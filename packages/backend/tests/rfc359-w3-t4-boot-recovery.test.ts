@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W3-T4（P0-3 / P0-4）—— daemon 启动期的任务执行恢复四步，两个引擎各跑一遍。
@@ -14,8 +16,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionIntents, taskExecutionOwners, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import {
   createDaemonLockProof,
@@ -55,9 +56,10 @@ function continuation(taskId: string): CanonicalContinuationRequest {
   }
 }
 
-async function seedRunningTask(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<string> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-w3-t4',
     description: '',
@@ -65,7 +67,7 @@ async function seedRunningTask(db: ProviderNeutralDatabase, taskId: string): Pro
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -83,7 +85,7 @@ async function seedRunningTask(db: ProviderNeutralDatabase, taskId: string): Pro
   })
   const runId = ulid()
   // 上一代 daemon 的子进程已随它一起死了：pid 为空 ⇒ 收割器判 no-pid，直接翻 interrupted。
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -96,7 +98,7 @@ async function seedRunningTask(db: ProviderNeutralDatabase, taskId: string): Pro
 }
 
 /** 上一代 daemon（gen-old）认领了任务并挂上 runtime，然后整个进程被 SIGKILL。 */
-async function crashPreviousDaemon(db: ProviderNeutralDatabase, taskId: string) {
+async function crashPreviousDaemon(db: PersistenceDb, taskId: string) {
   const persistence = createTaskExecutionPersistence(db)
   const previous = createProviderTaskExecutionModule({
     daemonGeneration: `gen-old-${ulid()}`,
@@ -135,6 +137,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     })
     const recoveredOwner = await persistence.ownership.read(taskId)
     expect(recoveredOwner?.state).toBe('released')
+    const { tasks, nodeRuns, taskExecutionIntents } = tablesOf(db)
     const recoveredTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(recoveredTask.status).toBe('interrupted')
     expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]?.status).toBe(
@@ -166,6 +169,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     const taskId = `w3t4_${ulid()}`
     const runId = await seedRunningTask(db, taskId)
     const { persistence } = await crashPreviousDaemon(db, taskId)
+    const { nodeRuns, tasks } = tablesOf(db)
     await db.update(nodeRuns).set({ pid: 999 }).where(eq(nodeRuns.id, runId))
     // Only prepare runs: the actual previous owner becomes revoked while the
     // old running task/run are left for the periodic recovery command itself.
@@ -229,6 +233,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
 
     const owner = await persistence.ownership.read(taskId)
     expect(owner?.state).toBe('released')
+    const { tasks, nodeRuns, taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(task.status).toBe('interrupted')
     expect(task.errorSummary).toBe('daemon-restart')

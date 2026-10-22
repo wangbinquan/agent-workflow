@@ -15,6 +15,8 @@
 // 前端最容易拼出来的——`?expectedConfigHash=${row.configHash ?? ''}`、表单未填、状态还没
 // 加载完，都会产生它。「显式传了空」与「没传」在语义上是两回事，不能合并。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -24,8 +26,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, mcps, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CommandContext,
   QueryContext,
@@ -37,7 +38,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const tempDirs: string[] = []
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 function testCommandContext(): CommandContext {
   return Object.freeze({
@@ -60,7 +61,7 @@ function testQueryContext(): QueryContext {
   })
 }
 
-function makeApp(db: ProviderNeutralDatabase, appHome: string): Hono {
+function makeApp(db: PersistenceDb, appHome: string): Hono {
   const box = createSecretBoxFromKey(randomBytes(32))
   const app = new Hono()
   const actor = {
@@ -114,14 +115,15 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
 }
 
 async function seed(): Promise<{
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   mcpId: string
   wfId: string
 }> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-fence-http-'))
   tempDirs.push(appHome)
-  await db.insert(users).values({
+  const { users, mcps, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'U1',
@@ -132,7 +134,7 @@ async function seed(): Promise<{
     updatedAt: 1,
   } as never)
   const mcpId = ulid()
-  await db.insert(mcps).values({
+  await insertOne(db, mcps, {
     id: mcpId,
     name: 'gh',
     description: '',
@@ -145,7 +147,7 @@ async function seed(): Promise<{
     updatedAt: 1,
   } as never)
   const wfId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -226,7 +228,8 @@ describeEachProvider('AC-12 · 导出 fence 的路由层解析（双引擎）', 
 
       // agent 的 fence 是 updatedAt + aclRevision，两者都可以是 0（刚建的资源）。
       const agentId = ulid()
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         id: agentId,
         name: 'fresh',
         description: '',
@@ -260,7 +263,8 @@ describeEachProvider('AC-12 · 导出 fence 的路由层解析（双引擎）', 
       const { db, appHome } = await seed()
       const app = makeApp(db, appHome)
       const agentId = ulid()
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         id: agentId,
         name: 'a2',
         description: '',

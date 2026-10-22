@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -20,9 +22,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { memories, memoryDistillJobs } from '../src/db/schema'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
@@ -56,7 +56,7 @@ const envelopeWithoutPort = (payload: unknown) =>
   `<workflow-output nonce="${NONCE}">\n\`\`\`json\n${JSON.stringify(payload)}\n\`\`\`\n</workflow-output>`
 
 describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let previousHome: string | undefined
   let temporaryHome: string
 
@@ -76,7 +76,8 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
 
   async function seedJob(): Promise<ReturnType<typeof rowToDistillJob>> {
     const id = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id,
       debounceKey: 'task-x:feedback',
       sourceKind: 'feedback',
@@ -176,6 +177,7 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
     expect(fake.calls[1]!.prompt).toContain('no `<port name="...">` element')
     expect(fake.calls[1]!.prompt).not.toContain('did not contain a `<workflow-output>` envelope')
 
+    const { memories } = tablesOf(db)
     const rows = await db.select().from(memories).where(eq(memories.distillJobId, job.id))
     expect(rows).toHaveLength(1)
     expect(rows[0]!.status).toBe('candidate')
@@ -257,6 +259,7 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
     expect(result.candidatesCreated).toBe(1)
     expect(fake.calls[0]!.protocol).toBe('claude-code')
     expect(fake.calls[0]!.isSandbox).toBe(true)
+    const { memories } = tablesOf(db)
     const rows = await db.select().from(memories).where(eq(memories.distillJobId, job.id))
     expect(rows).toHaveLength(1)
   })
@@ -285,6 +288,7 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
       { eventText: envelopeWithPort({ candidates: [candidate({ scopeId: 'not-null' })] }) },
     ])
     await expect(runDistill(baseOptions(job, fake.runFn))).rejects.toThrow(/none passed validation/)
+    const { memories } = tablesOf(db)
     const rows = await db.select().from(memories).where(eq(memories.distillJobId, job.id))
     expect(rows).toHaveLength(0)
   })

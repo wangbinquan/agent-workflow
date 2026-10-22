@@ -1,12 +1,13 @@
 // RFC-370: actual provider HTTP roots read the very content selection used by a
 // drive writer, including after application reconstruction. No listener is opened.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import type { NodeRunPromptOperations } from '@/modules/task-execution/application/ports/nodeRunPromptContent'
 import { bindTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
@@ -54,8 +55,9 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
     let pending: Promise<Response> | undefined
     try {
       await seedTask(harness.db, taskId)
+      const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
       await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
-      await harness.db.insert(nodeRuns).values({
+      await insertOne(harness.db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: DESIGNER,
@@ -79,7 +81,7 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
         worktreeDirName: '',
         items: [{ source, sourcePath: 'report.md' }],
       })
-      await harness.db.insert(nodeRunOutputs).values({
+      await insertOne(harness.db, nodeRunOutputs, {
         nodeRunId,
         portName: 'report',
         content: 'report.md',

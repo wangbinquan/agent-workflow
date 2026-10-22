@@ -1,6 +1,6 @@
 import { preparedArtifactLane } from './workspaceLaunchLane'
 import { canonicalJson } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
@@ -17,7 +17,7 @@ export type TransferredWorkspaceArtifact = {
 }
 
 export async function admitTransferredWorkspace(
-  transaction: ProviderNeutralDatabase,
+  transaction: PersistenceDb,
   artifact: TransferredWorkspaceArtifact,
 ): Promise<TaskWorkspaceLaunchLane> {
   const journal = createWorkspacePreparationJournal(transaction)

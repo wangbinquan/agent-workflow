@@ -1,13 +1,14 @@
 // RFC-370: selected settings must be awaited at mint/commit time; frozen run
 // facts remain independent of later setting edits. Both providers use the
 // real node runtime persistence, without starting a runtime or local service.
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec, first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import { nodeRuns } from '@/db/schema'
 import type { TaskOperationConfigurationQueries } from '@/modules/task-execution/public/queries'
 import { mintNodeRun, resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
 import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
@@ -40,15 +41,19 @@ describeEachProvider('RFC-370 Task operation configuration', (harness) => {
       const configPath = absentConfig(),
         entered = barrier(),
         release = barrier()
-      await harness.db.run(
+      await rawExec(
+        harness.db,
         sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'config', '{}')`,
       )
-      await harness.db.run(sql`
+      await rawExec(
+        harness.db,
+        sql`
         INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
           base_branch, branch, status, inputs, started_at, schema_version, execution_lineage_id, lineage_slot_path_json)
         VALUES ('task', 'config', 'wf', '{}', '/tmp/r', '/tmp/w', 'main', 'b', 'running', '{}', 1, 1, 'task',
           ${JSON.stringify([{ stableNodeKey: 'task-root', frozenOccurrenceKey: 'task', workflowRevision: null }])})
-      `)
+      `,
+      )
       const first = await mintNodeRun(harness.db, {
         taskId: 'task',
         nodeId: 'first',
@@ -121,8 +126,9 @@ describeEachProvider('RFC-370 Task operation configuration', (harness) => {
           await resolveFrozenRuntimeWith(persistence, second, null, null, inherited, current),
         ).toMatchObject({ protocol, binary: '/selected/second' })
         expect(reads).toBe(2)
+        const { nodeRuns } = tablesOf(harness.db)
         expect(
-          (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, first)).get())
+          (await firstRow(harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, first))))
             ?.runtimeBinary,
         ).toBe('/selected/first')
         expect(existsSync(configPath)).toBe(false)

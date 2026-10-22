@@ -10,7 +10,7 @@
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
@@ -18,7 +18,7 @@ import type { TaskActorRole } from '@agent-workflow/shared'
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createClarifyDecisionCommand(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   memoryDistillEnqueuer: MemoryDistillEnqueuer,
 ): ClarifyDecisionCommandPort {
   return {

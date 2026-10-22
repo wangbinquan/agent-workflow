@@ -4,10 +4,11 @@
 // `"table"."column"` in INSERT column lists and SET targets, which SQLite
 // rejects and PostgreSQL does not accept either.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { runtimes, users } from '@/db/schema'
 import type {
   IntentSessionRecord,
   IntentTurnRecord,
@@ -112,12 +113,12 @@ function postgresqlFixture() {
     if (/^\s*insert\b/i.test(statement)) return rows({ objects: [{}], count: 1 })
     return rows()
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -149,15 +150,12 @@ function postgresqlFixture() {
   }
 }
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
 describe('RFC-349 Intent SQL persistence identifier rendering', () => {
   describeEachProvider('shared persistence records', (harness) => {
     test('SQLite createSession writes and reads the shared persistence records', async () => {
       const db = harness.db
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id: SESSION.ownerUserId,
         username: 'intent-sql-owner',
         displayName: 'Intent SQL Owner',
@@ -177,7 +175,8 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
     // RFC-371: the SQL mapper used to drop the selected runtime identity, so
     // actual Intent calls lost native capture and their accepted CNY rate book.
     test('Intent keeps the selected registration and configuration revision without fabricating a fallback identity', async () => {
-      await harness.db.insert(runtimes).values({
+      const { runtimes } = tablesOf(harness.db)
+      await insertOne(harness.db, runtimes, {
         id: 'intent-observation-runtime',
         name: 'Intent observation runtime',
         protocol: 'opencode',

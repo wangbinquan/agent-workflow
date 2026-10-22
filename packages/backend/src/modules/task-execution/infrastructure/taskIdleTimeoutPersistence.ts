@@ -4,7 +4,7 @@
 // `composition/taskIdleTimeout.ts` 里的绑定别名）。可以这么做是因为本
 // adapter 只有纯读 + 两条单语句写、**没有事务**：SQLite 的 `dbTxSync` 与 PostgreSQL 的
 // 异步事务那道真正的分歧在这里不存在，而 `DbClient` 与 `PostgresqlDatabaseClient` 都是
-// drizzle 的 `BaseSQLiteDatabase`，同一套 query builder 在 `await` 下行为一致。
+// drizzle 的 `PersistenceDb`，同一套 query builder 在 `await` 下行为一致。
 // 抄成两份只会制造漂移——RFC-350 的 provider 一致性（AC-15）由此在**结构上**成立，
 // 而不是靠一条跑不进常规 CI 的对拍测试（PostgreSQL 侧要真实 server）。
 //
@@ -18,6 +18,9 @@
 //     `idx_events_node(node_run_id, id)` 一行就停，后者要扫完该 run 的全部事件行
 //     （单个 run 有几万行事件是常态）。id 单调递增，两者取到的是同一行。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -28,16 +31,8 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 
-import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import type * as schema from '@/db/schema'
-import {
-  collaborationGateOperations,
-  nodeRunEvents,
-  nodeRuns,
-  recoveryEvents,
-  tasks,
-} from '@/db/schema'
 import { bumpRecoveryCounter } from '@/services/recovery'
 import { chunkedAll } from '@/util/sqlChunk'
 import { createLogger } from '@/util/log'
@@ -57,7 +52,7 @@ const log = createLogger('task-idle-timeout-persistence')
  * `PostgresqlDatabaseClient`（remote，异步）都可赋值给它，于是同一段查询代码
  * `await` 之后在两边行为一致。
  */
-export type TaskIdleTimeoutDb = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>
+export type TaskIdleTimeoutDb = PersistenceDb
 
 /**
  * 取消写进 `error_summary` 的两个默认值；覆盖原因时按它们认领「这行是我们取消的」。
@@ -87,6 +82,7 @@ export function createTaskIdleTimeoutPersistence(
   return Object.freeze({
     async listIdleCandidateRoots(limit: number): Promise<readonly string[]> {
       if (limit <= 0) return []
+      const { tasks } = tablesOf(db)
       // 起手式只要活任务的三列，走 status 索引；软删除行整体不参与（AC-14）。
       const live = await db
         .select({
@@ -114,8 +110,9 @@ export function createTaskIdleTimeoutPersistence(
 
     async loadTreeActivity(rootTaskId: string): Promise<IdleTimeoutTreeSnapshot | null> {
       const taskIds = await collectTree(db, rootTaskId)
-      const taskRows = await chunkedAll(taskIds, (chunk) =>
-        db
+      const taskRows = await chunkedAll(taskIds, (chunk) => {
+        const { tasks } = tablesOf(db)
+        return db
           .select({
             id: tasks.id,
             status: tasks.status,
@@ -124,8 +121,8 @@ export function createTaskIdleTimeoutPersistence(
             deletedAt: tasks.deletedAt,
           })
           .from(tasks)
-          .where(inArray(tasks.id, chunk)),
-      )
+          .where(inArray(tasks.id, chunk))
+      })
       if (taskRows.length === 0) return null
       // 树里混进软删除行 ⇒ 整棵树本拍不动（AC-14 的树级表达）。
       if (taskRows.some((row) => row.deletedAt !== null)) return null
@@ -136,8 +133,9 @@ export function createTaskIdleTimeoutPersistence(
       const runRows =
         liveTaskIds.length === 0
           ? []
-          : await chunkedAll(liveTaskIds, (chunk) =>
-              db
+          : await chunkedAll(liveTaskIds, (chunk) => {
+              const { nodeRuns } = tablesOf(db)
+              return db
                 .select({
                   id: nodeRuns.id,
                   taskId: nodeRuns.taskId,
@@ -148,13 +146,14 @@ export function createTaskIdleTimeoutPersistence(
                   spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
                 })
                 .from(nodeRuns)
-                .where(inArray(nodeRuns.taskId, chunk)),
-            )
+                .where(inArray(nodeRuns.taskId, chunk))
+            })
       const gateRows =
         liveTaskIds.length === 0
           ? []
-          : await chunkedAll(liveTaskIds, (chunk) =>
-              db
+          : await chunkedAll(liveTaskIds, (chunk) => {
+              const { collaborationGateOperations } = tablesOf(db)
+              return db
                 .select({
                   taskId: collaborationGateOperations.taskId,
                   committedAt: collaborationGateOperations.committedAt,
@@ -166,8 +165,8 @@ export function createTaskIdleTimeoutPersistence(
                     eq(collaborationGateOperations.operationKind, 'decide'),
                     isNotNull(collaborationGateOperations.committedAt),
                   ),
-                ),
-            )
+                )
+            })
 
       const runActivity = new Map<string, number>()
       const liveRuns: IdleTimeoutRunSnapshot[] = []
@@ -214,6 +213,7 @@ export function createTaskIdleTimeoutPersistence(
       readonly summary: string
       readonly message: string
     }): Promise<boolean> {
+      const { tasks } = tablesOf(db)
       await db
         .update(tasks)
         .set({ errorSummary: input.summary, errorMessage: input.message })
@@ -224,42 +224,40 @@ export function createTaskIdleTimeoutPersistence(
             inArray(tasks.errorSummary, CLAIMABLE_CANCEL_SUMMARIES),
           ),
         )
-        .run()
       // 用一次回读判「认领成功没有」，而不是读 driver 的 changes 计数：两个 provider
       // 的 mutation 结果形状不同（bun:sqlite 给 {changes}，remote 给 rows/count），
       // 回读是同一段代码在两边都成立的唯一判据，代价是每个被收割任务一次窄查询。
-      const row = await db
-        .select({ status: tasks.status, errorSummary: tasks.errorSummary })
-        .from(tasks)
-        .where(eq(tasks.id, input.taskId))
-        .limit(1)
-        .get()
+      const row = await first(
+        db
+          .select({ status: tasks.status, errorSummary: tasks.errorSummary })
+          .from(tasks)
+          .where(eq(tasks.id, input.taskId))
+          .limit(1),
+      )
       return row?.status === 'canceled' && row.errorSummary === input.summary
     },
 
     async recordReapAudit(input: IdleTimeoutAuditRecord): Promise<void> {
       bumpRecoveryCounter('idle-timeout-reap')
       try {
-        await db
-          .insert(recoveryEvents)
-          .values({
-            id: ulid(),
-            taskId: input.taskId,
-            nodeRunId: null,
-            actor: 'system',
-            kind: 'idle-timeout-reap',
-            reason: input.reason,
-            beforeJson: JSON.stringify({
-              silentMs: input.silentMs,
-              thresholdMs: input.thresholdMs,
-            }),
-            afterJson: JSON.stringify({
-              status: 'canceled',
-              killOutcomes: input.killOutcomes,
-            }),
-            createdAt: input.now,
-          })
-          .run()
+        const { recoveryEvents } = tablesOf(db)
+        await insertOne(db, recoveryEvents, {
+          id: ulid(),
+          taskId: input.taskId,
+          nodeRunId: null,
+          actor: 'system',
+          kind: 'idle-timeout-reap',
+          reason: input.reason,
+          beforeJson: JSON.stringify({
+            silentMs: input.silentMs,
+            thresholdMs: input.thresholdMs,
+          }),
+          afterJson: JSON.stringify({
+            status: 'canceled',
+            killOutcomes: input.killOutcomes,
+          }),
+          createdAt: input.now,
+        })
       } catch (error) {
         log.warn('idle-timeout recovery audit dropped', { error: String(error) })
       }
@@ -276,13 +274,15 @@ async function latestEventTsForRun(
   db: TaskIdleTimeoutDb,
   nodeRunId: string,
 ): Promise<number | null> {
-  const row = await db
-    .select({ ts: nodeRunEvents.ts })
-    .from(nodeRunEvents)
-    .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    .orderBy(desc(nodeRunEvents.id))
-    .limit(1)
-    .get()
+  const { nodeRunEvents } = tablesOf(db)
+  const row = await first(
+    db
+      .select({ ts: nodeRunEvents.ts })
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .orderBy(desc(nodeRunEvents.id))
+      .limit(1),
+  )
   return row?.ts ?? null
 }
 
@@ -290,12 +290,14 @@ async function latestEventTsForRun(
 async function resolveRoot(db: TaskIdleTimeoutDb, taskId: string): Promise<string> {
   let current = taskId
   for (let depth = 0; depth < MAX_TREE_DEPTH; depth += 1) {
-    const row = await db
-      .select({ parentTaskId: tasks.parentTaskId })
-      .from(tasks)
-      .where(eq(tasks.id, current))
-      .limit(1)
-      .get()
+    const { tasks } = tablesOf(db)
+    const row = await first(
+      db
+        .select({ parentTaskId: tasks.parentTaskId })
+        .from(tasks)
+        .where(eq(tasks.id, current))
+        .limit(1),
+    )
     if (row === undefined || row.parentTaskId === null) return current
     current = row.parentTaskId
   }
@@ -308,9 +310,10 @@ async function collectTree(db: TaskIdleTimeoutDb, rootTaskId: string): Promise<s
   const seen = new Set(out)
   let frontier = [rootTaskId]
   for (let depth = 0; frontier.length > 0 && depth < MAX_TREE_DEPTH; depth += 1) {
-    const children = await chunkedAll(frontier, (chunk) =>
-      db.select({ id: tasks.id }).from(tasks).where(inArray(tasks.parentTaskId, chunk)),
-    )
+    const children = await chunkedAll(frontier, (chunk) => {
+      const { tasks } = tablesOf(db)
+      return db.select({ id: tasks.id }).from(tasks).where(inArray(tasks.parentTaskId, chunk))
+    })
     const next: string[] = []
     for (const child of children) {
       if (seen.has(child.id)) continue

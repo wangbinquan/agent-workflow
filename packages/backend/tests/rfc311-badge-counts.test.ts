@@ -9,21 +9,14 @@
 // replaced: for every actor, count === filtered-list length. If either side
 // drifts, the badge starts lying about the inbox.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
 import {
   countAwaitingClarifyRounds,
   listClarifyRoundSummaries,
@@ -34,7 +27,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { visibleTaskIdsOf } from '../src/services/taskAuthorization'
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -45,6 +38,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seed(db: Db): Promise<void> {
   const now = 1_788_278_400_000
+  const { users, workflows } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob', 'carol'].map((id) => ({
       id,
@@ -55,7 +49,7 @@ async function seed(db: Db): Promise<void> {
       updatedAt: now,
     })),
   )
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -69,7 +63,8 @@ async function addTask(
   status: 'running' | 'awaiting_review' | 'awaiting_human' | 'done' | 'canceled',
   opts: { workflowId?: string } = {},
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId: opts.workflowId ?? 'wf1',
@@ -91,7 +86,8 @@ async function addReviewRun(
   runId: string,
   status: 'awaiting_review' | 'running' | 'done',
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'rev',
@@ -111,7 +107,8 @@ async function addDocVersion(
   decision: 'pending' | 'approved' | 'rejected',
   port = 'doc',
 ): Promise<void> {
-  await db.insert(docVersions).values({
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
     id: ulid(),
     taskId,
     reviewNodeId: 'rev',
@@ -159,7 +156,8 @@ describeEachProvider('RFC-311 — countPendingReviews oracle', (harness) => {
     await addDocVersion(db, 't-live', 'run-live', 1, 'pending')
     await addDocVersion(db, 't-live', 'run-live', 2, 'pending')
     await addDocVersion(db, 't-live', 'run-live', 1, 'pending', 'other-port')
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId: 't-live',
       userId: 'carol',
       role: 'collaborator',
@@ -204,7 +202,8 @@ describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) 
     status: 'awaiting_human' | 'answered',
   ): Promise<void> {
     const runId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'ask',
@@ -213,7 +212,7 @@ describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) 
       iteration: 0,
       startedAt: 100,
     })
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: ulid(),
       taskId,
       kind: 'self',

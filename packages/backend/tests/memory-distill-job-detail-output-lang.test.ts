@@ -9,24 +9,23 @@
 //     to null rather than leaking through (defence-in-depth at the
 //     decorator boundary).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { memoryDistillJobs } from '../src/db/schema'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
 
-function getDistillJobDetail(db: ProviderNeutralDatabase, jobId: string) {
+function getDistillJobDetail(db: PersistenceDb, jobId: string) {
   return composeMemoryDistillQueries(db).getJobDetail(jobId)
 }
 
-async function seedJob(
-  db: ProviderNeutralDatabase,
-  outputLang: string | null | undefined,
-): Promise<string> {
+async function seedJob(db: PersistenceDb, outputLang: string | null | undefined): Promise<string> {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'k-' + id.slice(-6),
     sourceKind: 'feedback',
@@ -43,7 +42,7 @@ async function seedJob(
 }
 
 describeEachProvider('RFC-050 getDistillJobDetail — outputLang', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -74,6 +73,7 @@ describeEachProvider('RFC-050 getDistillJobDetail — outputLang', (harness) => 
 
   test('corrupt value (manual SQL edit) sanitised to null', async () => {
     const jobId = await seedJob(db, 'zh-CN')
+    const { memoryDistillJobs } = tablesOf(db)
     // Simulate someone manually flipping the column to a stray value.
     await db
       .update(memoryDistillJobs)

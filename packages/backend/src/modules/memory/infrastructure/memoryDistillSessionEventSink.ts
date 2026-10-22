@@ -7,8 +7,8 @@
 //
 // 契约（`services/sessionEventSink.ts`）：**sink 的持久化失败绝不能改变 agent 的业务结果**。
 // 因此这里所有失败都只落日志 / marker 行，从不抛给调用方。
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { memoryDistillEvents } from '@/db/schema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/runtime-management/public/types'
 import type {
   SessionCaptureIncompleteReason,
@@ -54,7 +54,7 @@ class MemoryDistillSessionEventSink implements SystemAgentEventSinkV1 {
   private stopped = false
 
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly job: MemoryDistillSessionEventSinkInput,
   ) {}
 
@@ -129,6 +129,7 @@ class MemoryDistillSessionEventSink implements SystemAgentEventSinkV1 {
       parentSessionId: row.parentSessionId,
     }))
     try {
+      const { memoryDistillEvents } = tablesOf(this.db)
       await this.db.insert(memoryDistillEvents).values(values)
     } catch (err) {
       // 观测面失败不得反噬业务结果（sessionEventSink.ts 的契约）。
@@ -148,7 +149,7 @@ class MemoryDistillSessionEventSink implements SystemAgentEventSinkV1 {
   }
 }
 
-export function createMemoryDistillSessionEventSink(db: ProviderNeutralDatabase) {
+export function createMemoryDistillSessionEventSink(db: PersistenceDb) {
   return (input: MemoryDistillSessionEventSinkInput): SystemAgentEventSinkV1 =>
     new MemoryDistillSessionEventSink(db, input)
 }

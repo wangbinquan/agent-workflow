@@ -9,28 +9,30 @@
 // 臂级正向行为（active owner 子任务照常启动）由既有 rfc243-call-* 套件覆盖；
 // 本文件不重复起全调度器。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { projectOwnerlessLegacyActor } from '../src/modules/identity-access/application/legacyActorProjection'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
 }
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   status: 'active' | 'disabled',
 ): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id}`,
     displayName: `U ${id}`,

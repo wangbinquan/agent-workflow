@@ -2,19 +2,20 @@
 // still executes four real statements and remains visible to a late recorder.
 // The original owner below is a frozen data/SQL oracle (70258c078f12ee35...),
 // with its opaque input branch copied verbatim and no new branch semantics.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, spyOn, test } from 'bun:test'
 import { and, count, eq, gte, inArray, isNull, or, type SQL } from 'drizzle-orm'
 import type { OverviewTasks } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement, StatementRecording } from './helpers/statementRecorder'
 
 async function originalLoadOverview(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: Parameters<TaskOverviewQuery['load']>[0],
 ): Promise<OverviewTasks> {
   const canReadAll = input.actor.permissions.has('tasks:read:all')
@@ -22,6 +23,7 @@ async function originalLoadOverview(
     return { running: 0, awaiting: 0, done7d: 0, failed7d: 0 }
   }
 
+  const { taskCollaborators, tasks } = tablesOf(db)
   const collaboratorTaskIds = db
     .select({ taskId: taskCollaborators.taskId })
     .from(taskCollaborators)
@@ -77,7 +79,8 @@ const inputs: readonly Parameters<TaskOverviewQuery['load']>[0][] = [
 
 async function seed(harness: ProviderHarness) {
   for (const id of ['overview-a', 'overview-b']) {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id,
       username: id,
       displayName: id,
@@ -88,9 +91,8 @@ async function seed(harness: ProviderHarness) {
       updatedAt: since,
     })
   }
-  await harness.db
-    .insert(workflows)
-    .values({ id: 'overview-wf', name: 'overview', definition: '{}' })
+  const { workflows, tasks } = tablesOf(harness.db)
+  await insertOne(harness.db, workflows, { id: 'overview-wf', name: 'overview', definition: '{}' })
   const rows = [
     { id: 'a-running', status: 'running', ownerUserId: 'overview-a' },
     { id: 'b-running', status: 'running', ownerUserId: 'overview-b' },
@@ -110,7 +112,7 @@ async function seed(harness: ProviderHarness) {
     },
   ] as const
   for (const row of rows) {
-    await harness.db.insert(tasks).values({
+    await insertOne(harness.db, tasks, {
       workflowId: 'overview-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -147,7 +149,7 @@ async function capture<T>(recording: StatementRecording, run: () => Promise<T>) 
 }
 
 async function compare(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   owner: TaskOverviewQuery,
   recording: StatementRecording,
   input: Parameters<TaskOverviewQuery['load']>[0],
@@ -182,6 +184,7 @@ describeEachProvider('RFC-359 W21 task overview query templates', (harness) => {
     const recording = harness.recordStatements()
     try {
       for (const input of inputs) await compare(harness.db, owner, recording, input)
+      const { tasks } = tablesOf(harness.db)
       await harness.db
         .update(tasks)
         .set({ status: 'done', finishedAt: since + 2 })
@@ -227,12 +230,14 @@ describeEachProvider('RFC-359 W21 task overview query templates', (harness) => {
 
   test('transaction-bound warmed templates see current rows and preserve complete rollback', async () => {
     await seed(harness)
+    const { tasks } = tablesOf(harness.db)
     const before = await harness.db.select().from(tasks).orderBy(tasks.id)
     const interruption = new Error('overview template rollback')
     await expect(
       harness.session.transaction(async (tx) => {
         const owner = createTaskOverviewQuery(tx)
         await owner.load(inputs[0]!)
+        const { tasks } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ status: 'done', finishedAt: since })

@@ -4,12 +4,13 @@
 // Member-based-private like tasks: owner + tasks:read:all admin see the row;
 // everyone else gets it filtered from the list AND a 404 on the detail route
 // (invisible == missing, so existence can't be probed).
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { scheduledTasks } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -20,7 +21,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
   app: Hono
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   adminToken: string
   bobToken: string
   carolToken: string
@@ -51,7 +52,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
 
   const bobSchedId = 'sched-bob'
   const now = Date.now()
-  await db.insert(scheduledTasks).values({
+  const { scheduledTasks } = tablesOf(db)
+  await insertOne(db, scheduledTasks, {
     id: bobSchedId,
     name: 'bob nightly',
     ownerUserId: bob.id,

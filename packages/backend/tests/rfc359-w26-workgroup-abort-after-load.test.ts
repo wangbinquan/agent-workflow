@@ -1,16 +1,10 @@
 // The real persistence port supplies every row and commit. Only host arrival
 // and load continuation are held to expose cancellation during an async read.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import {
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-  workgroupMessages,
-  workgroupTaskState,
-} from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { createLogger } from '@/util/log'
 import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
@@ -80,10 +74,14 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
       },
     ],
   }
-  await db
-    .insert(workflows)
-    .values({ id: 'w26-abort-workflow', name: 'host', definition: '{}', builtin: true })
-  await db.insert(tasks).values({
+  const { workflows, tasks, nodeRuns, workgroupAssignments, workgroupMessages } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: 'w26-abort-workflow',
+    name: 'host',
+    definition: '{}',
+    builtin: true,
+  })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'wg-batch-task',
     workflowId: 'w26-abort-workflow',
@@ -102,7 +100,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
     workgroupId: config.workgroupId,
     workgroupConfigJson: JSON.stringify(config),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: pastRunId,
     taskId,
     nodeId: WG_MEMBER_NODE_ID,
@@ -111,7 +109,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
     shardKey: 'msg:m-a:0',
     startedAt: now,
   })
-  await db.insert(workgroupAssignments).values({
+  await insertOne(db, workgroupAssignments, {
     id: cardId,
     taskId,
     round: 0,
@@ -123,7 +121,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
     createdAt: now,
     updatedAt: now,
   })
-  await db.insert(workgroupMessages).values({
+  await insertOne(db, workgroupMessages, {
     id: 'w26-human-message',
     taskId,
     round: 0,
@@ -266,6 +264,7 @@ describeEachProvider('RFC-359 W26 workgroup cancellation after load', (harness) 
       expect(
         run.requests.map((request) => (request.hostOutputPorts ?? []).includes('wg_task_results')),
       ).toEqual([false, true])
+      const { workgroupAssignments, nodeRuns, workgroupTaskState } = tablesOf(harness.db)
       const cards = await harness.db
         .select()
         .from(workgroupAssignments)
@@ -306,6 +305,7 @@ describeEachProvider('RFC-359 W26 workgroup cancellation after load', (harness) 
       expect(run.requests).toHaveLength(2)
       expect(run.controller.signal.aborted).toBe(true)
       expect(returned).toBe(false)
+      const { workgroupAssignments } = tablesOf(harness.db)
       const before = await harness.db
         .select()
         .from(workgroupAssignments)

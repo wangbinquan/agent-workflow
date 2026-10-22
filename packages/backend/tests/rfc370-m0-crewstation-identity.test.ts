@@ -4,6 +4,7 @@
 // platform subject maps to exactly one aw account created on first sight
 // (least-privileged default role, configured administrators, never merged by
 // email); a disabled account is refused; HTTP and WebSocket admit identically.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
@@ -13,7 +14,6 @@ import { mountMcpTransport } from '@/mcp/server'
 import { errorHandler } from '@/util/errors'
 import { composeHttpAuthenticationMiddleware } from '@/modules/identity-access/composition/authentication'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose'
-import { externalIdentities, userPermissionGrants, users } from '@/db/schema'
 import {
   composeCrewStationCredentialAdapters,
   composeCrewStationRecoveryRequester,
@@ -234,6 +234,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
     expect(again.kind === 'authenticated' && first.kind === 'authenticated').toBe(true)
     if (first.kind !== 'authenticated' || again.kind !== 'authenticated') return
     expect(again.identity.actor.user.id).toBe(first.identity.actor.user.id)
+    const { users, externalIdentities } = tablesOf(harness.db)
     const account = (
       await harness.db.select().from(users).where(eq(users.id, first.identity.actor.user.id))
     )[0]!
@@ -255,6 +256,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
     expect(admitted.kind).toBe('authenticated')
     if (admitted.kind !== 'authenticated') return
     expect(admitted.identity.actor.user.role).toBe('admin')
+    const { userPermissionGrants } = tablesOf(harness.db)
     expect(
       await harness.db
         .select()
@@ -269,6 +271,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
       identityAccess: createIdentityAccessRuntime({ db: harness.db }),
     })
     const id = SUBJECT.slice('user:'.length)
+    const { users, externalIdentities } = tablesOf(harness.db)
     const before = await harness.db.select({ id: users.id }).from(users)
     for (const unknown of [id, ADMIN.slice(5), SUBJECT, '__system__', '', 'invalid'])
       expect(await requester.resolve(unknown)).toBeNull()
@@ -298,6 +301,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
       request(await token({ subject: ADMIN, claims: { email: 'shared@x.io' } })),
     )
     if (second.kind !== 'authenticated') throw new Error('second identity was not admitted')
+    const { users, externalIdentities } = tablesOf(harness.db)
     const row = (
       await harness.db.select().from(users).where(eq(users.id, second.identity.actor.user.id))
     )[0]!
@@ -311,6 +315,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
     await expect(http.authenticate(request('garbage'))).rejects.toMatchObject({ status: 401 })
     const admitted = await http.authenticate(request(await token()))
     if (admitted.kind !== 'authenticated') throw new Error('identity was not admitted')
+    const { users } = tablesOf(harness.db)
     await harness.db
       .update(users)
       .set({ status: 'disabled' })
@@ -339,6 +344,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
     expect((await webSocket.reresolve(admitted.credential))?.actor.user.id).toBe(
       admitted.actor!.user.id,
     )
+    const { users } = tablesOf(harness.db)
     await harness.db
       .update(users)
       .set({ status: 'disabled' })

@@ -17,22 +17,16 @@
 // cases hold real writes until the intended winner owns the mutation queue and
 // both requests are in flight; array order alone does not establish the winner.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   buildReviewPromptContext,
   dispatchReviewNode,
@@ -49,7 +43,7 @@ import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMu
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let worktree: string
 
@@ -90,6 +84,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const acquired = gate()
     const release = gate()
     const transaction = harness.session.transaction(async (tx) => {
+      const { tasks, docVersions } = tablesOf(tx)
       // A decision writes the task; a selection writes the document. Both locks
       // belong to this one real PG transaction and neither changes fixture data.
       await harness.session.engine.lockAggregateRoot(tx, tasks, tasks.id, taskId)
@@ -174,12 +169,13 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
   async function seed(): Promise<{
     taskId: string
-    task: typeof tasks.$inferSelect
+    task: PersistenceTables['tasks']['$inferSelect']
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
     const caseGenId = ulid()
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks } = tablesOf(db)
+    await insertOne(db, agents, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -210,7 +206,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       edges: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -223,7 +219,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const lineageSlotPathJson = JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ])
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'multidoc',
       workflowId,
@@ -240,14 +236,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     })
     // Both providers must start from the original SQLite-materialized row.
     expect(
-      await db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get(),
+      await firstRow(
+        db
+          .select({
+            executionLineageId: tasks.executionLineageId,
+            lineageSlotPathJson: tasks.lineageSlotPathJson,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, taskId)),
+      ),
     ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
@@ -256,7 +253,8 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
   /** Seed the upstream done run + its `cases` list output, write the case files. */
   async function seedSrc(taskId: string, srcId: string, paths: string[]): Promise<void> {
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: srcId,
       taskId,
       nodeId: 'src',
@@ -267,9 +265,11 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: srcId, portName: 'cases', content: paths.join('\n') })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: srcId,
+      portName: 'cases',
+      content: paths.join('\n'),
+    })
     for (const p of paths) {
       const abs = join(worktree, p)
       mkdirSync(dirname(abs), { recursive: true })
@@ -280,11 +280,11 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   /** Dispatch the review and return its node_run id + ordered doc_versions. */
   async function dispatchRound(): Promise<{
     taskId: string
-    task: typeof tasks.$inferSelect
+    task: PersistenceTables['tasks']['$inferSelect']
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
     reviewNodeRunId: string
-    docs: (typeof docVersions.$inferSelect)[]
+    docs: PersistenceTables['docVersions']['$inferSelect'][]
   }> {
     const { taskId, task, definition, reviewNode } = await seed()
     await seedSrc(taskId, '01SRC', PATHS)
@@ -298,6 +298,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       iteration: 0,
     })
     expect(result.kind).toBe('awaiting_review')
+    const { docVersions } = tablesOf(db)
     const docs = await db
       .select()
       .from(docVersions)
@@ -331,6 +332,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       selection: 'accepted',
     })
     expect(res.selection).toBe('accepted')
+    const { docVersions } = tablesOf(db)
     const after = (await db.select().from(docVersions).where(eq(docVersions.id, docs[0]!.id)))[0]!
     expect(after.selection).toBe('accepted')
 
@@ -376,6 +378,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     expect(result.taskId).toBe(taskId)
     expect(result.resumeRequired).toBe(true)
 
+    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
     const accepted = (
       await db
         .select()
@@ -446,6 +449,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       expect((results[1]!.reason as { code?: string }).code).toBe('review-not-awaiting')
     }
 
+    const { docVersions, nodeRunOutputs } = tablesOf(db)
     const first = (await db.select().from(docVersions).where(eq(docVersions.id, docs[0]!.id)))[0]!
     expect(first.selection).toBe('accepted')
     const accepted = (
@@ -494,6 +498,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     )
     expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
 
+    const { docVersions, nodeRunOutputs } = tablesOf(db)
     const second = (await db.select().from(docVersions).where(eq(docVersions.id, docs[1]!.id)))[0]!
     expect(second.selection).toBe('not_accepted')
     const accepted = (
@@ -535,7 +540,8 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     // comment on a (0) and c (2); b (1) gets none.
     const addComment = async (docVersionId: string, text: string): Promise<void> => {
-      await db.insert(reviewComments).values({
+      const { reviewComments } = tablesOf(db)
+      await insertOne(db, reviewComments, {
         id: ulid(),
         docVersionId,
         anchorSectionPath: 'h0',
@@ -562,6 +568,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     })
     expect(result.reviewIteration).toBe(1) // bumped
 
+    const { docVersions } = tablesOf(db)
     // each item is now iterated; review back to pending for the scheduler rerun.
     const after = await db
       .select()
@@ -592,6 +599,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     })
     expect(result.reviewIteration).toBe(1)
 
+    const { docVersions, nodeRuns } = tablesOf(db)
     // every item recorded the round-level reject reason.
     const after = await db
       .select()

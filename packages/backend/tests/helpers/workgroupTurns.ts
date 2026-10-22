@@ -5,7 +5,7 @@
 // 这个 shim 保持 `runWorkgroupEngine` 的调用形状（db + taskId + log + hooks），把它接到两个 provider
 // 真正在跑的那条路上，于是同一批断言在两个引擎上各跑一遍。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
@@ -26,7 +26,7 @@ export interface WorkgroupTurnsTestHooks {
 }
 
 /** 两个 provider 都用的回合操作；装配与两个 bootstrap 完全同一条。 */
-export function composeTestWorkgroupTurns(db: ProviderNeutralDatabase) {
+export function composeTestWorkgroupTurns(db: PersistenceDb) {
   return composeWorkgroupTurnsOperations(
     db,
     composeWorkgroupHostLedgerParticipantFactory({
@@ -38,7 +38,7 @@ export function composeTestWorkgroupTurns(db: ProviderNeutralDatabase) {
 
 /** 与 legacy `runWorkgroupEngine(args)` 同形的调用面，跑的是中立回合驱动。 */
 export async function runWorkgroupTurns(args: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   log: WorkgroupTurnLogger
   signal?: AbortSignal

@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 
 import { createWorkgroupLaunchResourceOperations } from '../infrastructure/workgroupLaunchResourceOperations'
@@ -9,7 +9,7 @@ import type { WorkgroupRouteLaunchResources } from '../infrastructure/taskRouteL
  * 根不许深挖 `infrastructure/`，也不该自己拼 ACL 读法。
  */
 export function composeWorkgroupLaunchResourceOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly integrity: AgentLaunchResourceIntegrityParticipant
 }): WorkgroupRouteLaunchResources {
   return createWorkgroupLaunchResourceOperations(input)

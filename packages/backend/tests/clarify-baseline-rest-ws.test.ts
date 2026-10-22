@@ -14,11 +14,12 @@
 // already takes the provider-neutral client, so the wire shapes above are now
 // pinned on PostgreSQL too rather than only on bun:sqlite.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRoundWithDecision } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
@@ -36,7 +37,7 @@ import { installCommittedEventProjectionHarness } from './helpers/committedEvent
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   withCross: boolean,
 ): Promise<{ taskId: string; definition: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
@@ -88,7 +89,8 @@ async function seedTask(
         outputs: [],
       }
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rest-baseline-task',
     description: '',
@@ -96,7 +98,7 @@ async function seedTask(
     version: 1,
     schemaVersion: withCross ? 4 : 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'rest-baseline-task',
     id: taskId,
     workflowId,
@@ -148,7 +150,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // designer entry. The designer rerun is now minted by reassigning the answered round's questioner
 // card to the graph designer node + dispatching that designer entry.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -167,7 +169,7 @@ async function reassignThenDispatchDesigner(
 let uninstallProjection = (): void => {}
 
 /** Deterministic in-process frame delivery for the cases that read WS events. */
-async function installProjection(db: ProviderNeutralDatabase): Promise<void> {
+async function installProjection(db: PersistenceDb): Promise<void> {
   uninstallProjection = await installCommittedEventProjectionHarness(db)
 }
 
@@ -182,7 +184,7 @@ afterAll(() => {
 })
 
 describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -192,7 +194,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
     test('listClarifySummaries: rows carry taskName + sourceAgent + iteration', async () => {
       await installProjection(db)
       const { taskId } = await seedTask(db, false)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_src',
         taskId,
         nodeId: 'designer',
@@ -225,7 +228,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
 
     test('listCrossClarifySummaries: rows carry crossClarifyNodeId + sourceQuestioner + iteration', async () => {
       const { taskId } = await seedTask(db, true)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
@@ -257,6 +261,7 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
 
     test('mixed inbox: REST route merges + sorts by createdAt desc (simulated)', async () => {
       const { taskId } = await seedTask(db, true)
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_src',
@@ -313,7 +318,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
   describe('RFC-058 baseline T6 — detail wire shape', () => {
     test('getClarifyDetail returns ClarifySession with full questions array', async () => {
       const { taskId } = await seedTask(db, false)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_src',
         taskId,
         nodeId: 'designer',
@@ -341,7 +347,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
 
     test('getCrossClarifyDetail returns CrossClarifySession with full questions array', async () => {
       const { taskId } = await seedTask(db, true)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
@@ -372,7 +379,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
     test('clarify.created event carries clarifyNodeId + iterationIndex + session summary', async () => {
       await installProjection(db)
       const { taskId } = await seedTask(db, false)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_src',
         taskId,
         nodeId: 'designer',
@@ -402,7 +410,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
     test('cross-clarify.created event carries crossClarifyNodeId + iteration + targetDesigner', async () => {
       await installProjection(db)
       const { taskId } = await seedTask(db, true)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
@@ -430,6 +439,7 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
     test('cross-clarify.answered + designer rerun dispatched on successful continue submit', async () => {
       await installProjection(db)
       const { taskId } = await seedTask(db, true)
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_designer_prior',
@@ -484,6 +494,7 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
     test('cross-clarify.rejected on stop submit', async () => {
       await installProjection(db)
       const { taskId } = await seedTask(db, true)
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_designer_prior',
@@ -533,7 +544,8 @@ describeEachProvider('RFC-058 baseline T6 —— REST / WS 线形（双引擎）
     test('clarify.answered on self-clarify submit', async () => {
       await installProjection(db)
       const { taskId } = await seedTask(db, false)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_src',
         taskId,
         nodeId: 'designer',

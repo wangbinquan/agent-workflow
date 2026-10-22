@@ -15,11 +15,12 @@
 //     and distillTick passes the head row's MemoryDistillJob.outputLang
 //     into runDistill; we lock the per-row capture invariant here.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { memoryDistillJobs } from '../src/db/schema'
 import {
   enqueueDistillJob,
   resetMemoryDistillPolicyProviderForTest,
@@ -50,7 +51,7 @@ function setAmbientLang(read: () => Language | null): void {
 }
 
 describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: { store: DrizzleMemoryDistillWorkStore }
 
   beforeEach(() => {
@@ -74,11 +75,10 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
         outputLang: 'zh-CN',
       }),
     )
-    const row = await db
-      .select()
-      .from(memoryDistillJobs)
-      .where(eq(memoryDistillJobs.id, jobId))
-      .get()
+    const { memoryDistillJobs } = tablesOf(db)
+    const row = await first(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)),
+    )
     expect(row?.outputLang).toBe('zh-CN')
   })
 
@@ -91,11 +91,10 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
         taskId: null,
       }),
     )
-    const row = await db
-      .select()
-      .from(memoryDistillJobs)
-      .where(eq(memoryDistillJobs.id, jobId))
-      .get()
+    const { memoryDistillJobs } = tablesOf(db)
+    const row = await first(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)),
+    )
     expect(row?.outputLang).toBe('zh-CN')
   })
 
@@ -107,11 +106,10 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
         taskId: null,
       }),
     )
-    const row = await db
-      .select()
-      .from(memoryDistillJobs)
-      .where(eq(memoryDistillJobs.id, jobId))
-      .get()
+    const { memoryDistillJobs } = tablesOf(db)
+    const row = await first(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)),
+    )
     expect(row?.outputLang).toBeNull()
   })
 
@@ -125,11 +123,10 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
         outputLang: null,
       }),
     )
-    const row = await db
-      .select()
-      .from(memoryDistillJobs)
-      .where(eq(memoryDistillJobs.id, jobId))
-      .get()
+    const { memoryDistillJobs } = tablesOf(db)
+    const row = await first(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)),
+    )
     expect(row?.outputLang).toBeNull()
   })
 
@@ -159,16 +156,13 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     )
     // (Same debounceKey because (taskId, sourceKind) identical for feedback.)
     expect(a.debounceKey).toBe(b.debounceKey)
-    const rowA = await db
-      .select()
-      .from(memoryDistillJobs)
-      .where(eq(memoryDistillJobs.id, a.jobId))
-      .get()
-    const rowB = await db
-      .select()
-      .from(memoryDistillJobs)
-      .where(eq(memoryDistillJobs.id, b.jobId))
-      .get()
+    const { memoryDistillJobs } = tablesOf(db)
+    const rowA = await first(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, a.jobId)),
+    )
+    const rowB = await first(
+      db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, b.jobId)),
+    )
     expect(rowA?.outputLang).toBe('zh-CN')
     expect(rowB?.outputLang).toBe('en-US')
   })

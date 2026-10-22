@@ -10,6 +10,8 @@
 // Reference check: an agent's frontmatter.skills[] referencing this skill
 // makes it un-deletable; same as agents <-> workflows in P-1-08.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   CreateManagedSkill,
   FileNode,
@@ -22,8 +24,7 @@ import { and, eq } from 'drizzle-orm'
 import { existsSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, skills } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   commitSkillVersion,
   type SkillVersionFsOptions,
@@ -31,10 +32,7 @@ import {
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { skillFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/skillPersistence'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   abandonOperation,
   advancePhase,
@@ -78,7 +76,7 @@ import {
   discardFileSkillContentRoot,
 } from '../local/fileSkillCreationContentStore'
 
-type SkillRow = typeof skills.$inferSelect
+type SkillRow = PersistenceTables['skills']['$inferSelect']
 
 export interface SkillFsOptions extends SkillVersionFsOptions {
   /** Selected reader; legacy history and recovery still use appHome. */
@@ -106,7 +104,8 @@ export interface SkillDeleteHooks {
 
 // --- query helpers ---
 
-export async function listSkills(db: ProviderNeutralDatabase): Promise<Skill[]> {
+export async function listSkills(db: PersistenceDb): Promise<Skill[]> {
+  const { skills } = tablesOf(db)
   // RFC-170 §9: skills mid-creation (reservation_state='reserving') are not yet
   // published and must stay invisible until their reserve op reaches 'ready'.
   const rows = await db.select().from(skills).where(eq(skills.reservationState, 'ready'))
@@ -116,10 +115,8 @@ export async function listSkills(db: ProviderNeutralDatabase): Promise<Skill[]> 
   return rows.filter((r) => isSkillAvailableThisBoot(r)).map(rowToSkill)
 }
 
-export async function getSkillById(
-  db: ProviderNeutralDatabase,
-  skillId: string,
-): Promise<Skill | null> {
+export async function getSkillById(db: PersistenceDb, skillId: string): Promise<Skill | null> {
+  const { skills } = tablesOf(db)
   const rows = await db
     .select()
     .from(skills)
@@ -157,10 +154,11 @@ export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
  * does not.
  */
 export async function isSkillNameOccupiedForOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   ownerUserId: string | null,
 ): Promise<boolean> {
+  const { skills } = tablesOf(db)
   // RFC-284 T11：NULL-safe owner+name 查询收编 ownerScopedNameWhere（0118
   // 表达式唯一索引的配套谓词，与 agent/mcp/plugin/workgroup 四域同源）。
   const rows = await db
@@ -190,7 +188,7 @@ function creationContentFor(
 // --- create ---
 
 export async function createManagedSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   input: CreateManagedSkill,
   aclOpts?: { ownerUserId?: string; actor?: Actor | null },
@@ -229,7 +227,7 @@ export async function createManagedSkill(
  * failed with "skill disappeared right after insert".
  */
 export async function createManagedSkillWithFiles(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   meta: { name: string; description: string; ownerUserId?: string; actor?: Actor | null },
   produceFiles: SkillInitialContent | ((filesDir: string) => void),
@@ -260,7 +258,8 @@ export async function createManagedSkillWithFiles(
   let opId: string
   try {
     opId = await databaseSessionFor(db).transaction(async (tx) => {
-      await tx.insert(skills).values({
+      const { skills } = tablesOf(tx)
+      await insertOne(tx, skills, {
         id,
         name: meta.name,
         description: meta.description,
@@ -342,6 +341,7 @@ export async function createManagedSkillWithFiles(
       /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
     }
     await databaseSessionFor(db).transaction(async (tx) => {
+      const { skills } = tablesOf(tx)
       await tx.delete(skills).where(eq(skills.id, id))
       await abandonOperation(tx, opId)
     })
@@ -358,9 +358,10 @@ export async function createManagedSkillWithFiles(
  *  the rest of the bundle (steps ①-③ run in the pipeline's pre-stage phase via
  *  stageManagedSkill; finishOperation/compensation stay with the caller). */
 export async function commitSkillReadyInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   p: { skillId: string; opId: string },
 ): Promise<void> {
+  const { skills } = tablesOf(tx)
   await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, p.skillId))
   await advancePhase(tx, p.opId, 'db-committed')
 }
@@ -370,7 +371,7 @@ export async function commitSkillReadyInTx(
  *  The skill stays INVISIBLE until commitSkillReadyInTx runs. On throw the
  *  stage is already compensated (same rollback as the create path). */
 export async function stageManagedSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   meta: {
     name: string
@@ -396,7 +397,8 @@ export async function stageManagedSkill(
   let opId: string
   try {
     opId = await databaseSessionFor(db).transaction(async (tx) => {
-      await tx.insert(skills).values({
+      const { skills } = tablesOf(tx)
+      await insertOne(tx, skills, {
         id,
         name: meta.name,
         description: meta.description,
@@ -452,7 +454,7 @@ export async function stageManagedSkill(
  *  boot convergence): files best-effort, then row + op in one tx (RFC-208
  *  ordering: a stranded lock is worse than a leftover dir). */
 export async function compensateManagedSkillStage(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   p: { skillId: string; opId: string; skillDir: string },
   creation?: SkillCreationContentStore,
 ): Promise<void> {
@@ -464,6 +466,7 @@ export async function compensateManagedSkillStage(
     /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
   }
   await databaseSessionFor(db).transaction(async (tx) => {
+    const { skills } = tablesOf(tx)
     await tx.delete(skills).where(eq(skills.id, p.skillId))
     await abandonOperation(tx, p.opId)
   })
@@ -472,7 +475,7 @@ export async function compensateManagedSkillStage(
 // --- delete ---
 
 export async function deleteSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   skillId: string,
   actor: Actor,
@@ -500,6 +503,7 @@ export async function deleteSkill(
         'malformed precondition token; reload and retry',
       )
     }
+    const { skills } = tablesOf(db)
     const live = await db
       .select({
         id: skills.id,
@@ -537,12 +541,14 @@ export async function deleteSkill(
   // RFC-223 (PR-1): agents.skills stores typed refs — match managed refs by id.
   const refs = await findAgentsUsingManagedSkill(
     {
-      find: (skillId) =>
-        findAgentsReferencingIdInJsonColumn(db, {
+      find: (skillId) => {
+        const { agents } = tablesOf(db)
+        return findAgentsReferencingIdInJsonColumn(db, {
           column: agents.skills,
           id: skillId,
           matches: matchesManagedSkillReference,
-        }),
+        })
+      },
     },
     existing.id,
   )
@@ -586,7 +592,7 @@ export async function deleteSkill(
 // --- SKILL.md content (parsed view) ---
 
 export async function readSkillContent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions | SkillContentReadOptions,
   skillId: string,
 ): Promise<SkillContent> {
@@ -598,6 +604,7 @@ export async function readSkillContent(
   const raw = await contentReaderFor(opts).readMain(contentReferenceOf(skill))
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
+  const { skills } = tablesOf(db)
   // RFC-170 §2/T3 + re-review-3: emit the composite precondition token AND the DB
   // description-fallback from ONE atomic row snapshot, keyed on the immutable id.
   // Reading skills.description and metaRevision in two separate queries let a
@@ -649,9 +656,10 @@ export async function readSkillContent(
  * A→B recreate resolve to null → the fusion is refused before any side effect.
  */
 export async function getSkillPreconditionTokenById(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   skillId: string,
 ): Promise<string | null> {
+  const { skills } = tablesOf(db)
   const row = await db
     .select({
       id: skills.id,
@@ -673,7 +681,7 @@ export async function getSkillPreconditionTokenById(
 }
 
 export async function writeSkillContent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   skillId: string,
   patch: UpdateSkillContent,
@@ -757,7 +765,7 @@ export async function writeSkillContent(
  * writeSkillContent (which bumps content_version) and returns the fresh token.
  */
 export async function saveSkillWithToken(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   skillId: string,
   patch: UpdateSkillContent,
@@ -770,6 +778,7 @@ export async function saveSkillWithToken(
 ): Promise<SkillContent> {
   const skill = await getSkillById(db, skillId)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  const { skills } = tablesOf(db)
   const metaRow = await db
     .select({ metaRevision: skills.metaRevision })
     .from(skills)
@@ -813,7 +822,7 @@ export async function saveSkillWithToken(
 // --- file tree ---
 
 export async function listSkillFiles(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions | SkillContentReadOptions,
   skillId: string,
 ): Promise<FileNode[]> {
@@ -825,7 +834,7 @@ export async function listSkillFiles(
 }
 
 export async function readSkillFile(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions | SkillContentReadOptions,
   skillId: string,
   relPath: string,
@@ -837,7 +846,7 @@ export async function readSkillFile(
 }
 
 export async function writeSkillFile(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   skillId: string,
   relPath: string,
@@ -879,7 +888,7 @@ export async function writeSkillFile(
 }
 
 export async function deleteSkillFile(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillFsOptions,
   skillId: string,
   relPath: string,

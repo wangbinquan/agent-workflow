@@ -1,6 +1,6 @@
 import type { SaveWorkgroupReceipt, Workgroup, WorkgroupDetail } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import { monotonicNow } from '@/util/time'
@@ -53,7 +53,7 @@ export interface WorkgroupCatalogCompositionDependencies extends Omit<
   WorkgroupCatalogAdapterCompositionDependencies,
   'repository' | 'projection' | 'access' | 'acl'
 > {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }
 
@@ -121,7 +121,7 @@ export function composeWorkgroupCatalogFromAdapters(
 
 /** 仓库依赖一份：引用可用性 / 访问解析 / 授权用户清单 / 定时任务引用 / 复制命名（测试也从这里拿）。 */
 export function workgroupRepositoryDependencies(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly id?: () => string
   readonly now?: () => number
 }): WorkgroupRepositoryDependencies {

@@ -5,12 +5,13 @@
 // → 记 heartbeat-kill 事件；disabled → no-op；隔离 → 跳；kill 非 'killed' → 跳）；
 // ② findStalledRunningChildren 真查询（running+pid+静默 → 命中；近期/非 running/无 pid → 排除）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   findStalledRunningChildren,
   runHeartbeatKillOnce,
@@ -30,12 +31,13 @@ afterEach(() => {
   __resetRecoveryCountersForTest()
 })
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -134,12 +136,13 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
 
 describeEachProvider('RFC-108 T20 — findStalledRunningChildren query', (harness) => {
   async function seedRun(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     taskId: string,
     opts: { status: string; pid: number | null; startedAt: number | null },
   ): Promise<string> {
     const id = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId: 'n1',

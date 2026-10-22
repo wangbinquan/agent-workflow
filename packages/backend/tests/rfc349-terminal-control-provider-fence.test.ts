@@ -12,8 +12,8 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 //   1. the SQLite bootstrap registered the worker only as a *close* participant,
 //      and the source session is deliberately kept open as the rollback horizon
 //      during a cutover — so its interval timer kept ticking after
-//      `selectDatabaseSchemaProvider('postgresql')` re-pointed the shared table
-//      projection, and every tick then prepared PostgreSQL-qualified SQL on the
+//      the former process-level table projection switched to PostgreSQL,
+//      and every tick then prepared PostgreSQL-qualified SQL on the
 //      bun:sqlite client;
 //   2. `wake()` assigned the drain promise without a rejection handler, so that
 //      failure surfaced as an unhandled rejection and terminated the process

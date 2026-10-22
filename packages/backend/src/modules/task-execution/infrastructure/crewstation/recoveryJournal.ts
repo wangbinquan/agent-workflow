@@ -1,6 +1,6 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { asc, eq, inArray } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedRecoveryRequests } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import {
@@ -45,7 +45,9 @@ export interface HostedRecoveryJournal {
   ): Promise<void>
 }
 
-function decode(row: typeof hostedRecoveryRequests.$inferSelect): HostedRecoveryRecord {
+function decode(
+  row: PersistenceTables['hostedRecoveryRequests']['$inferSelect'],
+): HostedRecoveryRecord {
   return {
     requestId: row.requestId,
     request: CrewStationRecoveryRequest.parse(JSON.parse(row.requestJson)),
@@ -61,20 +63,21 @@ function decode(row: typeof hostedRecoveryRequests.$inferSelect): HostedRecovery
 }
 
 export function createHostedRecoveryJournal(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly now?: () => number
 }): HostedRecoveryJournal {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
-  const write = async <T>(work: (tx: ProviderNeutralDatabase, epoch: number) => Promise<T>) => {
+  const write = async <T>(work: (tx: PersistenceDb, epoch: number) => Promise<T>) => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
       return work(tx, lease.epoch)
     })
   }
-  const read = async (db: ProviderNeutralDatabase, requestId: string) => {
+  const read = async (db: PersistenceDb, requestId: string) => {
+    const { hostedRecoveryRequests } = tablesOf(db)
     const row = (
       await db
         .select()
@@ -87,6 +90,7 @@ export function createHostedRecoveryJournal(input: {
   return {
     get: (requestId) => read(input.db, requestId),
     async active() {
+      const { hostedRecoveryRequests } = tablesOf(input.db)
       const rows = await input.db
         .select()
         .from(hostedRecoveryRequests)
@@ -96,6 +100,7 @@ export function createHostedRecoveryJournal(input: {
     },
     async admit({ request, taskId, actorUserId }) {
       return write(async (tx, epoch) => {
+        const { hostedRecoveryRequests } = tablesOf(tx)
         await tx
           .insert(hostedRecoveryRequests)
           .values({
@@ -115,6 +120,7 @@ export function createHostedRecoveryJournal(input: {
     },
     async executing(requestId, receipt) {
       await write(async (tx, epoch) => {
+        const { hostedRecoveryRequests } = tablesOf(tx)
         await tx
           .update(hostedRecoveryRequests)
           .set({
@@ -128,6 +134,7 @@ export function createHostedRecoveryJournal(input: {
     },
     async finish(requestId, state, reason) {
       await write(async (tx, epoch) => {
+        const { hostedRecoveryRequests } = tablesOf(tx)
         await tx
           .update(hostedRecoveryRequests)
           .set({

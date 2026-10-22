@@ -6,6 +6,8 @@
 // `describeEachProvider` 的 lane 交进来（`buildHarness(harness.db, …)`），修复入口统一取
 // `tests/helpers/repairEngine.ts` 的唯一装配点——同一批断言因此同时落在两个真引擎上。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { tmpdir } from 'node:os'
@@ -16,22 +18,14 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  docVersions,
-  lifecycleAlerts,
-  lifecycleRepairAudit,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { abortAllActiveTasks } from '../src/services/task'
 import { createRepairEngine, type RepairEngine } from './helpers/repairEngine'
 
 export const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 export interface RepairHarness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   workflowId: string
   tmpDir: string
@@ -44,7 +38,7 @@ export interface RepairHarness {
 }
 
 export async function buildHarness(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     taskStatus:
       | 'pending'
@@ -75,9 +69,10 @@ export async function buildHarness(
       edges: [],
     } as WorkflowDefinition)
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -101,7 +96,7 @@ export async function buildHarness(
 }
 
 export async function insertNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     nodeId: string
@@ -131,7 +126,8 @@ export async function insertNodeRun(
   },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId,
@@ -148,7 +144,7 @@ export async function insertNodeRun(
 }
 
 export async function insertDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     reviewNodeRunId: string
@@ -160,7 +156,8 @@ export async function insertDocVersion(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(docVersions).values({
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
     id,
     taskId,
     reviewNodeId: opts.reviewNodeId,
@@ -178,7 +175,7 @@ export async function insertDocVersion(
 }
 
 export async function insertClarifySession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     clarifyNodeRunId: string
@@ -204,7 +201,7 @@ export async function insertClarifySession(
 }
 
 export async function insertAlert(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     rule: string
@@ -213,7 +210,8 @@ export async function insertAlert(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(lifecycleAlerts).values({
+  const { lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, lifecycleAlerts, {
     id,
     taskId,
     rule: opts.rule,
@@ -226,7 +224,7 @@ export async function insertAlert(
 }
 
 export async function readAuditRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<
   Array<{
@@ -237,6 +235,7 @@ export async function readAuditRows(
     afterSnapshot: Record<string, unknown>
   }>
 > {
+  const { lifecycleRepairAudit } = tablesOf(db)
   const rows = await db
     .select()
     .from(lifecycleRepairAudit)
@@ -251,9 +250,10 @@ export async function readAuditRows(
 }
 
 export async function readAlert(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   alertId: string,
 ): Promise<{ resolvedAt: number | null; severity: string } | null> {
+  const { lifecycleAlerts } = tablesOf(db)
   const rows = await db
     .select()
     .from(lifecycleAlerts)
@@ -264,9 +264,10 @@ export async function readAlert(
 }
 
 export async function readNodeRunStatus(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   nodeRunId: string,
 ): Promise<string | null> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ status: nodeRuns.status })
     .from(nodeRuns)
@@ -275,10 +276,8 @@ export async function readNodeRunStatus(
   return rows[0]?.status ?? null
 }
 
-export async function readTaskStatus(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<string | null> {
+export async function readTaskStatus(db: PersistenceDb, taskId: string): Promise<string | null> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ status: tasks.status })
     .from(tasks)

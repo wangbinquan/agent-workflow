@@ -14,16 +14,20 @@
 // 哪个字段」才是两个引擎真正不同的地方。所以用 agents 的真实唯一冲突把两个引擎各走一遍就够；
 // skill / workgroup 走的是同一个分类器、同一条判据，当时坏也是坏在同一处。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { isOwnerScopedNameConflict } from '@/modules/identity-access/public/operations'
-import { agents } from '@/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const CASES = [
   {
     label: 'agents',
-    table: agents,
+    table: (db: object) => {
+      const { agents } = tablesOf(db)
+      return agents
+    },
     indexName: 'agents_owner_name_unique',
     row: (id: string) => ({
       id,
@@ -54,10 +58,10 @@ const CASES = [
 describeEachProvider('RFC-359 owner-scoped name conflict is one verdict on both engines', (h) => {
   for (const testCase of CASES) {
     test(`${testCase.label}: the unique violation classifies as an owner/name conflict`, async () => {
-      await h.db.insert(testCase.table).values(testCase.row('conflict-1'))
+      await insertOne(h.db, testCase.table(h.db), testCase.row('conflict-1'))
       let raised: unknown
       try {
-        await h.db.insert(testCase.table).values(testCase.row('conflict-2'))
+        await insertOne(h.db, testCase.table(h.db), testCase.row('conflict-2'))
       } catch (error) {
         raised = error
       }
@@ -77,10 +81,11 @@ describeEachProvider('RFC-359 owner-scoped name conflict is one verdict on both 
   // 会被回成 409「同名已存在」，把用户指向一个不存在的问题。
   test('a unique violation on a different index is not an owner/name conflict', async () => {
     const row = CASES[0].row('same-id')
-    await h.db.insert(agents).values(row)
+    const { agents } = tablesOf(h.db)
+    await insertOne(h.db, agents, row)
     let raised: unknown
     try {
-      await h.db.insert(agents).values({ ...row, name: 'a-different-name' })
+      await insertOne(h.db, agents, { ...row, name: 'a-different-name' })
     } catch (error) {
       raised = error
     }

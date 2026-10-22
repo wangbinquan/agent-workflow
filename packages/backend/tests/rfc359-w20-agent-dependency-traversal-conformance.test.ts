@@ -1,14 +1,16 @@
 // RFC-359 AC1: two save-time Agent dependency walks duplicated the same DFS.
 // Preserve their caller-owned root normalization and SQL while sharing the
 // traversal. Pure scheduling cases and real transactional readers are separate.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import ts from 'typescript'
 import { CreateAgentSchema } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertAgentDependencyTraversal } from '@/modules/resource-catalog/infrastructure/agentDependencyTraversal'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -28,10 +30,11 @@ function decodeDependencies(raw: string): readonly string[] {
   }
 }
 
-function rowReader(db: ProviderNeutralDatabase, shape: QueryShape, observed: string[]) {
+function rowReader(db: PersistenceDb, shape: QueryShape, observed: string[]) {
   return async (id: string): Promise<readonly string[] | undefined> => {
     observed.push(id)
     if (shape === 'limited-array') {
+      const { agents } = tablesOf(db)
       const row = (
         await db
           .select({ dependsOn: agents.dependsOn })
@@ -41,18 +44,21 @@ function rowReader(db: ProviderNeutralDatabase, shape: QueryShape, observed: str
       )[0]
       return row === undefined ? undefined : decodeDependencies(row.dependsOn)
     }
-    const row = await db
-      .select({ id: agents.id, dependsOn: agents.dependsOn })
-      .from(agents)
-      .where(eq(agents.id, id))
-      .get()
+    const { agents } = tablesOf(db)
+    const row = await first(
+      db
+        .select({ id: agents.id, dependsOn: agents.dependsOn })
+        .from(agents)
+        .where(eq(agents.id, id)),
+    )
     return row === undefined ? undefined : decodeDependencies(row.dependsOn)
   }
 }
 
-async function insertGraph(db: ProviderNeutralDatabase, rows: Readonly<Record<string, string>>) {
+async function insertGraph(db: PersistenceDb, rows: Readonly<Record<string, string>>) {
   for (const [id, dependsOn] of Object.entries(rows)) {
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       ...createAgentPersistenceValues({
         id,
         agent: CreateAgentSchema.parse({ name: id }),
@@ -201,7 +207,7 @@ describe('ordered Agent dependency traversal', () => {
     expect(semantics).toContain('.select({ dependsOn: agents.dependsOn })')
     expect(semantics).toContain('.limit(1))[0]')
     expect(packageArm).toContain('.select({ id: agents.id, dependsOn: agents.dependsOn })')
-    expect(packageArm).toContain('.get()')
+    expect(packageArm).toContain('await first(')
     expect(functionBody('agentPersistenceSemantics.ts', 'unique')).toContain(
       'new Set(values.filter((value) => value.length > 0))',
     )
@@ -213,7 +219,8 @@ describe('ordered Agent dependency traversal', () => {
 
 describeEachProvider('Agent dependency traversal uses the caller transaction', (harness) => {
   beforeEach(async () => {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: OWNER,
       displayName: OWNER,
@@ -249,7 +256,7 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
             .filter((statement) => statement.sql.includes('"agents"'))
           expect(reads.map((statement) => statement.rows)).toEqual([1, 1, 1])
           expect(reads.map((statement) => [...statement.values])).toEqual(
-            observed.map((id) => (shape === 'limited-array' ? [id, 1] : [id])),
+            observed.map((id) => [id, 1]),
           )
           for (const read of reads) {
             if (shape === 'limited-array') {
@@ -257,9 +264,10 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
               expect(read.sql).toMatch(/\blimit\b/i)
             } else {
               expect(read.sql).toMatch(/select\s+"id",\s*"depends_on"\s+from/i)
-              expect(read.sql).not.toMatch(/\blimit\b/i)
+              expect(read.sql).toMatch(/\blimit\b/i)
             }
           }
+          const { agents } = tablesOf(tx)
           expect(
             await tx
               .select({ id: agents.id })
@@ -270,6 +278,7 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
           throw sentinel
         }),
       ).rejects.toBe(sentinel)
+      const { agents } = tablesOf(harness.db)
       expect(await harness.db.select().from(agents).where(inArray(agents.id, IDS))).toEqual([])
     })
 
@@ -284,6 +293,7 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
           const reader = rowReader(tx, shape, observed)
           await assertAgentDependencyTraversal('candidate', ['traversal-a'], reader)
           expect(observed).toEqual(['traversal-a', 'traversal-leaf'])
+          const { agents } = tablesOf(tx)
           await tx
             .update(agents)
             .set({ dependsOn: '["missing-z","missing-a"]' })
@@ -297,6 +307,7 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
         details: { notFound: ['missing-z'] },
       })
       expect(observed).toEqual(['traversal-a', 'traversal-leaf', 'missing-z'])
+      const { agents } = tablesOf(harness.db)
       expect(await harness.db.select().from(agents).where(inArray(agents.id, IDS))).toEqual([])
     })
   }

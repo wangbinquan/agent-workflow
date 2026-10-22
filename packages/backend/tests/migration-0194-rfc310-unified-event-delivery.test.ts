@@ -1,3 +1,4 @@
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
@@ -7,12 +8,16 @@ import { MIGRATIONS } from './migration-freeze'
 describe('migration 0194 — unified multicast event delivery', () => {
   test('stores generic event launch provenance and removes transport priority', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const taskColumns = db.all<{ name: string }>(sql`SELECT name FROM pragma_table_info('tasks')`)
+    const taskColumns = rawRows<{ name: string }>(
+      db,
+      sql`SELECT name FROM pragma_table_info('tasks')`,
+    )
     expect(taskColumns.map((column) => column.name)).toEqual(
       expect.arrayContaining(['event_subscription_id', 'event_delivery_id']),
     )
 
-    const deliveryColumns = db.all<{ name: string }>(
+    const deliveryColumns = rawRows<{ name: string }>(
+      db,
       sql`SELECT name FROM pragma_table_info('event_deliveries')`,
     )
     const deliveryNames = deliveryColumns.map((column) => column.name)
@@ -27,24 +32,32 @@ describe('migration 0194 — unified multicast event delivery', () => {
         'dead_letter_at',
       ]),
     )
-    expect(db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+    expect(rawRows(db, sql`PRAGMA foreign_key_check`)).toEqual([])
   })
 
   test('allows one event to fan out but forbids duplicate delivery per subscription', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    db.run(sql`
+    rawExec(
+      db,
+      sql`
       INSERT INTO event_sources (
         source_id, revision, descriptor_json, descriptor_digest, state, registered_at
       ) VALUES ('source', 1, '{}', 'digest', 'published', 1)
-    `)
-    db.run(sql`
+    `,
+    )
+    rawExec(
+      db,
+      sql`
       INSERT INTO event_type_catalog (
         event_type_id, revision, source_id, source_revision,
         descriptor_json, descriptor_digest, state, registered_at
       ) VALUES ('event.type', 1, 'source', 1, '{}', 'digest', 'published', 1)
-    `)
+    `,
+    )
     for (const subscriptionId of ['subscription-a', 'subscription-b']) {
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO event_subscriptions (
           id, event_type_id, event_type_revision, source_id, source_revision,
           subject_type, subject_ref, subscriber_kind, subscriber_ref,
@@ -54,9 +67,12 @@ describe('migration 0194 — unified multicast event delivery', () => {
           'subject', 'subject-1', 'system', ${subscriptionId},
           'exact', 'active', 1, 1
         )
-      `)
+      `,
+      )
     }
-    db.run(sql`
+    rawExec(
+      db,
+      sql`
       INSERT INTO event_records (
         id, event_type_id, event_type_revision, source_id, source_revision,
         subject_type, subject_ref, occurred_at, observed_at, dedupe_key, summary_json
@@ -64,12 +80,15 @@ describe('migration 0194 — unified multicast event delivery', () => {
         'event-1', 'event.type', 1, 'source', 1,
         'subject', 'subject-1', 1, 1, 'dedupe-1', '{"summary":"event"}'
       )
-    `)
+    `,
+    )
     for (const [deliveryId, subscriptionId] of [
       ['delivery-a', 'subscription-a'],
       ['delivery-b', 'subscription-b'],
     ] as const) {
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO event_deliveries (
           id, event_id, subscription_id, subscriber_kind, subscriber_ref,
           delivery_class, state, attempt_count, next_attempt_at, created_at
@@ -77,16 +96,20 @@ describe('migration 0194 — unified multicast event delivery', () => {
           ${deliveryId}, 'event-1', ${subscriptionId}, 'system', ${subscriptionId},
           'test', 'pending', 0, 1, 1
         )
-      `)
+      `,
+      )
     }
 
     expect(
-      db.all<{ subscriptionId: string }>(
+      rawRows<{ subscriptionId: string }>(
+        db,
         sql`SELECT subscription_id AS subscriptionId FROM event_deliveries ORDER BY subscription_id`,
       ),
     ).toEqual([{ subscriptionId: 'subscription-a' }, { subscriptionId: 'subscription-b' }])
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO event_deliveries (
           id, event_id, subscription_id, subscriber_kind, subscriber_ref,
           delivery_class, state, attempt_count, next_attempt_at, created_at
@@ -94,7 +117,8 @@ describe('migration 0194 — unified multicast event delivery', () => {
           'delivery-duplicate', 'event-1', 'subscription-a', 'system', 'subscription-a',
           'test', 'pending', 0, 1, 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
   })
 })

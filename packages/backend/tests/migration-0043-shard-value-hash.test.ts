@@ -11,18 +11,20 @@
 //   done shard must stay reusable). If a future table rebuild drops/renames
 //   the column, these go RED. (Conventions mirror migration-0040.)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'm43',
     description: '',
@@ -30,7 +32,7 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'm43',
     workflowId: wfId,
@@ -49,14 +51,15 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
 describe('RFC-098 migration 0043 — node_runs.shard_value_hash', () => {
   test('node_runs has the shard_value_hash column', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = db.all(sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
+    const cols = rawRows(db, sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
     expect(cols.map((c) => c.name)).toContain('shard_value_hash')
   })
 
   test('a fanout shard child row round-trips its value hash', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: '01FANWRAPPER',
       taskId,
       nodeId: 'fan',
@@ -65,7 +68,7 @@ describe('RFC-098 migration 0043 — node_runs.shard_value_hash', () => {
       iteration: 0,
     })
     const hash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: '01SHARDCHILD',
       taskId,
       nodeId: 'inner',
@@ -83,7 +86,8 @@ describe('RFC-098 migration 0043 — node_runs.shard_value_hash', () => {
   test('historical-style row leaves shard_value_hash NULL (NULL=MATCH precondition)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: '01LEGACYSHARD',
       taskId,
       nodeId: 'inner',

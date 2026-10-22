@@ -22,6 +22,8 @@
 // 工作流刻意取最小形态 input → output（零 agent 节点，opencode 不会真被
 // spawn），因此本测试只行使 runTask 的入口路径 + frontier 终结路径，确定性 100%。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -30,9 +32,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import {
   createProviderTaskExecutionTestTopology,
@@ -47,7 +48,7 @@ const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
   db: TDatabase
   postgresql: boolean
   appHome: string
@@ -109,17 +110,18 @@ function minimalDef(): WorkflowDefinition {
 async function seedTaskWithStatus(
   h: Harness,
   status: 'pending' | 'canceled' | 'done' | 'running',
-  extra: Partial<typeof tasks.$inferInsert> = {},
+  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   const def = minimalDef()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'audit-s08-task',
     workflowId,
@@ -144,7 +146,7 @@ async function seedTaskWithStatus(
   return taskId
 }
 
-function bindInvokeRunTask<TDatabase extends ProviderNeutralDatabase>(
+function bindInvokeRunTask<TDatabase extends PersistenceDb>(
   runTask: (
     options: Parameters<ProviderTaskExecutionTestTopology['runTask']>[0] & { db: TDatabase },
   ) => Promise<void>,
@@ -176,6 +178,7 @@ function registerNativeCases1() {
 
     await invokeRunTask(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     // 终态设防：runTask 入口 CAS from={pending} 失败 → log + return。
     expect(row?.status).toBe('canceled')
@@ -194,6 +197,7 @@ function registerNativeCases1() {
 
     await invokeRunTask(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(row?.status).toBe('done')
     expect(row?.finishedAt).toBe(staleFinishedAt)
@@ -209,6 +213,7 @@ function registerNativeCases1() {
 
     await invokeRunTask(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     // 状态仍归第一实例所有；本次调用零副作用（不翻状态、不终结）。
     expect(row?.status).toBe('running')
@@ -233,7 +238,7 @@ function registerProviderCases2(provider: ProviderHarness) {
     if (execution === undefined) throw new Error('task runtime fixture not initialized')
     return execution.runTask(options)
   }
-  const invokeRunTask = bindInvokeRunTask<ProviderNeutralDatabase>(runTask)
+  const invokeRunTask = bindInvokeRunTask<PersistenceDb>(runTask)
   beforeEach(async () => {
     fixture = undefined
     execution = undefined
@@ -256,6 +261,7 @@ function registerProviderCases2(provider: ProviderHarness) {
 
     await invokeRunTask(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(row?.status).toBe('done')
     expect(row?.finishedAt ?? 0).toBeGreaterThan(0)

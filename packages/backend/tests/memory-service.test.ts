@@ -6,7 +6,7 @@
 // WS publication shape.
 
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   composeMemoryCatalogOperations,
@@ -17,7 +17,7 @@ import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthor
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { MemoryWsMessage } from '@agent-workflow/shared'
 
-function memoryCatalogOf(db: ProviderNeutralDatabase, testHooks?: MemoryCatalogTestHooks) {
+function memoryCatalogOf(db: PersistenceDb, testHooks?: MemoryCatalogTestHooks) {
   return composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
@@ -35,7 +35,7 @@ function captureBroadcasts(): { msgs: MemoryWsMessage[]; stop: () => void } {
 }
 
 describeEachProvider('memory service — PR1 CRUD + supersede chain', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
     resetBroadcastersForTests()

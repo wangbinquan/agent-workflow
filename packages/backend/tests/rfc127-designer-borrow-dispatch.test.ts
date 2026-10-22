@@ -20,14 +20,15 @@
 // What remains is ONE structural lock: a clarify reassign produces a designer handler with NO
 // override — so a refactor that re-introduces borrow through the reassign path goes red here.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -100,12 +101,13 @@ function ans(qid: string) {
 /** Seed a task on liveDef + the designer's prior `done` draft + the questioner's `done` asking run,
  *  then open one cross-clarify session (awaiting_human). */
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; crossClarifyNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc127-retired',
     description: '',
@@ -113,7 +115,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -130,7 +132,7 @@ async function seedTask(
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: DESIGNER,
@@ -140,7 +142,7 @@ async function seedTask(
     startedAt: Date.now() - 1000,
   })
   const questionerRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: questionerRunId,
     taskId,
     nodeId: QUESTIONER,
@@ -163,7 +165,8 @@ async function seedTask(
   return { taskId, crossClarifyNodeRunId }
 }
 
-async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+async function designerEntries(db: PersistenceDb, taskId: string) {
+  const { taskQuestions } = tablesOf(db)
   return db
     .select()
     .from(taskQuestions)
@@ -185,6 +188,7 @@ describeEachProvider('RFC-359 rfc127-designer-borrow-dispatch database behavior'
         answers: [ans('q1')],
         directive: 'continue',
       })
+      const { taskQuestions } = tablesOf(db)
       const questioner = (
         await db
           .select()

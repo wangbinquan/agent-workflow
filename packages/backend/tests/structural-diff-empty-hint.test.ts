@@ -4,20 +4,21 @@
 // broke" (observed on a real refactor task). The service now stamps
 // `emptyHint` so the frontend can explain WHY the view is empty.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 
 describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) => {
   const getTaskStructuralDiff = (
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
       ? Rest
       : never
@@ -42,7 +43,7 @@ describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) =
   }
 
   async function seedTask(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     opts: {
       worktreePath: string
       baseCommit: string
@@ -51,13 +52,14 @@ describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) =
   ): Promise<string> {
     const taskId = `01EH${Math.random().toString(36).slice(2, 10).toUpperCase()}`
     const workflowId = `wf-${taskId}`
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify({ nodes: [], edges: [] }),
       version: 1,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([

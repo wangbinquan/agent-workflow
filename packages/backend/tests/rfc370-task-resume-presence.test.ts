@@ -1,22 +1,15 @@
 // RFC-370: ordinary routes use the selected SC presence facts before admission.
 // These real-provider cases stop at the existing source fence after a positive
 // receipt; they do not claim to execute the TaskEngine or a remote workspace.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import {
-  nodeRuns,
-  taskExecutionIntents,
-  taskExecutionOwners,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 
@@ -28,12 +21,13 @@ function barrier() {
   })
   return { pending, release }
 }
-async function seed(db: ProviderNeutralDatabase, repositories = 1) {
+async function seed(db: PersistenceDb, repositories = 1) {
   const taskId = ulid(),
     workflowId = ulid(),
     userId = ulid()
   const workspace = `workspace://${taskId}`
-  await db.insert(users).values({
+  const { users, workflows, tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, users, {
     id: userId,
     username: userId,
     displayName: userId,
@@ -43,8 +37,8 @@ async function seed(db: ProviderNeutralDatabase, repositories = 1) {
     updatedAt: 1,
   })
   const definition = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
-  await db.insert(workflows).values({ id: workflowId, name: 'resume presence', definition })
-  await db.insert(tasks).values({
+  await insertOne(db, workflows, { id: workflowId, name: 'resume presence', definition })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'resume presence',
     workflowId,
@@ -77,7 +71,8 @@ async function seed(db: ProviderNeutralDatabase, repositories = 1) {
   }
   return { taskId, userId, workspace, refs }
 }
-async function assertUnadmitted(db: ProviderNeutralDatabase, taskId: string) {
+async function assertUnadmitted(db: PersistenceDb, taskId: string) {
+  const { tasks, taskExecutionOwners, taskExecutionIntents } = tablesOf(db)
   const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
   expect(row?.status).toBe('failed')
   expect(row?.lifecycleEventRevision).toBe(1)
@@ -203,6 +198,7 @@ describeEachProvider('RFC-370 ordinary task resume selected workspace presence',
   for (const phase of ['preparing', 'pruning', 'pruned'] as const) {
     test(`${phase} retains its earlier decision without an existence call`, async () => {
       const fixture = await seed(harness.db)
+      const { tasks, nodeRuns } = tablesOf(harness.db)
       await harness.db
         .update(tasks)
         .set({
@@ -212,7 +208,7 @@ describeEachProvider('RFC-370 ordinary task resume selected workspace presence',
         })
         .where(eq(tasks.id, fixture.taskId))
       if (phase === 'preparing')
-        await harness.db.insert(nodeRuns).values({
+        await insertOne(harness.db, nodeRuns, {
           id: ulid(),
           taskId: fixture.taskId,
           nodeId: '__repo_prep__',

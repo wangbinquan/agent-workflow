@@ -16,21 +16,23 @@
 // **整个 filters 对象**做规范序列化，整类 bug 一次性消失。本文件同时锁住两件事：
 //   1. 只差一个筛选项的并发查询**不得**被合并（逐项过一遍，新加的筛选项漏了就红）；
 //   2. 完全同形的并发查询**仍然**被合并（别把性能特性一起修没了）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import type { TaskRouteListFilters } from '@/modules/task-execution/public/taskRoutes'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 const NOW = 1_788_300_000_000
 
-async function seedListFixture(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seedListFixture(db: PersistenceDb): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u-flight',
     username: 'flight',
     displayName: 'Flight',
@@ -39,7 +41,7 @@ async function seedListFixture(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf-flight',
     name: 'flight',
     definition: JSON.stringify({ $schema_version: 5, inputs: [], nodes: [], edges: [] }),
@@ -60,10 +62,13 @@ async function seedListFixture(db: ProviderNeutralDatabase): Promise<void> {
     catalogVisibility: 'public' as const,
     repoCount: 1,
   }
-  await db
-    .insert(tasks)
-    .values({ ...base, id: 'tk-schedule-0001', name: 'by schedule', launchOrigin: 'scheduled' })
-  await db.insert(tasks).values({ ...base, id: 'tk-api-0001', name: 'by api', launchOrigin: 'api' })
+  await insertOne(db, tasks, {
+    ...base,
+    id: 'tk-schedule-0001',
+    name: 'by schedule',
+    launchOrigin: 'scheduled',
+  })
+  await insertOne(db, tasks, { ...base, id: 'tk-api-0001', name: 'by api', launchOrigin: 'api' })
 }
 
 describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛选项', (harness) => {

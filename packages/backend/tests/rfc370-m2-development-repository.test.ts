@@ -1,10 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { cachedRepos } from '@/db/schema'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createHostedDevelopmentRepositoryPreparation } from '@/modules/source-control/infrastructure/crewstation/developmentRepository'
 import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/composition/crewstationWorkspace'
@@ -21,7 +22,8 @@ describeEachProvider('RFC-370 canonical development repository volume', (harness
   test('unknown refresh reuses the original command before publishing the prepared owner reference', async () => {
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 13))
     const url = 'https://git.example.test/project.git'
-    await harness.db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(harness.db)
+    await insertOne(harness.db, cachedRepos, {
       id: 'repo',
       urlHash: createHash('sha256').update(url).digest('hex'),
       urlEnc: secretBox.seal(url),

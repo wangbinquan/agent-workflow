@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
@@ -5,7 +6,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition'
-import { employeeInputUploads } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -109,6 +109,7 @@ describeEachProviderHttpApplication(
         const selected = new SelectedInputStorage(outcome)
         expect(Object.hasOwn(selected, 'putFile')).toBe(false)
         const { app, appHome } = await scope.open({ employeeInputArtifacts: selected })
+        const { employeeInputUploads } = tablesOf(scope.harness.db)
         const before = await scope.harness.db.select().from(employeeInputUploads)
         let settled = false
         const pending = Promise.resolve(

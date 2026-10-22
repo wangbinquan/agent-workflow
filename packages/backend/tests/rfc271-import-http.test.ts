@@ -5,6 +5,9 @@
 // This test crosses that seam with a real preview -> multipart commit request and checks durable
 // effects on both sides of the contract.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -16,8 +19,7 @@ import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { mcps, resourceBundleApplies, users, workgroupMembers, workgroups } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CommandContext,
   QueryContext,
@@ -31,7 +33,7 @@ import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePa
 
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 const tempDirs: string[] = []
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 /**
  * RFC-359 —— apply 引擎合一后，写会话**会**读 `context.authority`：它把 authority 解回 Actor
@@ -189,12 +191,13 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
 }
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   username: string,
   role: 'admin' | 'user',
 ): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -207,7 +210,7 @@ async function seedUser(
 }
 
 function appWithResourcePackageRoutes(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   actor = buildActor({
     user: {
@@ -402,18 +405,20 @@ describeEachProvider('资源包 multipart 提交的路由接缝（双引擎）',
       expect(receipt.skippedSecrets).toEqual([
         { resourceType: 'mcp', resourceName: 'tools', field: 'config.env.OPTIONAL_TOKEN' },
       ])
+      const { resourceBundleApplies, mcps, workgroups, workgroupMembers } = tablesOf(db)
       const storedReceipt = JSON.parse(
         (
-          await db
-            .select({ receiptJson: resourceBundleApplies.receiptJson })
-            .from(resourceBundleApplies)
-            .where(eq(resourceBundleApplies.id, receipt.journalId))
-            .get()
+          await first(
+            db
+              .select({ receiptJson: resourceBundleApplies.receiptJson })
+              .from(resourceBundleApplies)
+              .where(eq(resourceBundleApplies.id, receipt.journalId)),
+          )
         )?.receiptJson ?? '{}',
       ) as { skippedSecrets?: unknown }
       expect(storedReceipt.skippedSecrets).toEqual(receipt.skippedSecrets)
 
-      const landedMcp = await db.select().from(mcps).where(eq(mcps.name, 'tools')).get()
+      const landedMcp = await first(db.select().from(mcps).where(eq(mcps.name, 'tools')))
       expect(landedMcp).toBeDefined()
       const config = JSON.parse(landedMcp?.config ?? '{}') as {
         env?: Record<string, string>
@@ -421,11 +426,9 @@ describeEachProvider('资源包 multipart 提交的路由接缝（双引擎）',
       expect(config.env).toEqual({ TOKEN: 'secret-from-http' })
       expect(JSON.stringify(config)).not.toContain(PACKAGE_SECRET_PLACEHOLDER)
 
-      const landedWorkgroup = await db
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.name, 'squad'))
-        .get()
+      const landedWorkgroup = await first(
+        db.select().from(workgroups).where(eq(workgroups.name, 'squad')),
+      )
       expect(landedWorkgroup).toBeDefined()
       const landedMembers = await db
         .select()

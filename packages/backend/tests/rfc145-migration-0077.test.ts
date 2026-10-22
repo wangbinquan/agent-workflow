@@ -11,6 +11,8 @@
 //   ④ 不匹配行留 NULL（= 无机器可读失败，合法常态）；幂等。
 // 另按 0044 先例锁列存在/往返/历史行 NULL/全枚举可存（真迁移链路）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -19,8 +21,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { FAILURE_CODES } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIGRATION = readFileSync(resolve(MIGRATIONS, '0077_rfc145_failure_code.sql'), 'utf8')
 
@@ -164,13 +164,14 @@ describe('migration 0077 — 真迁移链路（0044 先例四测）', () => {
   async function harness() {
     const db = createInMemoryDb(MIGRATIONS)
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 't',
       id: taskId,
       workflowId,
@@ -189,7 +190,8 @@ describe('migration 0077 — 真迁移链路（0044 先例四测）', () => {
   test('三列存在且可往返；省略时为 NULL（历史行语义）', async () => {
     const { db, taskId } = await harness()
     const id = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId: 'n',
@@ -205,9 +207,13 @@ describe('migration 0077 — 真迁移链路（0044 先例四测）', () => {
     expect(row.rolledBack).toBe(true)
 
     const bare = ulid()
-    await db
-      .insert(nodeRuns)
-      .values({ id: bare, taskId, nodeId: 'n', status: 'failed', startedAt: Date.now() })
+    await insertOne(db, nodeRuns, {
+      id: bare,
+      taskId,
+      nodeId: 'n',
+      status: 'failed',
+      startedAt: Date.now(),
+    })
     const bareRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, bare)))[0]!
     expect(bareRow.failureCode).toBeNull()
     expect(bareRow.supersededByReview).toBeNull()
@@ -219,7 +225,8 @@ describe('migration 0077 — 真迁移链路（0044 先例四测）', () => {
     const { db, taskId } = await harness()
     for (const code of FAILURE_CODES) {
       const id = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id,
         taskId,
         nodeId: 'n',

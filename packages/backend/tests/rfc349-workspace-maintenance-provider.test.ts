@@ -1,3 +1,6 @@
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -14,8 +17,6 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { taskExecutionMaintenanceClaims, tasks, workflows } from '@/db/schema'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
@@ -39,7 +40,6 @@ function rows(objects: readonly Record<string, unknown>[] = []): SqlRows {
 }
 
 afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
   while (cleanups.length > 0) cleanups.pop()?.()
 })
 
@@ -61,7 +61,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       resolve(sourceRoot, 'infrastructure/workspaceMaintenanceStore.ts'),
       'utf8',
     )
-    expect(neutral).toContain('ProviderNeutralDatabase')
+    expect(neutral).toContain('PersistenceDb')
     expect(neutral).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient|createInMemoryDb|deasync/)
   })
 
@@ -96,10 +96,10 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       if (/update\s+"agent_workflow"\."tasks"/i.test(query)) return rows([{ id: 'task-pg' }])
       throw new Error(`unexpected PostgreSQL workspace query: ${query}`)
     }
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe: execute,
       release() {},
-    }
+    })
     const pool: PostgresqlPool = {
       unsafe: execute,
       async reserve() {
@@ -152,14 +152,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const workspace = join(appHome, 'scratch', taskId)
     mkdirSync(workspace, { recursive: true })
     writeFileSync(join(workspace, 'result.md'), 'durable workspace')
-    await db.insert(workflows).values({
+    const { workflows, tasks, taskExecutionMaintenanceClaims } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'workspace maintenance fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'terminal scratch task',
       workflowId,
@@ -268,14 +269,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const taskId = ulid()
     const workspace = join(appHome, 'scratch', taskId)
     mkdirSync(workspace, { recursive: true })
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'workspace recovery fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'claimed scratch task',
       workflowId,
@@ -327,14 +329,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const taskId = ulid()
     const isoRoot = join(appHome, 'iso', taskId)
     mkdirSync(join(isoRoot, 'attempt-1'), { recursive: true })
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'iso maintenance fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'terminal remote task',
       workflowId,
@@ -376,14 +379,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const db = harness.db
     const workflowId = ulid()
     const taskId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'iso lease CAS fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'terminal task with a replaced ISO claim',
       workflowId,

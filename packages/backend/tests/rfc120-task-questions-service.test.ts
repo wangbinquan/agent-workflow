@@ -9,18 +9,12 @@
 //   * reconcile is idempotent (listing twice does not duplicate rows).
 //   * sourceNodeId + phase filters.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import {
-  clarifyRounds,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   confirmTaskQuestion,
   listTaskQuestions,
@@ -55,8 +49,9 @@ const Q = (id: string) => ({
   ],
 })
 
-async function seedTask(db: ProviderNeutralDatabase, taskId = 'task-1') {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId = 'task-1') {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf-1',
     name: 'wf',
     definition: '{}',
@@ -64,7 +59,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId = 'task-1') {
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId: 'wf-1',
@@ -81,7 +76,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId = 'task-1') {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   id: string,
   nodeId: string,
@@ -92,7 +87,8 @@ async function seedRun(
     withOutput?: boolean
   } = {},
 ) {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -102,14 +98,14 @@ async function seedRun(
     startedAt: Date.now(),
   })
   if (over.withOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'x' })
   }
 }
 
 async function seedRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  over: Partial<typeof clarifyRounds.$inferSelect> & {
+  over: Partial<PersistenceTables['clarifyRounds']['$inferSelect']> & {
     id: string
     kind: 'self' | 'cross'
     askingNodeId: string
@@ -121,7 +117,8 @@ async function seedRound(
   const askingRunId = `${over.id}-ask`
   await seedRun(db, taskId, askingRunId, over.askingNodeId)
   await seedRun(db, taskId, over.intermediaryNodeRunId, `${over.id}-intnode`)
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     taskId,
     askingNodeRunId: askingRunId,
     intermediaryNodeId: `${over.id}-int`,
@@ -158,6 +155,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
     // RFC-132: 相位派生自 entry 自身 dispatch 状态 — reconcile 建 entry 后 dispatch+bind 到
     // done+output handler(取代旧 consumption-stamp seed)。
     const [pre] = await listTaskQuestions(db, taskId)
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), triggerRunId: 'r-handler' })
@@ -238,6 +236,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       status: 'awaiting_human',
     })
 
+    const { tasks, taskQuestions } = tablesOf(db)
     // The first board read happens only after the task is terminal. It must hide
     // the actionable card while still lazily materializing the audit ledger.
     await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
@@ -274,6 +273,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
     const second = await listTaskQuestions(db, taskId)
     expect(first).toHaveLength(2)
     expect(second).toHaveLength(2)
+    const { taskQuestions } = tablesOf(db)
     const rows = await db.select().from(taskQuestions)
     expect(rows.length).toBe(2)
   })
@@ -307,7 +307,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
 })
 
 describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harness) => {
-  async function seedSelfAwaitingConfirm(db: ProviderNeutralDatabase) {
+  async function seedSelfAwaitingConfirm(db: PersistenceDb) {
     const taskId = await seedTask(db)
     await seedRun(db, taskId, 'r-handler', 'designer', {
       rerunCause: 'clarify-answer',
@@ -324,6 +324,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     })
     // RFC-132: dispatch+bind 取代 consumption-stamp seed(相位读 entry 自身 dispatch 状态)。
     const [pre] = await listTaskQuestions(db, taskId)
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), triggerRunId: 'r-handler' })
@@ -360,7 +361,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
   })
 
   /** Seed an answered cross round (single questioner card) and return its taskId. */
-  async function seedAnsweredCross(db: ProviderNeutralDatabase, id = 'x1') {
+  async function seedAnsweredCross(db: PersistenceDb, id = 'x1') {
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id,
@@ -424,6 +425,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     // Simulate RFC-128 P1 per-question seal: stamp the asker entry sealedAt while the round
     // stays 'awaiting_human' (a partial seal is a pure derived state — clarifySeal.ts:22).
     const sealTs = Date.now()
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ sealedAt: sealTs })
@@ -447,6 +449,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     const dispatchedAt = Date.now()
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt, dispatchedBy: 'u1' })
@@ -472,6 +475,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     const [questioner] = await listTaskQuestions(db, taskId)
     // Add the designer first (asker still undispatched), then dispatch the asker.
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), dispatchedBy: 'u1' })
@@ -492,6 +496,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     const stagedAt = Date.now() - 5_000
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ stagedAt, stagedBy: 'u9', sealedAt: stagedAt })
@@ -511,6 +516,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const { taskQuestions } = tablesOf(db)
     const designer = (await db.select().from(taskQuestions)).find((r) => r.roleKind === 'designer')!
     expect(designer.stagedAt).toBeNull()
   })
@@ -521,6 +527,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    const { taskQuestions } = tablesOf(db)
     const rows = await db.select().from(taskQuestions)
     expect(rows.some((r) => (r.roleKind as string) === 'echo')).toBe(false)
   })
@@ -576,6 +583,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
     })
     const [entry] = await listTaskQuestions(db, taskId)
     expect(entry!.phase).toBe('pending')
+    const { taskQuestions } = tablesOf(db)
     // RFC-128 P2 §11 — 待下发 gate: a question must be SEALED before it can be staged. Stamp
     // the per-question seal marker directly (a partial control-channel seal leaves the round
     // awaiting_human, so the entry stays 'pending' yet is now stageable). Without this the
@@ -641,6 +649,7 @@ describeEachProvider('RFC-120 Codex impl-gate regressions (F1/F2/F3)', (harness)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
     let designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), triggerRunId: 'h' })

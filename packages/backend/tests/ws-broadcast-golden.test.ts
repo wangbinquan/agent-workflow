@@ -26,12 +26,13 @@
 // service function. That's the contract surface — anything below that is
 // implementation detail.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { tasks, workflows } from '../src/db/schema'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import {
   resetBroadcastersForTests,
@@ -116,7 +117,7 @@ interface Recorded {
   task: TaskWsMessage[]
 }
 
-async function seedTask(db: ProviderNeutralDatabase, status: 'pending' | 'running' = 'pending') {
+async function seedTask(db: PersistenceDb, status: 'pending' | 'running' = 'pending') {
   const taskId = `task_${ulid()}`
   const wfId = `wf_${ulid()}`
   const def = JSON.stringify({
@@ -126,7 +127,8 @@ async function seedTask(db: ProviderNeutralDatabase, status: 'pending' | 'runnin
     edges: [],
     outputs: [],
   })
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf-golden',
     definition: def,
@@ -134,7 +136,7 @@ async function seedTask(db: ProviderNeutralDatabase, status: 'pending' | 'runnin
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -199,7 +201,7 @@ function subscribeInterleaved(taskId: string): {
 }
 
 async function projectStatus(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     taskId: string
     revision: number

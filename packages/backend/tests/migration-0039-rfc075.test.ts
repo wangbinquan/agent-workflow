@@ -7,6 +7,7 @@
 // A regression that drops the DEFAULT 0 on auto_commit_push would flip every
 // legacy task into auto-commit mode on read; this test pins it.
 
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -25,7 +26,7 @@ interface ColInfo {
 describe('RFC-075 — migration 0039 columns', () => {
   test('tasks.working_branch exists (nullable TEXT)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(tasks)`)) as ColInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'working_branch')
     expect(col).toBeDefined()
     expect(col?.notnull).toBe(0)
@@ -34,7 +35,7 @@ describe('RFC-075 — migration 0039 columns', () => {
 
   test('tasks.auto_commit_push exists (NOT NULL DEFAULT 0)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(tasks)`)) as ColInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'auto_commit_push')
     expect(col).toBeDefined()
     expect(col?.notnull).toBe(1)
@@ -43,7 +44,7 @@ describe('RFC-075 — migration 0039 columns', () => {
 
   test('task_repos.working_branch exists (nullable TEXT)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(task_repos)`)) as ColInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(task_repos)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'working_branch')
     expect(col).toBeDefined()
     expect(col?.notnull).toBe(0)
@@ -52,7 +53,7 @@ describe('RFC-075 — migration 0039 columns', () => {
 
   test('node_runs.commit_push_json exists (nullable TEXT)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(node_runs)`)) as ColInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'commit_push_json')
     expect(col).toBeDefined()
     expect(col?.notnull).toBe(0)
@@ -61,16 +62,20 @@ describe('RFC-075 — migration 0039 columns', () => {
 
   test('a task inserted without the new columns reads back working_branch=NULL, auto_commit_push=0', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'f', '{}')`)
-    await db.run(sql`
+    await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'f', '{}')`)
+    await rawExec(
+      db,
+      sql`
       INSERT INTO tasks
         (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
          base_branch, branch, status, inputs, started_at, schema_version)
       VALUES
         ('t-legacy', 'legacy', 'wf-1', '{}', '/p', '/w',
          'main', 'agent-workflow/t-legacy', 'done', '{}', 1, 1)
-    `)
-    const rows = (await db.all(
+    `,
+    )
+    const rows = (await rawRows(
+      db,
       sql`SELECT working_branch, auto_commit_push FROM tasks WHERE id='t-legacy'`,
     )) as Array<{ working_branch: string | null; auto_commit_push: number }>
     expect(rows).toHaveLength(1)

@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { developmentObjectArtifacts } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedStoredObject } from '@/platform/crewstation/objectStorage'
 
 /** Publication owner of development evidence blobs and bundles. */
@@ -12,10 +12,11 @@ export interface DevelopmentObjectIndex {
 
 /** The index row commits in the ready transaction of its publication. */
 export async function retainDevelopmentObjectInTx(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
   reference: string,
   object: HostedStoredObject,
 ): Promise<void> {
+  const { developmentObjectArtifacts } = tablesOf(tx)
   await tx
     .insert(developmentObjectArtifacts)
     .values({
@@ -37,10 +38,11 @@ export async function retainDevelopmentObjectInTx(
 
 /** Only immutable object receipts are committed here, after upload and pin. */
 export function createDevelopmentObjectIndex(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }): DevelopmentObjectIndex {
   return {
     async find(reference) {
+      const { developmentObjectArtifacts } = tablesOf(input.db)
       const row = (
         await input.db
           .select()

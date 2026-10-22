@@ -18,38 +18,37 @@
 // "live-name" divergence assertions below fail if anyone reintroduces it.
 // Frontend wiring is locked by tasks-workgroup-badge.test.ts.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows, workgroups } from '../src/db/schema'
 import { getTask } from '../src/services/task'
 import {
   WORKGROUP_HOST_WORKFLOW_ID,
   WORKGROUP_HOST_WORKFLOW_NAME,
 } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
-async function seedWorkflow(db: ProviderNeutralDatabase, id: string, name: string): Promise<void> {
+async function seedWorkflow(db: PersistenceDb, id: string, name: string): Promise<void> {
   const now = Date.now()
-  await db
-    .insert(workflows)
-    .values({
-      id,
-      name,
-      description: '',
-      definition: '{}',
-      version: 1,
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id,
+    name,
+    description: '',
+    definition: '{}',
+    version: 1,
+    schemaVersion: 1,
+    createdAt: now,
+    updatedAt: now,
+  })
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     name: string
     workflowId: string
@@ -61,28 +60,26 @@ async function seedTask(
 ): Promise<string> {
   const tId = ulid()
   const now = Date.now()
-  await db
-    .insert(tasks)
-    .values({
-      id: tId,
-      name: opts.name,
-      workflowId: opts.workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/r',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${tId}`,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: now,
-      ...(opts.workgroupId !== undefined ? { workgroupId: opts.workgroupId } : {}),
-      ...(opts.workgroupConfigJson !== undefined
-        ? { workgroupConfigJson: opts.workgroupConfigJson }
-        : {}),
-      ...(opts.sourceAgentName !== undefined ? { sourceAgentName: opts.sourceAgentName } : {}),
-      ...(opts.sourceAgentId !== undefined ? { sourceAgentId: opts.sourceAgentId } : {}),
-    })
-    .run()
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
+    id: tId,
+    name: opts.name,
+    workflowId: opts.workflowId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/r',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${tId}`,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: now,
+    ...(opts.workgroupId !== undefined ? { workgroupId: opts.workgroupId } : {}),
+    ...(opts.workgroupConfigJson !== undefined
+      ? { workgroupConfigJson: opts.workgroupConfigJson }
+      : {}),
+    ...(opts.sourceAgentName !== undefined ? { sourceAgentName: opts.sourceAgentName } : {}),
+    ...(opts.sourceAgentId !== undefined ? { sourceAgentId: opts.sourceAgentId } : {}),
+  })
   return tId
 }
 
@@ -93,9 +90,10 @@ describeEachProvider(
       const db = harness.db
       await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
+      const { workgroups } = tablesOf(db)
       // Live resource name deliberately DIVERGES from the frozen config name — the
       // summary must read the frozen one (a live join would surface 'live-name').
-      await db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
+      await insertOne(db, workgroups, { id: groupId, name: 'live-name' })
       const tId = await seedTask(db, {
         name: 'ship it',
         workflowId: WORKGROUP_HOST_WORKFLOW_ID,
@@ -118,18 +116,15 @@ describeEachProvider(
       const db = harness.db
       await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
-      await db.insert(workgroups).values({ id: groupId, name: 'design-crew' }).run()
+      const { workgroups } = tablesOf(db)
+      await insertOne(db, workgroups, { id: groupId, name: 'design-crew' })
       const tId = await seedTask(db, {
         name: 't',
         workflowId: WORKGROUP_HOST_WORKFLOW_ID,
         workgroupId: groupId,
         workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew' }),
       })
-      await db
-        .update(workgroups)
-        .set({ name: 'renamed-live' })
-        .where(eq(workgroups.id, groupId))
-        .run()
+      await db.update(workgroups).set({ name: 'renamed-live' }).where(eq(workgroups.id, groupId))
 
       const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
       expect(row.workgroupName).toBe('design-crew') // still frozen, not 'renamed-live'
@@ -176,9 +171,10 @@ describeEachProvider(
       const db = harness.db
       await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
+      const { workgroups } = tablesOf(db)
       // Live resource name diverges — the detail must read the frozen one (ACL
       // parity with the list; a live join would leak a post-launch rename).
-      await db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
+      await insertOne(db, workgroups, { id: groupId, name: 'live-name' })
       const tId = await seedTask(db, {
         name: 'ship it',
         workflowId: WORKGROUP_HOST_WORKFLOW_ID,

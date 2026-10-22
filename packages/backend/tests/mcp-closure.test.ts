@@ -6,7 +6,7 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -66,7 +66,7 @@ describe('collectMcpIdsFromClosure', () => {
 })
 
 describeEachProvider('loadMcpsByIds', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })

@@ -4,6 +4,8 @@
 // createWebhookDispatcher），只在 launch 处注入 fake（落真 tasks 行）。
 // 锁「HTTP 入站（HMAC 验签 + 事件头判别）→ 真 dispatcher → 任务归属列」
 // 这条 GitHub 形态的接线，含同 PR 二发 supersede。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createHmac } from 'node:crypto'
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
@@ -14,14 +16,6 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from './helpers/userFixture'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
-import {
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggers,
-  workflows,
-} from '../src/db/schema'
 import {
   createWebhookDispatcher,
   renderedLaunchPayload,
@@ -65,7 +59,8 @@ async function seedFixture(providerHarness: ProviderHarness) {
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, webhookEndpoints, webhookTriggers, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'fix-wf',
     description: '',
@@ -76,7 +71,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-gh',
     name: 'gh',
     provider: 'github',
@@ -84,7 +79,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     secretEnc: box.seal(SECRET),
     enabled: true,
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'tr-gh',
     name: '修到绿',
     endpointId: 'ep-gh',
@@ -104,7 +99,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     launch: async (actor, rendered, invoker) => {
       if (invoker.type !== 'event') throw new Error('bad invoker')
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: (renderedLaunchPayload(rendered) as never as { name: string }).name,
         workflowId,
@@ -196,6 +191,7 @@ describeEachProvider('RFC-259 · GitHub webhook 全链路（双引擎）', (harn
       const { deliveryId } = (await res.json()) as { deliveryId: string }
 
       const fire = await waitFor(async () => {
+        const { webhookTriggerFires } = tablesOf(h.db)
         const rows = await h.db
           .select()
           .from(webhookTriggerFires)
@@ -207,6 +203,7 @@ describeEachProvider('RFC-259 · GitHub webhook 全链路（双引擎）', (harn
         error: null,
       })
       expect(fire.streamKey).toBe('acme/api|mr:42') // PR number 维度（fork 空数组时才落 branch）
+      const { webhookDeliveries, tasks, webhookTriggerFires } = tablesOf(h.db)
       const delivery = (
         await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
       )[0]

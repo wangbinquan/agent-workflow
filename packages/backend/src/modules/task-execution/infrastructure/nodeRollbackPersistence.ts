@@ -1,13 +1,14 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskRepos, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import { DrizzleTaskExecutionEffectPersistence } from './taskExecutionEffectPersistence'
 
-export type NodeRollbackDatabase = ProviderNeutralDatabase
+export type NodeRollbackDatabase = PersistenceDb
 
-export async function loadNodeRollbackTarget(db: ProviderNeutralDatabase, taskId: string) {
+export async function loadNodeRollbackTarget(db: PersistenceDb, taskId: string) {
+  const { tasks, taskRepos } = tablesOf(db)
   const taskRows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   const task = taskRows[0]
   if (task === undefined) return null
@@ -32,7 +33,7 @@ export async function loadNodeRollbackTarget(db: ProviderNeutralDatabase, taskId
 }
 
 export function createNodeRollbackEffectObserver(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly taskId: string
   readonly nodeRunId: string
   readonly request: unknown

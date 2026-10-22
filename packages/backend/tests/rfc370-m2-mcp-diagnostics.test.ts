@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { Mcp } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCrewStationMcpDiagnosticsEffects } from '@/modules/resource-catalog/composition/crewstationMcpDiagnostics'
 import type {
   McpDiagnosticRuntime,
@@ -177,7 +177,7 @@ function fixture(protocol: 'opencode' | 'claude-code' = 'opencode') {
   }
   const effects = createCrewStationMcpDiagnosticsEffects(
     {
-      db: new Proxy({} as ProviderNeutralDatabase, {
+      db: new Proxy({} as PersistenceDb, {
         get() {
           throw new Error('unexpected task effect')
         },

@@ -6,12 +6,12 @@
 // 正是 dev-gotchas「新增文件先 git add -N 再跑门禁」那条的又一次实证）。
 // 全部经真实 HTTP app：错误码读 body.code，不读 message（dev-gotchas 定式）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { developmentAdapterDefinitions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -22,7 +22,7 @@ import { eq } from 'drizzle-orm'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   token: string
 }
@@ -109,6 +109,7 @@ describeEachProviderHttpApplication(
       })
       expect(created.status).toBe(201)
       const { id } = (await created.json()) as { id: string }
+      const { developmentAdapterDefinitions } = tablesOf(h.db)
       await h.db
         .update(developmentAdapterDefinitions)
         .set({ visibility: 'public' })

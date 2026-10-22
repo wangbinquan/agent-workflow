@@ -12,6 +12,8 @@
 //   - make applyPendingRestoreIfAny ignore a tarball-missing marker (proceed to
 //     restoreBackup) → the "already consumed" test throws → reds.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -21,7 +23,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { workflows } from '../src/db/schema'
 import { createBackup } from '../src/services/backup'
 import {
   clearPendingRestore,
@@ -60,7 +61,8 @@ function sqliteOf(db: DbClient): Database {
 
 async function addWorkflows(db: DbClient, n: number): Promise<void> {
   for (let i = 0; i < n; i++) {
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: ulid(),
       name: `wf-${ulid()}`,
       definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),

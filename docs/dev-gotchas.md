@@ -2538,6 +2538,10 @@ SQLite 列的恒等映射，`bigint` 原样回成字符串——mission 列表�
 锁：`rfc359-provider-schema-column-facade.test.ts` 故意在模块加载期捕获列，两引擎各验解码 / 编码 / 行值比较 / 原型。
 仍要注意的例外：`db.all(sql\`…\`)`这类裸 SQL 读**不经列 mapper**，数值列在 PG 上照样是字符串——投影层用能力矩阵的`numericFromRawRow` 归一（`taskListPage/projection.ts` 的既有做法）。
 
+**RFC-395 I-b 更正（2026-10-22）**：进程级投影、列 facade 与 `numericFromRawRow` 均已删除。两个 provider 各有一套原生表，
+表与列一律从会话句柄取（`tablesOf(db)`），模块顶层没有句柄可捕获；裸 SQL 行改用 `rawRows` / `rawFirst`
+（`platform/persistence/queryHelpers.ts`）并按合同 codec 解码。
+
 ## 全树源码扫描类守卫要缓存解析结果（rfc305 CI 超时，2026-09-05）
 
 `rfc305-architecture-lock` 的每条锁各自 `readdirSync` + `ts.createSourceFile` 整棵 backend src，一条锁里六七次全树扫描；
@@ -2932,6 +2936,8 @@ GIT_DIR=<repo>/.git AW_TEST_PROVIDERS=sqlite bun test --isolate \
 本文件先前记过「凡是从 `drizzle-orm/sqlite-core` 里拿的东西，在 provider 中立代码里都是 provider-盲的」。
 **那条说过头了。** PG 客户端就是 drizzle 的 **sqlite-proxy**（`platform/persistence/postgresqlDatabaseClient.ts`），
 **表对象两侧是同一套**，所以 `alias` 这类只做包装的工具在 PG 上正常工作。
+（RFC-395 I-b 更正：PG 客户端已改为原生 `drizzle-orm/bun-sql`，两侧表对象不再是同一套；别名用
+`platform/persistence/tableAlias.ts`，业务代码不再 import `drizzle-orm/sqlite-core`，守卫 `rfc395-neutral-query-boundary`。）
 
 真正会炸的是**读 SQLite 专属符号**的那些——实撞的是 `getTableConfig`：它取
 `SQLiteTable.Symbol.InlineForeignKeys`，而投影出来的 PgTable 上那个符号是 `undefined`，当场 `TypeError`。
@@ -3040,7 +3046,7 @@ bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=N/M …
   注册表清空，后者当场 `declared operation has no mounted binding`；
 - `db/providerSchema.ts` 的 `activeProvider`——`createPostgresqlDatabaseClient()`
   （**生产代码**，`postgresqlDatabaseClient.ts:307`）会把它翻成 `postgresql`，并发跑的 SQLite
-  用例随后就去查 `agent_workflow.users`，报 `no such table`。
+  用例随后就去查 `agent_workflow.users`，报 `no such table`。（RFC-395 I-b 起这条全局态已删除。）
 
 **这不是仓库缺陷**：生产 daemon 一个进程只跑一个 provider、只装一次路由；CI 带 `--isolate`
 也从不暴露。是**本地命令写错**。
@@ -3145,6 +3151,7 @@ owner 一个没动。同理：改注释、调整 import 顺序、prettier 重排
 
 它是 drizzle 的 **sqlite-proxy**：`SqliteRemoteDatabase<typeof schema> & { $provider, $generationId }`，
 **结构上是 `ProviderNeutralDatabase` 的子类型**。也就是说：
+（RFC-395 I-b 更正：它现在是原生 `BunSQLDatabase`；provider 中立的代码一律写 `PersistenceDb`，下面的判断方法仍适用。）
 
 - 一个函数的签名写着 `db: PostgresqlDatabaseClient`，**只说明它被这么标注了**，不说明它做了任何
   PostgreSQL 专属的事；它的函数体很可能一行方言都没有，换成 `ProviderNeutralDatabase` 直接就能用。
@@ -3502,6 +3509,8 @@ grep -aoE "\(pass\) .*\[[0-9]{4,}\.[0-9]+ms\]" job.log | sed -E 's/.*\[([0-9]+)\
 实测两个变异（中立事务体内摘掉围栏写的 `await`、摘掉任务铸造事务里 `taskCollaborators` 插入的
 `await`），**两个引擎的行为测试全绿**——drizzle 的 sqlite-proxy `.run()` 是**急切发射**的，
 它的 microtask 会被事务体后面任何一个 `await` 冲掉，于是照样赶在 COMMIT 之前落库。
+（RFC-395 I-b 更正：PG 已换原生 bun-sql。直接 `await` 的 builder 是惰性的，漏了 `await` 在两个引擎上都**根本不执行**，
+行为测试能抓到，`lint:promises` 也会报；经 `queryWrite(…)` 的写仍是急切发射。）
 
 **真正的暴露面只有两条**：① **返回值**——`changes` / `rows` 变成 undefined，CAS 判定当场误读；
 ② **顺序**——同一事务内多条写之间的相对次序不再保证。
@@ -6454,6 +6463,7 @@ CI 是唯一权威门，但**改了几十个文件的迁移**推上去红三次�
 - 进程级 schema 投影（`db/providerSchema.ts` 的 `activeProvider`）是全局的，harness 在每个用例
   前显式选引擎、用完还原；自己手写 PostgreSQL 用例时同样要 `selectDatabaseSchemaProvider`
   成对使用，否则会渗进同进程后面的文件（本仓有前科）。
+  （RFC-395 I-b 起作废：投影已删除，用例与业务代码一样从句柄取表 `tablesOf(db)`，无需选引擎。）
 - **Bun.SQL 的字符串绑定参数会按 json 类型二次序列化**：`pool.unsafe('… $1::json', ['[...]'])` 送到服务端的是
   JSON **标量** `"[...]"`，`json_populate_recordset` 报 `cannot call json_populate_recordset on a scalar`。
   要把 JSON 数组文本当 json 用，改成带唯一标签的美元引号内联（`$aw_seed$…$aw_seed$::json`），别走绑定参数。

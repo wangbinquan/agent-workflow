@@ -1,12 +1,13 @@
 // RFC-370 H6: durable version metadata decides direction; the selected storage
 // performs rollback/publish and must finish before the recovery driver retires it.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { skills, skillVersions } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { SkillVersionRecoveryContentStore } from '@/modules/resource-catalog/application/skills/versionRecoveryContentStore'
 import { createManagedSkill } from '@/modules/resource-catalog/infrastructure/legacy/skill'
@@ -87,7 +88,8 @@ describeEachProvider('RFC-370 skill version recovery content', (harness) => {
       await advancePhase(tx, opId, 'fs-staged')
       await advancePhase(tx, opId, 'fs-versioned')
       if (committed) {
-        await tx.insert(skillVersions).values({
+        const { skillVersions, skills } = tablesOf(tx)
+        await insertOne(tx, skillVersions, {
           id: ulid(),
           skillId,
           versionIndex: 2,
@@ -140,6 +142,7 @@ describeEachProvider('RFC-370 skill version recovery content', (harness) => {
       ready.release()
     }
     expect(await pending).toMatchObject({ rolledBack: 1, rolledForward: 0 })
+    const { skills } = tablesOf(harness.db)
     expect(
       (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]?.contentVersion,
     ).toBe(1)
@@ -179,6 +182,7 @@ describeEachProvider('RFC-370 skill version recovery content', (harness) => {
     }
     expect(await pending).toMatchObject({ rolledForward: 1, rolledBack: 0 })
     expect(await getActiveOp(harness.db, skillId)).toBeNull()
+    const { skillVersions } = tablesOf(harness.db)
     expect(
       await harness.db.select().from(skillVersions).where(eq(skillVersions.skillId, skillId)),
     ).toHaveLength(2)
@@ -203,6 +207,7 @@ describeEachProvider('RFC-370 skill version recovery content', (harness) => {
       ),
     ).rejects.toBe(failure)
     expect(await getActiveOp(harness.db, skillId)).toMatchObject({ opId, active: 1 })
+    const { skills } = tablesOf(harness.db)
     await harness.db.update(skills).set({ contentVersion: 1 }).where(eq(skills.id, skillId))
     await expect(
       recoverSkillOperations(

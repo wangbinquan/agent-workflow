@@ -1,11 +1,11 @@
 // LOCKS: RFC-057 — R1 repair options (approved doc_version but review run not done).
 // 3 options × 3 cases = 9 tests.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createRepairEngine } from './helpers/repairEngine'
 import { describeEachProvider } from './helpers/eachProvider'
 import { cancelViaEngine } from './helpers/cancelEngine'
@@ -39,10 +39,7 @@ interface R1WriterCase {
  * 它们改走**公开入口**——断言的本来就是用户可见的结果（409 且零写入、完整事实集先落库），
  * 不是「在锁里第几步重验」这种实现内部结构。
  */
-async function seedR1WriterCase(
-  db: ProviderNeutralDatabase,
-  optionId: R1WriterId,
-): Promise<R1WriterCase> {
+async function seedR1WriterCase(db: PersistenceDb, optionId: R1WriterId): Promise<R1WriterCase> {
   const h = await buildHarness(db, { taskStatus: 'awaiting_review' })
   const reviewRunId = await insertNodeRun(h.db, h.taskId, {
     nodeId: 'rev_1',
@@ -105,6 +102,7 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('done')
 
+    const { nodeRunOutputs } = tablesOf(h.db)
     const outputs = await h.db
       .select()
       .from(nodeRunOutputs)
@@ -163,6 +161,7 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
           }
           if (property !== 'insert') return value.bind(inner)
           return (...args: unknown[]) => {
+            const { nodeRunOutputs } = tablesOf(h.db)
             if (args[0] === nodeRunOutputs && ++outputInsertCount === 2) {
               throw new Error('injected failure before approval_meta upsert')
             }
@@ -170,7 +169,7 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
           }
         },
       }) as T
-    const flakyDb = injectFailure(h.db) as ProviderNeutralDatabase
+    const flakyDb = injectFailure(h.db) as PersistenceDb
     // 崩在两次 output upsert 之间：对同一个库另建一台引擎，句柄换成会炸的那个。
     const flaky = createRepairEngine(flakyDb, { appHome: h.tmpDir })
 
@@ -183,6 +182,7 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
       }),
     ).rejects.toThrow('injected failure before approval_meta upsert')
     expect(await readNodeRunStatus(h.db, seeded.reviewRunId)).toBe('awaiting_review')
+    const { nodeRunOutputs } = tablesOf(h.db)
     // RFC-359 AC-1（第 8 刀）：**崩在两次 upsert 之间不留半成品**。合并前那份实现不在事务里
     // 写，于是崩完库里躺着一个只有 `approved_doc` 的评审 run——运维看到的是「批准了但没有
     // 批准元数据」的中间态。留下的这份把整个 apply 放在一笔事务里，崩了就整笔回滚。
@@ -272,6 +272,7 @@ describeEachProvider('RFC-057 — R1.unapprove-doc', (provider) => {
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('awaiting_review')
+    const { docVersions } = tablesOf(h.db)
     const dvAfter = (
       await h.db.select().from(docVersions).where(eq(docVersions.id, dvId)).limit(1)
     )[0]!
@@ -415,7 +416,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          void createHumanGateTerminalSweepCommand(db).run({ taskId: taskId, cause: `task-${to}` })
+          void createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
         },
       })
       // 运维那一侧真实发生的次序：别人刚把任务取消掉，诊断面板上的那个按钮还在，点下去。
@@ -434,6 +435,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       }
       expect(code, '已取消的任务上点修复必须被拒，而不是把它改回去').toBe('repair-preflight-stale')
 
+      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
       expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
         'canceled',
       )
@@ -460,7 +462,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          void createHumanGateTerminalSweepCommand(db).run({ taskId: taskId, cause: `task-${to}` })
+          void createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
         },
       })
       // 反过来的次序：修复先落库，随后任务被取消——取消的清扫不该把修复刚写下的事实抹掉。
@@ -472,6 +474,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       })
       await cancelViaEngine(h.db, h.taskId)
 
+      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
       expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
         'canceled',
       )

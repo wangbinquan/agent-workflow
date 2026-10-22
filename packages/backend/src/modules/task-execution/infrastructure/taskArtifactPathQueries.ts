@@ -1,17 +1,18 @@
 // RFC-359 W4-B1 —— 任务工件路径查询：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNotNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import type { TaskArtifactPathQueries } from '../application/ports/taskArtifactPathQueries'
 import { collectTaskArtifactPaths } from '../domain/taskArtifactPaths'
 
 export class DrizzleTaskArtifactPathQueries implements TaskArtifactPathQueries {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async forcedPaths(taskId: string): Promise<readonly string[]> {
+    const { tasks, nodeRunOutputs, nodeRuns } = tablesOf(this.db)
     const taskRows = await this.db
       .select({ spaceKind: tasks.spaceKind, platformInputPathsJson: tasks.platformInputPathsJson })
       .from(tasks)

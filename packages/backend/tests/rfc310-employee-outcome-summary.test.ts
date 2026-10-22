@@ -5,13 +5,14 @@
 // keep the two ledgers separate so the UI can combine them without a cross-domain
 // table import or N+1 detail requests.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { developmentMissions, employeeCases, users } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -29,7 +30,8 @@ describeEachProvider('RFC-310 T212 — bounded employee outcome projections', (h
     try {
       process.env.AGENT_WORKFLOW_HOME = home
       const db = harness.db
-      await db.insert(users).values({
+      const { users, employeeCases, developmentMissions } = tablesOf(db)
+      await insertOne(db, users, {
         id: 'u1',
         username: 'u1',
         displayName: 'u1',
@@ -71,7 +73,7 @@ describeEachProvider('RFC-310 T212 — bounded employee outcome projections', (h
       const missionRow = (id: string, employeeId: string | null, status: string) => ({
         id,
         revision: 1,
-        status: status as typeof developmentMissions.$inferInsert.status,
+        status: status as PersistenceTables['developmentMissions']['$inferInsert']['status'],
         automationMode: 'auto' as const,
         transitionFence: 'none' as const,
         repositoryId: 'repo-1',

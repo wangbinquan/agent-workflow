@@ -41,12 +41,14 @@
 // 矩阵是实测）。而生产里这个表达式作用在 `tasks.workgroup_config_json` 这样的**表列**上，
 // planner 不会预先求值，两种写法都安全。所以语料一律落进一张真表再查。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql, type SQL } from 'drizzle-orm'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { tasks, workflows } from '@/db/schema'
 import { jsonMemberSqlLiterals } from '@/platform/persistence/capabilities'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -145,7 +147,8 @@ describeEachProvider('RFC-359 W6-T24 —— jsonMemberText', (harness) => {
    * 见头注释「语料必须落在真表的列上」。
    */
   const seed = async (): Promise<void> => {
-    await harness.db.insert(workflows).values({ id: 'wf-t24', name: 'w6t24', definition: '{}' })
+    const { workflows, tasks } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, { id: 'wf-t24', name: 'w6t24', definition: '{}' })
     await harness.db.insert(tasks).values(
       CORPUS.map(([label, document], index) => ({
         id: `w6t24-${String(index).padStart(2, '0')}`,
@@ -172,7 +175,8 @@ describeEachProvider('RFC-359 W6-T24 —— jsonMemberText', (harness) => {
   }
 
   const evaluateAll = async (expression: SQL): Promise<Record<string, unknown>> => {
-    const rows = await harness.db.all<{ label: string; r: unknown }>(
+    const rows = await rawRows<{ label: string; r: unknown }>(
+      harness.db,
       sql`SELECT d.name AS label, ${expression} AS r FROM tasks d`,
     )
     return Object.fromEntries(rows.map((row) => [row.label, row.r ?? null]))

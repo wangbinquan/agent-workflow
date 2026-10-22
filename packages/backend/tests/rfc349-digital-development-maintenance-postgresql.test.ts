@@ -1,9 +1,9 @@
 // RFC-349 — the three owner maintenance jobs execute through real PostgreSQL
 // adapters and keep the same bounded counters as SQLite.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import {
   composeDigitalEmployeeMaintenanceCommands,
@@ -61,7 +61,10 @@ function fixture() {
     }
     throw new Error(`unexpected PostgreSQL owner-maintenance query: ${sql}`)
   }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: execute,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -108,7 +111,10 @@ function writerFixture() {
     }
     throw new Error(`unexpected PostgreSQL writer-cutover query: ${sql}`)
   }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: execute,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -133,10 +139,6 @@ function writerFixture() {
   }
   return { db: createPostgresqlDatabaseClient(runtime), statements }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 Digital/Development PostgreSQL maintenance owners', () => {
   test('upload GC, retention and employee-input GC use owner tables and bounded counters', async () => {

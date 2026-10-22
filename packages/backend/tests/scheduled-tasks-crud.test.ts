@@ -4,14 +4,14 @@
 // (invisible/builtin → error) + rejects required-upload workflows + computes the
 // initial next_run_at; update re-gates when the result is enabled + recomputes
 // next_run_at + resets consecutive_failures; row corruption is caught.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { scheduledTasks, workflows } from '../src/db/schema'
 import {
   deleteScheduledTask,
   getScheduledTask,
@@ -63,7 +63,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'America/New_York' } as const
 
 describeEachProvider('RFC-159 scheduled-task CRUD', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let wfId = ''
   beforeEach(async () => {
     db = harness.db
@@ -144,6 +144,7 @@ describeEachProvider('RFC-159 scheduled-task CRUD', (harness) => {
       { name: 'p', description: '', definition: DEF },
       { ownerUserId: 'bob' },
     )
+    const { workflows } = tablesOf(db)
     await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, priv.id))
     await expect(
       createScheduledTask(
@@ -250,6 +251,7 @@ describeEachProvider('RFC-159 scheduled-task CRUD', (harness) => {
       },
       { actor: actor('alice') },
     )
+    const { scheduledTasks } = tablesOf(db)
     // simulate a prior failure streak on the disabled row
     await db
       .update(scheduledTasks)
@@ -356,6 +358,7 @@ describeEachProvider('RFC-159 scheduled-task CRUD', (harness) => {
       },
       { actor: actor('alice') },
     )
+    const { scheduledTasks } = tablesOf(db)
     await db
       .update(scheduledTasks)
       .set({ scheduleSpec: '{bad json' })

@@ -1,9 +1,9 @@
 // RFC-349 — memory distill monitoring uses the same Promise query contract for
 // SQLite and PostgreSQL; only the infrastructure adapter sees the DB client.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composePostgresqlMemoryDistillQueries } from '@/modules/memory/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -27,7 +27,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -79,10 +82,6 @@ function jobRow(id = 'job-1') {
     'en-US',
   ] as const
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL memory distill queries', () => {
   test('projects detail through PostgreSQL without exposing its client to application code', async () => {

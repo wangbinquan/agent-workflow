@@ -1,6 +1,8 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: the actual Intent and Memory algorithms must consume the selected
 // System family and opaque runtime/content references on both database engines.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,15 +12,6 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { ulid } from 'ulid'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '@/auth/actor'
-import {
-  intentSessions,
-  intentTurns,
-  memoryDistillJobs,
-  taskFeedback,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
 import { runIntentTurn } from '@/modules/intent/application/turnEngine'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {
@@ -135,7 +128,8 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
     const root = home(),
       id = ulid()
     const now = Date.now()
-    await harness.db.insert(users).values({
+    const { users, intentTurns, intentSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id,
       username: 'system-family-' + id.toLowerCase(),
       displayName: 'System family',
@@ -344,6 +338,7 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
         scope: { namespace: 'intent', name: finishedTurnId },
       },
     ])
+    const { intentTurns, intentSessions } = tablesOf(harness.db)
     const turn = (
       await harness.db.select().from(intentTurns).where(eq(intentTurns.id, finishedTurnId))
     )[0]
@@ -361,10 +356,13 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
       taskId = ulid(),
       workflowId = ulid(),
       feedbackId = ulid()
-    await harness.db
-      .insert(workflows)
-      .values({ id: workflowId, name: 'Selected memory', definition: '{"nodes":[],"edges":[]}' })
-    await harness.db.insert(tasks).values({
+    const { workflows, tasks, taskFeedback, memoryDistillJobs } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
+      id: workflowId,
+      name: 'Selected memory',
+      definition: '{"nodes":[],"edges":[]}',
+    })
+    await insertOne(harness.db, tasks, {
       id: taskId,
       name: 'Selected memory task',
       workflowId,
@@ -377,7 +375,7 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await harness.db.insert(taskFeedback).values({
+    await insertOne(harness.db, taskFeedback, {
       id: feedbackId,
       taskId,
       authorUserId: null,

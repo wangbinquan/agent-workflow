@@ -15,7 +15,7 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
     expect(facade).toContain('RFC-345 compatibility facade')
     expect(facade).toContain('@/modules/resource-catalog/infrastructure/legacy/agent')
     expect(facade).not.toMatch(/@\/db|drizzle-orm|dbTxSync|DbClient|DbTxSync/)
-    expect(implementation).toContain("from '@/db/schema'")
+    expect(implementation).toContain("from '@/platform/persistence/sessionTables'")
     expect(repository).not.toContain("from './legacy/agent'")
     expect(repository).not.toContain("from '@/services/agent'")
   })

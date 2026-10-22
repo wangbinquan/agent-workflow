@@ -1,4 +1,5 @@
 // RFC-395 II-pre：既有启动夹具改走生产根启动内核 / workflow 参与者；这里只装配依赖与工作区租约。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   WorkflowDefinitionSchema,
   type StartTask,
@@ -7,7 +8,6 @@ import {
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import { users } from '@/db/schema'
 import {
   createIdentityAccessRuntime,
   composeIdentityAccess,
@@ -89,6 +89,7 @@ async function fixtureActor(options: TestTaskLaunchOptions): Promise<Actor> {
   if (options.launchResources !== undefined) return options.launchResources.actor
   if (options.actor !== undefined) return options.actor
   const id = options.actorUserId ?? options.callLaunch?.launchActorUserId ?? SYSTEM_USER_ID
+  const { users } = tablesOf(options.db)
   const row = (await options.db.select().from(users).where(eq(users.id, id)))[0]
   if (row === undefined) throw new Error(`launch fixture user missing: ${id}`)
   return buildActor({

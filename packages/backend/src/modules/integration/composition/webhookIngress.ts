@@ -7,7 +7,7 @@ import {
   type WebhookDispatcher,
 } from '@/services/webhook/dispatcherTypes'
 import { createVerifiedWebhookIngress } from '../application/verifiedWebhookIngress'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AcceptedVerifiedDelivery,
   VerifiedWebhookDeliveryInput,
@@ -38,9 +38,7 @@ export function composeWebhookIngressPersistence(
 }
 
 /** RFC-359 W4-D2：端点管理 / 投递持久化 / 已验证投递接收都是中立实现，两个 provider 装同一份。 */
-export function composeWebhookIngressPersistenceFor(
-  db: ProviderNeutralDatabase,
-): WebhookIngressPersistence {
+export function composeWebhookIngressPersistenceFor(db: PersistenceDb): WebhookIngressPersistence {
   const verified = createVerifiedWebhookDeliveryPersistence(db)
   return composeWebhookIngressPersistence({
     endpoints: createWebhookEndpointAdministration(db),
@@ -49,9 +47,7 @@ export function composeWebhookIngressPersistenceFor(
   })
 }
 
-export function composeWebhookDeliveryRuntimeFor(
-  db: ProviderNeutralDatabase,
-): WebhookDeliveryRuntime {
+export function composeWebhookDeliveryRuntimeFor(db: PersistenceDb): WebhookDeliveryRuntime {
   const ingress = composeWebhookIngressPersistenceFor(db)
   return Object.freeze({
     ...ingress,

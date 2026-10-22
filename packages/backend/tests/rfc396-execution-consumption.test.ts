@@ -1,4 +1,6 @@
 // The graph imports committed Task outputs while the native clarify gate is still waiting.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphExecutionContractRegistrations } from '@/modules/development-automation/application/graph-development/toolContracts'
@@ -11,12 +13,12 @@ import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/appl
 import { GRAPH_CONTEXT_TYPE } from '@/modules/development-automation/application/graph-development/employeeType'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture, bookingView } from './helpers/graphDesign'
-import { tasks, nodeRuns, nodeRunOutputs } from '@/db/schema'
 import { createEmployeeExecutionArtifactQueries } from '@/modules/task-execution/infrastructure/employeeExecutionArtifacts'
 
 describeEachProvider('RFC-396 committed execution consumption', (harness) => {
   test('the production artifact reader exposes completed node outputs before the human gate completes the Task', async () => {
-    await harness.db.insert(tasks).values({
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
+    await insertOne(harness.db, tasks, {
       id: 'waiting-task',
       name: 'waiting',
       workflowId: 'fixture-workflow',

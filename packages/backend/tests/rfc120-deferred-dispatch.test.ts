@@ -20,7 +20,9 @@
 // deferred model); the legacy immediate mint + the flag-based submit split are deleted.
 // The park fixtures below drive the CONTROL channel (seal), mirroring the board flow.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -34,16 +36,6 @@ import { ulid } from 'ulid'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'
 import { expectDatabaseFailure } from './helpers/databaseFailure'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import {
@@ -131,13 +123,14 @@ function mkQ(id: string, title: string): ClarifyQuestion {
  *  cross-clarify session and return its node_run id. */
 async function seedTask(
   // RFC-359 —— 形参收成中立面：函数体只有普通 insert，两个 provider 共用一份种子。
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { deferred: boolean; questions?: ClarifyQuestion[]; ownerUserId?: string },
 ): Promise<{ taskId: string; intermediaryNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc120-t9',
     description: '',
@@ -145,7 +138,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc120-t9',
     workflowId,
@@ -163,7 +156,7 @@ async function seedTask(
   // lineage window — is pure ULID id-order, so these seeded runs must sort BEFORE
   // the later-minted dispatch reruns (a non-ULID string id sorts AFTER ULIDs and
   // would pollute the lineage window).
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: DESIGNER,
@@ -173,7 +166,7 @@ async function seedTask(
     startedAt: Date.now() - 1000,
   })
   const questionerRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: questionerRunId,
     taskId,
     nodeId: QUESTIONER,
@@ -199,7 +192,7 @@ async function seedTask(
 /** Seed a DEFERRED task whose designer has TWO sibling cross-clarify nodes
  *  (cc_a/q_a, cc_b/q_b both → DESIGNER) — for the H3 multi-source readiness gate. */
 async function seedTwoSource(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; ccA: string; ccB: string; def: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const nodes: WorkflowNode[] = [
@@ -233,7 +226,8 @@ async function seedTwoSource(
     })
   }
   const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc120-t9-2src',
     description: '',
@@ -241,7 +235,7 @@ async function seedTwoSource(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc120-t9-2src',
     workflowId: `wf_${taskId}`,
@@ -254,18 +248,33 @@ async function seedTwoSource(
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
-  await db
-    .insert(nodeRuns)
-    .values({ id: ulid(), taskId, nodeId: DESIGNER, status: 'done', retryIndex: 0, iteration: 0 })
+  await insertOne(db, nodeRuns, {
+    id: ulid(),
+    taskId,
+    nodeId: DESIGNER,
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+  })
   // fixer prior run (so an override dispatch to it is not rejected as never-run).
-  await db
-    .insert(nodeRuns)
-    .values({ id: ulid(), taskId, nodeId: 'fixer', status: 'done', retryIndex: 0, iteration: 0 })
+  await insertOne(db, nodeRuns, {
+    id: ulid(),
+    taskId,
+    nodeId: 'fixer',
+    status: 'done',
+    retryIndex: 0,
+    iteration: 0,
+  })
   const open = async (q: string, cc: string): Promise<string> => {
     const runId = ulid()
-    await db
-      .insert(nodeRuns)
-      .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+    await insertOne(db, nodeRuns, {
+      id: runId,
+      taskId,
+      nodeId: q,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+    })
     const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
       kind: 'cross',
       db,
@@ -297,12 +306,13 @@ function ans(qid: string) {
  *  `defaultTargetNodeId` == `designerNodeId` — the exact shape the §18 dispatch mechanics below
  *  used to get for free. Call once per (origin → graph designer) for multi-source fixtures. */
 async function seedDesignerEntries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   designerNodeId: string,
   actor: { userId: string; role: string },
   opts: { originNodeRunId?: string } = {},
 ): Promise<void> {
+  const { taskQuestions } = tablesOf(db)
   const questioners = (
     await db
       .select()
@@ -334,6 +344,7 @@ describeEachProvider(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign
       // (targets the graph designer node, reproducing the old designer-by-default shape).
       await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
+      const { nodeRuns, taskQuestions } = tablesOf(db)
       // the answer IS recorded (round answered) but NO designer rerun minted
       const designerRuns = await db
         .select()
@@ -375,7 +386,7 @@ describeEachProvider(
 // B — PARK gate (pure deriveFrontier).
 // ---------------------------------------------------------------------------
 describe('RFC-120 T9 — frontier park gate', () => {
-  type Row = typeof nodeRuns.$inferSelect
+  type Row = PersistenceTables['nodeRuns']['$inferSelect']
   let seq = 0
   function row(nodeId: string, status: string): Row {
     seq += 1
@@ -465,6 +476,7 @@ describeEachProvider(
       // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
       // derives it from scope) — this is what T2 must treat as a valid park.
       await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
+      const { tasks } = tablesOf(db)
       // park the task (the scheduler would do this at quiescence)
       await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
       const result = await runLifecycleInvariants({
@@ -486,6 +498,7 @@ describeEachProvider(
         directive: 'continue',
         actor: { userId: 'u1', role: 'owner' },
       })
+      const { tasks } = tablesOf(db)
       await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
       const result = await runLifecycleInvariants({
         operations: taskRecoveryOperations(db),
@@ -507,6 +520,7 @@ describeEachProvider(
       // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
       // derives it from scope) — S2 must exempt this valid deferred park.
       await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
+      const { tasks } = tablesOf(db)
       // park + age past the freshness gate (startedAt long ago, no events)
       await db
         .update(tasks)
@@ -531,7 +545,7 @@ describeEachProvider(
 // 整轮 answered 之后才下发的不变量不可放松（P1 仅把「整轮 answered 后」的前置改为「该题
 // 已 sealed 后」，CAS / frontier mint / 一节点一条 rerun 的语义须逐字保留）。
 describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
-  async function seedDeferredAnswered(db: ProviderNeutralDatabase) {
+  async function seedDeferredAnswered(db: PersistenceDb) {
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
@@ -542,6 +556,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign
     // (targets the graph designer node, reproducing the old designer-by-default shape).
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
+    const { taskQuestions } = tablesOf(db)
     const entry = (
       await db
         .select()
@@ -561,6 +576,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
     expect(result.dispatchedEntryIds).toEqual([entryId])
 
+    const { nodeRuns, taskQuestions } = tablesOf(db)
     // a fresh pending designer rerun was minted (the upstream frontier — the only node)
     const designerRuns = await db
       .select()
@@ -591,6 +607,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     const second = await dispatchTaskQuestions(db, taskId, [entryId], actor)
     expect(second.reruns.length).toBe(0) // already claimed → no-op
 
+    const { nodeRuns } = tablesOf(db)
     const designerRuns = await db
       .select()
       .from(nodeRuns)
@@ -620,6 +637,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       gate: { kind: 'questions', ref: `questions:${taskId}` },
       replayed: false,
     })
+    const { taskQuestions, tasks, taskExecutionIntents, nodeRuns } = tablesOf(db)
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
     ).toMatchObject({ dispatchedBy: actor.userId })
@@ -659,6 +677,8 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
   test('RFC-333 intent fault rolls question stamp, rerun, task release and operation back', async () => {
     const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
+    const { nodeRuns, collaborationGateOperations, taskQuestions, tasks, taskExecutionIntents } =
+      tablesOf(db)
     const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
     // 注入「intent 写入必失败」的故障：两个引擎的写法不同——SQLite 直接 RAISE(ABORT)，
@@ -729,7 +749,8 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
 describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', (harness) => {
   const actor = { userId: 'u1', role: 'owner' as const }
 
-  async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+  async function designerEntries(db: PersistenceDb, taskId: string) {
+    const { taskQuestions } = tablesOf(db)
     return db
       .select()
       .from(taskQuestions)
@@ -764,6 +785,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect(after.every((e) => e.dispatchedAt !== null)).toBe(true)
     expect(after.every((e) => e.triggerRunId === null)).toBe(true) // NOT bound at dispatch
     expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // gate released
+    const { nodeRuns } = tablesOf(db)
     const designerRuns = await db
       .select()
       .from(nodeRuns)
@@ -803,10 +825,11 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await bindTriggerRun(db, [entries[0]!.id], runId)
     expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(false)
 
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     // q1's rerun finishes done+output → q1 consumed. Now the node RE-PARKS for the still-
     // undispatched q2 (so a later dispatch of q2 isn't lost to an already-completing task).
     await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-    await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'result', content: 'x' })
     expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(true)
   })
 
@@ -830,6 +853,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // The park set excludes DESIGNER (in-flight q1) → deriveFrontier does NOT bucket it into
     // awaitingHuman; its pending rerun is dispatchable (not stranded).
     const deferred = await loadUndispatchedDesignerTargets(db, taskId)
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
     const f = deriveFrontier(
@@ -869,6 +893,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id, entries[1]!.id], actor)
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.entryIds.length).toBe(2)
+    const { nodeRuns } = tablesOf(db)
     const pending = await db
       .select()
       .from(nodeRuns)
@@ -913,6 +938,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
     // q2 stays uncommitted (nothing stamped); exactly ONE pending rerun on DESIGNER.
     expect((await designerEntries(db, taskId)).find((e) => e.id === q2.id)?.dispatchedAt).toBeNull()
+    const { nodeRuns } = tablesOf(db)
     const pending = await db
       .select()
       .from(nodeRuns)
@@ -948,8 +974,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const d1 = await dispatchTaskQuestions(db, taskId, [q1.id], actor)
     const P = d1.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q1.id], P)
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, P))
-    await db.insert(nodeRunOutputs).values({ nodeRunId: P, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: P, portName: 'result', content: 'x' })
 
     // Now the node is free → dispatching q2 mints a FRESH rerun P2 (no conflict).
     const d2 = await dispatchTaskQuestions(db, taskId, [q2.id], actor)
@@ -985,6 +1012,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const P = d1.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q1.id], P)
     expect((await designerEntries(db, taskId)).find((e) => e.id === q1.id)?.triggerRunId).toBe(P)
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, P))
 
     // Dispatching q2 to the SAME node is REJECTED — q1 is still OPEN (failed ≠ consumed). A
@@ -1014,7 +1042,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
 
     // Once P's revival reaches done+output (q1 consumed), dispatching q2 SUCCEEDS (test c).
     await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, P))
-    await db.insert(nodeRunOutputs).values({ nodeRunId: P, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: P, portName: 'result', content: 'x' })
     const d2 = await dispatchTaskQuestions(db, taskId, [q2.id], actor)
     expect(d2.reruns.length).toBe(1)
     expect(d2.reruns[0]?.nodeRunId).not.toBe(P)
@@ -1023,8 +1051,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
   test('(dispatch/reassign race) a concurrent reassign before the tx → ROLLS BACK task-question-target-changed; re-run with the new target succeeds', async () => {
     const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+    const { nodeRuns } = tablesOf(db)
     // OTHER (the reassign target B) needs a prior run to be a valid frontier mint target.
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: OTHER,
@@ -1124,6 +1153,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
     expect(result.reruns.length).toBe(1)
     const rerunId = result.reruns[0]!.nodeRunId
+    const { nodeRuns } = tablesOf(db)
     // the minted run is a REAL row (stamp+mint committed together, no orphan); the entry
     // is committed (dispatched_at) but NOT yet bound (trigger_run_id NULL).
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]
@@ -1141,8 +1171,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
   test('reassign to a run-but-no-edge node → 去借壳: mint the TARGET itself (own agent); the target queue injection carries + binds the answer', async () => {
     const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
+    const { nodeRuns } = tablesOf(db)
     // OTHER has a prior node_run + no feedback edge — a valid reassign target.
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: OTHER,
@@ -1220,6 +1251,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     }
     expect((threw as { code?: string }).code).toBe('task-question-unsafe-dispatch-target')
     expect((await designerEntries(db, taskId))[0]?.dispatchedAt).toBeNull() // nothing stamped
+    const { nodeRuns } = tablesOf(db)
     const pending = await db
       .select()
       .from(nodeRuns)
@@ -1230,7 +1262,8 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
   test('per-node queue is authoritative for deferred (去借壳): the TARGET injects the reassigned question (mint on target, own agent); the origin designer has no queue', async () => {
     const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: OTHER,
@@ -1287,7 +1320,8 @@ describeEachProviderHttpApplication(
       return (await scope.open()).app
     }
 
-    async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+    async function designerEntries(db: PersistenceDb, taskId: string) {
+      const { taskQuestions } = tablesOf(db)
       return db
         .select()
         .from(taskQuestions)
@@ -1300,7 +1334,8 @@ describeEachProviderHttpApplication(
         deferred: true,
         questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
       })
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, taskQuestions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -1358,7 +1393,8 @@ describeEachProviderHttpApplication(
     test('M1: the override handoff mints the rerun ON the target (RFC-141: no Update-Directive suppression anymore)', async () => {
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -1423,6 +1459,7 @@ describeEachProviderHttpApplication(
       // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
       // derives it from scope) — the HTTP dispatch below then stamps + mints + releases it.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
+      const { tasks, nodeRuns } = tablesOf(db)
       await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
       expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(1) // parked
 
@@ -1492,6 +1529,7 @@ describeEachProviderHttpApplication(
       await dispatchTaskQuestions(db, taskId, [entry.id], actor)
       // the designer entry is dispatched (stamped) → the designer rerun minted EXACTLY once.
       expect((await designerEntries(db, taskId))[0]?.dispatchedAt).not.toBeNull()
+      const { nodeRuns } = tablesOf(db)
       const designerReruns = await db
         .select()
         .from(nodeRuns)
@@ -1540,16 +1578,18 @@ describeEachProviderHttpApplication(
       expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(runId)
       expect(await phaseOf()).toBe('processing') // bound, but run not done yet
 
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
       // Run finishes done + output → awaiting_confirm.
       await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-      await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
+      await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'result', content: 'x' })
       expect(await phaseOf()).toBe('awaiting_confirm')
     })
 
     test('M1(re-gate): reassign allowed pre-dispatch (NULL trigger) but rejected post-dispatch (stamped)', async () => {
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -1600,6 +1640,7 @@ describeEachProviderHttpApplication(
       const entry = (await designerEntries(db, taskId))[0]!
       const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
       const anchorRunId = result.reruns[0]!.nodeRunId
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
       const anchorRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, anchorRunId)))[0]!
 
       await bindTriggerRun(db, [entry.id], anchorRunId)
@@ -1622,9 +1663,7 @@ describeEachProviderHttpApplication(
         cause: 'process-retry',
         overrides: { startedAt: Date.now() },
       })
-      await db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: retryId, portName: 'result', content: 'x' })
+      await insertOne(db, nodeRunOutputs, { nodeRunId: retryId, portName: 'result', content: 'x' })
 
       // The entry resolves through the LINEAGE → awaiting_confirm (not stuck).
       expect(await phaseOf()).toBe('awaiting_confirm')
@@ -1647,6 +1686,7 @@ describeEachProviderHttpApplication(
       const entry = (await designerEntries(db, taskId))[0]!
       const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
       const attempt1 = result.reruns[0]!.nodeRunId
+      const { nodeRuns } = tablesOf(db)
       const a1Row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, attempt1)))[0]!
 
       await bindTriggerRun(db, [entry.id], attempt1)
@@ -1655,7 +1695,7 @@ describeEachProviderHttpApplication(
 
       // The scheduler mints a FRESH process-retry (different id, same node+iteration).
       const attempt2 = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: attempt2,
         taskId,
         nodeId: DESIGNER,
@@ -1711,7 +1751,8 @@ describeEachProviderHttpApplication(
       }
       const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
       const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: `wf_${taskId}`,
         name: 'h3',
         description: '',
@@ -1719,7 +1760,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'h3',
         workflowId: `wf_${taskId}`,
@@ -1733,9 +1774,14 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (const n of [D, E]) {
-        await db
-          .insert(nodeRuns)
-          .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
+        await insertOne(db, nodeRuns, {
+          id: ulid(),
+          taskId,
+          nodeId: n,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
       }
       const openSession = async (
         q: string,
@@ -1744,9 +1790,14 @@ describeEachProviderHttpApplication(
         qid: string,
       ): Promise<string> => {
         const runId = ulid()
-        await db
-          .insert(nodeRuns)
-          .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+        await insertOne(db, nodeRuns, {
+          id: runId,
+          taskId,
+          nodeId: q,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
         const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
           kind: 'cross',
           db,
@@ -1852,7 +1903,8 @@ describeEachProviderHttpApplication(
       }
       const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
       const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: `wf_${taskId}`,
         name: 'h2ng',
         description: '',
@@ -1860,7 +1912,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'h2ng',
         workflowId: `wf_${taskId}`,
@@ -1874,9 +1926,14 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (const n of [A, B]) {
-        await db
-          .insert(nodeRuns)
-          .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
+        await insertOne(db, nodeRuns, {
+          id: ulid(),
+          taskId,
+          nodeId: n,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
       }
       const openSession = async (
         q: string,
@@ -1885,9 +1942,14 @@ describeEachProviderHttpApplication(
         qid: string,
       ): Promise<string> => {
         const runId = ulid()
-        await db
-          .insert(nodeRuns)
-          .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+        await insertOne(db, nodeRuns, {
+          id: runId,
+          taskId,
+          nodeId: q,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
         const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
           kind: 'cross',
           db,
@@ -1976,6 +2038,7 @@ describeEachProviderHttpApplication(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
+      const { taskQuestions } = tablesOf(db)
       // Simulate a dispatch winning the race (stamping dispatched_at) AFTER reassign
       // would have read a NULL — the reassign CAS (WHERE dispatched_at IS NULL) then
       // affects 0 rows → reject (no silent re-target of committed work).
@@ -2076,7 +2139,8 @@ describeEachProviderHttpApplication(
       }
       const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
       const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: `wf_${taskId}`,
         name: 'two-designer',
         description: '',
@@ -2084,7 +2148,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'two-designer',
         workflowId: `wf_${taskId}`,
@@ -2098,15 +2162,25 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (const n of [D1, D2]) {
-        await db
-          .insert(nodeRuns)
-          .values({ id: ulid(), taskId, nodeId: n, status: 'done', retryIndex: 0, iteration: 0 })
+        await insertOne(db, nodeRuns, {
+          id: ulid(),
+          taskId,
+          nodeId: n,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
       }
       const open = async (q: string, cc: string, d: string, qid: string): Promise<string> => {
         const runId = ulid()
-        await db
-          .insert(nodeRuns)
-          .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+        await insertOne(db, nodeRuns, {
+          id: runId,
+          taskId,
+          nodeId: q,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
         const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
           kind: 'cross',
           db,
@@ -2194,7 +2268,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
   const actor = { userId: 'u1', role: 'owner' as const }
   const DOWN = 'down'
 
-  async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+  async function designerEntries(db: PersistenceDb, taskId: string) {
+    const { taskQuestions } = tablesOf(db)
     return db
       .select()
       .from(taskQuestions)
@@ -2205,7 +2280,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
    *  cc_a/q_a → DESIGNER (default), cc_b/q_b → DOWN (default; RFC-127 借壳 — was an
    *  override-to-DOWN). DESIGNER + DOWN each have a prior `done` run (DOWN's draft consumes
    *  DESIGNER's done — so a DESIGNER rerun demotes DOWN, RFC-074). */
-  async function seedFrontierChain(db: ProviderNeutralDatabase): Promise<{
+  async function seedFrontierChain(db: PersistenceDb): Promise<{
     taskId: string
     ccA: string
     ccB: string
@@ -2252,7 +2327,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       })
     }
     const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: `wf_${taskId}`,
       name: 'rfc120-frontier',
       description: '',
@@ -2260,7 +2336,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       version: 1,
       schemaVersion: 4,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'rfc120-frontier',
       workflowId: `wf_${taskId}`,
@@ -2274,7 +2350,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       startedAt: Date.now(),
     })
     const designerDoneId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: designerDoneId,
       taskId,
       nodeId: DESIGNER,
@@ -2283,7 +2359,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       iteration: 0,
     })
     const downDoneId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: downDoneId,
       taskId,
       nodeId: DOWN,
@@ -2295,9 +2371,14 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     })
     const open = async (q: string, cc: string, d: string): Promise<string> => {
       const runId = ulid()
-      await db
-        .insert(nodeRuns)
-        .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
+      await insertOne(db, nodeRuns, {
+        id: runId,
+        taskId,
+        nodeId: q,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
       const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
         kind: 'cross',
         db,
@@ -2319,7 +2400,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
   /** Answer both sources (designer-scoped, deferred), dispatch both. RFC-127 借壳: cc_b's DEFAULT
    *  designer is already DOWN (the seed wires cc_b → DOWN) — no override needed; entryA's home is
    *  DESIGNER, entryB's home is DOWN. Returns the dispatch result + the two entries. */
-  async function answerAndDispatch(db: ProviderNeutralDatabase) {
+  async function answerAndDispatch(db: PersistenceDb) {
     const seed = await seedFrontierChain(db)
     await sealRoundQuestions({
       db,
@@ -2356,6 +2437,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
     expect(result.dispatchedEntryIds.length).toBe(2) // BOTH entries committed for execution
 
+    const { nodeRuns } = tablesOf(db)
     // ZERO pending runs minted on DOWN by dispatch (it is NOT the frontier).
     const downRuns = await db
       .select()
@@ -2392,6 +2474,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     const { seed } = await answerAndDispatch(db)
     // Simulate A's frontier rerun completing FRESH (a new done id > the old draft id).
     const designerRerunDone = ulid()
+    const { nodeRuns } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ status: 'done' })
@@ -2436,7 +2519,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     const { seed, entryB } = await answerAndDispatch(db)
     // The cascade mints DOWN's rerun (a fresh pending run on DOWN).
     const downRerunId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, taskQuestions } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: downRerunId,
       taskId: seed.taskId,
       nodeId: DOWN,
@@ -2463,6 +2547,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
   test("CONSUMPTION: A done+output → only A's bound question leaves the queue; B's (downstream) question is untouched", async () => {
     const db = harness.db
     const { seed, entryA, entryB } = await answerAndDispatch(db)
+    const { nodeRuns, taskQuestions, nodeRunOutputs } = tablesOf(db)
     const designerRerunId = (
       await db
         .select()
@@ -2490,9 +2575,11 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     // A's run finishes done + output → ledger consumption (does NOT over-consume B): the
     // derived-aging queue selection per node is covered by rfc132-select-agent-queue.
     await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, designerRerunId))
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: designerRerunId, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: designerRerunId,
+      portName: 'result',
+      content: 'x',
+    })
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryB.id)))[0]
         ?.triggerRunId,
@@ -2514,7 +2601,8 @@ describeEachProvider(
   (harness) => {
     const actor = { userId: 'u1', role: 'owner' as const }
 
-    async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
+    async function designerEntries(db: PersistenceDb, taskId: string) {
+      const { taskQuestions } = tablesOf(db)
       return db
         .select()
         .from(taskQuestions)
@@ -2528,7 +2616,8 @@ describeEachProvider(
       // the context still builds and the suppress member is gone at runtime.
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, taskQuestions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -2583,6 +2672,7 @@ describeEachProvider(
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
       const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const { taskQuestions } = tablesOf(db)
       // Production dispatches a SEALED designer entry (stage gate). A genuine graph designer used to
       // be the suppressPriorOutput=false shape; RFC-141 removed the member for BOTH shapes.
       await db

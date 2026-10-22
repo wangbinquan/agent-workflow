@@ -1,10 +1,10 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   serializeWorkflowDefinitionStorageV1,
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import { workflows } from '@/db/schema'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {
@@ -12,7 +12,7 @@ import {
   validateWorkflowDef,
 } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AgentLaunchResourceOperations,
   AgentLaunchVisibleAgentQuery,
@@ -55,7 +55,7 @@ function hostWorkflowRow() {
  * PG bootstrap 照旧传自己的那两份。
  */
 export function createAgentLaunchResourceOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly agents?: AgentLaunchVisibleAgentQuery
   readonly workflowValidation?: AgentLaunchWorkflowValidation
 }): AgentLaunchResourceOperations {
@@ -78,6 +78,7 @@ export function createAgentLaunchResourceOperations(input: {
   return Object.freeze({
     loadVisibleAgent: (actor: Actor, agentId: string) => agents.get(actor, agentId),
     async ensureHostWorkflow() {
+      const { workflows } = tablesOf(db)
       await db
         .insert(workflows)
         .values(hostWorkflowRow())

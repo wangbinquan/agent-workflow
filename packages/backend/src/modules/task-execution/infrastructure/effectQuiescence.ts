@@ -16,24 +16,13 @@
 // BEGIN IMMEDIATE 已独占，锁是 no-op）。不用 SERIALIZABLE——这些原子只在 runtime 已停 / 旧 daemon
 // 已撤销之后跑，没有并发 worker 要用谓词锁去挡。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, isNull, like } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionLineageOperationRecords,
-  taskExecutionOwners,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   ManagedProcessQuiescenceAuthority,
   ManagedProcessQuiescenceInput,
@@ -71,9 +60,9 @@ export const MANAGED_PROCESS_RECOVERY_CLASS = 'managed-process-preactivation'
 /** Attempt states that still hold the effect open (and its resource fences). */
 export const UNRESOLVED_ATTEMPT_STATES = ['prepared', 'acting', 'recovery-required'] as const
 
-type OwnerRow = typeof taskExecutionOwners.$inferSelect
-type EffectRow = typeof taskExecutionEffects.$inferSelect
-type AttemptRow = typeof taskExecutionEffectAttempts.$inferSelect
+type OwnerRow = PersistenceTables['taskExecutionOwners']['$inferSelect']
+type EffectRow = PersistenceTables['taskExecutionEffects']['$inferSelect']
+type AttemptRow = PersistenceTables['taskExecutionEffectAttempts']['$inferSelect']
 
 export interface ResolvedQuiescenceAuthority {
   readonly owner: OwnershipTuple
@@ -133,7 +122,7 @@ export function parseJsonRecord(value: string | null): Readonly<Record<string, u
 export function recoveredManagedProcessEvidence(input: {
   readonly attemptState: AttemptRow['state']
   readonly receiptJson: string | null
-  readonly run: typeof nodeRuns.$inferSelect
+  readonly run: PersistenceTables['nodeRuns']['$inferSelect']
 }): 'applied' | 'definitely-not-applied' | null {
   if (input.run.status === 'pending' || input.run.status === 'running') return null
   if (input.receiptJson === null) {
@@ -179,12 +168,13 @@ function ownerSnapshot(row: OwnerRow): OwnerSnapshot {
 
 /** 锁住 owner 行并按元组 / revision / 允许状态围栏。所有清算原子的第一步。 */
 async function lockAndAssertOwnerTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   owner: OwnershipTuple,
   expectedRevision: number,
   allowedStates: readonly TaskOwnerState[],
   fencedMessage: string,
 ): Promise<OwnerRow> {
+  const { taskExecutionOwners } = tablesOf(tx)
   await engineOf(tx).lockAggregateRoot(
     tx,
     taskExecutionOwners,
@@ -212,10 +202,11 @@ async function lockAndAssertOwnerTx(
 }
 
 async function loadUnresolvedAttemptsTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   taskId: string,
   kind?: EffectRow['kind'],
 ): Promise<readonly { readonly attempt: AttemptRow; readonly effect: EffectRow }[]> {
+  const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
   return await tx
     .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
     .from(taskExecutionEffectAttempts)
@@ -239,9 +230,10 @@ async function loadUnresolvedAttemptsTx(
 
 /** effect ids that still have a prepared / acting / recovery-required attempt. Works on a client or a tx. */
 export async function readUnresolvedEffectIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<readonly string[]> {
+  const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(db)
   const rows = await db
     .select({ effectId: taskExecutionEffects.id })
     .from(taskExecutionEffectAttempts)
@@ -264,9 +256,10 @@ export async function readUnresolvedEffectIds(
  * owner 只能进 recovery-required，交给 successor-daemon 的孤儿收割屏障。
  */
 export async function readUnreapedProcessCode(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<string | null> {
+  const { nodeRuns } = tablesOf(db)
   const row = (
     await db
       .select({ errorMessage: nodeRuns.errorMessage })
@@ -278,11 +271,12 @@ export async function readUnreapedProcessCode(
 }
 
 async function upsertWatermarkTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   effect: EffectRow,
   outcome: 'succeeded' | 'failed' | 'outcome-unknown',
   now: number,
 ): Promise<void> {
+  const { taskExecutionLineageOperationRecords } = tablesOf(tx)
   const watermark = (
     await tx
       .select()
@@ -308,26 +302,23 @@ async function upsertWatermarkTx(
     throw new Error('recovered effect digest differs from retained watermark')
   }
   if (watermark === undefined) {
-    await tx
-      .insert(taskExecutionLineageOperationRecords)
-      .values({
-        id: ulid(),
-        recordKind: 'generation-watermark',
-        executionLineageId: effect.executionLineageId,
-        operationFamilyKey: effect.operationFamilyKey,
-        operationGeneration: null,
-        highestSettledGeneration: effect.operationGeneration,
-        lastOutcome: outcome,
-        requestHash: effect.requestHash,
-        slotPathJson: effect.slotPathJson,
-        slotPathDigest: effect.slotPathDigest,
-        rootAnchorTaskId: effect.taskId,
-        currentAnchorTaskId: effect.taskId,
-        recordRevision: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+    await insertOne(tx, taskExecutionLineageOperationRecords, {
+      id: ulid(),
+      recordKind: 'generation-watermark',
+      executionLineageId: effect.executionLineageId,
+      operationFamilyKey: effect.operationFamilyKey,
+      operationGeneration: null,
+      highestSettledGeneration: effect.operationGeneration,
+      lastOutcome: outcome,
+      requestHash: effect.requestHash,
+      slotPathJson: effect.slotPathJson,
+      slotPathDigest: effect.slotPathDigest,
+      rootAnchorTaskId: effect.taskId,
+      currentAnchorTaskId: effect.taskId,
+      recordRevision: 1,
+      createdAt: now,
+      updatedAt: now,
+    })
     return
   }
   const updated = await tx
@@ -366,11 +357,12 @@ async function upsertWatermarkTx(
  * 静默清算本就是一份实现（本文件），端口只是委托——围栏释放同理。
  */
 export async function releaseAttemptFencesTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   attemptId: string,
   epoch: number,
   now: number,
 ): Promise<void> {
+  const { taskExecutionEffectFences } = tablesOf(tx)
   await tx
     .update(taskExecutionEffectFences)
     .set({ releasedAt: now })
@@ -381,7 +373,6 @@ export async function releaseAttemptFencesTx(
         eq(taskExecutionEffectFences.acquiredEpoch, epoch),
       ),
     )
-    .run()
 }
 
 /**
@@ -390,7 +381,7 @@ export async function releaseAttemptFencesTx(
  * 调用方先用 `resolveQuiescenceAuthority` 判完权威再进事务。
  */
 async function resolveManagedProcessesTx(input: {
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
   readonly owner: OwnershipTuple
   readonly quiescenceEvidenceDigest: string
   readonly now: number
@@ -417,6 +408,7 @@ async function resolveManagedProcessesTx(input: {
       unresolved.add(effect.id)
       continue
     }
+    const { nodeRuns, taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
     const run = (
       await tx
         .select()
@@ -529,7 +521,7 @@ async function resolveManagedProcessesTx(input: {
 
 /** Resolve pre-activated managed-process attempts after the task's runtime went quiet. */
 export async function resolveQuiescedManagedProcesses(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: ManagedProcessQuiescenceInput,
 ): Promise<RecoveredManagedProcessResolution> {
   if (input.quiescenceEvidenceDigest.length === 0) {
@@ -571,7 +563,7 @@ export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntents
  * holds or the owner — that is exactly what this closure is for.
  */
 async function closeOutcomeUnknownAndReleaseTx(input: {
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
   readonly owner: OwnerRow
   readonly proof: VerifiedOutcomeUnknownClosure
   readonly allowedOwnerStates: readonly TaskOwnerState[]
@@ -593,6 +585,11 @@ async function closeOutcomeUnknownAndReleaseTx(input: {
   }
   for (const { attempt, effect } of unresolved) {
     const failureCode = attempt.failureCode ?? 'outcome-unknown-after-quiescence'
+    const {
+      taskExecutionEffectAttempts,
+      taskExecutionEffects,
+      taskExecutionLineageOperationRecords,
+    } = tablesOf(tx)
     const attemptUpdated = await tx
       .update(taskExecutionEffectAttempts)
       .set({
@@ -653,31 +650,28 @@ async function closeOutcomeUnknownAndReleaseTx(input: {
         .limit(1)
     )[0]
     if (decision === undefined) {
-      await tx
-        .insert(taskExecutionLineageOperationRecords)
-        .values({
-          id: ulid(),
-          recordKind: 'replay-decision',
-          executionLineageId: effect.executionLineageId,
-          operationFamilyKey: effect.operationFamilyKey,
-          operationGeneration: effect.operationGeneration,
-          highestSettledGeneration: null,
-          lastOutcome: 'outcome-unknown',
-          requestHash: effect.requestHash,
-          slotPathJson: effect.slotPathJson,
-          slotPathDigest: effect.slotPathDigest,
-          rootAnchorTaskId: effect.taskId,
-          currentAnchorTaskId: effect.taskId,
-          sourceTaskId: effect.taskId,
-          sourceEffectId: effect.id,
-          sourceAttemptId: attempt.id,
-          failureCode,
-          decisionState: 'requires-actor',
-          recordRevision: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(tx, taskExecutionLineageOperationRecords, {
+        id: ulid(),
+        recordKind: 'replay-decision',
+        executionLineageId: effect.executionLineageId,
+        operationFamilyKey: effect.operationFamilyKey,
+        operationGeneration: effect.operationGeneration,
+        highestSettledGeneration: null,
+        lastOutcome: 'outcome-unknown',
+        requestHash: effect.requestHash,
+        slotPathJson: effect.slotPathJson,
+        slotPathDigest: effect.slotPathDigest,
+        rootAnchorTaskId: effect.taskId,
+        currentAnchorTaskId: effect.taskId,
+        sourceTaskId: effect.taskId,
+        sourceEffectId: effect.id,
+        sourceAttemptId: attempt.id,
+        failureCode,
+        decisionState: 'requires-actor',
+        recordRevision: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
     }
   }
   await terminalizeTaskExecutionIntentsTx(tx, {
@@ -686,6 +680,7 @@ async function closeOutcomeUnknownAndReleaseTx(input: {
     failureCode: 'task-execution-outcome-unknown',
     now,
   })
+  const { taskExecutionOwners } = tablesOf(tx)
   const released = await tx
     .update(taskExecutionOwners)
     .set({
@@ -718,7 +713,7 @@ async function closeOutcomeUnknownAndReleaseTx(input: {
 
 /** Exact-owner closure: the process-local driver proves task-wide quiescence with its own token. */
 export async function closeOutcomeUnknownAndRelease(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly token: OwnershipToken
     readonly intentId: string
@@ -753,7 +748,7 @@ export async function closeOutcomeUnknownAndRelease(
 
 /** Successor-daemon closure: a new daemon generation closes the old owner's ambiguous generation. */
 export async function closeRecoveredOutcomeUnknownAndRelease(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly owner: OwnershipTuple
     readonly expectedRevision: number
@@ -825,12 +820,13 @@ function boundedReceipt(value: string): string {
  * 唯一的调用方两边写的是同一件事，因此这里收成实现的一部分。
  */
 async function projectRecoveredCodeHostNodeRunTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   taskId: string,
   resolution: RecoveredCodeHostMutation,
   now: number,
 ): Promise<void> {
   if (resolution.nodeRunId === null) return
+  const { nodeRuns, nodeRunOutputs } = tablesOf(tx)
   const run = (
     await tx
       .select({ status: nodeRuns.status })
@@ -856,7 +852,6 @@ async function projectRecoveredCodeHostNodeRunTx(
         target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
         set: { content: value.content },
       })
-      .run()
   }
   const projected = await tx
     .update(nodeRuns)
@@ -885,7 +880,7 @@ async function projectRecoveredCodeHostNodeRunTx(
  * （缺口 04-pg-code-host-recovery-lock-proof）。
  */
 export async function resolveQuiescedCodeHostMutations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly owner: OwnershipTuple
     readonly expectedRevision: number
@@ -930,6 +925,7 @@ export async function resolveQuiescedCodeHostMutations(
     const appliedEffectIds: string[] = []
     const retryAuthorizedEffectIds: string[] = []
     for (const { resolution, receiptJson } of normalized) {
+      const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
       const row = (
         await tx
           .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })

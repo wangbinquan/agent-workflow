@@ -6,24 +6,18 @@
 // 提交与完成的幂等重放、以及「提交要求工件全 staged / 完成要求工件全 finalized」两条判据——它们
 // 在中立记账 `DatabaseHumanGateOperationJournal` 里已经逐行照搬，这里直接用，不再另写一套。
 //
-// 事务是中立的 `DatabaseTransaction`：调用方（task-execution 的 park 原子）在
+// 事务是中立的 `PersistenceTx`：调用方（task-execution 的 park 原子）在
 // `withTaskExecutionSerializable` 体内把它交进来，本文件只做 collaboration 自己的投影与记账。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { SYSTEM_DECIDER } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  docVersions,
-  nodeRunEvents,
-  nodeRuns,
-  reviewComments,
-  taskQuestions,
-} from '@/db/schema'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import type {
   HumanGateNodeRunLifecycleParticipantInTx,
@@ -114,13 +108,14 @@ async function parkGateNodeRun(
 
 /** The collaboration-owned review projection applied inside the park transaction. */
 async function projectReviewGateOpen(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   manifest: ReviewGateOpenManifest,
 ): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
+    const { nodeRuns } = tablesOf(tx)
     const existing = await tx
       .select({ id: nodeRuns.id })
       .from(nodeRuns)
@@ -147,6 +142,7 @@ async function projectReviewGateOpen(
       },
     })
   } else {
+    const { nodeRuns, docVersions, reviewComments } = tablesOf(tx)
     const existing = (
       await tx
         .select({
@@ -223,7 +219,6 @@ async function projectReviewGateOpen(
         await tx
           .delete(reviewComments)
           .where(inArray(reviewComments.docVersionId, currentPendingIds))
-          .run()
         await tx
           .update(docVersions)
           .set({
@@ -233,16 +228,15 @@ async function projectReviewGateOpen(
             decidedAt: node.startedAt,
           })
           .where(inArray(docVersions.id, currentPendingIds))
-          .run()
       }
       await tx
         .update(nodeRuns)
         .set({ consumedUpstreamRunsJson: node.consumedUpstreamRunsJson })
         .where(eq(nodeRuns.id, node.id))
-        .run()
     }
   }
 
+  const { docVersions, nodeRunEvents } = tablesOf(tx)
   // RFC-359 W6-T25 —— 文档投影按批落库。`manifest.documents` 的条数**无界**（它来自 agent 输出端口
   // 的 splitListItems，review 路径没有 wrapper-fanout 那道 256 闸），而这段跑在
   // `withTaskExecutionSerializable` 体内——SQLite 上那是全库独占，逐行写的 N 次往返阻塞的是所有任务。
@@ -275,37 +269,33 @@ async function projectReviewGateOpen(
       decidedBy: document.decidedBy,
       decidedByRole: document.decidedByRole,
     })),
-    (batch) =>
-      tx
-        .insert(docVersions)
-        .values([...batch])
-        .run(),
+    (batch) => {
+      return queryWrite(tx.insert(docVersions).values([...batch]))
+    },
   )
-  await tx
-    .insert(nodeRunEvents)
-    .values({
-      nodeRunId: node.id,
-      ts: node.startedAt,
-      kind: 'text',
-      payload: `[rfc333/review-opened] ${JSON.stringify({
-        eventRef: manifest.committedEventRef,
-        gateRef: manifest.gateRef,
-        documents: manifest.documents.length,
-        sourceSnapshotDigest: manifest.sourceSnapshotDigest,
-      })}`,
-    })
-    .run()
+  await insertOne(tx, nodeRunEvents, {
+    nodeRunId: node.id,
+    ts: node.startedAt,
+    kind: 'text',
+    payload: `[rfc333/review-opened] ${JSON.stringify({
+      eventRef: manifest.committedEventRef,
+      gateRef: manifest.gateRef,
+      documents: manifest.documents.length,
+      sourceSnapshotDigest: manifest.sourceSnapshotDigest,
+    })}`,
+  })
 }
 
 /** The collaboration-owned clarify node + round + eager question projection. */
 export async function projectClarifyGateOpen(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   manifest: ClarifyGateOpenManifest,
 ): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
+    const { nodeRuns } = tablesOf(tx)
     const existing = await tx
       .select({ id: nodeRuns.id })
       .from(nodeRuns)
@@ -332,6 +322,7 @@ export async function projectClarifyGateOpen(
       },
     })
   } else {
+    const { nodeRuns } = tablesOf(tx)
     const existing = (
       await tx
         .select({
@@ -378,6 +369,7 @@ export async function projectClarifyGateOpen(
     }
   }
 
+  const { clarifyRounds, taskQuestions, nodeRunEvents } = tablesOf(tx)
   const round = await tx
     .select({ id: clarifyRounds.id })
     .from(clarifyRounds)
@@ -389,7 +381,7 @@ export async function projectClarifyGateOpen(
       `clarify-open round projection '${manifest.round.id}' already exists`,
     )
   }
-  await tx.insert(clarifyRounds).values(manifest.round).run()
+  await insertOne(tx, clarifyRounds, manifest.round)
 
   for (const question of manifest.questions) {
     if (question.mode === 'insert') {
@@ -412,40 +404,37 @@ export async function projectClarifyGateOpen(
           `clarify-open question projection '${question.questionId}' appeared before park`,
         )
       }
-      await tx
-        .insert(taskQuestions)
-        .values({
-          id: question.id,
-          taskId: question.taskId,
-          originNodeRunId: question.originNodeRunId,
-          questionId: question.questionId,
-          questionTitle: question.questionTitle,
-          sourceKind: question.sourceKind,
-          roleKind: question.roleKind,
-          iteration: question.iteration,
-          loopIter: question.loopIter,
-          defaultTargetNodeId: question.defaultTargetNodeId,
-          overrideTargetNodeId: null,
-          dispatchedAt: null,
-          dispatchedBy: null,
-          triggerRunId: null,
-          stagedAt: null,
-          stagedBy: null,
-          autoDispatchDeferredAt: null,
-          sealedAt: null,
-          sealedBy: null,
-          confirmation: 'open',
-          confirmedBy: null,
-          confirmedByRole: null,
-          confirmedAt: null,
-          lastReassignedBy: null,
-          lastReassignedAt: null,
-          manualBody: null,
-          manualCreatedBy: null,
-          createdAt: question.createdAt,
-          updatedAt: question.updatedAt,
-        })
-        .run()
+      await insertOne(tx, taskQuestions, {
+        id: question.id,
+        taskId: question.taskId,
+        originNodeRunId: question.originNodeRunId,
+        questionId: question.questionId,
+        questionTitle: question.questionTitle,
+        sourceKind: question.sourceKind,
+        roleKind: question.roleKind,
+        iteration: question.iteration,
+        loopIter: question.loopIter,
+        defaultTargetNodeId: question.defaultTargetNodeId,
+        overrideTargetNodeId: null,
+        dispatchedAt: null,
+        dispatchedBy: null,
+        triggerRunId: null,
+        stagedAt: null,
+        stagedBy: null,
+        autoDispatchDeferredAt: null,
+        sealedAt: null,
+        sealedBy: null,
+        confirmation: 'open',
+        confirmedBy: null,
+        confirmedByRole: null,
+        confirmedAt: null,
+        lastReassignedBy: null,
+        lastReassignedAt: null,
+        manualBody: null,
+        manualCreatedBy: null,
+        createdAt: question.createdAt,
+        updatedAt: question.updatedAt,
+      })
       continue
     }
     const existing = (
@@ -478,31 +467,28 @@ export async function projectClarifyGateOpen(
         updatedAt: question.updatedAt,
       })
       .where(eq(taskQuestions.id, question.id))
-      .run()
   }
-  await tx
-    .insert(nodeRunEvents)
-    .values({
-      nodeRunId: node.id,
-      ts: manifest.round.createdAt,
-      kind: 'text',
-      payload: `[rfc333/clarify-opened] ${JSON.stringify({
-        eventRef: manifest.committedEventRef,
-        gateRef: manifest.gateRef,
-        kind: manifest.round.kind,
-        roundId: manifest.round.id,
-        questions: manifest.questions.length,
-        sourceSnapshotDigest: manifest.sourceSnapshotDigest,
-      })}`,
-    })
-    .run()
+  await insertOne(tx, nodeRunEvents, {
+    nodeRunId: node.id,
+    ts: manifest.round.createdAt,
+    kind: 'text',
+    payload: `[rfc333/clarify-opened] ${JSON.stringify({
+      eventRef: manifest.committedEventRef,
+      gateRef: manifest.gateRef,
+      kind: manifest.round.kind,
+      roundId: manifest.round.id,
+      questions: manifest.questions.length,
+      sourceSnapshotDigest: manifest.sourceSnapshotDigest,
+    })}`,
+  })
 }
 
 async function manualQuestionStillOutstanding(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   manifest: ManualQuestionOpenManifest,
 ): Promise<boolean> {
   const expected = manifest.question
+  const { taskQuestions } = tablesOf(tx)
   const row = (
     await tx.select().from(taskQuestions).where(eq(taskQuestions.id, expected.id)).limit(1)
   )[0]
@@ -536,13 +522,14 @@ async function manualQuestionStillOutstanding(
 
 export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenParticipantInTx {
   constructor(
-    private readonly tx: DatabaseTransaction,
+    private readonly tx: PersistenceTx,
     private readonly journal: HumanGateOperationJournal,
     private readonly nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
     private readonly nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   ) {}
 
   async listPreparedManualQuestionParksTx(taskId: string): Promise<readonly string[]> {
+    const { collaborationGateOperations } = tablesOf(this.tx)
     const rows = await this.tx
       .select({ id: collaborationGateOperations.id })
       .from(collaborationGateOperations)

@@ -1,11 +1,12 @@
 // RFC-370 H6: history and diff use the selected asynchronous snapshot reader.
 // Real provider metadata and file snapshots preserve the existing history rules.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Skill } from '@agent-workflow/shared'
-import { users } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import type {
@@ -50,7 +51,8 @@ describeEachProvider('RFC-370 skill version reader', (harness) => {
   let authority: SkillOperationContext
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-version-reader-'))
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'version-reader-admin',
       username: 'version-reader-admin',
       displayName: 'Version reader admin',

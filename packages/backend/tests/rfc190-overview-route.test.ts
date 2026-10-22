@@ -11,6 +11,8 @@
 //   4. the fixed-clock 7-day window boundary (D10 / design gate P2-1);
 //   5. the response contract (OverviewResponseSchema + generatedAt).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import {
@@ -20,16 +22,8 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import {
-  cachedRepos,
-  memories,
-  scheduledTasks,
-  taskCollaborators,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -62,7 +56,7 @@ function unusedCapability(): never {
  * 这一条 oracle 的价值正在于此：它逐 actor 断言「概览计数 === 同一 actor 在对应列表端点
  * 拿到的行数」，是这次两份收一份的安全网。
  */
-function buildOverview(db: ProviderNeutralDatabase, actor: Actor, now?: () => number) {
+function buildOverview(db: PersistenceDb, actor: Actor, now?: () => number) {
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,
     resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
@@ -87,7 +81,7 @@ function buildOverview(db: ProviderNeutralDatabase, actor: Actor, now?: () => nu
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string } // creator / task owner
   bob: { id: string; token: string } // grantee / second owner
@@ -271,6 +265,7 @@ async function seedResources(h: Harness): Promise<void> {
   ).toBe(200)
 
   const now = Date.now()
+  const { cachedRepos, scheduledTasks, memories } = tablesOf(h.db)
   await h.db.insert(cachedRepos).values([
     {
       id: 'repo-1',
@@ -408,7 +403,8 @@ function taskRow(
  */
 async function seedTasks(h: Harness): Promise<void> {
   const now = Date.now()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: 'wf-ov',
     name: 'wf-ov',
     description: '',
@@ -561,6 +557,7 @@ describeEachProviderHttpApplication(
       const rows = (await response.json()) as Array<{ id: string }>
       expect(rows.some((row) => row.id === 'internal-done')).toBe(false)
       expect((await getOverview(h, h.admin.token)).tasks?.done7d).toBe(2)
+      const { tasks } = tablesOf(h.db)
       expect(
         (await h.db.select({ id: tasks.id }).from(tasks)).some((row) => row.id === 'internal-done'),
       ).toBe(true)
@@ -659,7 +656,8 @@ describeEachProviderHttpApplication(
     test('7d 边界（注入时钟）：cutoff-1ms 不计 / 恰好 cutoff 计 / cutoff+1ms 计', async () => {
       const T0 = 1_900_000_000_000 // fixed, far from wall-clock seed noise
       const cutoff = T0 - 7 * 86_400_000
-      await h.db.insert(workflows).values({
+      const { workflows, tasks } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: 'wf-bd',
         name: 'wf-bd',
         description: '',

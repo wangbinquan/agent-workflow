@@ -1,5 +1,7 @@
 // RFC-370: complete selected workspace effects retain serial content and close ACKs.
 // Exact 694 CI repair: launch-frozen submission and complete fake port retain the close ACK oracle.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,12 +30,6 @@ import { createWorkspaceValidationAdapter } from '@/modules/development-automati
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { runMissionReconcile } from '@/modules/development-automation/application/missionReconciler'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import {
-  cachedRepos,
-  employeeCases,
-  employeeCaseWorkspaces,
-  employeeReactionRounds,
-} from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
@@ -514,7 +510,9 @@ describeEachProvider('RFC-370 actual DA selected workspace ordering', (harness) 
       })
       const db = harness.db,
         baselineSha = 'a'.repeat(40)
-      await db.insert(cachedRepos).values({
+      const { cachedRepos, employeeCases, employeeReactionRounds, employeeCaseWorkspaces } =
+        tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id: 'selected-repo',
         urlHash: 'selected',
         urlEnc: null,
@@ -524,7 +522,7 @@ describeEachProvider('RFC-370 actual DA selected workspace ordering', (harness) 
         lastFetchedAt: 1,
         createdAt: 1,
       })
-      await db.insert(employeeCases).values({
+      await insertOne(db, employeeCases, {
         id: 'selected-case',
         employeeId: 'employee',
         employeeRevision: 1,
@@ -578,7 +576,7 @@ describeEachProvider('RFC-370 actual DA selected workspace ordering', (harness) 
           ]),
         }),
       }
-      await db.insert(employeeReactionRounds).values({
+      await insertOne(db, employeeReactionRounds, {
         id: 'selected-round',
         caseId: 'selected-case',
         caseRevision: 1,

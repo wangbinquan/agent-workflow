@@ -22,8 +22,10 @@
 //   - The decision route hands the acting user to the service (P16) — pinned by
 //     source text, since the service-level re-check is only observable in races.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -33,15 +35,6 @@ import { z } from 'zod'
 import { SubmitReviewDecisionSchema, type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
-import {
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskCollaborators,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {} from '@/modules/collaboration/composition/decisionCommands'
 import {
   ALL_TOOLS,
@@ -102,7 +95,7 @@ function toolNamed(name: string): McpToolDef {
 
 interface Harness {
   app: Hono
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   configPath: string
   userId: string
@@ -168,13 +161,16 @@ async function seedReview(
     ],
     edges: [],
   }
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(
+    h.db,
+  )
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -188,7 +184,7 @@ async function seedReview(
     startedAt: NOW,
     ownerUserId: h.userId,
   })
-  await h.db.insert(taskCollaborators).values({
+  await insertOne(h.db, taskCollaborators, {
     taskId,
     userId: h.userId,
     role: 'owner',
@@ -196,7 +192,7 @@ async function seedReview(
     addedAt: NOW,
   })
   const docRunId = ulid()
-  await h.db.insert(nodeRuns).values({
+  await insertOne(h.db, nodeRuns, {
     id: docRunId,
     taskId,
     nodeId: 'doc',
@@ -206,13 +202,13 @@ async function seedReview(
     startedAt: NOW - 1000,
     finishedAt: NOW - 900,
   })
-  await h.db.insert(nodeRunOutputs).values({
+  await insertOne(h.db, nodeRunOutputs, {
     nodeRunId: docRunId,
     portName: 'docpath',
     content: mode === 'single' ? SINGLE_BODY : bodies.map((_, i) => `cases/${i}.md`).join('\n'),
   })
   const reviewRunId = ulid()
-  await h.db.insert(nodeRuns).values({
+  await insertOne(h.db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -227,7 +223,7 @@ async function seedReview(
     const id = ulid()
     const bodyPath = `doc_versions/${id}.md`
     writeFileSync(join(h.appHome, bodyPath), body)
-    await h.db.insert(docVersions).values({
+    await insertOne(h.db, docVersions, {
       id,
       taskId,
       reviewNodeId: 'rev_1',
@@ -405,6 +401,7 @@ describeEachProviderHttpApplication(
         nodeRunId: fx.reviewRunId,
         commentId: created.id,
       })
+      const { reviewComments, docVersions } = tablesOf(h.db)
       expect(await h.db.select().from(reviewComments)).toEqual([])
 
       const decided = (await call(h, writer, 'submit_review', {
@@ -466,6 +463,7 @@ describeEachProviderHttpApplication(
         comments: [{ docVersionId: b, quote: 'beta', commentText: 'why b is out' }],
       })) as { ok: boolean; selectionsApplied: number; commentsAdded: number }
       expect(decided).toMatchObject({ ok: true, selectionsApplied: 2, commentsAdded: 1 })
+      const { nodeRunOutputs } = tablesOf(h.db)
       const accepted = (
         await h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, fx.reviewRunId))
       ).find((o) => o.portName === 'accepted')!
@@ -484,6 +482,7 @@ describeEachProviderHttpApplication(
         comments: [{ commentText: 'overall', quote: undefined }],
       })) as { ok: boolean; commentsAdded: number }
       expect(decided).toMatchObject({ ok: true, commentsAdded: 1 })
+      const { docVersions } = tablesOf(h.db)
       const dv = (
         await h.db.select().from(docVersions).where(eq(docVersions.id, fx.docIds[0]!))
       )[0]!
@@ -507,6 +506,7 @@ describeEachProviderHttpApplication(
       )
       expect(err.status).toBe(403)
       expect(err.code).toBe('forbidden')
+      const { reviewComments } = tablesOf(h.db)
       expect(await h.db.select().from(reviewComments)).toEqual([])
     })
   },
@@ -612,6 +612,7 @@ describeEachProviderHttpApplication(
       expect(notFoundText).toContain('enum should include')
       expect(notFoundText).not.toContain('/Users/')
 
+      const { reviewComments } = tablesOf(h.db)
       // 两次都被拒 ⇒ 零写入。
       expect(await h.db.select().from(reviewComments)).toEqual([])
     })
@@ -729,6 +730,7 @@ describeEachProviderHttpApplication(
       expect(refusalText).toContain('add_review_comment')
       expect(refusalText.toLowerCase()).toContain('not found')
       expect(refusalText.toLowerCase()).not.toContain('permission denied')
+      const { reviewComments } = tablesOf(h.db)
       expect(await h.db.select().from(reviewComments)).toEqual([])
     })
 

@@ -22,12 +22,13 @@
 //   lifecycle. A park without an owner keeps the exact prepared revision as its
 //   only fence (locked by rfc359-w4-d25-adapters.test.ts).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, collaborationGateOperations, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
@@ -101,10 +102,11 @@ function question(id: string): ClarifyQuestion {
 }
 
 /** A running task whose two designers both finished with a question, owned by a claimed driver. */
-async function seedOwnedSiblingAskers(db: ProviderNeutralDatabase, taskId: string) {
+async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
   const definition = siblingAskersDefinition()
   const workflowId = `wf-${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -112,7 +114,7 @@ async function seedOwnedSiblingAskers(db: ProviderNeutralDatabase, taskId: strin
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -175,7 +177,7 @@ async function seedOwnedSiblingAskers(db: ProviderNeutralDatabase, taskId: strin
 
 /** Prepares one sibling's clarify gate through the production preparation, bound to `revision`. */
 async function prepareSiblingGate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   side: 'a' | 'b',
   revision: number,
@@ -206,18 +208,20 @@ async function prepareSiblingGate(
   return result
 }
 
-function parker(db: ProviderNeutralDatabase): DatabaseHumanGateTaskLifecyclePersistence {
+function parker(db: PersistenceDb): DatabaseHumanGateTaskLifecyclePersistence {
   return new DatabaseHumanGateTaskLifecyclePersistence(
     db,
     createTaskRuntimeLifecyclePersistence(db),
   )
 }
 
-async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
+async function taskRow(db: PersistenceDb, taskId: string) {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]!
 }
 
-async function operationState(db: ProviderNeutralDatabase, operationId: string) {
+async function operationState(db: PersistenceDb, operationId: string) {
+  const { collaborationGateOperations } = tablesOf(db)
   return (
     await db
       .select({ state: collaborationGateOperations.state })
@@ -253,6 +257,7 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     // two in-flight siblings settle in the same tick.
     const opened = await Promise.all([ask('a'), ask('b')])
 
+    const { clarifyRounds, nodeRuns } = tablesOf(db)
     const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(rounds.map((round) => round.intermediaryNodeId).sort()).toEqual([
       'clarify_a',
@@ -299,6 +304,7 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
     })
+    const { clarifyRounds } = tablesOf(db)
     expect(
       await db
         .select()
@@ -316,6 +322,7 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     const first = await prepareSiblingGate(db, taskId, 'a', 1)
     const second = await prepareSiblingGate(db, taskId, 'b', 1)
     await parker(db).parkPrepared({ prepared: first.prepared, token, now: NOW + 2 })
+    const { tasks } = tablesOf(db)
     // The first gate was answered while the second asker was still settling:
     // the same owner keeps driving, and the task is running again.
     await db
@@ -344,6 +351,7 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     const first = await prepareSiblingGate(db, taskId, 'a', 1)
     const second = await prepareSiblingGate(db, taskId, 'b', 1)
     await parker(db).parkPrepared({ prepared: first.prepared, token, now: NOW + 2 })
+    const { tasks, clarifyRounds } = tablesOf(db)
     await db
       .update(tasks)
       .set({ status: 'canceled', lifecycleEventRevision: 3 })

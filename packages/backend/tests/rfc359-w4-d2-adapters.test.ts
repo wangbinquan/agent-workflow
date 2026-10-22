@@ -3,18 +3,13 @@
 // MR 关闭在一个事务里落投递 + 流状态 + 控制 effect 并撤销早于该修订的启动守卫、同事实重投只 bump、
 // reopen / merge 的线性化、终态重放复用根修订与根 effect、非 MR 无 uuid 投递不去重。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { CodeHostEvent } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookMrLaunchGuards,
-  webhookMrStreamStates,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { stableMrIdentityOf } from '@/modules/integration/domain/mrTerminalControl'
 import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
@@ -23,8 +18,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_700_000_000_000
 const DAY = 24 * 60 * 60 * 1000
 
-async function seedEndpoint(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(webhookEndpoints).values({
+async function seedEndpoint(db: PersistenceDb, id: string): Promise<void> {
+  const { webhookEndpoints } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id,
     name: id,
     provider: 'gitlab',
@@ -103,6 +99,7 @@ describeEachProvider('RFC-359 W4-D2 —— webhook 投递持久化 + 已验证�
       status: 'ignored',
       reason: 'no-trigger-matched',
     })
+    const { webhookDeliveries, webhookEndpoints } = tablesOf(db)
     expect(
       (
         await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, first.deliveryId))
@@ -134,7 +131,7 @@ describeEachProvider('RFC-359 W4-D2 —— webhook 投递持久化 + 已验证�
       .update(webhookDeliveries)
       .set({ receivedAt: NOW - 30 * DAY })
       .where(eq(webhookDeliveries.endpointId, 'ep-d2'))
-    await db.insert(webhookDeliveries).values({
+    await insertOne(db, webhookDeliveries, {
       id: 'fresh',
       endpointId: 'ep-d2',
       eventUuid: 'uuid-fresh',
@@ -184,7 +181,13 @@ describeEachProvider('RFC-359 W4-D2 —— webhook 投递持久化 + 已验证�
     const verified = createVerifiedWebhookDeliveryPersistence(db)
     const identity = stableMrIdentityOf(mrEvent())
     if (identity === null) throw new Error('fixture identity')
-    await db.insert(webhookMrLaunchGuards).values({
+    const {
+      webhookMrLaunchGuards,
+      webhookMrStreamStates,
+      webhookMrControlEffects,
+      webhookDeliveries,
+    } = tablesOf(db)
+    await insertOne(db, webhookMrLaunchGuards, {
       id: 'guard-old',
       endpointId: 'ep-d2',
       streamKey: identity.streamKey,

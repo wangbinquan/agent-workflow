@@ -1,13 +1,13 @@
 // RFC-370 — Intent apply over the hosted Resource Catalog artifact owners.
 // Assembly only: the retention read lives in Intent infrastructure, and the
 // resource owners arrive through Resource Catalog's public participant.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedIntentResourceArtifacts } from '@/modules/resource-catalog/public/participants'
 import { createHostedIntentPluginRetention } from '../infrastructure/crewstation/pluginRetention'
 import type { IntentArtifactSelection } from './apply'
 import type { IntentSkillArtifact } from '../application/ports/intentArtifactContent'
 
-export function composeCrewStationIntentPluginRetention(db: ProviderNeutralDatabase) {
+export function composeCrewStationIntentPluginRetention(db: PersistenceDb) {
   return createHostedIntentPluginRetention(db)
 }
 

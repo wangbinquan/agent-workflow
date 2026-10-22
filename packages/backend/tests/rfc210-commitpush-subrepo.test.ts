@@ -16,12 +16,13 @@
 // bump gitlink 并推。任一子仓推不上去就**扣住父仓**——宁可少推一次，也不让远端
 // 出现无法解析的 gitlink。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { runCommitPush } from '@/services/commitPushRunner'
@@ -36,7 +37,7 @@ import {
 } from './helpers/repositoryCandidatePublication'
 
 const created: string[] = []
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let prevGitGlobal: string | undefined
 const gitCfgDir = mkdtempSync(join(tmpdir(), 'aw-rfc210-cp-cfg-'))
 
@@ -124,9 +125,10 @@ async function fixture(subPushable: boolean): Promise<{ parent: string; subOrigi
  * `lineage_slot_path_json` are written out: the SQLite-only trigger
  * `rfc328_tasks_lineage_after_insert` has no PostgreSQL counterpart by design.
  */
-async function seedTask(repo: string): Promise<ProviderNeutralDatabase> {
-  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
-  await db.insert(tasks).values({
+async function seedTask(repo: string): Promise<PersistenceDb> {
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
+  await insertOne(db, tasks, {
     id: 't1',
     name: 'cp',
     workflowId: 'wf',
@@ -146,7 +148,7 @@ async function seedTask(repo: string): Promise<ProviderNeutralDatabase> {
   })
   // The mint factory enforces "born-running ⟹ child row", so provide the
   // triggering agent run exactly as production does.
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'parent-run',
     taskId: 't1',
     nodeId: 'writer',

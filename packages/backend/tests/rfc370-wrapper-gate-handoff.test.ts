@@ -1,10 +1,11 @@
 // A human-gate successor must cross every nested wrapper without publishing
 // completion, promoting empty outputs, or leaving admitted sibling work behind.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runScope } from '../src/modules/task-execution/composition/taskDagScope'
 import { createWrapperRunLedger } from '../src/modules/task-execution/composition/wrapperRunLifecycle'
@@ -519,12 +520,13 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
     const runId = ulid()
     const progress = JSON.stringify({ kind: 'loop', iteration: 1, phase: 'inner-running' })
     const workflowId = ulid()
-    await harness.db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
       id: workflowId,
       name: 'handoff workflow fixture',
       definition: JSON.stringify(nestedDefinition),
     })
-    await harness.db.insert(tasks).values({
+    await insertOne(harness.db, tasks, {
       id: taskId,
       name: 'handoff fixture',
       workflowId,
@@ -537,7 +539,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
       branch: `agent-workflow/${taskId}`,
       workflowSnapshot: JSON.stringify(nestedDefinition),
     })
-    await harness.db.insert(nodeRuns).values({
+    await insertOne(harness.db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'loop',

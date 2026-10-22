@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-044 — distiller source-context loader + builder unit tests.
@@ -24,15 +27,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   buildDistillerUserPrompt,
   loadSourceEvents,
@@ -46,7 +41,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
 
-function createMemoryDistillTestContext(db: ProviderNeutralDatabase, root = appHome()) {
+function createMemoryDistillTestContext(db: PersistenceDb, root = appHome()) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
@@ -62,9 +57,10 @@ interface Seeded {
   workflowId: string
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<Seeded> {
+async function seedTask(db: PersistenceDb): Promise<Seeded> {
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -74,7 +70,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<Seeded> {
   })
 
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -93,12 +89,13 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<Seeded> {
 }
 
 async function seedSourceAgentNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { promptText?: string; opencodeSessionId?: string | null; startedAt?: number } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'agent-1',
@@ -115,12 +112,13 @@ async function seedSourceAgentNodeRun(
 }
 
 async function seedClarifySession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   sourceRunId: string,
 ): Promise<{ clarifyId: string; clarifyRunId: string }> {
   const clarifyRunId = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, clarifyRounds } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: clarifyRunId,
     taskId,
     nodeId: 'clarify-1',
@@ -131,7 +129,7 @@ async function seedClarifySession(
   })
 
   const clarifyId = ulid()
-  await db.insert(clarifyRounds).values({
+  await insertOne(db, clarifyRounds, {
     kind: 'self' as const,
     id: clarifyId,
     taskId,
@@ -149,13 +147,14 @@ async function seedClarifySession(
 }
 
 async function insertTextEvent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   nodeRunId: string,
   ts: number,
   text: string,
   sessionId = 'sess-abc',
 ): Promise<void> {
-  await db.insert(nodeRunEvents).values({
+  const { nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRunEvents, {
     nodeRunId,
     ts,
     kind: 'text',
@@ -217,7 +216,7 @@ function mkReviewJob(taskId: string, reviewId: string) {
 }
 
 describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: ReturnType<typeof createMemoryDistillTestContext>
   beforeEach(() => {
     db = harness.db
@@ -318,7 +317,7 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
 })
 
 describeEachProvider('loadSourceEvents — review body', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: ReturnType<typeof createMemoryDistillTestContext>
   let prevHome: string | undefined
   let tmpHome: string
@@ -341,7 +340,8 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
     relPath = 'docs/v1.md',
   ): Promise<string> {
     const reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'review-1',
@@ -352,7 +352,7 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
     })
 
     const dvId = ulid()
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: dvId,
       taskId,
       reviewNodeId: 'review-1',
@@ -467,7 +467,8 @@ describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () =
     // Insert a clarify row that points to a node_run id we never seed.
     const orphanRunId = ulid()
     const clarifyRunId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: clarifyRunId,
       taskId,
       nodeId: 'clarify-1',
@@ -496,9 +497,9 @@ describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () =
     // RFC-217 T8：clarify_rounds 对 asking_node_run_id 有 FK（遗留表没有），
     // 夹具会自动补 run 桩——要驱动「源 run 行缺失」的防御分支，插完 round 后
     // 关 FK 删掉桩，构造出 FK 之外才可能出现的孤儿 round。
-    await db.run(sql`PRAGMA foreign_keys = OFF`)
+    await rawExec(db, sql`PRAGMA foreign_keys = OFF`)
     await db.delete(nodeRuns).where(eq(nodeRuns.id, orphanRunId))
-    await db.run(sql`PRAGMA foreign_keys = ON`)
+    await rawExec(db, sql`PRAGMA foreign_keys = ON`)
     const loaded = await loadSourceEvents(
       memory.store,
       memory.reviewedArtifacts,

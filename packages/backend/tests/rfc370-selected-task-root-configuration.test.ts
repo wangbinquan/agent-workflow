@@ -1,6 +1,8 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: exercise both real provider roots, not a stand-in coordinator. Capture
 // the real Task run binding request after live settings ACK and keep original files.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config, REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -8,7 +10,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, and } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { tasks, nodeRuns, memories, fusions } from '@/db/schema'
 import { createUser } from './helpers/userFixture'
 import {
   composeApplicationConfigurationBinding,
@@ -120,6 +121,7 @@ describeEachProviderHttpApplication(
       async function waitTask(id: string, status: string) {
         const deadline = Date.now() + 12_000
         for (;;) {
+          const { tasks } = tablesOf(scope.harness.db)
           const row = (
             await scope.harness.db.select().from(tasks).where(eq(tasks.id, id)).limit(1)
           )[0]
@@ -336,7 +338,8 @@ describeEachProviderHttpApplication(
       expect(created.status, await created.clone().text()).toBe(201)
       const skill = (await created.json()) as { id: string },
         memoryId = ulid()
-      await scope.harness.db.insert(memories).values({
+      const { memories, tasks, fusions } = tablesOf(scope.harness.db)
+      await insertOne(scope.harness.db, memories, {
         id: memoryId,
         scopeType: 'global',
         scopeId: null,
@@ -409,6 +412,7 @@ describeEachProviderHttpApplication(
       expect(response.status, await response.clone().text()).toBe(201)
       const task = (await response.json()) as { id: string }
       await f.waitTask(task.id, 'done')
+      const { tasks } = tablesOf(scope.harness.db)
       // A persisted interrupted fixture keeps the real workspace, owner and lineage.
       await scope.harness.db
         .update(tasks)
@@ -448,6 +452,7 @@ describeEachProviderHttpApplication(
       const task = (await response.json()) as { id: string }
       const failed = await f.waitTask(task.id, 'failed')
       expect(failed.errorMessage).not.toBeNull()
+      const { nodeRuns } = tablesOf(scope.harness.db)
       const prep = (
         await scope.harness.db
           .select()

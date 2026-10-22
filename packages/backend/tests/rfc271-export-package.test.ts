@@ -11,6 +11,8 @@
 // 覆盖验收条款：AC-10（requirements 分段列出导入方需自备的东西）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,11 +26,10 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { eq } from 'drizzle-orm'
-import { agents, mcps, workflows } from '../src/db/schema'
 import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { applyPackageSecretInputs } from '../src/services/resourcePackage/secretInputs'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 // 技能内容在文件系统里（`${appHome}/skills/{id}/files/`），所以导出要 appHome。
@@ -45,61 +46,53 @@ const actorOf = (id: string, permissions: string[] = ['scripts:author']): Actor 
 const defn = (nodes: unknown[]): WorkflowDefinition =>
   ({ $schema_version: 4, inputs: [], nodes, edges: [] }) as unknown as WorkflowDefinition
 
-async function seed(db: ProviderNeutralDatabase): Promise<{ wf: string }> {
+async function seed(db: PersistenceDb): Promise<{ wf: string }> {
   const mcpId = ulid()
-  await db
-    .insert(mcps)
-    .values({
-      id: mcpId,
-      name: 'gh-tools',
-      description: '',
-      type: 'remote',
-      config: JSON.stringify({
-        url: 'https://api.test/mcp',
-        headers: { Authorization: 'Bearer ghp_REAL_SECRET_VALUE' },
-      }),
-      enabled: true,
-      ownerUserId: 'u1',
-      visibility: 'private',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    .run()
+  const { mcps, agents, workflows } = tablesOf(db)
+  await insertOne(db, mcps, {
+    id: mcpId,
+    name: 'gh-tools',
+    description: '',
+    type: 'remote',
+    config: JSON.stringify({
+      url: 'https://api.test/mcp',
+      headers: { Authorization: 'Bearer ghp_REAL_SECRET_VALUE' },
+    }),
+    enabled: true,
+    ownerUserId: 'u1',
+    visibility: 'private',
+    createdAt: 1,
+    updatedAt: 1,
+  } as never)
   const agentId = ulid()
-  await db
-    .insert(agents)
-    .values({
-      id: agentId,
-      name: 'auditor',
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      dependsOn: '[]',
-      mcp: JSON.stringify([mcpId]),
-      plugins: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      ownerUserId: 'u1',
-      visibility: 'private',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    .run()
+  await insertOne(db, agents, {
+    id: agentId,
+    name: 'auditor',
+    description: '',
+    outputs: '[]',
+    permission: '{}',
+    skills: '[]',
+    dependsOn: '[]',
+    mcp: JSON.stringify([mcpId]),
+    plugins: '[]',
+    frontmatterExtra: '{}',
+    bodyMd: '',
+    ownerUserId: 'u1',
+    visibility: 'private',
+    createdAt: 1,
+    updatedAt: 1,
+  } as never)
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'audit',
-      description: '',
-      definition: JSON.stringify(defn([{ id: 'n1', kind: 'agent-single', agentId }])),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    .run()
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'audit',
+    description: '',
+    definition: JSON.stringify(defn([{ id: 'n1', kind: 'agent-single', agentId }])),
+    ownerUserId: 'u1',
+    visibility: 'private',
+    createdAt: 1,
+    updatedAt: 1,
+  } as never)
   return { wf: wfId }
 }
 
@@ -217,41 +210,38 @@ describeEachProvider('② 凭据：位置在包里、值不在包里', (harness)
   test('分离式 --token/--password 的 value 槽脱敏，整个 zip 字节不含原值', async () => {
     const db = harness.db
     const { wf } = await seed(db)
+    const { agents, mcps } = tablesOf(db)
     const [agent] = await db.select().from(agents)
     const localMcpId = ulid()
     const tokenValue = 'SYNTHETIC_SEPARATED_TOKEN_FOR_ZIP_SCAN'
     const passwordValue = 'SYNTHETIC_SEPARATED_PASSWORD_FOR_ZIP_SCAN'
-    await db
-      .insert(mcps)
-      .values({
-        id: localMcpId,
-        name: 'local-secret-tools',
-        description: '',
-        type: 'local',
-        config: JSON.stringify({
-          command: [
-            'acme-tool',
-            '--token',
-            tokenValue,
-            '--password',
-            passwordValue,
-            '--port',
-            '8080',
-          ],
-          env: {},
-        }),
-        enabled: true,
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
+    await insertOne(db, mcps, {
+      id: localMcpId,
+      name: 'local-secret-tools',
+      description: '',
+      type: 'local',
+      config: JSON.stringify({
+        command: [
+          'acme-tool',
+          '--token',
+          tokenValue,
+          '--password',
+          passwordValue,
+          '--port',
+          '8080',
+        ],
+        env: {},
+      }),
+      enabled: true,
+      ownerUserId: 'u1',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never)
     await db
       .update(agents)
       .set({ mcp: JSON.stringify([...JSON.parse(agent!.mcp), localMcpId]) })
       .where(eq(agents.id, agent!.id))
-      .run()
 
     const pkg = await exportResourcePackage(
       db,
@@ -321,6 +311,7 @@ describeEachProvider('② 凭据：位置在包里、值不在包里', (harness)
   test('自由 JSON 的 dot/bracket/numeric key 经 export→apply 精确往返', async () => {
     const db = harness.db
     const { wf } = await seed(db)
+    const { agents } = tablesOf(db)
     const [agent] = await db.select().from(agents)
     const original = {
       'a.b': { token: 'literal-dot-value' },
@@ -333,7 +324,6 @@ describeEachProvider('② 凭据：位置在包里、值不在包里', (harness)
       .update(agents)
       .set({ frontmatterExtra: JSON.stringify(original) })
       .where(eq(agents.id, agent!.id))
-      .run()
 
     const pkg = await exportResourcePackage(
       db,
@@ -428,28 +418,25 @@ describe('requirements —— 导入方需要自备的东西', () => {
     test('代码平台与本地 MCP 可执行文件进入预检前提清单', async () => {
       const db = harness.db
       const { wf } = await seed(db)
+      const { agents, mcps, workflows } = tablesOf(db)
       const [agent] = await db.select().from(agents)
       const localMcpId = ulid()
-      await db
-        .insert(mcps)
-        .values({
-          id: localMcpId,
-          name: 'local-tools',
-          description: '',
-          type: 'local',
-          config: JSON.stringify({ command: ['acme-tool', '--stdio'], env: {} }),
-          enabled: true,
-          ownerUserId: 'u1',
-          visibility: 'private',
-          createdAt: 1,
-          updatedAt: 1,
-        } as never)
-        .run()
+      await insertOne(db, mcps, {
+        id: localMcpId,
+        name: 'local-tools',
+        description: '',
+        type: 'local',
+        config: JSON.stringify({ command: ['acme-tool', '--stdio'], env: {} }),
+        enabled: true,
+        ownerUserId: 'u1',
+        visibility: 'private',
+        createdAt: 1,
+        updatedAt: 1,
+      } as never)
       await db
         .update(agents)
         .set({ mcp: JSON.stringify([...JSON.parse(agent!.mcp), localMcpId]) })
         .where(eq(agents.id, agent!.id))
-        .run()
       await db
         .update(workflows)
         .set({
@@ -467,7 +454,6 @@ describe('requirements —— 导入方需要自备的东西', () => {
           ),
         })
         .where(eq(workflows.id, wf))
-        .run()
 
       const pkg = await exportResourcePackage(
         db,

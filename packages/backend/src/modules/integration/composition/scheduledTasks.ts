@@ -1,5 +1,5 @@
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import type {
   IntegrationTriggerResourceBinding,
@@ -43,7 +43,7 @@ export function composeScheduledTaskRuntime(input: {
 }
 
 export interface ScheduledTaskRuntimeInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly resourceSnapshots: IntegrationTriggerResourceSnapshotFactory
   readonly validation: IntegrationTriggerValidationRuntime
   readonly resourceAclChanged: ScheduledTaskOperations['resourceAclChanged']

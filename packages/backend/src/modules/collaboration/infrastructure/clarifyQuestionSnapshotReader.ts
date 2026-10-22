@@ -1,21 +1,22 @@
 // RFC-359 W4-D25 —— clarify 准备用的问题快照读面：一份实现，两个引擎共用。
 // 合一前两份逐字同一条查询，只差取行姿势（SQLite `.get()` / PG `.limit(1)` 取首行）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskQuestions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ClarifyQuestionSnapshot,
   ClarifyQuestionSnapshotReader,
 } from '../application/ports/clarifyQuestionSnapshotReader'
 
 export class DatabaseClarifyQuestionSnapshotReader implements ClarifyQuestionSnapshotReader {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async find(
     input: Parameters<ClarifyQuestionSnapshotReader['find']>[0],
   ): Promise<ClarifyQuestionSnapshot | null> {
+    const { taskQuestions } = tablesOf(this.db)
     const rows = await this.db
       .select({
         id: taskQuestions.id,

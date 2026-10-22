@@ -12,10 +12,10 @@
 // advisory twin over possibly-stale resolvers): a cycle or an unresolvable
 // name fails the LAUNCH closed with id-only payloads (design-gate P2-6 —
 // names are display data the launcher may not be entitled to echo).
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { workflows, workgroups as workgroupsTable } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
@@ -269,7 +269,7 @@ export async function freezeCallClosure(
   // `dbTxSync`，`DbClient` 只出现在这一处标注上，是个残留的品牌。放宽向后兼容
   // （`DbClient` 是它的子类型），代价为零，换来的是 `rfc291-closure-call-edges` 的
   // freeze/dump 同解两条用例能上双引擎——此前它们只能留在单引擎块里，正是被这个标注钉住的。
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   root: { id: string; definition: WorkflowDefinition },
   /**
    * 实现门 P0-1 —— the LAUNCH actor. Resolution is id-cache-first (the node's
@@ -318,6 +318,7 @@ export async function freezeCallClosure(
     const hintIds = [
       ...new Set(pending.flatMap((e) => (e.ref.idHint !== undefined ? [e.ref.idHint] : []))),
     ]
+    const { workflows } = tablesOf(db)
     const hintRows =
       hintIds.length === 0
         ? []
@@ -434,17 +435,18 @@ export async function freezeCallClosure(
   const workgroupNames = new Set(workgroupEdges.map((e) => e.ref.authoritativeName))
   const frozenWorkgroups: Record<string, FrozenWorkgroupRef> = {}
   if (workgroupNames.size > 0) {
+    const { workgroups } = tablesOf(db)
     const rows = await db
       .select({
-        id: workgroupsTable.id,
-        name: workgroupsTable.name,
-        version: workgroupsTable.version,
-        ownerUserId: workgroupsTable.ownerUserId,
-        visibility: workgroupsTable.visibility,
+        id: workgroups.id,
+        name: workgroups.name,
+        version: workgroups.version,
+        ownerUserId: workgroups.ownerUserId,
+        visibility: workgroups.visibility,
       })
-      .from(workgroupsTable)
-      .where(inArray(workgroupsTable.name, [...workgroupNames]))
-      .orderBy(asc(workgroupsTable.id))
+      .from(workgroups)
+      .where(inArray(workgroups.name, [...workgroupNames]))
+      .orderBy(asc(workgroups.id))
     // id-hint 行（与工作流分支同构：命中且**该行仍带该选择器名字**才用）。
     const hintIds = [
       ...new Set(
@@ -459,14 +461,14 @@ export async function freezeCallClosure(
         ? []
         : await db
             .select({
-              id: workgroupsTable.id,
-              name: workgroupsTable.name,
-              version: workgroupsTable.version,
-              ownerUserId: workgroupsTable.ownerUserId,
-              visibility: workgroupsTable.visibility,
+              id: workgroups.id,
+              name: workgroups.name,
+              version: workgroups.version,
+              ownerUserId: workgroups.ownerUserId,
+              visibility: workgroups.visibility,
             })
-            .from(workgroupsTable)
-            .where(inArray(workgroupsTable.id, hintIds))
+            .from(workgroups)
+            .where(inArray(workgroups.id, hintIds))
     // RFC-291 面 D — 与工作流分支同构：可见性在这里判（我们持有 ACL 上下文），
     // 「选哪一行」交给 pickCallTarget 这个单点，intent dump 调的是同一个。
     const candidateById = new Map<string, (typeof rows)[number]>()

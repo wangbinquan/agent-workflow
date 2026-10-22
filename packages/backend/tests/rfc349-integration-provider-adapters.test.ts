@@ -1,12 +1,12 @@
 // RFC-349 — Integration provider adapters keep verified-ingress dedupe and
 // MR launch admission atomic while exposing one Promise application contract.
 
-import { afterEach, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { expect, test } from 'bun:test'
 import type { CodeHostEvent } from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import type { Actor } from '@/auth/actor'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type {
   ScheduledTaskCreateRecord,
   ScheduledTaskPersistencePort,
@@ -62,12 +62,12 @@ function fixture(responses: Array<Response | Error>) {
     if (response instanceof Error) throw response
     return rows(response)
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: run,
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -179,10 +179,6 @@ async function assertScheduledCreateBehavior(
   })
   await expect(persistence.countVisible(scheduledOwner)).resolves.toBe(1)
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
   test('scheduled-task atomic create has one behavior oracle for SQLite and PostgreSQL', async () => {

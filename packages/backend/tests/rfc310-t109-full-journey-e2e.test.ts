@@ -22,6 +22,8 @@
 // `__mr.factsCollectedAt` cells 实现（PR-7 集成测试同款手法）——快进时钟，
 // 不伪造行为。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { afterAll, beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
@@ -64,11 +66,10 @@ import { collectMergeRequestFacts } from '../src/modules/integration/application
 import { projectMrCells } from '../src/modules/development-automation/domain/mrFacts'
 import type { MergeRequestFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { sha256Hex } from '../src/util/hash'
-import { cachedRepos, developmentAgentAttempts, developmentMrClaims } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 setDefaultTimeout(300_000)
 
@@ -168,12 +169,13 @@ async function startLaneWorld(): Promise<void> {
 }
 
 /** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
-async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
+async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
   launches.length = 0
   outcomes.clear()
   fx = await buildPr3Fixture({ db, feedbackRoute: true })
   const repoPath = repoCachePath
-  await fx.db.insert(cachedRepos).values({
+  const { cachedRepos, developmentMrClaims } = tablesOf(fx.db)
+  await insertOne(fx.db, cachedRepos, {
     id: 'repo-1',
     urlHash: 't109j1',
     localPath: repoPath,
@@ -403,6 +405,7 @@ async function reconcileUntil(
   }
   if (!(await pred())) {
     const m = await fx.store.getMission(missionId)
+    const { developmentAgentAttempts } = tablesOf(fx.db)
     const rejections = (
       await fx.db
         .select({

@@ -1,5 +1,7 @@
 // RFC-370: exercise the selected script family through complete real provider
 // Task drives. These owner-issued references are fixtures, not CS acceptance.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -11,7 +13,6 @@ import {
   type ScriptLanguage,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { nodeRuns, taskExecutionEffectAttempts, tasks, users, workflows } from '../src/db/schema'
 import {
   ScriptDepsInstallError,
   type TaskScriptDependencyEnvironment,
@@ -305,7 +306,8 @@ describeEachProvider(
         let family: SelectedScriptFamily | undefined,
           selections = 0
         try {
-          await db.insert(users).values({
+          const { users, workflows, tasks, nodeRuns, taskExecutionEffectAttempts } = tablesOf(db)
+          await insertOne(db, users, {
             id: userId,
             username: userId,
             displayName: userId,
@@ -341,10 +343,12 @@ describeEachProvider(
             ],
             edges: [],
           }
-          await db
-            .insert(workflows)
-            .values({ id: workflowId, name: workflowId, definition: JSON.stringify(definition) })
-          await db.insert(tasks).values({
+          await insertOne(db, workflows, {
+            id: workflowId,
+            name: workflowId,
+            definition: JSON.stringify(definition),
+          })
+          await insertOne(db, tasks, {
             id: taskId,
             executionLineageId: taskId,
             lineageSlotPathJson: JSON.stringify([

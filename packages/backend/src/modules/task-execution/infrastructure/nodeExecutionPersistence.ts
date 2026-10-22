@@ -1,10 +1,11 @@
 // RFC-359 W4-B1 批 2f —— node run 执行投影（快照 / 输出 / 事件）：一份实现，两个 provider 共用。
 // 写路径是产品里最热的（agent 每吐一行就 appendEvents 一次）：统一写事务 + owner 围栏 + 聚合根行锁。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, eq, inArray, isNotNull, isNull, not, notLike, sql } from 'drizzle-orm'
 
-import { nodeExecutionEventSources, nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
@@ -21,7 +22,8 @@ import {
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
 
-function whereQuery(db: ProviderNeutralDatabase, input: NodeExecutionQuery) {
+function whereQuery(db: PersistenceDb, input: NodeExecutionQuery) {
+  const { nodeRuns } = tablesOf(db)
   const conditions = [eq(nodeRuns.taskId, input.taskId)]
   if (input.nodeId !== undefined) conditions.push(eq(nodeRuns.nodeId, input.nodeId))
   if (input.iteration !== undefined) conditions.push(eq(nodeRuns.iteration, input.iteration))
@@ -44,7 +46,7 @@ function whereQuery(db: ProviderNeutralDatabase, input: NodeExecutionQuery) {
   return and(...conditions)
 }
 
-type NodeRunRow = typeof nodeRuns.$inferSelect
+type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
 
 function mergeStateOf(value: string | null): MergeStateOrNull {
   if (value === null || (MERGE_STATES as readonly string[]).includes(value)) {
@@ -67,6 +69,7 @@ async function fencedTaskId(
   context: TaskExecutionContextRef | undefined,
   now: number,
 ): Promise<string | null> {
+  const { nodeRuns } = tablesOf(tx)
   const rows = await tx
     .select({ taskId: nodeRuns.taskId })
     .from(nodeRuns)
@@ -85,14 +88,16 @@ async function fencedTaskId(
 }
 
 export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async read(nodeRunId: string): Promise<NodeExecutionSnapshot | null> {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
     return rows[0] === undefined ? null : snapshotOf(rows[0])
   }
 
   async list(input: NodeExecutionQuery): Promise<readonly NodeExecutionSnapshot[]> {
+    const { nodeRuns } = tablesOf(this.db)
     return (
       await this.db
         .select()
@@ -103,6 +108,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
   }
 
   async listOutputs(nodeRunId: string) {
+    const { nodeRunOutputs } = tablesOf(this.db)
     return await this.db
       .select()
       .from(nodeRunOutputs)
@@ -111,6 +117,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
   }
 
   async countAgentTextEvents(nodeRunId: string, frameworkPrefix: string): Promise<number> {
+    const { nodeRunEvents } = tablesOf(this.db)
     const rows = await this.db
       .select({ count: count() })
       .from(nodeRunEvents)
@@ -126,6 +133,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
   }
 
   async readStderr(nodeRunId: string): Promise<string> {
+    const { nodeRunEvents } = tablesOf(this.db)
     const rows = await this.db
       .select({ payload: nodeRunEvents.payload })
       .from(nodeRunEvents)
@@ -143,6 +151,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         input.now ?? Date.now(),
       )
       if (taskId === null) return false
+      const { nodeRuns } = tablesOf(tx)
       const rows = await tx
         .update(nodeRuns)
         .set(input.values)
@@ -179,21 +188,23 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         })),
         (row) => row.portName,
       )
-      await insertInBatches(tx, nodeRunOutputs, rows, (batch) =>
-        tx
-          .insert(nodeRunOutputs)
-          .values([...batch])
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: {
-              content: sql`excluded.${sql.identifier(nodeRunOutputs.content.name)}`,
-              kind: sql`excluded.${sql.identifier(nodeRunOutputs.kind.name)}`,
-              archiveJson: sql`excluded.${sql.identifier(nodeRunOutputs.archiveJson.name)}`,
-              active: sql`excluded.${sql.identifier(nodeRunOutputs.active.name)}`,
-            },
-          })
-          .run(),
-      )
+      const { nodeRunOutputs } = tablesOf(tx)
+      await insertInBatches(tx, nodeRunOutputs, rows, (batch) => {
+        return queryWrite(
+          tx
+            .insert(nodeRunOutputs)
+            .values([...batch])
+            .onConflictDoUpdate({
+              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+              set: {
+                content: sql`excluded.${sql.identifier(nodeRunOutputs.content.name)}`,
+                kind: sql`excluded.${sql.identifier(nodeRunOutputs.kind.name)}`,
+                archiveJson: sql`excluded.${sql.identifier(nodeRunOutputs.archiveJson.name)}`,
+                active: sql`excluded.${sql.identifier(nodeRunOutputs.active.name)}`,
+              },
+            }),
+        )
+      })
     })
   }
 
@@ -208,21 +219,19 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         input.now ?? Date.now(),
       )
       if (taskId === null) return
-      await tx.delete(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, input.nodeRunId)).run()
+      const { nodeRunOutputs } = tablesOf(tx)
+      await tx.delete(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, input.nodeRunId))
       if (input.outputs.length > 0) {
-        await tx
-          .insert(nodeRunOutputs)
-          .values(
-            input.outputs.map((output) => ({
-              nodeRunId: input.nodeRunId,
-              portName: output.portName,
-              content: output.content,
-              kind: output.kind ?? null,
-              archiveJson: output.archiveJson ?? null,
-              active: output.active ?? true,
-            })),
-          )
-          .run()
+        await tx.insert(nodeRunOutputs).values(
+          input.outputs.map((output) => ({
+            nodeRunId: input.nodeRunId,
+            portName: output.portName,
+            content: output.content,
+            kind: output.kind ?? null,
+            archiveJson: output.archiveJson ?? null,
+            active: output.active ?? true,
+          })),
+        )
       }
     })
   }
@@ -252,6 +261,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
       const fresh = []
       for (const event of input.events) {
         if (event.sourceKey !== undefined) {
+          const { nodeExecutionEventSources } = tablesOf(tx)
           const inserted = await tx
             .insert(nodeExecutionEventSources)
             .values({
@@ -264,6 +274,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         }
         fresh.push(event)
       }
+      const { nodeRunEvents } = tablesOf(tx)
       await insertInBatches(
         tx,
         nodeRunEvents,
@@ -275,11 +286,9 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
           sessionId: event.sessionId ?? null,
           parentSessionId: event.parentSessionId ?? null,
         })),
-        (batch) =>
-          tx
-            .insert(nodeRunEvents)
-            .values([...batch])
-            .run(),
+        (batch) => {
+          return queryWrite(tx.insert(nodeRunEvents).values([...batch]))
+        },
       )
     })
   }
@@ -296,6 +305,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         input.now ?? Date.now(),
       )
       if (taskId === null) return
+      const { nodeRunEvents } = tablesOf(tx)
       await tx
         .update(nodeRunEvents)
         .set({ sessionId: input.logicalSessionId })
@@ -306,7 +316,6 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
             isNull(nodeRunEvents.parentSessionId),
           ),
         )
-        .run()
       await tx
         .update(nodeRunEvents)
         .set({ parentSessionId: input.logicalSessionId })
@@ -316,7 +325,6 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
             inArray(nodeRunEvents.parentSessionId, input.supersededSessionIds),
           ),
         )
-        .run()
     })
   }
 }

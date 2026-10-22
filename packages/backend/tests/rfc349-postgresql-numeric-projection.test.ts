@@ -56,6 +56,27 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       'repositoryWorkspaceSqlStore.cachedRepoFacets 的调用点对 all/referenced/attention ' +
       '三个字段都套了 Number()（`unused` 也是由解码后的两个数相减）',
   },
+  // RFC-395 I-b: raw execution is now in the neutral provider surface; retain its existing decoders.
+  'modules/intent/infrastructure/intentSqlPersistence.ts': {
+    revision:
+      'firstRow passes { revision: int } to rawFirst contract codecs before revision arithmetic.',
+  },
+  'modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts': {
+    count:
+      'executor.all passes { count: int } to rawRows; returned counts additionally pass Number().',
+    cached_repo_id:
+      'The first alias is text; the count projection in the same query has { count: int }.',
+    scope_id:
+      'The first alias is text; the memory count projection has { count: int } in executor.all.',
+  },
+  'modules/task-execution/infrastructure/taskListPage/query.ts': {
+    NOT: 'fastFilteredRootQuery shares page.ts numericOrZero() and projection.ts numeric() decoders.',
+    MATERIALIZED:
+      'baseCtes is an SQL fragment; page/projection.ts normalizes open_alert_count with numeric().',
+    facet_all: 'page.ts normalizes all four aggregate facet fields with numericOrZero().',
+    workflow_name:
+      'Fast page queries share page.ts and projection.ts numeric() / numericOrZero() decoders.',
+  },
   // RFC-374：两处都不把聚合值交回 JS。
   'modules/task-execution/infrastructure/nodeRunSeqBackfillStore.ts': {
     id:
@@ -72,43 +93,43 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
  * `MAX(branch_started_at)` 正好落在这个盲区里（PostgreSQL 的 `max(bigint)` 回 **int8**，
  * 驱动交回字符串）。
  */
-const AGGREGATE = /\bsql(?:<[^>]*>)?`[^`]*\b(?:count|sum|avg|max|min)\(/giu
+const AGGREGATE = /\b(?:count|sum|avg|max|min)\s*\(/iu
 
 function aggregateProjections(text: string) {
   const source = ts.createSourceFile('projection.ts', text, ts.ScriptTarget.Latest, true)
-  const templateStarts = new Set<number>()
+  const result: { line: number; key: string; mapped: boolean }[] = []
   const visit = (node: ts.Node): void => {
     if (ts.isTaggedTemplateExpression(node)) {
       const tag = node.tag
-      if (ts.isIdentifier(tag) && tag.text === 'sql') {
-        templateStarts.add(tag.getStart(source))
-      } else if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'sql') {
-        templateStarts.add(tag.name.getStart(source))
+      if (
+        (ts.isIdentifier(tag) && tag.text === 'sql') ||
+        (ts.isPropertyAccessExpression(tag) && tag.name.text === 'sql')
+      ) {
+        const template = ts.isNoSubstitutionTemplateLiteral(node.template)
+          ? node.template.text
+          : node.template.head.text +
+            node.template.templateSpans.map((span) => ' ? ' + span.literal.text).join('')
+        if (AGGREGATE.test(template)) {
+          const start = tag.getStart(source)
+          const parent = node.parent
+          result.push({
+            line: source.getLineAndCharacterOfPosition(start).line + 1,
+            key:
+              /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*$/u.exec(text.slice(0, start))?.[1] ??
+              /\bAS\s+"?([A-Za-z_][A-Za-z0-9_]*)/iu.exec(template)?.[1] ??
+              '?',
+            mapped:
+              ts.isPropertyAccessExpression(parent) &&
+              parent.name.text === 'mapWith' &&
+              ts.isCallExpression(parent.parent),
+          })
+        }
       }
     }
     ts.forEachChild(node, visit)
   }
   visit(source)
-
-  // A comment or string can quote the exact broken SQL syntax. Only real
-  // tagged templates are projections; keep their original offsets for diagnostics.
-  return [...text.matchAll(AGGREGATE)]
-    .filter((match) => templateStarts.has(match.index ?? 0))
-    .map((match) => {
-      const start = match.index ?? 0
-      const closing = text.indexOf('`', text.indexOf('`', start) + 1)
-      const tail = text.slice(closing + 1, closing + 12)
-      const template = text.slice(start, closing)
-      return {
-        line: text.slice(0, start).split('\n').length,
-        // The key introduces the expression, or comes from a raw template's alias.
-        key:
-          /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*$/u.exec(text.slice(0, start))?.[1] ??
-          /\bAS\s+([A-Za-z_][A-Za-z0-9_]*)/iu.exec(template)?.[1] ??
-          '?',
-        mapped: tail.startsWith('.mapWith('),
-      }
-    })
+  return result
 }
 
 /**
@@ -148,6 +169,13 @@ describe('RFC-349 PostgreSQL aggregates come back as numbers', () => {
       { line: 7, key: 'average', mapped: false },
       { line: 8, key: 'minimum', mapped: false },
     ])
+  })
+
+  test('JavaScript interpolation is not an SQL aggregate', () => {
+    expect(aggregateProjections('const limit = sql`LIMIT ${Math.max(1, input.limit)}`')).toEqual([])
+    expect(
+      aggregateProjections('const count = sql`SELECT COUNT(*) AS "total" FROM t WHERE id = ${id}`'),
+    ).toEqual([{ line: 1, key: 'total', mapped: false }])
   })
 
   test("drizzle's count() carries the Number mapper that a raw template lacks", () => {

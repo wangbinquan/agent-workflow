@@ -7,6 +7,7 @@
 // PostgreSQL 走的中立回合驱动把它简化成「有人类成员且预算 > 0」（不查已问次数、不查 stop）。
 // 反问轮与节点 directive 都归 collaboration 所有，判定也落在这里。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   resolveClarifyBudget,
   wgClarifyAskerKey,
@@ -14,8 +15,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
 import { getNodeClarifyDirective } from './taskClarifyDirective'
 
@@ -33,10 +33,11 @@ export interface WorkgroupClarifyAskGate {
 
 /** 该 asker（节点 + 分片）已经发起过的自澄清轮数。 */
 export async function countWorkgroupClarifyAsks(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   askerKey: string,
 ): Promise<number> {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select({ nodeId: clarifyRounds.askingNodeId, shard: clarifyRounds.askingShardKey })
     .from(clarifyRounds)
@@ -47,7 +48,7 @@ export async function countWorkgroupClarifyAsks(
 }
 
 export async function resolveWorkgroupClarifyAllowed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: WorkgroupClarifyAskInput,
 ): Promise<boolean> {
   if (!workgroupHasHumanMember(input.members)) return false
@@ -61,9 +62,7 @@ export async function resolveWorkgroupClarifyAllowed(
   return (await countWorkgroupClarifyAsks(db, input.taskId, askerKey)) < budget
 }
 
-export function createWorkgroupClarifyAskGate(
-  db: ProviderNeutralDatabase,
-): WorkgroupClarifyAskGate {
+export function createWorkgroupClarifyAskGate(db: PersistenceDb): WorkgroupClarifyAskGate {
   return Object.freeze({
     allowed: (input: WorkgroupClarifyAskInput) => resolveWorkgroupClarifyAllowed(db, input),
   })

@@ -2,17 +2,12 @@
 // one corpus. These small real-database cases are data/shape evidence; HTTP
 // latency and the full-size benchmark run separately in the hosted workflow.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { count, eq, getTableColumns } from 'drizzle-orm'
-import {
-  cachedRepos,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  webhookDeliveries,
-  workflows,
-} from '@/db/schema'
 import {
   PERF_CORPUS_CHUNKS,
   PERF_CORPUS_FULL_DIMENSIONS,
@@ -159,21 +154,22 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
     expect(receipt.expectedDigests).toEqual(OLD_NATIVE_DIGESTS)
     expect(receipt.actualDigests).toEqual(OLD_NATIVE_DIGESTS)
     expect(receipt.matchesExpected).toBe(true)
+    const { nodeRuns, cachedRepos, tasks, nodeRunEvents, webhookDeliveries } = tablesOf(harness.db)
     // RFC-374 appends a nullable column; preserve the frozen legacy-column oracle.
-    const persistedRuns = await harness.db.select().from(nodeRuns).orderBy(nodeRuns.id).all()
+    const persistedRuns = await harness.db.select().from(nodeRuns).orderBy(nodeRuns.id)
     expect(persistedRuns.every((row) => row.seq === null)).toBe(true)
     // Independent old physical-row goldens also cover every omitted schema default.
     expect({
       cachedRepos: allColumnDigest(
-        await harness.db.select().from(cachedRepos).orderBy(cachedRepos.id).all(),
+        await harness.db.select().from(cachedRepos).orderBy(cachedRepos.id),
       ),
-      tasks: allColumnDigest(await harness.db.select().from(tasks).orderBy(tasks.id).all()),
+      tasks: allColumnDigest(await harness.db.select().from(tasks).orderBy(tasks.id)),
       nodeRuns: allColumnDigest(persistedRuns.map(({ seq: _seq, ...legacy }) => legacy)),
       nodeRunEvents: allColumnDigest(
-        await harness.db.select().from(nodeRunEvents).orderBy(nodeRunEvents.id).all(),
+        await harness.db.select().from(nodeRunEvents).orderBy(nodeRunEvents.id),
       ),
       webhookDeliveries: allColumnDigest(
-        await harness.db.select().from(webhookDeliveries).orderBy(webhookDeliveries.id).all(),
+        await harness.db.select().from(webhookDeliveries).orderBy(webhookDeliveries.id),
       ),
     }).toEqual({
       cachedRepos: '049c5274754fbad8f36a4e0eab251627306cd73eff6da6d64f329af59c02c75f',
@@ -189,16 +185,16 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
       ['nodeRunEvents', 361, 361],
       ['webhookDeliveries', 11, 11],
     ])
-    const child = await harness.db.select().from(tasks).where(eq(tasks.id, 'perftask0000009')).get()
+    const child = await first(
+      harness.db.select().from(tasks).where(eq(tasks.id, 'perftask0000009')),
+    )
     expect(child?.executionLineageId).toBe('perftask0000008')
     expect(child?.lineageSlotPathJson).toBe(
       '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"perftask0000008","workflowRevision":null},{"stableNodeKey":"child-task","frozenOccurrenceKey":"perftask0000009","workflowRevision":null}]',
     )
-    const run = await harness.db
-      .select()
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, 'perfrun00000000'))
-      .get()
+    const run = await first(
+      harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'perfrun00000000')),
+    )
     expect(run).toMatchObject({
       continuationSlotKey: null,
       lineageSlotPathJson: null,
@@ -209,24 +205,20 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
 
   test('the reusable entry preserves existing database-default workflow timestamps', async () => {
     await seedPerformanceCorpusEntry({ db: harness.db, session: harness.session })
-    const original = await harness.db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, 'perf-wf'))
-      .get()
+    const { workflows } = tablesOf(harness.db)
+    const original = await first(
+      harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf')),
+    )
     expect(original?.createdAt).toBeGreaterThan(0)
     expect(original?.updatedAt).toBeGreaterThan(0)
     await harness.db
       .update(workflows)
       .set({ createdAt: 123_456, updatedAt: 234_567 })
       .where(eq(workflows.id, 'perf-wf'))
-      .run()
     await seedPerformanceCorpus({ db: harness.db, session: harness.session, dimensions: TINY })
-    const restored = await harness.db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, 'perf-wf'))
-      .get()
+    const restored = await first(
+      harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf')),
+    )
     expect(restored?.createdAt).toBe(123_456)
     expect(restored?.updatedAt).toBe(234_567)
   })
@@ -244,6 +236,9 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
       const inserts = recording.statements.filter((item) => /^insert\s+into\b/i.test(item.sql))
       expect(inserts.every((item) => item.params <= harness.capabilities.maxBindParameters)).toBe(
         true,
+      )
+      const { cachedRepos, tasks, nodeRuns, nodeRunEvents, webhookDeliveries } = tablesOf(
+        harness.db,
       )
       for (const [name, table, total] of [
         ['cached_repos', cachedRepos, dimensions.repos],
@@ -277,7 +272,8 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
           onProgress: async (item) => {
             if (item.table === 'nodeRuns') {
               await harness.session.transaction(async (tx) => {
-                await tx.delete(nodeRuns).where(eq(nodeRuns.id, 'perfrun00000502')).run()
+                const { nodeRuns } = tablesOf(tx)
+                await tx.delete(nodeRuns).where(eq(nodeRuns.id, 'perfrun00000502'))
               })
             }
           },
@@ -292,17 +288,20 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
         firstEventInsert?.values.filter((value) => value === perfEventRow(0, dimensions).payload)
           .length,
       ).toBe(500)
-      expect(await harness.db.select({ count: count() }).from(nodeRunEvents).get()).toEqual({
+      const { nodeRunEvents, tasks, nodeRuns, cachedRepos, webhookDeliveries } = tablesOf(
+        harness.db,
+      )
+      expect(await first(harness.db.select({ count: count() }).from(nodeRunEvents))).toEqual({
         count: 0,
       })
-      expect(await harness.db.select({ count: count() }).from(tasks).get()).toEqual({ count: 503 })
-      expect(await harness.db.select({ count: count() }).from(nodeRuns).get()).toEqual({
+      expect(await first(harness.db.select({ count: count() }).from(tasks))).toEqual({ count: 503 })
+      expect(await first(harness.db.select({ count: count() }).from(nodeRuns))).toEqual({
         count: 502,
       })
-      expect(await harness.db.select({ count: count() }).from(cachedRepos).get()).toEqual({
+      expect(await first(harness.db.select({ count: count() }).from(cachedRepos))).toEqual({
         count: 7,
       })
-      expect(await harness.db.select({ count: count() }).from(webhookDeliveries).get()).toEqual({
+      expect(await first(harness.db.select({ count: count() }).from(webhookDeliveries))).toEqual({
         count: 0,
       })
     } finally {
@@ -320,21 +319,23 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
           dimensions: TINY,
         })
         expect(receipt.matchesExpected).toBe(true)
-        expect(await tx.select({ count: count() }).from(nodeRunEvents).get()).toEqual({
+        const { nodeRunEvents } = tablesOf(tx)
+        expect(await first(tx.select({ count: count() }).from(nodeRunEvents))).toEqual({
           count: 361,
         })
         throw failure
       }),
     ).rejects.toBe(failure)
-    expect(await harness.db.select({ count: count() }).from(tasks).get()).toEqual({ count: 0 })
-    expect(await harness.db.select({ count: count() }).from(cachedRepos).get()).toEqual({
+    const { tasks, cachedRepos, nodeRunEvents, workflows } = tablesOf(harness.db)
+    expect(await first(harness.db.select({ count: count() }).from(tasks))).toEqual({ count: 0 })
+    expect(await first(harness.db.select({ count: count() }).from(cachedRepos))).toEqual({
       count: 0,
     })
-    expect(await harness.db.select({ count: count() }).from(nodeRunEvents).get()).toEqual({
+    expect(await first(harness.db.select({ count: count() }).from(nodeRunEvents))).toEqual({
       count: 0,
     })
     expect(
-      await harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf')).get(),
+      await first(harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf'))),
     ).toBeUndefined()
   })
 
@@ -349,26 +350,23 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
     expect(second.actualDigests.tasks).toBe(OLD_NATIVE_DIGESTS.tasks)
     expect(second.actualDigests.nodeRuns).toBe(OLD_NATIVE_DIGESTS.nodeRuns)
     expect(second.matchesExpected).toBe(false)
-    const appended = await harness.db
-      .select()
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.id, 362))
-      .get()
+    const { nodeRunEvents } = tablesOf(harness.db)
+    const appended = await first(
+      harness.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.id, 362)),
+    )
     expect(appended).toMatchObject({ id: 362, ...perfEventRow(0, TINY) })
   })
 
   test('receipt includes unrelated existing rows instead of hiding them with a corpus prefix', async () => {
     await seedPerformanceCorpus({ db: harness.db, session: harness.session, dimensions: TINY })
-    await harness.db
-      .insert(cachedRepos)
-      .values({
-        id: 'ordinary-existing-repo',
-        urlHash: 'ordinary-existing-hash',
-        localPath: '/ordinary-repo',
-        lastFetchedAt: 1,
-        createdAt: 1,
-      })
-      .run()
+    const { cachedRepos } = tablesOf(harness.db)
+    await insertOne(harness.db, cachedRepos, {
+      id: 'ordinary-existing-repo',
+      urlHash: 'ordinary-existing-hash',
+      localPath: '/ordinary-repo',
+      lastFetchedAt: 1,
+      createdAt: 1,
+    })
     const receipt = await readPerformanceCorpusReceipt(harness.db, TINY)
     expect(receipt.actualCounts.cachedRepos).toBe(8)
     expect(receipt.actualDigests.cachedRepos).not.toBe(OLD_NATIVE_DIGESTS.cachedRepos)

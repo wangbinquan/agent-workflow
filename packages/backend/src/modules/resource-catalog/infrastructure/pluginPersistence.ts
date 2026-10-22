@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   PluginSchema,
   pluginOperationConfigHashWith,
@@ -6,8 +7,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { plugins } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { ConflictError } from '@/util/errors'
 import { ValidationError, staleConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -126,10 +126,12 @@ export async function loadLegacyPluginRow(
   db: DbClient,
   id: string,
 ): Promise<PluginPersistenceRow | null> {
+  const { plugins } = tablesOf(db)
   return (await db.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0] ?? null
 }
 
-export function fullPluginRowWhere(row: PluginPersistenceRow) {
+export function fullPluginRowWhere(db: object, row: PluginPersistenceRow) {
+  const { plugins } = tablesOf(db)
   return and(
     eq(plugins.id, row.id),
     eq(plugins.name, row.name),
@@ -183,15 +185,16 @@ export function createPluginInsertValues(record: PluginInsertRecord) {
     aclRevision: record.aclRevision,
     createdAt: record.now,
     updatedAt: record.now,
-  } satisfies Omit<typeof plugins.$inferInsert, 'schemaVersion'>
+  } satisfies Omit<PersistenceTables['plugins']['$inferInsert'], 'schemaVersion'>
 }
 
 /** Join the caller's transaction; timestamps and installed artifacts are already captured. */
 export async function insertPluginRowInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   record: PluginInsertRecord,
 ): Promise<PluginPersistenceRow[]> {
   await assertHostedPluginPublicationInTx(tx, record.id, record.cachedPath)
+  const { plugins } = tablesOf(tx)
   return await tx
     .insert(plugins)
     .values({
@@ -203,16 +206,17 @@ export async function insertPluginRowInTx(
 
 /** The complete captured row remains the publication CAS, including nullable columns. */
 export async function publishPluginRowInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   captured: PluginPersistenceRow,
   set: LegacyPluginPublishSet,
 ): Promise<PluginPersistenceRow[]> {
   await assertHostedPluginPublicationInTx(tx, captured.id, set.cachedPath)
-  return await tx.update(plugins).set(set).where(fullPluginRowWhere(captured)).returning()
+  const { plugins } = tablesOf(tx)
+  return await tx.update(plugins).set(set).where(fullPluginRowWhere(tx, captured)).returning()
 }
 
 export async function commitLegacyPluginCreateInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   prepared: LegacyPreparedPluginCreate,
 ): Promise<Plugin> {
   const [created] = await insertPluginRowInTx(tx, {
@@ -235,7 +239,7 @@ export async function commitLegacyPluginCreateInTx(
 }
 
 export async function commitLegacyPluginPublishInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   captured: PluginPersistenceRow,
   set: LegacyPluginPublishSet,
 ): Promise<Plugin> {

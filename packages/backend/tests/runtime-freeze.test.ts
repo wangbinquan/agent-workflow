@@ -5,6 +5,8 @@
 // deleted / re-pointed custom runtime, can't re-route a captured session to the
 // wrong driver or binary.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -12,8 +14,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { frozenRuntimeOfSession, resolveFrozenRuntime } from './helpers/nodeRunRuntime'
 import {
   createRuntime,
@@ -26,19 +27,18 @@ import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 import type { NodeRunRuntimeSelectionSession } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-async function seedRun(
-  db: ProviderNeutralDatabase,
-): Promise<{ db: ProviderNeutralDatabase; id: string }> {
+async function seedRun(db: PersistenceDb): Promise<{ db: PersistenceDb; id: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -56,14 +56,15 @@ async function seedRun(
     startedAt: Date.now(),
   })
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
   return { db, id }
 }
 
 async function frozenCols(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<{ runtime: unknown; binary: unknown }> {
+  const { nodeRuns } = tablesOf(db)
   const row = (
     await db
       .select({ runtime: nodeRuns.runtime, binary: nodeRuns.runtimeBinary })
@@ -106,6 +107,7 @@ describeEachProvider(
 
     test('an unrecognized frozen protocol re-resolves to opencode (legacy NULL safety)', async () => {
       const { db, id } = await seedRun(harness.db)
+      const { nodeRuns } = tablesOf(db)
       await db.update(nodeRuns).set({ runtime: 'bogus-runtime' }).where(eq(nodeRuns.id, id))
       expect((await resolveFrozenRuntime(db, id, null, null)).protocol).toBe('opencode')
     })
@@ -173,6 +175,7 @@ describeEachProvider(
   (harness) => {
     test('frozenRuntimeOfSession returns the (protocol, binary) of the row that captured a session', async () => {
       const { db, id } = await seedRun(harness.db)
+      const { nodeRuns } = tablesOf(db)
       await db
         .update(nodeRuns)
         .set({
@@ -192,10 +195,15 @@ describeEachProvider(
       const db = harness.db
       const wfId = ulid()
       const taskId = ulid()
-      await db
-        .insert(workflows)
-        .values({ id: wfId, name: 'wf', definition: '{}', createdAt: 0, updatedAt: 0 })
-      await db.insert(tasks).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
+        id: wfId,
+        name: 'wf',
+        definition: '{}',
+        createdAt: 0,
+        updatedAt: 0,
+      })
+      await insertOne(db, tasks, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -214,7 +222,7 @@ describeEachProvider(
       })
       // original row R1: ran on a custom claude fork, captured session S.
       const r1 = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: r1,
         taskId,
         nodeId: 'n1',
@@ -226,7 +234,7 @@ describeEachProvider(
       // the custom runtime is later DELETED / the agent flipped to opencode.
       // a fresh retry row R2 carries session S and resolves with the inherited pair.
       const r2 = ulid()
-      await db.insert(nodeRuns).values({ id: r2, taskId, nodeId: 'n1', status: 'pending' })
+      await insertOne(db, nodeRuns, { id: r2, taskId, nodeId: 'n1', status: 'pending' })
       const inherited = await frozenRuntimeOfSession(db, 'sess-S')
       const frozen = await resolveFrozenRuntime(db, r2, 'opencode', 'opencode', inherited)
       // re-resolving 'opencode' would have mispaired the claude session S with the
@@ -342,6 +350,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
     expect(
       (await resolveFrozenRuntime(db, id, 'priced-runtime', null)).observationIdentity,
     ).toEqual(identity)
+    const { nodeRuns } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ opencodeSessionId: 'priced-native-session' })
@@ -420,6 +429,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
       { registrationId: 'id', configurationRevision: -1 },
       { registrationId: 'id', configurationRevision: 1.1 },
     ]) {
+      const { nodeRuns } = tablesOf(db)
       await db
         .update(nodeRuns)
         .set({ runtimeParamsJson: JSON.stringify({ __observation: bad }) })
@@ -430,6 +440,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
     }
     const oldIdentity = { registrationId: 'historical-registration', configurationRevision: 7 }
     for (const acceptedName of [undefined, null, '', '   ', 42, 'x'.repeat(201)]) {
+      const { nodeRuns } = tablesOf(db)
       await db
         .update(nodeRuns)
         .set({
@@ -440,6 +451,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
         oldIdentity,
       )
     }
+    const { nodeRuns } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({

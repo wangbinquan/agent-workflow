@@ -2,6 +2,8 @@
 // statistic is an indexed window scan + GROUP BY over these two tables; there
 // is no projection, cache or trigger.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   and,
   asc,
@@ -17,8 +19,7 @@ import {
   type AnyColumn,
   type SQL,
 } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { observationCallModels as models, observationCalls as calls } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   CallAggregate,
@@ -37,58 +38,64 @@ const tally = (condition: SQL) =>
   sql<number>`coalesce(sum(case when ${condition} then 1 else 0 end), 0)`.mapWith(Number)
 
 // Built per query: schema columns are provider projections and must not be captured at load time.
-function usageFields() {
+function usageFields(db: object) {
+  const { observationCalls } = tablesOf(db)
   return {
     calls: count(),
-    incompleteCalls: tally(sql`${calls.usageState} <> 'complete'`),
-    failedCalls: tally(sql`${calls.status} in ('failed', 'interrupted')`),
-    input: total(calls.inputTokens),
-    cacheRead: total(calls.cacheReadTokens),
-    cacheWrite: total(calls.cacheWriteTokens),
-    output: total(calls.outputTokens),
-    reasoning: total(calls.reasoningTokens),
-    costNano: total(calls.costNano),
-    unpricedCalls: tally(sql`${calls.costState} in ('unpriced', 'partial')`),
+    incompleteCalls: tally(sql`${observationCalls.usageState} <> 'complete'`),
+    failedCalls: tally(sql`${observationCalls.status} in ('failed', 'interrupted')`),
+    input: total(observationCalls.inputTokens),
+    cacheRead: total(observationCalls.cacheReadTokens),
+    cacheWrite: total(observationCalls.cacheWriteTokens),
+    output: total(observationCalls.outputTokens),
+    reasoning: total(observationCalls.reasoningTokens),
+    costNano: total(observationCalls.costNano),
+    unpricedCalls: tally(sql`${observationCalls.costState} in ('unpriced', 'partial')`),
   }
 }
 
-function where(filter: CallFilter): SQL | undefined {
+function where(db: object, filter: CallFilter): SQL | undefined {
+  const { observationCalls } = tablesOf(db)
   const scope =
     filter.scope.kind === 'all'
       ? undefined
       : filter.scope.kind === 'tasks'
-        ? inArray(calls.taskId, [...filter.scope.taskIds])
-        : and(isNull(calls.taskId), eq(calls.ownerUserId, filter.scope.userId))
+        ? inArray(observationCalls.taskId, [...filter.scope.taskIds])
+        : and(
+            isNull(observationCalls.taskId),
+            eq(observationCalls.ownerUserId, filter.scope.userId),
+          )
   return and(
-    filter.from === undefined ? undefined : gte(calls.startedAt, filter.from),
-    filter.to === undefined ? undefined : lt(calls.startedAt, filter.to),
+    filter.from === undefined ? undefined : gte(observationCalls.startedAt, filter.from),
+    filter.to === undefined ? undefined : lt(observationCalls.startedAt, filter.to),
     scope,
-    filter.purpose ? eq(calls.purpose, filter.purpose) : undefined,
-    filter.systemKind ? eq(calls.systemKind, filter.systemKind) : undefined,
+    filter.purpose ? eq(observationCalls.purpose, filter.purpose) : undefined,
+    filter.systemKind ? eq(observationCalls.systemKind, filter.systemKind) : undefined,
   )
 }
 
-function groupKey(group: CallGroup, dayOffsetMinutes: number): SQL | null {
+function groupKey(db: object, group: CallGroup, dayOffsetMinutes: number): SQL | null {
+  const { observationCalls } = tablesOf(db)
   switch (group) {
     case 'none':
       return null
     case 'purpose':
-      return sql`${calls.purpose}`
+      return sql`${observationCalls.purpose}`
     case 'day': {
       // A validated integer offset, inlined so both engines see a plain integer expression.
       const offset = sql.raw(String(Math.trunc(dayOffsetMinutes) * 60_000))
-      return sql`cast((${calls.startedAt} + ${offset}) / ${sql.raw(String(DAY_MS))} as integer)`
+      return sql`cast((${observationCalls.startedAt} + ${offset}) / ${sql.raw(String(DAY_MS))} as integer)`
     }
     case 'task':
-      return sql`${calls.taskId}`
+      return sql`${observationCalls.taskId}`
     case 'agent':
-      return sql`coalesce(${calls.agentId}, '~' || ${calls.agentName})`
+      return sql`coalesce(${observationCalls.agentId}, '~' || ${observationCalls.agentName})`
     case 'kind':
-      return sql`${calls.systemKind}`
+      return sql`${observationCalls.systemKind}`
   }
 }
 
-type RawCall = typeof calls.$inferSelect
+type RawCall = PersistenceTables['observationCalls']['$inferSelect']
 function callRow(row: RawCall): CallRow {
   return {
     id: row.id,
@@ -116,7 +123,7 @@ function callRow(row: RawCall): CallRow {
     costState: row.costState,
   }
 }
-function modelRow(row: typeof models.$inferSelect): CallModelRow {
+function modelRow(row: PersistenceTables['observationCallModels']['$inferSelect']): CallModelRow {
   return {
     callId: row.callId,
     model: row.model,
@@ -130,21 +137,25 @@ function modelRow(row: typeof models.$inferSelect): CallModelRow {
   }
 }
 
-export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
+export function createCallPersistence(db: PersistenceDb): CallStore {
   /** Price-line key; calls recorded before built-in keys existed fall back to theirs. */
-  const runtimeKey = () =>
-    sql<string>`coalesce(${calls.runtimeId}, 'builtin:' || ${calls.protocol})`.mapWith(String)
+  const runtimeKey = () => {
+    const { observationCalls } = tablesOf(db)
+    return sql<string>`coalesce(${observationCalls.runtimeId}, 'builtin:' || ${observationCalls.protocol})`.mapWith(
+      String,
+    )
+  }
 
   async function modelsOf(ids: readonly string[]): Promise<CallModelRow[]> {
     const rows: CallModelRow[] = []
     for (let i = 0; i < ids.length; i += 500) {
       const chunk = ids.slice(i, i + 500)
+      const { observationCallModels } = tablesOf(db)
       const found = await db
         .select()
-        .from(models)
-        .where(inArray(models.callId, [...chunk]))
-        .orderBy(asc(models.callId), asc(models.model))
-        .all()
+        .from(observationCallModels)
+        .where(inArray(observationCallModels.callId, [...chunk]))
+        .orderBy(asc(observationCallModels.callId), asc(observationCallModels.model))
       rows.push(...found.map(modelRow))
     }
     return rows
@@ -152,8 +163,9 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
 
   return {
     async insert(call, at) {
+      const { observationCalls } = tablesOf(db)
       const accepted = await db
-        .insert(calls)
+        .insert(observationCalls)
         .values({
           ...call,
           status: 'running',
@@ -163,48 +175,60 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
           updatedAt: at,
         })
         .onConflictDoUpdate({
-          target: calls.id,
+          target: observationCalls.id,
           set: { status: 'running', endedAt: null, updatedAt: at },
           where: and(
-            eq(calls.purpose, call.purpose),
-            call.taskId === null ? isNull(calls.taskId) : eq(calls.taskId, call.taskId),
-            call.nodeRunId === null ? isNull(calls.nodeRunId) : eq(calls.nodeRunId, call.nodeRunId),
-            eq(calls.protocol, call.protocol),
-            eq(calls.agentName, call.agentName),
+            eq(observationCalls.purpose, call.purpose),
+            call.taskId === null
+              ? isNull(observationCalls.taskId)
+              : eq(observationCalls.taskId, call.taskId),
+            call.nodeRunId === null
+              ? isNull(observationCalls.nodeRunId)
+              : eq(observationCalls.nodeRunId, call.nodeRunId),
+            eq(observationCalls.protocol, call.protocol),
+            eq(observationCalls.agentName, call.agentName),
             call.ownerUserId === null
-              ? isNull(calls.ownerUserId)
-              : eq(calls.ownerUserId, call.ownerUserId),
-            call.agentId === null ? isNull(calls.agentId) : eq(calls.agentId, call.agentId),
-            call.runtimeId === null ? isNull(calls.runtimeId) : eq(calls.runtimeId, call.runtimeId),
+              ? isNull(observationCalls.ownerUserId)
+              : eq(observationCalls.ownerUserId, call.ownerUserId),
+            call.agentId === null
+              ? isNull(observationCalls.agentId)
+              : eq(observationCalls.agentId, call.agentId),
+            call.runtimeId === null
+              ? isNull(observationCalls.runtimeId)
+              : eq(observationCalls.runtimeId, call.runtimeId),
             call.systemKind === null
-              ? isNull(calls.systemKind)
-              : eq(calls.systemKind, call.systemKind),
+              ? isNull(observationCalls.systemKind)
+              : eq(observationCalls.systemKind, call.systemKind),
           ),
         })
-        .returning({ id: calls.id })
+        .returning({ id: observationCalls.id })
       if (accepted.length !== 1) throw new Error('observation-call-identity-mismatch')
     },
 
     async pricingContext(callId) {
-      const row = await db
-        .select({ runtimeId: calls.runtimeId, startedAt: calls.startedAt })
-        .from(calls)
-        .where(eq(calls.id, callId))
-        .get()
+      const { observationCalls } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ runtimeId: observationCalls.runtimeId, startedAt: observationCalls.startedAt })
+          .from(observationCalls)
+          .where(eq(observationCalls.id, callId)),
+      )
       return row ? { runtimeId: row.runtimeId, startedAt: Number(row.startedAt) } : null
     },
 
     async writeUsage(callId, write) {
       await databaseSessionFor(db).transaction(async (tx) => {
-        const current = await tx
-          .select({ status: calls.status })
-          .from(calls)
-          .where(eq(calls.id, callId))
-          .get()
+        const { observationCalls, observationCallModels } = tablesOf(tx)
+        const current = await first(
+          tx
+            .select({ status: observationCalls.status })
+            .from(observationCalls)
+            .where(eq(observationCalls.id, callId)),
+        )
         if (current?.status !== 'running') return
-        await tx.delete(models).where(eq(models.callId, callId))
+        await tx.delete(observationCallModels).where(eq(observationCallModels.callId, callId))
         if (write.models.length)
-          await tx.insert(models).values(
+          await tx.insert(observationCallModels).values(
             write.models.map((row) => ({
               callId,
               model: row.model,
@@ -219,7 +243,7 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
             })),
           )
         await tx
-          .update(calls)
+          .update(observationCalls)
           .set({
             usageState: write.usageState,
             inputTokens: write.totals.input,
@@ -232,94 +256,95 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
             updatedAt: write.updatedAt,
             ...(write.end ? { status: write.end.status, endedAt: write.end.endedAt } : {}),
           })
-          .where(eq(calls.id, callId))
+          .where(eq(observationCalls.id, callId))
       })
     },
 
     async end(callId, end, at) {
+      const { observationCalls } = tablesOf(db)
       await db
-        .update(calls)
+        .update(observationCalls)
         .set({
           status: end.status,
           endedAt: end.endedAt,
-          usageState: sql`case when ${calls.usageState} = 'pending' then 'none' else ${calls.usageState} end`,
+          usageState: sql`case when ${observationCalls.usageState} = 'pending' then 'none' else ${observationCalls.usageState} end`,
           updatedAt: at,
         })
-        .where(and(eq(calls.id, callId), eq(calls.status, 'running')))
+        .where(and(eq(observationCalls.id, callId), eq(observationCalls.status, 'running')))
     },
 
     async interruptRunning(bootAt, at) {
+      const { observationCalls } = tablesOf(db)
       const stale = await db
-        .select({ id: calls.id })
-        .from(calls)
-        .where(and(eq(calls.status, 'running'), lt(calls.startedAt, bootAt)))
-        .all()
+        .select({ id: observationCalls.id })
+        .from(observationCalls)
+        .where(and(eq(observationCalls.status, 'running'), lt(observationCalls.startedAt, bootAt)))
       if (!stale.length) return 0
       for (let i = 0; i < stale.length; i += 500)
         await db
-          .update(calls)
+          .update(observationCalls)
           .set({
             status: 'interrupted',
-            endedAt: sql`${calls.updatedAt}`,
-            usageState: sql`case when ${calls.usageState} = 'pending' then 'none' else ${calls.usageState} end`,
+            endedAt: sql`${observationCalls.updatedAt}`,
+            usageState: sql`case when ${observationCalls.usageState} = 'pending' then 'none' else ${observationCalls.usageState} end`,
             updatedAt: at,
           })
           .where(
             and(
               inArray(
-                calls.id,
+                observationCalls.id,
                 stale.slice(i, i + 500).map((row) => row.id),
               ),
-              eq(calls.status, 'running'),
+              eq(observationCalls.status, 'running'),
             ),
           )
       return stale.length
     },
 
     async windowTaskIds(from, to, limit) {
+      const { observationCalls } = tablesOf(db)
       const rows = await db
-        .selectDistinct({ taskId: calls.taskId })
-        .from(calls)
+        .selectDistinct({ taskId: observationCalls.taskId })
+        .from(observationCalls)
         .where(
           and(
-            gte(calls.startedAt, from),
-            lt(calls.startedAt, to),
-            sql`${calls.taskId} is not null`,
+            gte(observationCalls.startedAt, from),
+            lt(observationCalls.startedAt, to),
+            sql`${observationCalls.taskId} is not null`,
           ),
         )
         .limit(limit)
-        .all()
       return rows.flatMap((row) => (row.taskId === null ? [] : [row.taskId]))
     },
 
     async aggregate(filter, group, dayOffsetMinutes = 0) {
-      const key = groupKey(group, dayOffsetMinutes)
+      const key = groupKey(db, group, dayOffsetMinutes)
+      const { observationCalls } = tablesOf(db)
       const fields = {
-        ...usageFields(),
+        ...usageFields(db),
         durationMs: total(
-          sql`case when ${calls.endedAt} is not null then ${calls.endedAt} - ${calls.startedAt} else 0 end`,
+          sql`case when ${observationCalls.endedAt} is not null then ${observationCalls.endedAt} - ${observationCalls.startedAt} else 0 end`,
         ),
-        tasks: sql<number>`count(distinct ${calls.taskId})`.mapWith(Number),
+        tasks: sql<number>`count(distinct ${observationCalls.taskId})`.mapWith(Number),
         agents:
-          sql<number>`count(distinct coalesce(${calls.agentId}, '~' || ${calls.agentName}))`.mapWith(
+          sql<number>`count(distinct coalesce(${observationCalls.agentId}, '~' || ${observationCalls.agentName}))`.mapWith(
             Number,
           ),
         // Text aggregates carry an explicit decoder too (drizzle keeps NULL as null).
         label:
           group === 'kind'
-            ? sql<string | null>`max(${calls.systemLabel})`.mapWith(String)
-            : sql<string | null>`max(${calls.agentName})`.mapWith(String),
+            ? sql<string | null>`max(${observationCalls.systemLabel})`.mapWith(String)
+            : sql<string | null>`max(${observationCalls.agentName})`.mapWith(String),
       }
       if (!key) {
-        const row = await db.select(fields).from(calls).where(where(filter)).get()
+        const row = await first(db.select(fields).from(observationCalls).where(where(db, filter)))
         return row && row.calls > 0 ? [{ ...row, key: null, label: null }] : []
       }
       const rows = await db
         .select({ ...fields, key: sql<string | number | null>`${key}` })
-        .from(calls)
-        .where(where(filter))
+        .from(observationCalls)
+        .where(where(db, filter))
         .groupBy(key)
-        .all()
       return rows.map(
         (row): CallAggregate => ({
           ...row,
@@ -330,43 +355,43 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
     },
 
     async aggregateModels(filter) {
-      const tokens = sql`(${models.inputTokens} + ${models.cacheReadTokens} + ${models.cacheWriteTokens} + ${models.outputTokens})`
+      const { observationCallModels, observationCalls } = tablesOf(db)
+      const tokens = sql`(${observationCallModels.inputTokens} + ${observationCallModels.cacheReadTokens} + ${observationCallModels.cacheWriteTokens} + ${observationCallModels.outputTokens})`
       const runtime = runtimeKey()
       const rows = await db
         .select({
           runtimeId: runtime,
-          runtimeName: sql<string | null>`max(${calls.runtimeName})`.mapWith(String),
-          protocol: sql<string>`max(${calls.protocol})`.mapWith(String),
-          model: models.model,
-          calls: sql<number>`count(distinct ${calls.id})`.mapWith(Number),
-          incompleteCalls: tally(sql`${calls.usageState} <> 'complete'`),
-          failedCalls: tally(sql`${calls.status} in ('failed', 'interrupted')`),
-          input: total(models.inputTokens),
-          cacheRead: total(models.cacheReadTokens),
-          cacheWrite: total(models.cacheWriteTokens),
-          output: total(models.outputTokens),
-          reasoning: total(models.reasoningTokens),
-          costNano: total(sql`coalesce(${models.costNano}, 0)`),
+          runtimeName: sql<string | null>`max(${observationCalls.runtimeName})`.mapWith(String),
+          protocol: sql<string>`max(${observationCalls.protocol})`.mapWith(String),
+          model: observationCallModels.model,
+          calls: sql<number>`count(distinct ${observationCalls.id})`.mapWith(Number),
+          incompleteCalls: tally(sql`${observationCalls.usageState} <> 'complete'`),
+          failedCalls: tally(sql`${observationCalls.status} in ('failed', 'interrupted')`),
+          input: total(observationCallModels.inputTokens),
+          cacheRead: total(observationCallModels.cacheReadTokens),
+          cacheWrite: total(observationCallModels.cacheWriteTokens),
+          output: total(observationCallModels.outputTokens),
+          reasoning: total(observationCallModels.reasoningTokens),
+          costNano: total(sql`coalesce(${observationCallModels.costNano}, 0)`),
           unpricedCalls: tally(
-            sql`${models.costState} in ('unpriced', 'partial') and ${tokens} > 0`,
+            sql`${observationCallModels.costState} in ('unpriced', 'partial') and ${tokens} > 0`,
           ),
         })
-        .from(models)
-        .innerJoin(calls, eq(calls.id, models.callId))
-        .where(where(filter))
-        .groupBy(runtime, models.model)
-        .all()
+        .from(observationCallModels)
+        .innerJoin(observationCalls, eq(observationCalls.id, observationCallModels.callId))
+        .where(where(db, filter))
+        .groupBy(runtime, observationCallModels.model)
       return rows.map((row): ModelAggregate => ({ ...row, protocol: row.protocol ?? '' }))
     },
 
     async taskCalls(taskId, limit) {
+      const { observationCalls } = tablesOf(db)
       const found = await db
         .select()
-        .from(calls)
-        .where(eq(calls.taskId, taskId))
-        .orderBy(asc(calls.startedAt), asc(calls.id))
+        .from(observationCalls)
+        .where(eq(observationCalls.taskId, taskId))
+        .orderBy(asc(observationCalls.startedAt), asc(observationCalls.id))
         .limit(limit + 1)
-        .all()
       const rows = found.slice(0, limit).map(callRow)
       return {
         calls: rows,
@@ -376,36 +401,39 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
     },
 
     async recentCalls(filter, before, limit) {
+      const { observationCalls } = tablesOf(db)
       const after = before
         ? or(
-            lt(calls.startedAt, before.startedAt),
-            and(eq(calls.startedAt, before.startedAt), lt(calls.id, before.id)),
+            lt(observationCalls.startedAt, before.startedAt),
+            and(
+              eq(observationCalls.startedAt, before.startedAt),
+              lt(observationCalls.id, before.id),
+            ),
           )
         : undefined
       const found = await db
         .select()
-        .from(calls)
-        .where(and(where(filter), after))
-        .orderBy(desc(calls.startedAt), desc(calls.id))
+        .from(observationCalls)
+        .where(and(where(db, filter), after))
+        .orderBy(desc(observationCalls.startedAt), desc(observationCalls.id))
         .limit(limit)
-        .all()
       const rows = found.map(callRow)
       return { calls: rows, models: await modelsOf(rows.map((row) => row.id)) }
     },
 
     async runtimeModels() {
       const runtime = runtimeKey()
+      const { observationCallModels, observationCalls } = tablesOf(db)
       const rows = await db
         .select({
           runtimeId: runtime,
-          model: models.model,
-          calls: sql<number>`count(distinct ${calls.id})`.mapWith(Number),
+          model: observationCallModels.model,
+          calls: sql<number>`count(distinct ${observationCalls.id})`.mapWith(Number),
         })
-        .from(models)
-        .innerJoin(calls, eq(calls.id, models.callId))
-        .where(sql`${models.model} <> ''`)
-        .groupBy(runtime, models.model)
-        .all()
+        .from(observationCallModels)
+        .innerJoin(observationCalls, eq(observationCalls.id, observationCallModels.callId))
+        .where(sql`${observationCallModels.model} <> ''`)
+        .groupBy(runtime, observationCallModels.model)
       return rows.map((row) => ({ runtimeId: row.runtimeId, model: row.model, calls: row.calls }))
     },
   }

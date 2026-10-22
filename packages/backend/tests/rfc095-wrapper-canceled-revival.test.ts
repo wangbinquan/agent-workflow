@@ -19,6 +19,8 @@
 // 迭代 1 开头持久化）；第 3 次调用（复活重跑迭代 1）输出 EXIT。全程无 sleep 竞态：
 // 每一步都由文件 marker / DB 终态轮询闸出。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -30,7 +32,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import {
@@ -113,7 +114,8 @@ function buildHarness(): Harness {
 }
 
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
-  await h.db.insert(agents).values({
+  const { agents, workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, agents, {
     id: ulid(),
     name: 'worker',
     description: 'test',
@@ -126,12 +128,12 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc095-revival',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -158,8 +160,9 @@ async function waitFor(cond: () => boolean, what: string): Promise<void> {
 async function waitForTerminalTask(
   db: DbClient,
   taskId: string,
-): Promise<typeof tasks.$inferSelect> {
+): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
+    const { tasks } = tablesOf(db)
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
@@ -210,6 +213,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     controller.abort()
     await running
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const afterCancel = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(afterCancel.status).toBe('canceled')
 
@@ -256,7 +260,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
         }).resume(id)
       },
     }).retry({
-      taskId: taskId,
+      taskId,
       nodeRunId: innerCanceled!.id,
       cascade: true,
     })
@@ -329,6 +333,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     controller.abort()
     await running
 
+    const { nodeRuns } = tablesOf(h.db)
     const midRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const lwCanceled = midRows.filter((r) => r.nodeId === 'lw')
     expect(lwCanceled).toHaveLength(1)
@@ -353,7 +358,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
         }).resume(id)
       },
     }).retry({
-      taskId: taskId,
+      taskId,
       nodeRunId: wrapperRunId,
       cascade: true,
     })

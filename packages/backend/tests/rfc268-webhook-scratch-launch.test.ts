@@ -2,6 +2,8 @@
 // RFC-268 T5 — 走 webhook dispatcher 的真实 startExecution 收口，证明三种目标
 // 都落成 RFC-165 scratch task：main 空根提交、空 tree、无 remote。这里不注入
 // launch fake；若 dispatcher 只“长得像” scratch 而未接进物化层，本测试会红。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -18,13 +20,6 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import {
-  tasks,
-  users,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookTriggers,
-} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
@@ -123,7 +118,8 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     )
 
     const box = createSecretBoxFromKey(Buffer.alloc(32, 8))
-    await db.insert(webhookEndpoints).values({
+    const { webhookEndpoints, webhookTriggers, users, webhookDeliveries, tasks } = tablesOf(db)
+    await insertOne(db, webhookEndpoints, {
       id: 'ep-rfc268',
       name: 'RFC 268 endpoint',
       provider: 'gitlab',
@@ -158,7 +154,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       },
     ]
     for (const row of triggerRows) {
-      await db.insert(webhookTriggers).values({
+      await insertOne(db, webhookTriggers, {
         id: row.id,
         name: row.name,
         endpointId: endpoint.id,
@@ -198,7 +194,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       raw: {},
     }
     const deliveryId = ulid()
-    await db.insert(webhookDeliveries).values({
+    await insertOne(db, webhookDeliveries, {
       id: deliveryId,
       endpointId: endpoint.id,
       eventUuid: event.eventUuid,

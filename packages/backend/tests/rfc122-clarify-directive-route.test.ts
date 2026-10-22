@@ -10,13 +10,14 @@
 // persistence, non-asking-node → 422, invalid directive → 422, missing task → 404,
 // contract-registry registration.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
-import { tasks, workflows } from '../src/db/schema'
 import { getNodeClarifyDirective } from '../src/services/taskClarifyDirective'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ProviderHarness } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -51,11 +52,12 @@ const SNAPSHOT = JSON.stringify({
 })
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   lineage?: typeof providerTaskLineage,
 ): Promise<void> {
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf-${taskId}`,
     name: 'wf',
     definition: '{}',
@@ -63,7 +65,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     ownerUserId: '__system__',
@@ -187,7 +189,7 @@ describe('RFC-122 clarify-directive route', () => {
 function registerProviderApplication(
   register: (
     harness: ProviderHarness,
-    makeApp: (db: ProviderNeutralDatabase) => Promise<Hono>,
+    makeApp: (db: PersistenceDb) => Promise<Hono>,
     seedTaskFixture: typeof seedTask,
   ) => void,
 ): void {

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
@@ -5,8 +6,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
-import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type {
@@ -80,12 +80,13 @@ function workflowClosure(
 
 /** RFC-359 W4-D15 —— 工作流校验的库存装载：一份实现，两个 provider 共用（skills 只算 ready 且本次启动可用的）。 */
 export function createWorkflowValidationPort(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly skillContent: SkillContentAvailability
 }): WorkflowValidationPort {
   const port: WorkflowValidationPort = {
     candidateHash: workflowDefinitionCandidateHashOf,
     async validate(candidate) {
+      const { agents, skills, mcps, plugins, workflows, workgroups } = tablesOf(input.db)
       const [agentRows, skillRows, mcpRows, pluginRows, workflowRows, workgroupRows] =
         await Promise.all([
           input.db.select().from(agents),
@@ -139,13 +140,14 @@ interface AdmissionRow {
 }
 
 async function loadAdmissionRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   resourceType: 'agent' | 'workflow' | 'workgroup',
   domain: 'id' | 'name',
   references: readonly string[],
 ): Promise<readonly AdmissionRow[]> {
   if (references.length === 0) return []
   const selected = [...new Set(references)]
+  const { agents, workflows, workgroups } = tablesOf(db)
   switch (resourceType) {
     case 'agent':
       return db
@@ -181,7 +183,7 @@ async function loadAdmissionRows(
 }
 
 export function createWorkflowReferenceAdmissionPort(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly authorization: ResourceAuthorizationApplication
 }): WorkflowReferenceAdmissionPort {
   const port: WorkflowReferenceAdmissionPort = {

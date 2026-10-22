@@ -8,9 +8,10 @@
 // deterministic per-generation request key), the shared-owner idle period,
 // the re-check right before the effect, tolerance of lifecycle races, the
 // completion of lost close receipts, and per-row failure isolation.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq, inArray } from 'drizzle-orm'
-import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedWorkspaceLifecycle,
   hostedWorkspaceLifecycleOwner,
@@ -89,7 +90,8 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
       } = {},
     ) => {
       const businessTaskId = `cs-${owner}`
-      await harness.db.insert(hostedTaskWorkspaces).values({
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      await insertOne(harness.db, hostedTaskWorkspaces, {
         taskId: owner,
         requestKey: `aw-task:installation:${owner}`,
         businessTaskId,
@@ -137,13 +139,15 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
       held: (owner) => held.has(owner),
       now: () => now,
     })
-    const row = async (owner: string) =>
-      (
+    const row = async (owner: string) => {
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      return (
         await harness.db
           .select()
           .from(hostedTaskWorkspaces)
           .where(eq(hostedTaskWorkspaces.taskId, owner))
       )[0]
+    }
     return {
       lifecycle,
       register,
@@ -272,6 +276,7 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
     // A ready mark refreshed while the pass runs (an ensure in between) also
     // cancels the pause: the row is re-read right before the effect.
     f.duringActivity(async () => {
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
       if (f.activityCalls() === 4)
         await harness.db
           .update(hostedTaskWorkspaces)
@@ -322,6 +327,7 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
     const f = await setup()
     await f.register('01ABANDONED', { state: 'closing' })
     await f.register('01ALLOCATING', { state: 'creating' })
+    const { hostedTaskWorkspaces } = tablesOf(harness.db)
     await harness.db
       .update(hostedTaskWorkspaces)
       .set({ businessTaskId: null })

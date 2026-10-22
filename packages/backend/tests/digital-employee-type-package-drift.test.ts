@@ -11,13 +11,15 @@
  * never reach the operator staring at the dead dev server. Keep these
  * assertions green so the guard cannot regress into an unactionable one-liner.
  */
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { employeeTypePackages } from '@/db/schema'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { DigitalEmployeeAuthoringService } from '@/modules/digital-employee/application/authoringService'
 import type {
@@ -42,7 +44,7 @@ const descriptor = employeeTypePackageDescriptorSchema.parse(
 )
 const currentDigest = packageDigest(descriptor)
 
-function newStore(db: ProviderNeutralDatabase) {
+function newStore(db: PersistenceDb) {
   return createDigitalEmployeeAuthoringPersistence(db)
 }
 
@@ -178,7 +180,7 @@ describe('employee type package digest guard', () => {
       })
 
       const service = new DigitalEmployeeAuthoringService({
-        store: store,
+        store,
         typePackages: [runtimePackage()],
         connectionCatalog: stubConnectionCatalog,
         programArtifacts: stubProgramArtifacts,
@@ -199,17 +201,15 @@ describe('employee type package digest guard', () => {
       const legacy = legacyDescriptor()
       const frozenJson = JSON.stringify(legacy)
       const frozenDigest = 'b'.repeat(64)
-      await db
-        .insert(employeeTypePackages)
-        .values({
-          typeId: 'development',
-          revision: 1,
-          descriptorJson: frozenJson,
-          descriptorDigest: frozenDigest,
-          state: 'published',
-          registeredAt: 900,
-        })
-        .run()
+      const { employeeTypePackages } = tablesOf(db)
+      await insertOne(db, employeeTypePackages, {
+        typeId: 'development',
+        revision: 1,
+        descriptorJson: frozenJson,
+        descriptorDigest: frozenDigest,
+        state: 'published',
+        registeredAt: 900,
+      })
 
       const projected = await store.getTypePackage({ typeId: 'development', revision: 1 })
 
@@ -221,10 +221,11 @@ describe('employee type package digest guard', () => {
       })
       expect(projected?.descriptor.eventTypes[0]).not.toHaveProperty('preemptsContinuation')
       expect(projected?.descriptorDigest).toBe(frozenDigest)
-      const frozenRow = await db
-        .select({ descriptorJson: employeeTypePackages.descriptorJson })
-        .from(employeeTypePackages)
-        .get()
+      const frozenRow = await first(
+        db
+          .select({ descriptorJson: employeeTypePackages.descriptorJson })
+          .from(employeeTypePackages),
+      )
       expect(frozenRow?.descriptorJson).toBe(frozenJson)
     })
 
@@ -239,17 +240,15 @@ describe('employee type package digest guard', () => {
       historical.typeRef = historicalTypeRef
       const frozenJson = JSON.stringify(historical)
       const frozenDigest = 'd'.repeat(64)
-      await db
-        .insert(employeeTypePackages)
-        .values({
-          typeId: historicalTypeRef.typeId,
-          revision: historicalTypeRef.revision,
-          descriptorJson: frozenJson,
-          descriptorDigest: frozenDigest,
-          state: 'published',
-          registeredAt: 900,
-        })
-        .run()
+      const { employeeTypePackages } = tablesOf(db)
+      await insertOne(db, employeeTypePackages, {
+        typeId: historicalTypeRef.typeId,
+        revision: historicalTypeRef.revision,
+        descriptorJson: frozenJson,
+        descriptorDigest: frozenDigest,
+        state: 'published',
+        registeredAt: 900,
+      })
 
       const projected = await store.getTypePackage(historicalTypeRef)
       const analyzeImplement = projected?.descriptor.authoringManifest.workItems.find(
@@ -261,10 +260,11 @@ describe('employee type package digest guard', () => {
         planningSlotRef: 'plan',
       })
       expect(projected?.descriptorDigest).toBe(frozenDigest)
-      const frozenRow = await db
-        .select({ descriptorJson: employeeTypePackages.descriptorJson })
-        .from(employeeTypePackages)
-        .get()
+      const frozenRow = await first(
+        db
+          .select({ descriptorJson: employeeTypePackages.descriptorJson })
+          .from(employeeTypePackages),
+      )
       expect(frozenRow?.descriptorJson).toBe(frozenJson)
 
       const service = new DigitalEmployeeAuthoringService({
@@ -319,7 +319,7 @@ describe('employee type package digest guard', () => {
       await store.ensureTypePackage(record(STALE_DIGEST))
 
       const service = new DigitalEmployeeAuthoringService({
-        store: store,
+        store,
         typePackages: [runtimePackage()],
         connectionCatalog: stubConnectionCatalog,
         programArtifacts: stubProgramArtifacts,
@@ -387,17 +387,15 @@ describe('employee type package digest guard', () => {
       frozenDescriptor.watchGenerationDraftMarker = true
       const frozenJson = JSON.stringify(frozenDescriptor)
       const frozenDigest = 'c'.repeat(64)
-      await db
-        .insert(employeeTypePackages)
-        .values({
-          typeId: descriptor.typeRef.typeId,
-          revision: descriptor.typeRef.revision,
-          descriptorJson: frozenJson,
-          descriptorDigest: frozenDigest,
-          state: 'published',
-          registeredAt: 1_000,
-        })
-        .run()
+      const { employeeTypePackages } = tablesOf(db)
+      await insertOne(db, employeeTypePackages, {
+        typeId: descriptor.typeRef.typeId,
+        revision: descriptor.typeRef.revision,
+        descriptorJson: frozenJson,
+        descriptorDigest: frozenDigest,
+        state: 'published',
+        registeredAt: 1_000,
+      })
       await expect(persistedStore.getTypePackage(descriptor.typeRef)).rejects.toThrow()
       expect(await persistedStore.listTypePackageRegistrations()).toHaveLength(1)
       const overlayStore = withTypePackageDraftOverlay(persistedStore)
@@ -417,15 +415,16 @@ describe('employee type package digest guard', () => {
         descriptor,
         descriptorDigest: currentDigest,
       })
-      const frozenRow = await db
-        .select({
-          descriptorJson: employeeTypePackages.descriptorJson,
-          descriptorDigest: employeeTypePackages.descriptorDigest,
-          state: employeeTypePackages.state,
-          registeredAt: employeeTypePackages.registeredAt,
-        })
-        .from(employeeTypePackages)
-        .get()
+      const frozenRow = await first(
+        db
+          .select({
+            descriptorJson: employeeTypePackages.descriptorJson,
+            descriptorDigest: employeeTypePackages.descriptorDigest,
+            state: employeeTypePackages.state,
+            registeredAt: employeeTypePackages.registeredAt,
+          })
+          .from(employeeTypePackages),
+      )
       expect(frozenRow).toEqual({
         descriptorJson: frozenJson,
         descriptorDigest: frozenDigest,
@@ -651,7 +650,7 @@ describeEachProvider('frozen employee type revisions', (harness) => {
 
   function serviceOver(store: ReturnType<typeof newStore>) {
     return new DigitalEmployeeAuthoringService({
-      store: store,
+      store,
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,

@@ -8,25 +8,27 @@
 // protocol" stays DRIVER knowledge (defaultBinary差分), zero kind literals in
 // the mint (the rfc143 bypass-zero lock enforces that side).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveFrozenRuntime } from './helpers/nodeRunRuntime'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
 describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let nodeRunId: string
 
   beforeEach(async () => {
     db = harness.db
     await seedTestDefaultOpencodeRuntime(db)
     const taskId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: 'wf',
       name: 'wf-' + taskId.toLowerCase(),
       description: '',
@@ -35,7 +37,7 @@ describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', 
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 't',
       workflowId: 'wf',
@@ -50,7 +52,7 @@ describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', 
       startedAt: Date.now(),
     })
     nodeRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: nodeRunId,
       taskId,
       nodeId: 'n1',
@@ -66,6 +68,7 @@ describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', 
     })
     expect(frozen.protocol).toBe('opencode')
     expect(frozen.binary).toBe('/opt/custom-oc')
+    const { nodeRuns } = tablesOf(db)
     const row = (
       await db
         .select({ runtimeBinary: nodeRuns.runtimeBinary })
@@ -97,6 +100,7 @@ describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', 
   // "a non-NULL frozen value never drifts"; the stored column stays NULL (compat
   // read only — no backfill), which the row assertion pins.
   test('a pre-C1 frozen row (runtime set, binary NULL) resolves the CURRENT config head on resume', async () => {
+    const { nodeRuns } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ runtime: 'opencode', runtimeBinary: null, runtimeParamsJson: '{}' })
@@ -116,6 +120,7 @@ describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', 
   })
 
   test('a pre-C1 frozen row without any config contribution stays bare (NULL)', async () => {
+    const { nodeRuns } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ runtime: 'opencode', runtimeBinary: null, runtimeParamsJson: '{}' })
@@ -153,6 +158,7 @@ describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', 
       { opencodePath: '/opt/commit-agent-oc' },
     )
     expect(frozen.binary).toBe('/opt/commit-agent-oc')
+    const { nodeRuns } = tablesOf(db)
     const row = (
       await db
         .select({ runtimeBinary: nodeRuns.runtimeBinary })

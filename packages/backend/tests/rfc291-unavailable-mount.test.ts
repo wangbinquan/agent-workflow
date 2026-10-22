@@ -15,6 +15,9 @@
 // 另外两格是**客户端代理注入**，用的是 bun:sqlite 的同步执行面，只能留在单引擎：
 // 见下方 `describe('materialize 期竞态与真错不吞…')` 的头注。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,8 +25,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, skills, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { buildIntentDoc } from '@/modules/intent/domain/intentDoc'
@@ -33,7 +35,7 @@ const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291un_000000'
 const OTHER = 'user_other_rfc291un_000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 
 const actor: Actor = {
@@ -43,7 +45,8 @@ const actor: Actor = {
 }
 
 async function seedUser(id: string): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -51,13 +54,14 @@ async function seedUser(id: string): Promise<void> {
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 async function seedAgent(name: string, ownerUserId = OWNER): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: name,
@@ -66,14 +70,15 @@ async function seedAgent(name: string, ownerUserId = OWNER): Promise<string> {
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as typeof agents.$inferInsert)
+  } as PersistenceTables['agents']['$inferInsert'])
   return id
 }
 
 async function seedSkill(name: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(skills).values({
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
     id,
     name,
     description: name,
@@ -83,7 +88,7 @@ async function seedSkill(name: string): Promise<string> {
     metaRevision: 1,
     createdAt: now,
     updatedAt: now,
-  } as typeof skills.$inferInsert)
+  } as PersistenceTables['skills']['$inferInsert'])
   return id
 }
 
@@ -132,6 +137,7 @@ describeEachProvider('RFC-291 失效挂载跳过而非抛错（双引擎）', (h
       const doomedHandle = first.manifest.find((e) => e.resourceId === doomed)?.handle
       expect(doomedHandle).toBeDefined()
 
+      const { agents } = tablesOf(db)
       await db.delete(agents).where(eq(agents.id, doomed))
 
       const after = await buildIntentDump({
@@ -217,7 +223,8 @@ describe('materialize 期竞态与真错不吞（客户端代理注入，单引�
           // 第一次 select 之后视作 catalog 已载入；随后立刻删除目标行。
           if (catalogLoaded && !deleted) {
             deleted = true
-            sqliteDb.delete(skills).where(eq(skills.id, skillId)).run()
+            const { skills } = tablesOf(sqliteDb)
+            queryWrite(sqliteDb.delete(skills).where(eq(skills.id, skillId)))
           }
           catalogLoaded = true
           return (value as (...a: unknown[]) => unknown).apply(target, args)

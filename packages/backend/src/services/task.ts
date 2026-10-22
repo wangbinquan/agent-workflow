@@ -1,3 +1,5 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   type MaterializedRepo,
   type MaterializedSpace,
@@ -14,7 +16,8 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 // Task service — continuation and retained read projections.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
-import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import {
   resolveTaskLaunchRuntimeConfiguration,
@@ -61,18 +64,10 @@ import type {
 import {
   and,
   asc,
-  cachedRepos,
   desc,
   eq,
   inArray,
   isNotNull,
-  nodeRunOutputs,
-  nodeRuns,
-  runtimeSessionLeases,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  workflows,
   type LegacySqliteTaskDatabase,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
@@ -217,7 +212,7 @@ function continuationSource(
  * `setTaskStatus` 的写事务搬到显式边界之后，这里的 `onTransitionTx` 回调用的是这一侧。
  */
 async function submitContinuationIntentInTx(input: {
-  tx: DatabaseTransaction
+  tx: PersistenceTx
   taskId: string
   intentId: string
   kind: TaskExecutionIntentKind
@@ -471,7 +466,7 @@ function repositoryWorkspaceFor(
  *
  * 从 `TaskContinuationDependencies` 里拆出来的理由与 §5ge / §5hn 批次一的几次拆分完全一样：
  * 这一步的函数体**早就是中立的**（`await db.select(...)` / `setTaskStatus` /
- * `setNodeRunStatus` / `mintNodeRun` 收的都已是 `ProviderNeutralDatabase`），
+ * `setNodeRunStatus` / `mintNodeRun` 收的都已是 `PersistenceDb`），
  * 只有类型把它钉死在 SQLite 那一侧——`TaskContinuationDependencies.db` 是 `DbClient`。
  * 后果不是不好看：**RFC-287 G7 因此在 PostgreSQL 上根本没实现**
  *（`rfc359-w5hn-deferred-repo-preparation-parity` 钉着那处落差），
@@ -815,6 +810,7 @@ function createPersistedRepositoryPreparationStep(input: {
 }): taskDriveComposition.PersistedRepositoryPreparationStep {
   const reader: RepositoryPreparationDescriptorReader = {
     async read(taskId) {
+      const { tasks, nodeRuns } = tablesOf(input.deps.db)
       // RFC-359 AC-1（plan §5ft 同一条）：中立读法。`.all()` 是 bun:sqlite 专属的同步
       // 终结符，在中立句柄上取到的是 Promise——这两处是本步骤仅存的两条 provider 绑定。
       const row = (
@@ -989,6 +985,7 @@ async function loadFrozenSpaceLayout(
   db: LegacyProviderNeutralDatabase,
   sourceTaskId: string,
 ): Promise<PlannedSpaceLayout> {
+  const { taskRepos, taskSpaceNodes } = tablesOf(db)
   const rows = await db
     .select()
     .from(taskRepos)
@@ -1275,11 +1272,13 @@ async function reapRunBeforeWorktreeReset(
   deps: TaskContinuationDependencies,
   log: Logger,
 ): Promise<void> {
-  const heldNativeLease = await db
-    .select({ sessionId: runtimeSessionLeases.sessionId })
-    .from(runtimeSessionLeases)
-    .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id))
-    .get()
+  const { runtimeSessionLeases } = tablesOf(db)
+  const heldNativeLease = await first(
+    db
+      .select({ sessionId: runtimeSessionLeases.sessionId })
+      .from(runtimeSessionLeases)
+      .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id)),
+  )
   const killOutcome = await (deps.killStaleRunProcessTree ?? killStaleRunProcessTree)(run)
   const recovery = requireTaskRecoveryOperations(deps)
   if (killOutcome === 'killed') {
@@ -1316,6 +1315,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
   deps: TaskContinuationDependencies,
   log: Logger,
 ): Promise<void> {
+  const { runtimeSessionLeases, nodeRuns } = tablesOf(db)
   const ownerIds = [
     ...new Set(
       (
@@ -1332,7 +1332,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
     ),
   ]
   for (const nodeRunId of ownerIds) {
-    const run = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const run = await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))
     if (run === undefined) {
       await escalateLiveChildSurvived(
         db,
@@ -1430,8 +1430,8 @@ async function resumeKick(
     event: TaskTransitionEvent
     extra?: TaskStatusUpdateExtra
     selectRollback: (
-      runs: Array<typeof nodeRuns.$inferSelect>,
-    ) => Array<typeof nodeRuns.$inferSelect>
+      runs: Array<PersistenceTables['nodeRuns']['$inferSelect']>,
+    ) => Array<PersistenceTables['nodeRuns']['$inferSelect']>
     reason: 'resumeTask' | 'syncTaskWorkflow'
     conflictCode: string
     verb: string
@@ -1443,7 +1443,7 @@ async function resumeKick(
      */
     worktreePreflight?: boolean
     onClaimTx?: (
-      tx: DatabaseTransaction,
+      tx: PersistenceTx,
       transition: {
         from: TaskStatus
         to: TaskStatus
@@ -1564,6 +1564,7 @@ async function resumeKick(
       // held native-session owner for the task before any rollback or fresh kick.
       await reapHeldRuntimeSessionOwnersForTask(db, id, opts.reason, deps, log)
 
+      const { nodeRuns } = tablesOf(db)
       // Collect the latest non-done run per nodeId — those need rollback + a fresh
       // attempt. Freshness is ULID id-order, matching the scheduler's authority
       // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
@@ -1689,7 +1690,7 @@ const WRAPPER_BREADCRUMB_TERMINAL: ReadonlySet<string> = new Set(['done', 'faile
  * only acts on `differs` + `blockers`, neither of which reads producedPorts.
  */
 export function buildSyncRunSummary(
-  runs: ReadonlyArray<typeof nodeRuns.$inferSelect>,
+  runs: ReadonlyArray<PersistenceTables['nodeRuns']['$inferSelect']>,
   producedPortsByNode?: ReadonlyMap<string, ReadonlySet<string>>,
 ): Map<string, NodeRunSyncSummary> {
   const runIdToNode = new Map(runs.map((r) => [r.id, r.nodeId]))
@@ -1770,12 +1771,13 @@ export async function computeWorkflowSyncPreview(
       message: error instanceof Error ? error.message : String(error),
     })
   }
+  const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
 
   // The freshest done top-level run per node + the output ports it produced —
   // the basis for the `dangling-input-port` warning (Codex F2).
   const freshestDoneRunIdByNode = new Map<string, string>()
-  const runsByNode = new Map<string, Array<typeof nodeRuns.$inferSelect>>()
+  const runsByNode = new Map<string, Array<PersistenceTables['nodeRuns']['$inferSelect']>>()
   for (const r of runs) {
     const list = runsByNode.get(r.nodeId)
     if (list === undefined) runsByNode.set(r.nodeId, [r])
@@ -1888,11 +1890,10 @@ async function assertChildTaskDrivable(
 ): Promise<void> {
   const callRowId = task.parentNodeRunId ?? null
   if ((task.parentTaskId ?? null) === null || callRowId === null) return
-  const row = await db
-    .select({ status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, callRowId))
-    .get()
+  const { nodeRuns } = tablesOf(db)
+  const row = await first(
+    db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, callRowId)),
+  )
   if (row === undefined) return
   if (isTerminalNodeRunStatus(row.status as NodeRunStatus)) {
     throw new ConflictError(
@@ -1982,6 +1983,7 @@ async function reclaimStalePrepArtifacts(
 
   // ③ 再在每个候选镜像里 prune 注册项 + 删掉按 taskId 派生的隔离分支。
   for (const id of mirrorIds) {
+    const { cachedRepos } = tablesOf(db)
     // RFC-359 AC-1（plan §5ft 同一条）：中立读法——`.all()` 是 bun:sqlite 专属的同步终结符。
     const row = (await db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1))[0]
     if (row === undefined || !existsSync(row.localPath)) continue
@@ -2142,6 +2144,7 @@ async function runDeferredRepoPreparation(args: {
     (await taskDriveComposition.hasDurableRepositoryPreparation(deps.db, taskId))
   )
     throw new Error('journaled-repository-preparation-binding-missing')
+  const { nodeRuns, tasks } = tablesOf(deps.db)
   // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
   // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
   //
@@ -2529,8 +2532,9 @@ async function runDeferredRepoPreparation(args: {
   // 事务边界与「四件事同生共死」的语义一格不动，只是不再依赖 bun:sqlite 专属的同步 `dbTxSync`。
   // 体内每一条语句都必须 `await`：`.run()` 在 PostgreSQL 上不 await 就是一个没人等的 Promise，
   // 语句要么落在事务外、要么根本不发，而两边都不会抛。
-  const persistPreparedProjection = async (tx: DatabaseTransaction): Promise<void> => {
+  const persistPreparedProjection = async (tx: PersistenceTx): Promise<void> => {
     await taskDriveComposition.acceptDurableRepositoryWorkspace(tx, taskId)
+    const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
     await tx
       .update(tasks)
       .set({
@@ -2548,21 +2552,17 @@ async function runDeferredRepoPreparation(args: {
         spaceKind: prepared.spaceKind,
       })
       .where(eq(tasks.id, taskId))
-      .run()
     if (prepared.repos.length > 0) {
-      await tx.insert(taskRepos).values(preparedRepoRows).run()
+      await tx.insert(taskRepos).values(preparedRepoRows)
     }
     if (prepared.nodePaths.length > 0) {
-      await tx
-        .insert(taskSpaceNodes)
-        .values(
-          prepared.nodePaths.map((nodePath) => ({
-            taskId,
-            nodePath,
-            schemaVersion: 1,
-          })),
-        )
-        .run()
+      await tx.insert(taskSpaceNodes).values(
+        prepared.nodePaths.map((nodePath) => ({
+          taskId,
+          nodePath,
+          schemaVersion: 1,
+        })),
+      )
     }
     // 准备行置 done **并入同一事务**（五轮门 Codex 数据完整性面 F2，用户拍板）。
     //
@@ -2619,6 +2619,7 @@ async function runDeferredRepoPreparation(args: {
 }
 
 export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Promise<Task | null> {
+  const { tasks, workflows, taskRepos, taskSpaceNodes } = tablesOf(db)
   const rows = await db
     .select({
       task: tasks,
@@ -2693,6 +2694,7 @@ export async function loadTaskFailureCodes(
   const out = new Map<string, FailureCode | null>()
   const wanted = rows.filter((r) => r.status === 'failed' && r.failedNodeId !== null)
   if (wanted.length === 0) return out
+  const { nodeRuns } = tablesOf(db)
   const runRows = await db
     .select({
       taskId: nodeRuns.taskId,
@@ -2719,7 +2721,7 @@ export async function loadTaskFailureCodes(
 }
 
 function rowToTask(
-  row: typeof tasks.$inferSelect,
+  row: PersistenceTables['tasks']['$inferSelect'],
   workflowName: string | null,
   workflowBuiltin: boolean,
   repos: TaskRepo[],
@@ -2876,7 +2878,7 @@ function frozenWorkgroupGoal(configJson: string | null): string | null {
  * columns are stored as 0/1 integers in SQLite; drizzle's `mode: 'boolean'`
  * surfaces them as JS booleans, but we coerce nullable booleans defensively.
  */
-function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
+function mapTaskRepoRow(row: PersistenceTables['taskRepos']['$inferSelect']): TaskRepo {
   return {
     repoIndex: row.repoIndex,
     repoPath: row.repoPath,
@@ -2917,7 +2919,7 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
  * Synthesizes a single entry from the legacy `tasks.*` mirror columns so
  * downstream consumers always see at least one repo.
  */
-function synthesizeRepoFromTaskRow(row: typeof tasks.$inferSelect): TaskRepo {
+function synthesizeRepoFromTaskRow(row: PersistenceTables['tasks']['$inferSelect']): TaskRepo {
   return {
     repoIndex: 0,
     repoPath: row.repoPath,

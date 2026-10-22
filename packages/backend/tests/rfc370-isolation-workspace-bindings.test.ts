@@ -1,17 +1,11 @@
 // RFC-370: selected scopes must reach real Task receipts, wrappers and replay.
 // The logical transport has no files; runtime execution is outside this A4 fixture.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-  taskExecutionEffects,
-  taskExecutionEffectAttempts,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -61,20 +55,22 @@ import {
 const EMPTY = { $schema_version: 6 as const, inputs: [], nodes: [], edges: [] }
 const TIMEOUT = 30_000
 
-async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
+async function fixture(db: PersistenceDb, mounts = ['']) {
   const taskId = ulid(),
     workflowId = ulid(),
     intentId = ulid()
   const path = [{ stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 }]
   const slotPathJson = canonicalJson(path)
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, taskExecutionEffects, taskExecutionEffectAttempts } =
+    tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: taskId,
     definition: JSON.stringify(EMPTY),
     version: 1,
     schemaVersion: 6,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -222,9 +218,13 @@ async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
       throw new Error('unexpected nested drive')
     },
   } as unknown as TaskMechanicsState
-  async function row(nodeId = 'worker', extra: Partial<typeof nodeRuns.$inferInsert> = {}) {
+  async function row(
+    nodeId = 'worker',
+    extra: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  ) {
     const id = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId,
@@ -237,8 +237,9 @@ async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
     })
     return id
   }
-  const read = async (id: string) =>
-    (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+  const read = async (id: string) => {
+    return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+  }
   const ledger = async () => {
     const records = await db
       .select()
@@ -1262,9 +1263,12 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             isoBaseSnapshot: 'base-one',
             isoWorktreePath: 'memory:workspace:shard-one',
           })
-          await harness.db
-            .insert(nodeRunOutputs)
-            .values({ nodeRunId: interrupted, portName: 'summary', content: 'one finished' })
+          const { nodeRunOutputs } = tablesOf(harness.db)
+          await insertOne(harness.db, nodeRunOutputs, {
+            nodeRunId: interrupted,
+            portName: 'summary',
+            content: 'one finished',
+          })
           const failedMerge = await f.row('worker', {
             status: 'done',
             mergeState: 'merge-failed',

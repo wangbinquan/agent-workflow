@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTask as launchTestTaskProduction } from './helpers/productionTaskLaunch'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceFilesystemForTest } from './helpers/workspaceMaintenance'
@@ -28,7 +30,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, workflows, users, nodeRuns, taskRepos, cachedRepos } from '../src/db/schema'
 import type { TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
 import { runGit } from '@/util/git'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
@@ -81,6 +82,7 @@ function launchTestTask(
 async function settle(db: DbClient, taskId: string, budgetMs = 60_000): Promise<void> {
   const t0 = Date.now()
   for (;;) {
+    const { tasks } = tablesOf(db)
     const st = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status
     if (st === 'failed' || st === 'done' || st === 'canceled') return
     if (Date.now() - t0 > budgetMs) throw new Error(`task ${taskId} never settled (status=${st})`)
@@ -110,7 +112,8 @@ const WF_DEF = { $schema_version: 1, inputs: [], nodes: [], edges: [] } as const
 async function seed(db: DbClient): Promise<{ workflowId: string; userId: string }> {
   const userId = 'u_' + ulid()
   const workflowId = ulid()
-  await db.insert(users).values({
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: userId,
     username: userId,
     email: `${userId}@example.test`,
@@ -120,7 +123,7 @@ async function seed(db: DbClient): Promise<{ workflowId: string; userId: string 
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(WF_DEF),
@@ -184,6 +187,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
     )
 
     await settle(db, task.id)
+    const { tasks, nodeRuns } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     // ① 行必须存在——这正是 G7 相对现状的核心差别（现状：什么都不留）。
     expect(row).toBeDefined()
@@ -248,6 +252,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
       )
 
       expect(task.status).toBe('done')
+      const { tasks, taskRepos, nodeRuns } = tablesOf(db2)
       const taskRow = (await db2.select().from(tasks).where(eq(tasks.id, task.id)))[0]!
       const repoRows = await db2
         .select()
@@ -304,6 +309,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
     } catch {
       threw = true
     }
+    const { tasks, nodeRuns } = tablesOf(db)
     // 旧路径：物化在落行之前，失败直接抛给 HTTP（或落一条 failed 行）——
     // 无论哪种，都**不是**本 RFC 要改的对象；这里只锁「开关默认关闭时不变」。
     const rows = await db.select().from(tasks)
@@ -413,6 +419,7 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
     const prep = await (async () => {
       const t0 = Date.now()
       for (;;) {
+        const { nodeRuns } = tablesOf(db2)
         const runs = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
         const row = runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)
         if (row !== undefined) return row
@@ -460,6 +467,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
   async function msUntilTerminal(db: DbClient, taskId: string): Promise<number> {
     const t0 = Date.now()
     for (;;) {
+      const { tasks } = tablesOf(db)
       const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       const st = row?.status
       if (st === 'failed' || st === 'done' || st === 'canceled') return Date.now() - t0
@@ -529,6 +537,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
     expect(task.worktreePath).toBe('')
     // 而准备确实在后台推进，并最终把任务落到 failed（远端不可达）。
     await msUntilTerminal(dbA, task.id)
+    const { tasks, nodeRuns } = tablesOf(dbA)
     const after = (await dbA.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     expect(after?.status).toBe('failed')
     const prep = (await dbA.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
@@ -558,6 +567,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
       } as never,
     )
     await settle(db4, task.id)
+    const { tasks } = tablesOf(db4)
     const row = (await db4.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     expect(row?.status).toBe('failed')
     expect(String(row?.errorMessage ?? '')).toMatch(/timed out|connect|clone|fatal/i)
@@ -618,6 +628,7 @@ describe('RFC-287 — scratch 启动排除在延后准备之外', () => {
         deferRepoPreparation: true,
       } as never,
     )
+    const { tasks, nodeRuns } = tablesOf(db5)
     const row = (await db5.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     // 关键断言：spaceKind 必须是 'scratch'，绝不能是占位的 'remote'。
     expect(row?.spaceKind).toBe('scratch')
@@ -698,6 +709,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     expect(task.repoUrl ?? '').toContain('***')
     // 准备失败之后依然留着（失败任务同样要能看出是哪个仓）。
     await settle(db, task.id)
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.repoUrl ?? '').not.toBe('')
@@ -708,6 +720,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'ac11-identity')
+    const { tasks, cachedRepos } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
     // 这一条是 AC-11 的地基：身份在**克隆之前**就落定了，所以哪怕克隆从未成功，
     // 来源依然找得回来。
@@ -724,6 +737,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'ac11-retry')
+    const { nodeRuns, tasks } = tablesOf(db)
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
       (r) => r.nodeId === REPO_PREP_NODE_ID,
     )
@@ -760,6 +774,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'ac16-done')
+    const { nodeRuns } = tablesOf(db)
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
       (r) => r.nodeId === REPO_PREP_NODE_ID,
     )
@@ -799,17 +814,16 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const s2 = await seed(db)
     const cachedId = ulid()
     const now = Date.now()
-    db.insert(cachedRepos)
-      .values({
-        id: cachedId,
-        urlHash: 'bf3hash',
-        urlRedacted: 'http://10.255.255.1:9/nope.git',
-        urlEnc: null,
-        localPath: '/tmp/aw-bf3-mirror',
-        lastFetchedAt: 0,
-        createdAt: now,
-      })
-      .run()
+    const { cachedRepos, nodeRuns } = tablesOf(db)
+    insertOne(db, cachedRepos, {
+      id: cachedId,
+      urlHash: 'bf3hash',
+      urlRedacted: 'http://10.255.255.1:9/nope.git',
+      urlEnc: null,
+      localPath: '/tmp/aw-bf3-mirror',
+      lastFetchedAt: 0,
+      createdAt: now,
+    })
     const task = await launchTestTask(
       { workflowId: s2.workflowId, name: 'bf3', cachedRepoId: cachedId, inputs: {} } as never,
       {
@@ -853,6 +867,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s2 = await seed(db)
     const id = await launchFailingPrep(db, s2, 'ac16-interrupted')
+    const { nodeRuns, tasks } = tablesOf(db)
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
       (r) => r.nodeId === REPO_PREP_NODE_ID,
     )
@@ -890,6 +905,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'refcount-blindspot')
+    const { tasks, taskRepos, cachedRepos } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
     const repoId = row!.cachedRepoId!
     expect(repoId).not.toBe('')
@@ -1109,6 +1125,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     expect(taskId).toBeTruthy()
 
     await settle(db2, taskId)
+    const { tasks, nodeRuns } = tablesOf(db2)
     // ② 任务行留下来了，且是 failed（G7 明确不新增状态）。
     const task = (await db2.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task).toBeDefined()
@@ -1161,7 +1178,8 @@ describe('RFC-287 G5×G7 —— 生产延后准备的地址拒绝', () => {
     const seeded = await seed(db)
     const cachedRepoId = ulid(),
       url = 'file:///srv/private/repo'
-    await db.insert(cachedRepos).values({
+    const { cachedRepos, tasks, nodeRuns, taskRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: cachedRepoId,
       urlHash: `h_${cachedRepoId}`,
       urlRedacted: url,
@@ -1201,7 +1219,8 @@ describe('RFC-287 G5×G7 —— 生产延后准备的地址拒绝', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = ulid()
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id,
       urlHash: 'h_' + id,
       urlRedacted: null,
@@ -1265,6 +1284,7 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac11-async')
+    const { nodeRuns } = tablesOf(db)
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).find(
       (r) => r.nodeId === REPO_PREP_NODE_ID,
     )
@@ -1298,6 +1318,7 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac11-retryindex')
     const retryOnce = async (): Promise<void> => {
+      const { nodeRuns } = tablesOf(db)
       const latest = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id)))
         .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
         .sort((a, b) => a.retryIndex - b.retryIndex)
@@ -1315,6 +1336,7 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
     await retryOnce()
     await retryOnce()
 
+    const { nodeRuns } = tablesOf(db)
     const prepRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id)))
       .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
       .sort((a, b) => a.retryIndex - b.retryIndex)
@@ -1359,6 +1381,7 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
     )
     // 等准备真的开跑（合成行出现即证明已进入窗口），再取消。
     for (let i = 0; i < 200; i++) {
+      const { nodeRuns } = tablesOf(db)
       const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
       if (runs.some((r) => r.nodeId === REPO_PREP_NODE_ID)) break
       await new Promise((r) => setTimeout(r, 25))
@@ -1375,6 +1398,7 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
     // runGit 原语层。这里保留耗时只作粗筛，判别力交给下面的错误码断言。
     expect(cancelMs, '取消必须打断正在跑的 git，而不是等它自己超时').toBeLessThan(20_000)
 
+    const { tasks, nodeRuns } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
     expect(row?.status).toBe('canceled')
     // 准备行不得停在 running：那样恢复扫描与 UI 都会把它当「还在跑」。
@@ -1424,6 +1448,7 @@ describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', (
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac15-no-tombstone')
+    const { tasks } = tablesOf(db)
     const before = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
     expect(before?.status).toBe('failed')
     expect(before?.worktreePath ?? '').toBe('')
@@ -1487,6 +1512,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const id = await launchFailingPrep2(db, s, 'ac10-autoresume')
     // 造成 boot reap 之后的形态：任务 interrupted + daemon-restart 摘要。
     const { DAEMON_RESTART_ERROR_SUMMARY } = await import('@agent-workflow/shared')
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({ status: 'interrupted', errorSummary: DAEMON_RESTART_ERROR_SUMMARY })
@@ -1531,6 +1557,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac10-boot-reprep')
     const { DAEMON_RESTART_ERROR_SUMMARY } = await import('@agent-workflow/shared')
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({ status: 'interrupted', errorSummary: DAEMON_RESTART_ERROR_SUMMARY })
@@ -1617,6 +1644,7 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     )
     // 等准备真的开跑，再模拟优雅停机（带 reason 的 abort）。
     for (let i = 0; i < 200; i++) {
+      const { nodeRuns } = tablesOf(db)
       const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
       if (runs.some((r) => r.nodeId === REPO_PREP_NODE_ID)) break
       await new Promise((r) => setTimeout(r, 25))
@@ -1627,6 +1655,7 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     // 等准备行落终态。
     let prep: { status: string } | undefined
     for (let i = 0; i < 400; i++) {
+      const { nodeRuns } = tablesOf(db)
       prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
         (r) => r.nodeId === REPO_PREP_NODE_ID,
       )
@@ -2092,13 +2121,13 @@ describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => 
     // 同一份投影写进一个事务，不能把事务句柄暴露到 application port。
     //
     // RFC-359 W10：回调的签名从 bun:sqlite 专属的同步 `(tx: LegacySqliteTaskTransaction): void`
-    // 换成中立的 `async (tx: DatabaseTransaction): Promise<void>`，消费它的边界从 `dbTxSync`
+    // 换成中立的 `async (tx: PersistenceTx): Promise<void>`，消费它的边界从 `dbTxSync`
     // 换成 `withTaskExecutionWrite`。本条守卫锁的**意图**没变（回填与 prep 置 done 必须同事务），
     // 只是锚点跟着改名走；行为判据在
     // `tests/rfc359-w10-task-execution-sync-transaction-cutover.test.ts` ⑥⑦（两引擎各一遍，
     // 含「最后一步失败时前三张表全部回滚」）。
     const at = src.indexOf(
-      'const persistPreparedProjection = async (tx: DatabaseTransaction): Promise<void> => {',
+      'const persistPreparedProjection = async (tx: PersistenceTx): Promise<void> => {',
     )
     expect(at, '应有唯一的准备投影事务回调').toBeGreaterThan(-1)
     // 回调体用**括号配平**切（内层还有多个 `})`，取第一个会切在半路）。
@@ -2206,6 +2235,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 's4-exempt')
+    const { tasks } = tablesOf(db)
     // 造回准备窗口形态：pending + 空路径 + 无墓碑，且已经等了 10 分钟。
     await db
       .update(tasks)

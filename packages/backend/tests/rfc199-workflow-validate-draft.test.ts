@@ -9,7 +9,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {
   describeEachProviderHttpApplication,
@@ -27,7 +27,7 @@ const EMPTY_DEFINITION: WorkflowDefinition = {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string }
   bob: { id: string; token: string }

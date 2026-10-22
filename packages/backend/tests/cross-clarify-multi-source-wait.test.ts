@@ -22,13 +22,15 @@
 // If any of these go red the multi-source aggregation contract drifted —
 // investigate before relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound, evaluateDesignerRerunReadiness } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -45,7 +47,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // aggregates every source. The park/pending assertions before all siblings answer are unchanged
 // (a not-yet-answered sibling still keeps the designer parked in evaluateDesignerRerunReadiness).
 async function reassignAllThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunIds: string[],
 ) {
@@ -128,11 +130,12 @@ function threeSiblingDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = threeSiblingDef()
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'multi-source',
     description: '',
@@ -145,7 +148,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -162,25 +165,23 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
-async function seedQRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  nodeId: string,
-): Promise<string> {
+async function seedQRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 6)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -191,9 +192,10 @@ async function seedQRun(
   return id
 }
 
-async function seedDesignerRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedDesignerRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_d_${Math.random().toString(36).slice(2, 6)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'designer',
@@ -205,8 +207,8 @@ async function seedDesignerRun(db: ProviderNeutralDatabase, taskId: string): Pro
   return id
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<{
-  db: ProviderNeutralDatabase
+async function buildHarness(db: PersistenceDb): Promise<{
+  db: PersistenceDb
   taskId: string
   sec: string
   ux: string
@@ -336,6 +338,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       answers: [makeAns('q1')],
       actor,
     })
+    const { nodeRuns } = tablesOf(db)
     const elevatedDesigner = await db
       .select()
       .from(nodeRuns)
@@ -401,6 +404,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
     })
     // RFC-162: the designer rerun is minted by dispatching the reassigned designer entries.
     await reassignAllThenDispatchDesigner(db, taskId, [sec, ux, perf])
+    const { nodeRuns, taskQuestions } = tablesOf(db)
     const elevatedDesigner = await db
       .select()
       .from(nodeRuns)

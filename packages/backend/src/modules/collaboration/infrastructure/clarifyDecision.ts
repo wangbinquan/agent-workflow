@@ -2,17 +2,16 @@
 //
 // RFC-359 W1-T2b：一份实现，两个引擎。此前只有 SQLite 的 dbTxSync 版本（journal 用
 // `SqliteHumanGateOperationStore`、决定接受走 `bindTaskDecisionParticipantInTx`），PostgreSQL
-// 上快速澄清命令根本没有实现。现在 replay / prepare 跑在 `ProviderNeutralDatabase` 上，
-// 参与者在 seal 的 `DatabaseTransaction` 里复用已合一的原子：`DatabaseHumanGateOperationJournal`
+// 上快速澄清命令根本没有实现。现在 replay / prepare 跑在 `PersistenceDb` 上，
+// 参与者在 seal 的 `PersistenceTx` 里复用已合一的原子：`DatabaseHumanGateOperationJournal`
 // / `acceptHumanGateDecisionTx` / `appendHumanGateDecisionCommittedEvent`。
 // RFC-359 W12：实现与源锁统一改为中立路径，两个引擎继续共用同一事务参与者。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, isNotNull, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { collaborationGateOperations, nodeRuns } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
@@ -74,7 +73,7 @@ function clarifyDecisionPayload(input: {
 }
 
 async function ensureLegacyClarifyGateRevisionTx(input: {
-  tx: DatabaseTransaction
+  tx: PersistenceTx
   operations: HumanGateOperationJournal
   taskId: string
   originNodeRunId: string
@@ -136,7 +135,7 @@ async function ensureLegacyClarifyGateRevisionTx(input: {
 }
 
 export async function replayCommittedClarifyDecision(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   originNodeRunId: string
   roundId: string
@@ -148,6 +147,7 @@ export async function replayCommittedClarifyDecision(input: {
 }): Promise<ClarifyDecisionReceiptEnvelope | null> {
   const gateRef = `clarify:${input.originNodeRunId}`
   const payload = clarifyDecisionPayload(input)
+  const { collaborationGateOperations } = tablesOf(input.db)
   const rows = await input.db
     .select()
     .from(collaborationGateOperations)
@@ -215,7 +215,7 @@ export async function replayCommittedClarifyDecision(input: {
 }
 
 export async function prepareClarifyDecision(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   originNodeRunId: string
   roundId: string
@@ -227,6 +227,7 @@ export async function prepareClarifyDecision(input: {
   decision: ClarifyDecisionArgs
 }): Promise<PreparedClarifyDecision> {
   const gateRef = `clarify:${input.originNodeRunId}`
+  const { collaborationGateOperations } = tablesOf(input.db)
   const latestGateRevision =
     (
       await input.db
@@ -318,6 +319,7 @@ export async function prepareClarifyDecision(input: {
         manifestJson,
         now: sealed.now,
       })
+      const { nodeRuns } = tablesOf(sealed.tx)
       const sourceRows = await sealed.tx
         .select()
         .from(nodeRuns)

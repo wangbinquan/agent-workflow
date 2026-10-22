@@ -1,10 +1,10 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-import { plugins } from '@/db/schema'
 import type { PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -126,6 +126,7 @@ describeEachProviderHttpApplication(
         expect(Object.hasOwn(selected, 'install')).toBe(false)
         expect(Object.hasOwn(selected, 'checkForUpdate')).toBe(false)
         const { app, appHome } = await scope.open({ pluginInstaller: selected })
+        const { plugins } = tablesOf(scope.harness.db)
         const before = await scope.harness.db.select().from(plugins)
         const headers = {
           Authorization: `Bearer ${'f'.repeat(64)}`,

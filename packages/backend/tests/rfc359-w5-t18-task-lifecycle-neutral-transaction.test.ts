@@ -55,12 +55,13 @@
 // 只有 PG 红。再往下还有一档：既不 `.run()` 也不 `await` 的惰性 `QueryPromise`，语句在**两个引擎上
 // 都一条不发**，双引擎一起红。判据是「语句发没发出去」双引擎一起红、「发出去了但结果没等到」只有 PG 红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   withSerializableTaskExecution,
   type TaskExecutionTransaction,
@@ -78,12 +79,13 @@ import { describeEachProvider } from './helpers/eachProvider'
  * （W11 起 `withPostgresqlTaskAggregateTransaction` 的聚合根行锁也走能力矩阵，于是它同样
  * 在两个引擎上都跑得动——此前它裸写 `for update`，在 SQLite 上是语法错误。）
  */
-const asClient = (db: ProviderNeutralDatabase): PostgresqlDatabaseClient =>
+const asClient = (db: PersistenceDb): PostgresqlDatabaseClient =>
   db as unknown as PostgresqlDatabaseClient
 
 /** 一行最小的业务行。选 `cached_repos`：两个引擎上列形状相同，且不牵扯任何生命周期不变量。 */
 async function insertRow(tx: TaskExecutionTransaction, id: string): Promise<void> {
-  await tx.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(tx)
+  await insertOne(tx, cachedRepos, {
     id,
     urlHash: `h_${id}`.slice(0, 40),
     urlRedacted: `https://example.invalid/${id}.git`,
@@ -94,7 +96,8 @@ async function insertRow(tx: TaskExecutionTransaction, id: string): Promise<void
   })
 }
 
-async function rowCount(db: ProviderNeutralDatabase, id: string): Promise<number> {
+async function rowCount(db: PersistenceDb, id: string): Promise<number> {
+  const { cachedRepos } = tablesOf(db)
   const rows = await db
     .select({ id: cachedRepos.id })
     .from(cachedRepos)
@@ -166,6 +169,7 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：可
       await insertRow(outer, outerId)
       // 另开一条连接的话，这次读在 READ COMMITTED 下看不见 outerId（PG 裸事务的旧形态）。
       return await withPostgresqlTaskAggregateTransaction(asClient(db), TASK_ID, async (inner) => {
+        const { cachedRepos } = tablesOf(inner)
         const rows = await inner
           .select({ id: cachedRepos.id })
           .from(cachedRepos)

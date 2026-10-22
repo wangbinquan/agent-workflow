@@ -17,6 +17,7 @@
 // Driven end-to-end through the REAL scheduler + REAL clarify-answer driver
 // (autoDispatchClarifyRound) — same harness as clarify-review-combination-scenarios.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -26,7 +27,6 @@ import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { clarifyRounds, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
@@ -159,6 +159,7 @@ async function runTaskWithDeadline(taskId: string): Promise<void> {
   }
 }
 async function topLevel(nodeId: string, taskId: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select()
     .from(nodeRuns)
@@ -166,6 +167,7 @@ async function topLevel(nodeId: string, taskId: string) {
   return rows.filter((r) => r.parentNodeRunId === null)
 }
 async function taskStatus(taskId: string): Promise<string> {
+  const { tasks } = tablesOf(db)
   const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
   return t?.status ?? '??'
 }
@@ -174,6 +176,7 @@ async function awaitingReviewRun(taskId: string, nodeId: string) {
   return tops.find((r) => r.status === 'awaiting_review')
 }
 async function openClarifyRunId(taskId: string): Promise<string> {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select()
     .from(clarifyRounds)
@@ -273,8 +276,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
       },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: opencodeCmd(),
         awaitScheduler: true,

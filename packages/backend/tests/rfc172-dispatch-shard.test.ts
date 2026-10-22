@@ -5,16 +5,17 @@
 // Locks the golden-lock invariant throughout: every non-workgroup path derives shardKey === null,
 // so a `(home, null)` composite key collapses byte-for-byte to today's home-only behavior.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { readFileSync } from 'node:fs'
 import type { WorkflowDefinition, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { derivedSupersededIds, expectFencedToAbandoned } from './helpers/nodeRunSupersession'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   buildFrontierMintPlan,
   dispatchTaskQuestions,
@@ -28,8 +29,6 @@ import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/
 import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
 import { createNodeRunMintParticipantInTx } from '../src/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { withTaskExecutionWrite } from '../src/modules/task-execution/infrastructure/ownedTaskExecution'
-import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
-
 // Monotonic so seed ORDER == id ORDER — several shard tests depend on "the run seeded last is the
 // freshest" (the shard-blind lineage window picks by ULID id; a same-ms random ULID would break it).
 const ulid = monotonicFactory()
@@ -41,9 +40,10 @@ const MIN_DEF = {
   edges: [],
 } as unknown as WorkflowDefinition
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
-  await db.insert(tasks).values({
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -59,13 +59,14 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
 }
 
 async function seedNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { retryIndex?: number; shardKey?: string; status?: string; mergeState?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -80,13 +81,14 @@ async function seedNodeRun(
 
 /** Insert a clarify round (+ its FK-referenced node_runs) keyed by intermediaryNodeRunId. */
 async function seedRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   intermediaryNodeRunId: string,
   askingShardKey: string | null,
 ): Promise<void> {
   const askingRunId = await seedNodeRun(db, taskId, '__wg_member__')
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -106,7 +108,7 @@ async function seedRound(
 
 /** Insert a task_question and return the full row (what dispatchTaskQuestions passes around). */
 async function seedEntry(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   e: {
     originNodeRunId: string
@@ -118,7 +120,8 @@ async function seedEntry(
   },
 ) {
   const id = ulid()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -175,9 +178,10 @@ const WG_CONFIG: WorkgroupRuntimeConfig = {
  *  (clarify-channel-only → upstream-free) frontier node dispatchTaskQuestions can mint against.
  *  workgroupId + config are set so `isTurnEngineWorkgroupTask` is true — the R2-T5 ban is gated on
  *  it (an ordinary workflow with a coincidentally-named node must NOT trip the ban). */
-async function seedWorkgroupTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
-  await db.insert(tasks).values({
+async function seedWorkgroupTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'wg-fixture',
     workflowId: `wf_${taskId}`,
@@ -197,7 +201,7 @@ async function seedWorkgroupTask(db: ProviderNeutralDatabase, taskId: string): P
 /** Seed an ORDINARY (non-workgroup) task whose snapshot has an agent node literally named
  *  '__wg_member__' — the P2 case: the R2-T5 ban must NOT fire here (no shard ambiguity). */
 async function seedOrdinaryTaskWithMemberNamedNode(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<void> {
   const def = {
@@ -206,8 +210,9 @@ async function seedOrdinaryTaskWithMemberNamedNode(
     nodes: [{ id: '__wg_member__', kind: 'agent-single', agentName: 'a' }],
     edges: [],
   }
-  await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'ordinary-fixture',
     workflowId: `wf_${taskId}`,
@@ -381,6 +386,7 @@ describeEachProvider(
       expect(res.reruns.length).toBe(2)
       const byShard = new Map<string | null, { entryIds: string[]; nodeId: string }>()
       for (const r of res.reruns) {
+        const { nodeRuns } = tablesOf(db)
         const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, r.nodeRunId)))[0]
         byShard.set(run?.shardKey ?? null, { entryIds: r.entryIds, nodeId: r.targetNodeId })
       }
@@ -426,6 +432,7 @@ describeEachProvider(
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
+      const { taskQuestions } = tablesOf(db)
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(0)
     })
@@ -442,6 +449,7 @@ describeEachProvider(
         { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
         actor,
       )
+      const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
       expect(row?.overrideTargetNodeId).toBe(WG_MEMBER_NODE_ID) // created, not rejected
     })
@@ -468,6 +476,7 @@ describeEachProvider(
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
+      const { taskQuestions } = tablesOf(db)
       // target unchanged (reassign failed before the update tx).
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
       expect(row?.overrideTargetNodeId).toBe('__wg_leader__')
@@ -495,6 +504,7 @@ describeEachProvider(
       }
       // the backstop rejects ANY shard-less entry at __wg_member__ (manual is always null-shard).
       expect((threw as { code?: string }).code).toBe('workgroup-member-shardless-dispatch')
+      const { taskQuestions } = tablesOf(db)
       // NOT dispatched — no rerun minted (would-be hijack prevented).
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, manual.id)))[0]
       expect(row?.dispatchedAt).toBeNull()
@@ -550,11 +560,7 @@ describeEachProvider(
     const actor = { userId: 'u1', role: 'owner' as const }
 
     /** member `shard` DISPATCHED with an in-flight (pending) rerun — the obligation the gate reads. */
-    async function seedInFlight(
-      db: ProviderNeutralDatabase,
-      taskId: string,
-      shard: string,
-    ): Promise<void> {
+    async function seedInFlight(db: PersistenceDb, taskId: string, shard: string): Promise<void> {
       const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
       await seedRound(db, taskId, clarify, shard)
       const rerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
@@ -571,7 +577,7 @@ describeEachProvider(
     }
 
     /** a fresh, sealed, UNDISPATCHED member answer on `shard`. */
-    async function seedFresh(db: ProviderNeutralDatabase, taskId: string, shard: string) {
+    async function seedFresh(db: PersistenceDb, taskId: string, shard: string) {
       const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
       await seedRound(db, taskId, clarify, shard)
       return seedEntry(db, taskId, { originNodeRunId: clarify, sourceKind: 'self', sealed: true })
@@ -590,6 +596,7 @@ describeEachProvider(
       // of run topology — so B dispatches through the sibling's in-flight rerun.
       const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
       expect(res.reruns.length).toBe(1)
+      const { nodeRuns } = tablesOf(db)
       const run = (
         await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
       )[0]
@@ -621,7 +628,7 @@ describeEachProvider(
 // must NOT block this member's rollback. Golden-lock: shard-blind (undefined) blocks on any open
 // ledger on the home, exactly as pre-172b.
 describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () => {
-  type Run = typeof nodeRunsTable.$inferSelect
+  type Run = PersistenceTables['nodeRuns']['$inferSelect']
   const mkRun = (over: Partial<Run>): Run =>
     ({
       seq: null,
@@ -701,7 +708,7 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
 // RFC-369：「作废」改由读侧推导（铸造不再写旧代），按 shard 收口的判据一字不变——推导集合与迁移围栏
 // 两面各断言一次；兄弟 shard 仍可正常前进。
 describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 shard 收口', (harness) => {
-  async function seedRun(db: ProviderNeutralDatabase, taskId: string, shard: string) {
+  async function seedRun(db: PersistenceDb, taskId: string, shard: string) {
     return seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
       shardKey: shard,
       status: 'running',
@@ -718,7 +725,7 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
    * 前面的 seed 行同样出自这个 monotonic 工厂，所以这里再取一个必然严格更大。
    */
   async function mintMemberRun(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     taskId: string,
     shardKey: string | null,
   ): Promise<string> {
@@ -744,6 +751,7 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
     await mintMemberRun(db, taskId, 'assign-B')
     expect(await derivedSupersededIds(db, taskId)).toEqual([runB])
     await expectFencedToAbandoned(db, runB)
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
     expect(byId.get(runA)).toBe('isolating') // sibling member A UNTOUCHED (the fix)
@@ -882,6 +890,7 @@ describeEachProvider(
       // no run obligation on the host → the done legacy ledger is consumed → B dispatches (releases).
       const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
       expect(res.reruns.length).toBe(1)
+      const { nodeRuns } = tablesOf(db)
       const run = (
         await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
       )[0]
@@ -920,6 +929,7 @@ describeEachProvider(
       // consumed → member C dispatches (a superseded failed row cannot deadlock the upgraded task).
       const res = await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
       expect(res.reruns.length).toBe(1)
+      const { nodeRuns } = tablesOf(db)
       const run = (
         await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
       )[0]

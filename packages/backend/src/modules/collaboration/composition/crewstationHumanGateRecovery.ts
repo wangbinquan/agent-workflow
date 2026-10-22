@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { HumanGateArtifactStore } from '../application/ports/humanGateArtifactStore'
@@ -8,7 +8,7 @@ import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGa
 /** Runs with the existing continuation owner. No second scheduler or local
  * artifact store is created; every journal mutation checks the current lease. */
 export function composeCrewStationHumanGateRecovery(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly artifacts: HumanGateArtifactStore
   readonly now?: () => number

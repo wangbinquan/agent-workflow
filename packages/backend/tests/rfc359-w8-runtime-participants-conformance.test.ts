@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
@@ -57,21 +59,9 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createWorkerIdentity } from '@/modules/task-execution/domain/ownership'
-import {
-  agents,
-  mcps,
-  nodeRunOutputs,
-  nodeRuns,
-  plugins,
-  skills,
-  tasks,
-  users,
-  workflows,
-  workgroupTaskState,
-} from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionRuntimeParticipants } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import {
@@ -147,7 +137,7 @@ function passthrough<T>(label: string): T {
  * {@link ChildTaskLifecycleRuntimePorts} 那三格里，由下面两个绑定分别交。
  */
 function sharedInput(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Omit<
   TaskExecutionRuntimeParticipantsInput,
   'taskDagCollaboration' | 'processConcurrencyScope' | 'log'
@@ -179,7 +169,7 @@ function sharedInput(
 }
 
 /** 单进程部署形态的绑定：进程级单例的同步认领 + 进程内注册表。 */
-function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
+function sqliteParticipants(db: PersistenceDb): TaskExecutionRuntimeParticipants {
   const client = db as unknown as DbClient
   return createTaskExecutionRuntimeParticipants({
     ...sharedInput(db),
@@ -188,7 +178,7 @@ function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimePa
 }
 
 /** 持久化租约部署形态的绑定：`claimPersisted` + 注入的执行模块注册表。 */
-function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
+function postgresqlParticipants(db: PersistenceDb): TaskExecutionRuntimeParticipants {
   const client = db as unknown as PostgresqlDatabaseClient
   const input = sharedInput(db)
   const executionModule = createProviderTaskExecutionModule({
@@ -225,7 +215,7 @@ function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRunti
 
 /** 按引擎取本引擎的那份适配器。`describeEachProvider` 有意不给 provider 名，只给能力矩阵。 */
 function participantsFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   isolation: 'exclusive' | 'read-committed',
 ): TaskExecutionRuntimeParticipants {
   return isolation === 'exclusive' ? sqliteParticipants(db) : postgresqlParticipants(db)
@@ -266,20 +256,21 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     const skillId = ulid()
     const mcpId = ulid()
     const pluginId = ulid()
-    await db.insert(agents).values({
+    const { agents, skills, mcps, plugins } = tablesOf(db)
+    await insertOne(db, agents, {
       id: agentId,
       name: `dynamic-${agentId}`,
       outputs: '["result"]',
       bodyMd: 'Read the selected catalog.',
     })
-    await db.insert(skills).values({ id: skillId, name: `dynamic-${skillId}` })
-    await db.insert(mcps).values({
+    await insertOne(db, skills, { id: skillId, name: `dynamic-${skillId}` })
+    await insertOne(db, mcps, {
       id: mcpId,
       name: `dynamic-${mcpId.toLowerCase()}`,
       type: 'local',
       config: JSON.stringify({ command: ['catalog-fixture', '--read'] }),
     })
-    await db.insert(plugins).values({
+    await insertOne(db, plugins, {
       id: pluginId,
       name: `dynamic-${pluginId.toLowerCase()}`,
       spec: 'file:/catalog-fixture',
@@ -323,7 +314,9 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     const workgroupId = ulid()
     let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
     try {
-      await db.insert(users).values({
+      const { users, agents, workflows, tasks, workgroupTaskState, nodeRuns, nodeRunOutputs } =
+        tablesOf(db)
+      await insertOne(db, users, {
         id: userId,
         username: `dynamic-${userId}`,
         displayName: 'Dynamic Runtime Fixture',
@@ -332,7 +325,7 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await db.insert(agents).values({
+      await insertOne(db, agents, {
         id: agentId,
         name: `dynamic-${agentId}`,
         outputs: '["result"]',
@@ -374,12 +367,12 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         ],
       })
       const dw = { ...initialDwState(), phase: 'awaiting_confirm', generatedDef: snapshot }
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: workflowId,
         name: `dynamic-${workflowId}`,
         definition: JSON.stringify(snapshot),
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
@@ -399,7 +392,7 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         workgroupId,
         workgroupConfigJson: JSON.stringify(config),
       })
-      await db.insert(workgroupTaskState).values({
+      await insertOne(db, workgroupTaskState, {
         taskId,
         dwStateJson: JSON.stringify(dw),
         updatedAt: 1,

@@ -5,17 +5,9 @@
 // Operations freezes the restored execution authority, fails the snapshot's
 // other building backups and re-adopts the restore source's archive pin. Every
 // participant is idempotent because a resumed restore runs it again.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import {
-  hostedDatabaseBackups,
-  hostedExecutionBindings,
-  hostedExecutionControl,
-  hostedObjectPublications,
-  hostedRecoveryRequests,
-  nodeRuns,
-  tasks,
-} from '@/db/schema'
 import { HOSTED_BACKUP_OWNER } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupFormat'
 import { createHostedSystemRestoreNormalization } from '@/modules/system-operations/infrastructure/crewstation/hostedRestoreNormalization'
 import { hostedPublicationId } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
@@ -45,6 +37,9 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
 
   test('Task Execution suspends live tasks, interrupts running work and cancels unsettled executions', async () => {
     for (const id of ['t-running', 't-gate', 't-done']) await seedTask(harness.db, id)
+    const { tasks, hostedExecutionBindings, hostedRecoveryRequests, nodeRuns } = tablesOf(
+      harness.db,
+    )
     await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, 't-running'))
     await harness.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, 't-done'))
     const running = await seedRun(harness.db, 't-running', 'n-running', { status: 'running' })
@@ -136,6 +131,9 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
     const source = '01a13e6d-3e00-7000-9e3c-0000000000a1'
     const other = '01a13e6d-3e00-7000-9e3c-0000000000a2'
     const object = { id: '01a13e6d-3e00-7000-9e3c-0000000000f1', sha256: 'c'.repeat(64), size: 42 }
+    const { hostedExecutionControl, hostedDatabaseBackups, hostedObjectPublications } = tablesOf(
+      harness.db,
+    )
     await harness.db
       .insert(hostedExecutionControl)
       .values({

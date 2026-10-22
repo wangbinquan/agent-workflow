@@ -39,6 +39,8 @@
 //        所以这里锁的是「这串语句配中立原语在两个引擎上都真的同生共死」，再由下面的源码层
 //        `await` 完整性守卫兜住第 ③ 档（漏 await 不会让任何行为测试变红）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -46,16 +48,7 @@ import ts from 'typescript'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEvents,
-  nodeRuns,
-  taskExecutionIntents,
-  taskExecutionOwners,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationEffectInput } from '@/modules/task-execution/application/applySourceTerminationEffect'
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sourceTerminationParticipant'
@@ -84,7 +77,7 @@ interface Seeded {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   overrides: {
     readonly status?: 'pending' | 'running' | 'done' | 'canceled'
     readonly launchRevision?: number | null
@@ -98,7 +91,8 @@ async function seedTask(
   const doneRunId = `run-done-${ulid()}`
   const intentId = `intent-${ulid()}`
   const status = overrides.status ?? 'done'
-  await db.insert(tasks).values({
+  const { tasks, nodeRuns, taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w10',
@@ -149,7 +143,7 @@ async function seedTask(
       operationGeneration: 0,
     },
   ])
-  await db.insert(taskExecutionIntents).values({
+  await insertOne(db, taskExecutionIntents, {
     id: intentId,
     taskId,
     kind: 'launch',
@@ -169,7 +163,7 @@ async function seedTask(
 }
 
 async function seedClaimedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ ownerId: string; daemonGeneration: string; epoch: number; revision: number }> {
   const owner = {
@@ -178,7 +172,8 @@ async function seedClaimedOwner(
     epoch: 1,
     revision: 3,
   }
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: owner.ownerId,
     daemonGeneration: owner.daemonGeneration,
@@ -227,6 +222,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await applySourceTermination(h, effect('fence-closed', 5))
 
+    const { tasks, taskExecutionOwners, taskExecutionIntents, nodeRuns, committedEvents } =
+      tablesOf(h.db)
     const task = (
       await h.db
         .select({
@@ -302,6 +299,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await applySourceTermination(h, effect('fence-merged', 5))
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (
       await h.db
         .select({
@@ -335,11 +333,11 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const boom = new Error('rfc359-w10-rollback-probe')
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ sourceTerminationFence: 'closed', sourceTerminationEffectRev: 5 })
           .where(eq(tasks.id, seeded.taskId))
-          .run()
         await revokeExactOwnerInTx(tx, {
           owner: { taskId: seeded.taskId, ...owner },
           expectedRevision: owner.revision,
@@ -362,6 +360,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toThrow('rfc359-w10-rollback-probe')
 
+    const { tasks, taskExecutionOwners, taskExecutionIntents, nodeRuns } = tablesOf(h.db)
     const task = (
       await h.db
         .select({
@@ -407,11 +406,11 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ sourceTerminationFence: 'merged' })
           .where(eq(tasks.id, seeded.taskId))
-          .run()
         // 期望 revision 比库里的老一格 —— 精确 owner CAS 必须不命中。
         await revokeExactOwnerInTx(tx, {
           owner: { taskId: seeded.taskId, ...owner },
@@ -422,6 +421,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
 
+    const { tasks, taskExecutionOwners } = tablesOf(h.db)
     const task = (
       await h.db
         .select({ fence: tasks.sourceTerminationFence })
@@ -467,26 +467,24 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const seeded = await seedTask(h.db, { status: 'running', openRunStatus: 'running' })
 
     await databaseSessionFor(h.db).transaction(async (tx) => {
+      const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
       await tx
         .update(tasks)
         .set({ worktreePath: '/tmp/prepared', branch: 'prepared', repoCount: 1 })
         .where(eq(tasks.id, seeded.taskId))
-        .run()
-      await tx
-        .insert(taskRepos)
-        .values({
-          taskId: seeded.taskId,
-          repoIndex: 0,
-          repoPath: '/tmp/prepared/repo',
-          baseBranch: 'main',
-          branch: 'prepared',
-          worktreePath: '/tmp/prepared/repo',
-        })
-        .run()
-      await tx
-        .insert(taskSpaceNodes)
-        .values({ taskId: seeded.taskId, nodePath: 'docs', schemaVersion: 1 })
-        .run()
+      await insertOne(tx, taskRepos, {
+        taskId: seeded.taskId,
+        repoIndex: 0,
+        repoPath: '/tmp/prepared/repo',
+        baseBranch: 'main',
+        branch: 'prepared',
+        worktreePath: '/tmp/prepared/repo',
+      })
+      await insertOne(tx, taskSpaceNodes, {
+        taskId: seeded.taskId,
+        nodePath: 'docs',
+        schemaVersion: 1,
+      })
       await setNodeRunStatusInTransaction({
         tx,
         nodeRunId: seeded.openRunId,
@@ -497,6 +495,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       })
     })
 
+    const { tasks, taskRepos, taskSpaceNodes, nodeRuns } = tablesOf(h.db)
     expect(
       (
         await h.db
@@ -532,26 +531,24 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
+        const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ worktreePath: '/tmp/prepared', branch: 'prepared', repoCount: 1 })
           .where(eq(tasks.id, seeded.taskId))
-          .run()
-        await tx
-          .insert(taskRepos)
-          .values({
-            taskId: seeded.taskId,
-            repoIndex: 0,
-            repoPath: '/tmp/prepared/repo',
-            baseBranch: 'main',
-            branch: 'prepared',
-            worktreePath: '/tmp/prepared/repo',
-          })
-          .run()
-        await tx
-          .insert(taskSpaceNodes)
-          .values({ taskId: seeded.taskId, nodePath: 'docs', schemaVersion: 1 })
-          .run()
+        await insertOne(tx, taskRepos, {
+          taskId: seeded.taskId,
+          repoIndex: 0,
+          repoPath: '/tmp/prepared/repo',
+          baseBranch: 'main',
+          branch: 'prepared',
+          worktreePath: '/tmp/prepared/repo',
+        })
+        await insertOne(tx, taskSpaceNodes, {
+          taskId: seeded.taskId,
+          nodePath: 'docs',
+          schemaVersion: 1,
+        })
         await setNodeRunStatusInTransaction({
           tx,
           nodeRunId: seeded.openRunId,
@@ -563,6 +560,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toMatchObject({ code: 'illegal-node-run-transition' })
 
+    const { tasks, taskRepos, taskSpaceNodes } = tablesOf(h.db)
     expect(
       (
         await h.db
@@ -588,7 +586,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const taskId = `task-${ulid()}`
     const intentId = `intent-${ulid()}`
     await databaseSessionFor(h.db).transaction(async (tx) => {
-      await tx.insert(tasks).values({
+      const { tasks, taskExecutionIntents } = tablesOf(tx)
+      await insertOne(tx, tasks, {
         id: taskId,
         name: taskId,
         workflowId: 'workflow-w10',
@@ -606,7 +605,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
         executionLineageId: taskId,
         lineageSlotPathJson: SLOT_PATH(taskId),
       })
-      await tx.insert(taskExecutionIntents).values({
+      await insertOne(tx, taskExecutionIntents, {
         id: intentId,
         taskId,
         kind: 'launch',
@@ -630,6 +629,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       })
     })
 
+    const { tasks, taskExecutionIntents, committedEvents } = tablesOf(h.db)
     expect(
       (await h.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length,
     ).toBe(1)
@@ -661,7 +661,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const intentId = `intent-${ulid()}`
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
-        await tx.insert(tasks).values({
+        const { tasks, taskExecutionIntents } = tablesOf(tx)
+        await insertOne(tx, tasks, {
           id: taskId,
           name: taskId,
           workflowId: 'workflow-w10',
@@ -679,7 +680,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
           executionLineageId: taskId,
           lineageSlotPathJson: SLOT_PATH(taskId),
         })
-        await tx.insert(taskExecutionIntents).values({
+        await insertOne(tx, taskExecutionIntents, {
           id: intentId,
           taskId,
           kind: 'launch',
@@ -706,6 +707,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toThrow('rfc359-w10-launch-rollback-probe')
 
+    const { tasks, taskExecutionIntents, committedEvents } = tablesOf(h.db)
     expect(
       (await h.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length,
       '任务行必须回滚——合一前这条原子性正是「手工回滚可能删掉一条既存任务」的替代品',

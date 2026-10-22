@@ -1,6 +1,6 @@
 // RFC-303 composition seam. Transitional routes/services may request this
 // command, while application/domain stay free of concrete SQLite imports.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
@@ -66,7 +66,7 @@ export function composeMrTerminalControlWithPorts(input: {
  * 与 PostgreSQL bootstrap 现在是同一个姿势。
  */
 export function composeMrTerminalControl(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly taskTermination: MrTerminalControlTaskTermination
 }): MrTerminalControl {
   return composeMrTerminalControlWithPorts({

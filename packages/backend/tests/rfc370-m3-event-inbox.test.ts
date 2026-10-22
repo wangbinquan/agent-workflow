@@ -15,20 +15,12 @@
 //   cannot receive; a hosted deployment has no direct webhook ingress.
 // - Completing a target re-implemented the direct ingress' delivery outcome;
 //   both now share `webhookDeliveryOutcome`.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import {
-  csEventInbox,
-  csEventRoutes,
-  csEventTargets,
-  csWebhookVerifications,
-  eventRecords,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrStreamStates,
-} from '@/db/schema'
 import { composeEventCenter } from './helpers/eventCenter'
 import type {
   EventObservationInput,
@@ -459,8 +451,9 @@ test('routing freezes sorted targets with their channels, or names why it cannot
 describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
   async function setup(type = 'gitlab.merge-request.open') {
     const { source, delivery } = fixture(type)
+    const { webhookEndpoints } = tablesOf(harness.db)
     for (const binding of source.bindings)
-      await harness.db.insert(webhookEndpoints).values({
+      await insertOne(harness.db, webhookEndpoints, {
         id: binding.endpointId,
         name: binding.endpointId,
         provider: 'gitlab',
@@ -534,17 +527,28 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
       },
     }
   }
-  const targetOf = async (endpointId: string) =>
-    (
+  const targetOf = async (endpointId: string) => {
+    const { csEventTargets } = tablesOf(harness.db)
+    return (
       await harness.db
         .select()
         .from(csEventTargets)
         .where(eq(csEventTargets.endpointId, endpointId))
     )[0]!
+  }
 
   test('ACK precedes normalization; a redelivery after configuration changes keeps the frozen targets', async () => {
     const f = await setup()
     await f.receive(f.delivery)
+    const {
+      webhookDeliveries,
+      csEventTargets,
+      csEventInbox,
+      csEventRoutes,
+      csWebhookVerifications,
+      webhookMrStreamStates,
+      webhookEndpoints,
+    } = tablesOf(harness.db)
     expect(await harness.db.select().from(webhookDeliveries)).toHaveLength(0)
     expect(await harness.db.select().from(csEventTargets)).toHaveLength(2)
     const changed = [
@@ -603,6 +607,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     expect(Object.keys(JSON.parse(partial.publishedJson))).toHaveLength(1)
     // Not due yet: a retry before the backoff does nothing.
     expect(await f.ingress().runPending(f.publisher)).toBe(0)
+    const { webhookDeliveries, webhookMrStreamStates, csEventTargets } = tablesOf(harness.db)
     await harness.db
       .update(webhookDeliveries)
       .set({ status: 'failed' })
@@ -656,6 +661,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     await expect(f.receive({ ...changed, deliveryId: Bun.randomUUIDv7() })).rejects.toMatchObject({
       status: 409,
     })
+    const { csEventInbox, csEventRoutes, csEventTargets, webhookDeliveries } = tablesOf(harness.db)
     expect((await harness.db.select().from(csEventInbox))[0]?.conflicts).toBe(1)
     expect((await harness.db.select().from(csEventRoutes))[0]?.conflicts).toBe(1)
     expect(await harness.db.select().from(csEventTargets)).toHaveLength(2)
@@ -668,6 +674,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
       status: 422,
       code: 'unknown-producer-or-event-binding',
     })
+    const { csEventInbox, csEventRoutes, csEventTargets } = tablesOf(harness.db)
     expect(await harness.db.select().from(csEventInbox)).toHaveLength(0)
     expect(await harness.db.select().from(csEventRoutes)).toHaveLength(0)
     await f.receive(f.delivery)
@@ -679,6 +686,9 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
   test('empty routing, deleted and disabled endpoints and the shadow channel have explicit terminal stages', async () => {
     const f = await setup()
     await f.receive(f.delivery, [{ ...f.source, bindings: [] }])
+    const { csEventRoutes, csEventTargets, webhookEndpoints, webhookDeliveries } = tablesOf(
+      harness.db,
+    )
     expect((await harness.db.select().from(csEventRoutes))[0]?.result).toBe('ignored')
     expect(await harness.db.select().from(csEventTargets)).toHaveLength(0)
     const second = { ...f.delivery, deliveryId: Bun.randomUUIDv7(), eventId: Bun.randomUUIDv7() }
@@ -716,6 +726,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     f.matchNothing()
     await f.receive(f.delivery, [{ ...f.source, bindings: [f.source.bindings[0]!] }])
     await f.ingress().runPending(f.publisher)
+    const { webhookDeliveries } = tablesOf(harness.db)
     const facts = await harness.db.select().from(webhookDeliveries)
     expect(facts).toHaveLength(1)
     expect(facts[0]).toMatchObject({ status: 'ignored', statusReason: 'no-trigger-matched' })
@@ -726,6 +737,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     await f.receive(f.delivery)
     f.loseFence()
     await expect(f.ingress().runPending(f.publisher)).rejects.toThrow('fence lost')
+    const { csEventTargets } = tablesOf(harness.db)
     expect(
       (await harness.db.select().from(csEventTargets)).every((row) => row.stage === 'pending'),
     ).toBe(true)
@@ -755,6 +767,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
       wakeTerminalControl: () => {},
     }
     await f.ingress().runPending(publisher)
+    const { eventRecords, csEventTargets } = tablesOf(harness.db)
     expect(await harness.db.select().from(eventRecords)).toHaveLength(2)
     expect(
       (await harness.db.select().from(csEventTargets)).every((row) => row.stage === 'admitted'),
@@ -776,6 +789,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
     const redelivery = { ...f.delivery, deliveryId: Bun.randomUUIDv7(), attempt: 2 }
     await f.receive(redelivery)
     await f.ingress().runPending(f.publisher)
+    const { webhookDeliveries, csWebhookVerifications } = tablesOf(harness.db)
     const fact = (await harness.db.select().from(webhookDeliveries))[0]!
     const detail = await createWebhookDeliveryQueries(harness.db).get(fact.id)
     expect(detail).toMatchObject({
@@ -849,6 +863,7 @@ describeEachProvider('RFC-370 permanent CS inbox', (harness) => {
       422,
       'unknown-producer-or-event-binding',
     )
+    const { csEventInbox, csEventTargets } = tablesOf(harness.db)
     expect(await harness.db.select().from(csEventInbox)).toHaveLength(0)
     // A field CrewStation adds later is accepted, not dead-lettered.
     expect(

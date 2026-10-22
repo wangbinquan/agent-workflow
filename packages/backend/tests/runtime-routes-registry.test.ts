@@ -5,6 +5,8 @@
 // binary (full smoke coverage lives in runtime-smoke.test.ts); CRUD cases use
 // probe:false to stay fast and not spawn.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -12,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { applyConfigPatch } from '../src/config'
 import { createUser } from './helpers/userFixture'
@@ -23,7 +25,6 @@ import {
   seedBuiltinRuntimes,
 } from './helpers/runtimeRegistryApplication'
 import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
-import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -35,7 +36,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   configPath: string
   userToken: string
@@ -335,7 +336,8 @@ describeEachProviderHttpApplication(
         name: 'used-rt',
         protocol: 'opencode',
       })
-      await h.db.insert(agents).values({ id: ulid(), name: 'auditor', runtime: 'used-rt' })
+      const { agents } = tablesOf(h.db)
+      await insertOne(h.db, agents, { id: ulid(), name: 'auditor', runtime: 'used-rt' })
       const inUse = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/used-rt', { method: 'DELETE' })
       expect(inUse.status).toBe(409)
       expect(((await inUse.json()) as { code: string }).code).toBe('runtime-in-use')

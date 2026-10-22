@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
 import {
   parseBatchShardKey,
@@ -8,8 +9,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRuns, tasks, workgroupAssignments } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { setNodeRunStatusTx } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -30,10 +30,11 @@ function canRequeueAssignment(
 }
 
 async function countClarifyAsks(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   askerKey: string,
 ): Promise<number> {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select({ nodeId: clarifyRounds.askingNodeId, shardKey: clarifyRounds.askingShardKey })
     .from(clarifyRounds)
@@ -45,9 +46,10 @@ async function countClarifyAsks(
 
 /** 实时反问许可（预算 / 已问次数 / stop 指令）：一份实现，两个 provider 共用。 */
 export async function isTaskClarifySuppressed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CollaborationClarifySuppressionInput,
 ): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   const row = (
     await db
       .select({ config: tasks.workgroupConfigJson })
@@ -85,12 +87,13 @@ export async function isTaskClarifySuppressed(
  * assignment. Broadcasts are emitted only after the transaction lands.
  */
 export async function dismissOpenClarifyParksForAutonomous(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CollaborationAutonomousDismissalInput,
 ): Promise<CollaborationAutonomousDismissalResult> {
   const resolvedMode =
     input.mode ??
     (await (async () => {
+      const { tasks } = tablesOf(db)
       const row = (
         await db
           .select({ config: tasks.workgroupConfigJson })
@@ -111,6 +114,7 @@ export async function dismissOpenClarifyParksForAutonomous(
     let dismissedSessionCount = 0
     const dismissedSessions: Array<{ nodeRunId: string; nodeId: string }> = []
     const requeuedAssignments: Array<{ id: string; to: WorkgroupAssignmentStatus }> = []
+    const { clarifyRounds, nodeRuns, workgroupAssignments } = tablesOf(tx)
     const open = await tx
       .select({
         id: clarifyRounds.id,

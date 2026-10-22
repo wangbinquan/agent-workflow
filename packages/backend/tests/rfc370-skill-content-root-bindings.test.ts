@@ -1,11 +1,11 @@
 // RFC-370 A2: real HTTP editing and boot recovery share the selected skill
 // content capabilities; leaf state machines and local mechanisms stay intact.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, afterEach } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills, skillOperations, skillOperationLocks } from '@/db/schema'
 import {
   selectSkillContentDependencies,
   type SkillContentBinding,
@@ -178,6 +178,7 @@ describeEachProviderHttpApplication(
               )
             }),
           ])
+          const { skills, skillOperationLocks, skillOperations } = tablesOf(scope.harness.db)
           const before = await scope.harness.db.select().from(skills)
           expect(before).toHaveLength(1)
           expect(before[0]).toMatchObject({ reservationState: 'reserving', contentVersion: 1 })

@@ -3,7 +3,7 @@
 import type { AclResourceType, ResourceAccess } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import {
@@ -654,7 +654,7 @@ export function composeDevelopmentConfigOperationsFromPersistence(
 
 /** 两个 provider 共用的装配入口：persistence 全部走 provider-中立实现，ACL 参与者由 Resource Catalog 交来。 */
 export function composeDevelopmentConfigOperationsFor(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly developmentAdapter: DevelopmentConfigResourceOperations
   readonly access: DevelopmentConfigResourceAccess
   readonly now?: () => number
@@ -671,7 +671,7 @@ export function composeDevelopmentConfigOperationsFor(input: {
 
 /** 位置参数形态的装配入口（server / cli bootstrap 沿用），语义同 composeDevelopmentConfigOperationsFor。 */
 export function composeDevelopmentConfigOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   developmentAdapter: DevelopmentConfigResourceOperations,
   access: DevelopmentConfigResourceAccess,
 ): DevelopmentConfigOperations {

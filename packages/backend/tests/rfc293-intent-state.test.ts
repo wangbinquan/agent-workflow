@@ -1,19 +1,14 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { CreateAgentSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { resumeQueuedIntentWorkingSetsForTest as resumeQueuedIntentWorkingSets } from './helpers/intentResourceCatalogBinding'
-import {
-  intentDraftResolutions,
-  intentDrafts,
-  intentSessions,
-  intentTurns,
-  intentWorkingSetChanges,
-} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   reserveExactIntentRetry,
@@ -54,7 +49,7 @@ import {
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let actor: Actor
 let persistence: IntentPersistence
 let visibility: IntentContextResourceAuthorization
@@ -70,7 +65,7 @@ describe('RFC-293 native compatibility', () => {
   })
 })
 
-async function setupIntentFixture(selectedDb: ProviderNeutralDatabase) {
+async function setupIntentFixture(selectedDb: PersistenceDb) {
   db = selectedDb
   persistence = composeIntentPersistence({
     db,
@@ -101,6 +96,7 @@ async function createBareSession(message = 'build it') {
 }
 
 async function seedFakeRoot(sessionId: string) {
+  const { intentSessions } = tablesOf(db)
   return await db
     .update(intentSessions)
     .set({
@@ -121,7 +117,8 @@ async function seedFakeRoot(sessionId: string) {
 async function insertDraft(sessionId: string) {
   const id = ulid()
   const hash = `sha256:${'a'.repeat(64)}`
-  await db.insert(intentDrafts).values({
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  await insertOne(db, intentDrafts, {
     id,
     sessionId,
     revision: 1,
@@ -166,6 +163,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
     )
     expect(submitted.change.state).toBe('applied')
     if (submitted.reservation === null) throw new Error('automatic successor was not reserved')
+    const { intentSessions, intentTurns } = tablesOf(db)
     const fresh = (
       await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
     )[0]!
@@ -204,6 +202,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       { message: 'running' },
       50,
     )
+    const { intentSessions, intentWorkingSetChanges } = tablesOf(db)
     const running = (
       await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
     )[0]!
@@ -311,6 +310,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       50,
     )
     expect(refined.reservation).not.toBeNull()
+    const { intentSessions, intentDraftResolutions, intentTurns } = tablesOf(db)
     expect(
       (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
         ?.currentDraftId,
@@ -380,6 +380,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
 
   test('continues from a committed checkpoint with no current candidate', async () => {
     const session = await createBareSession()
+    const { intentSessions } = tablesOf(db)
     await db.update(intentSessions).set({ commitSeq: 3 }).where(eq(intentSessions.id, session.id))
 
     const continued = await reserveIntentIteration(
@@ -408,7 +409,8 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       { ownerUserId: actor.user.id, actor },
     )
     const sourceTurnId = ulid()
-    await db.insert(intentTurns).values({
+    const { intentTurns, intentSessions } = tablesOf(db)
+    await insertOne(db, intentTurns, {
       id: sourceTurnId,
       sessionId: session.id,
       seq: 2,
@@ -490,6 +492,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
       { message: 'running' },
       50,
     )
+    const { intentSessions, intentWorkingSetChanges } = tablesOf(db)
     const running = (
       await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
     )[0]!

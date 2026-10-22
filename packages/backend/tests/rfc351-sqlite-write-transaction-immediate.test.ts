@@ -20,6 +20,9 @@
 // 夹具改为当前 handler 内等待原 100ms，保留真实 WAL 竞争、全部原断言和 1s 上限；
 // 日志没有记录 timer callback 时间，不能据此认定具体调度根因。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite, queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -28,7 +31,6 @@ import { join } from 'node:path'
 
 import { createInMemoryDb, openDb } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { employeeToolRegistrations } from '@/db/schema'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import { MIGRATIONS } from './migration-freeze'
 
@@ -79,18 +81,17 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
       // 又不至于让「真的卡住」这种回归悄悄拖成慢测试。
       busyTimeoutMs: 1_000,
     })
-    db.insert(employeeToolRegistrations)
-      .values({
-        id: TOOL_ID,
-        typeId: 'development',
-        typeRevision: 10,
-        workItemRef: 'analyze-implement',
-        draftJson: JSON.stringify({ content: publishInput().content, validationReceipt: null }),
-        name: 'RFC-351 contended tool',
-        createdAt: 1,
-        updatedAt: 1,
-      })
-      .run()
+    const { employeeToolRegistrations } = tablesOf(db)
+    insertOne(db, employeeToolRegistrations, {
+      id: TOOL_ID,
+      typeId: 'development',
+      typeRevision: 10,
+      workItemRef: 'analyze-implement',
+      draftJson: JSON.stringify({ content: publishInput().content, validationReceipt: null }),
+      name: 'RFC-351 contended tool',
+      createdAt: 1,
+      updatedAt: 1,
+    })
 
     const store = createDigitalEmployeeAuthoringPersistence(db)
     const worker = new Worker(
@@ -117,10 +118,11 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
       await expect(publish).resolves.toBeUndefined()
       expect(performance.now() - startedAt).toBeLessThan(1_000)
 
-      const rows = db
-        .select({ publishedRevision: employeeToolRegistrations.publishedRevision })
-        .from(employeeToolRegistrations)
-        .all()
+      const rows = queryRows(
+        db
+          .select({ publishedRevision: employeeToolRegistrations.publishedRevision })
+          .from(employeeToolRegistrations),
+      )
       expect(rows[0]?.publishedRevision).toBe(1)
     } finally {
       worker.terminate()
@@ -136,40 +138,46 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
   test('嵌套 dbTxSync 仍是一个原子单位：一起提交，内层抛错一起回滚', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const seed = (id: string, revision: number | null): void => {
-      db.insert(employeeToolRegistrations)
-        .values({
-          id,
-          typeId: 'development',
-          typeRevision: 10,
-          workItemRef: 'analyze-implement',
-          draftJson: '{}',
-          publishedRevision: revision,
-          name: id,
-          createdAt: 1,
-          updatedAt: 1,
-        })
-        .run()
+      const { employeeToolRegistrations } = tablesOf(db)
+      insertOne(db, employeeToolRegistrations, {
+        id,
+        typeId: 'development',
+        typeRevision: 10,
+        workItemRef: 'analyze-implement',
+        draftJson: '{}',
+        publishedRevision: revision,
+        name: id,
+        createdAt: 1,
+        updatedAt: 1,
+      })
     }
-    const publishedRevisions = (): Array<number | null> =>
-      db
-        .select({ v: employeeToolRegistrations.publishedRevision })
-        .from(employeeToolRegistrations)
-        .all()
-        .map((row) => row.v)
+    const publishedRevisions = (): Array<number | null> => {
+      const { employeeToolRegistrations } = tablesOf(db)
+      return queryRows(
+        db
+          .select({ v: employeeToolRegistrations.publishedRevision })
+          .from(employeeToolRegistrations),
+      ).map((row) => row.v)
+    }
 
     seed('outer', null)
     seed('inner', null)
 
     dbTxSync(db, () => {
-      db.update(employeeToolRegistrations)
-        .set({ publishedRevision: 1 })
-        .where(eq(employeeToolRegistrations.id, 'outer'))
-        .run()
+      const { employeeToolRegistrations } = tablesOf(db)
+      queryWrite(
+        db
+          .update(employeeToolRegistrations)
+          .set({ publishedRevision: 1 })
+          .where(eq(employeeToolRegistrations.id, 'outer')),
+      )
       dbTxSync(db, () => {
-        db.update(employeeToolRegistrations)
-          .set({ publishedRevision: 2 })
-          .where(eq(employeeToolRegistrations.id, 'inner'))
-          .run()
+        queryWrite(
+          db
+            .update(employeeToolRegistrations)
+            .set({ publishedRevision: 2 })
+            .where(eq(employeeToolRegistrations.id, 'inner')),
+        )
         return null
       })
       return null
@@ -178,10 +186,13 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
 
     expect(() =>
       dbTxSync(db, () => {
-        db.update(employeeToolRegistrations)
-          .set({ publishedRevision: 9 })
-          .where(eq(employeeToolRegistrations.id, 'outer'))
-          .run()
+        const { employeeToolRegistrations } = tablesOf(db)
+        queryWrite(
+          db
+            .update(employeeToolRegistrations)
+            .set({ publishedRevision: 9 })
+            .where(eq(employeeToolRegistrations.id, 'outer')),
+        )
         dbTxSync(db, () => {
           throw new Error('inner fails')
         })

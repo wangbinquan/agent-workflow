@@ -9,6 +9,8 @@
 // to 'out', so resolveUpstreamInputs found nothing and the agent received an
 // empty `## requirement` section.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -17,7 +19,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -45,7 +46,8 @@ function buildHarness(): Harness {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = `agent-${name}`
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -67,14 +69,15 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -147,6 +150,7 @@ describe('RFC-004 input-port contract', () => {
       }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(finalTask?.status).toBe('done')
     expect(finalTask?.errorMessage).toBeNull()

@@ -21,20 +21,14 @@
 // 次数**，不是查询本身。这是 AC-11（PG 各端点 P95 不劣于 SQLite）在轻端点上唯一的杠杆。
 //
 // 判据是**语句数**而不是墙钟：确定性、可进每次 PR，不会因为机器忙就假红。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import {
-  clarifyRounds,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
 import { countAwaitingClarifyRounds } from '../src/modules/collaboration/infrastructure/clarifyRounds'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
@@ -47,12 +41,13 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
 const NOW = 1_788_278_400_000
 
 async function addTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   ownerUserId: string | null,
   status: 'running' | 'awaiting_human' | 'canceled',
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId: 'wf',
@@ -69,12 +64,13 @@ async function addTask(
 }
 
 async function addRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   status: 'awaiting_human' | 'answered',
 ): Promise<void> {
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, clarifyRounds } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'ask',
@@ -83,7 +79,7 @@ async function addRound(
     iteration: 0,
     startedAt: NOW,
   })
-  await db.insert(clarifyRounds).values({
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -97,7 +93,8 @@ async function addRound(
 }
 
 /** 语料同时覆盖：属主可见 / 协作者可见 / 他人不可见 / 终态任务被丢弃 / 已答不计。 */
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
+async function seed(db: PersistenceDb): Promise<void> {
+  const { users, workflows, taskCollaborators } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob', 'carol'].map((id) => ({
       id,
@@ -108,7 +105,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
       updatedAt: NOW,
     })),
   )
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -116,7 +113,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
   await addTask(db, 'c-live', 'alice', 'awaiting_human')
   await addRound(db, 'c-live', 'awaiting_human')
   await addRound(db, 'c-live', 'answered')
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId: 'c-live',
     userId: 'carol',
     role: 'collaborator',
@@ -191,9 +188,10 @@ describeEachProvider('RFC-359 AC-11 —— 反问徽标计数的往返数预算'
 })
 
 /** 一条 task_id 指向不存在任务的 clarify_round——两个引擎都应当拒绝。 */
-async function db_insertOrphan(db: ProviderNeutralDatabase): Promise<void> {
+async function db_insertOrphan(db: PersistenceDb): Promise<void> {
   const runId = ulid()
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId: 'ghost-task',
     kind: 'self',

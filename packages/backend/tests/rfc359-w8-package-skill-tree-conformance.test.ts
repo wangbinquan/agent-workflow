@@ -22,7 +22,7 @@
 // # 这份对拍先在两个旧实现上跑过，五条差异全部是它照出来的
 //
 // 判定：**真重复**。两侧读同一张 `skills` 表、同一棵 appHome 下的技能目录、产出同一个结构体，
-// 且 DB 读法（`getSkillById`）本来就吃 `ProviderNeutralDatabase`——没有任何一处需要按引擎分叉。
+// 且 DB 读法（`getSkillById`）本来就吃 `PersistenceDb`——没有任何一处需要按引擎分叉。
 // 差异是 PostgreSQL 那份**重写了一遍**而没抄全 SQLite 侧攒下来的语义，外加两条 SQLite 侧的静默
 // 降级。逐条（红 → 处置，处置写在 `infrastructure/packageSkillTree.ts` 的文件头）：
 //
@@ -50,12 +50,13 @@
 // 空树」的实现也能满足；那一条逐字断言 frontmatter / 正文 / 文件路径集合 / 每个文件的字节，
 // 任何退化实现都过不去。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { skills } from '@/db/schema'
 import type { ResourcePackageSkillTree } from '@/modules/resource-catalog/application/package/ports'
 // 合一后的那一份实现：同一段断言在两个引擎上各跑一遍。
 import { readPackageSkillTree } from '@/modules/resource-catalog/infrastructure/packageSkillTree'
@@ -105,7 +106,8 @@ describeEachProvider('RFC-359 W8 —— 资源包技能树读出的双引擎对�
   async function seed(options: SeedOptions): Promise<string> {
     const appHome = newAppHome()
     const contentVersion = options.contentVersion ?? 1
-    await harness.db.insert(skills).values({
+    const { skills } = tablesOf(harness.db)
+    await insertOne(harness.db, skills, {
       id: SKILL_ID,
       name: 'w8-tree',
       description: '',

@@ -12,6 +12,8 @@
 // Sibling files cover C1 (clarify), T1/T2/T3/U1 (task ↔ node_runs / U1
 // dup-active), migration smoke, and route.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq, isNull, and } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -21,10 +23,9 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { docVersions, lifecycleAlerts, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '../src/services/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const HOUR_MS = 3_600_000
@@ -40,15 +41,12 @@ type HarnessTaskStatus =
   | 'interrupted'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
 
-async function buildHarness(
-  db: ProviderNeutralDatabase,
-  taskStatus: HarnessTaskStatus,
-): Promise<Harness> {
+async function buildHarness(db: PersistenceDb, taskStatus: HarnessTaskStatus): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-prd-review-'))
   mkdirSync(tmp, { recursive: true })
 
@@ -68,9 +66,10 @@ async function buildHarness(
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -87,12 +86,13 @@ async function buildHarness(
 }
 
 async function insertReviewRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { status: HarnessTaskStatus | 'skipped' | 'exhausted'; finishedAt?: number | null },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'rev_1',
@@ -107,7 +107,7 @@ async function insertReviewRun(
 }
 
 async function insertDoc(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     reviewNodeRunId: string
@@ -116,7 +116,8 @@ async function insertDoc(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(docVersions).values({
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
     id,
     taskId,
     reviewNodeId: 'rev_1',
@@ -258,6 +259,7 @@ describeEachProvider(
         scope: { taskId: h.taskId },
       })
       expect(r1.openAlerts.filter((a) => a.rule === 'R1')).toHaveLength(1)
+      const { nodeRuns, tasks, lifecycleAlerts } = tablesOf(h.db)
       // Fix shape: run becomes done, task moves to done too so T1 doesn't fire.
       await h.db
         .update(nodeRuns)
@@ -345,6 +347,7 @@ describeEachProvider(
       })
       expect(r2.newAlerts).toBe(0)
       expect(r2.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(1)
+      const { lifecycleAlerts } = tablesOf(h.db)
       const openR2 = await h.db
         .select()
         .from(lifecycleAlerts)

@@ -2,12 +2,12 @@
 // token only; that actor is allow-listed to setup, and the admin insert commit
 // immediately retires the credential before the new user logs in.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 
 import type { Hono } from 'hono'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { authLoginPolicy, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -16,7 +16,7 @@ import {
 const DAEMON_TOKEN = 'b'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
 }
 
@@ -109,6 +109,7 @@ describeEachProviderHttpApplication(
       expect(body.role).toBe('admin')
       expect(body.status).toBe('active')
       expect(body.sessionToken).toBeUndefined()
+      const { authLoginPolicy, users } = tablesOf(h.db)
       const [policyRow] = await h.db.select().from(authLoginPolicy)
       expect(policyRow?.bootstrapCompletedAt).not.toBeNull()
       expect(
@@ -152,6 +153,7 @@ describeEachProviderHttpApplication(
         DAEMON_TOKEN,
       )
       expect(res.status).toBe(422)
+      const { users } = tablesOf(h.db)
       expect(
         (await h.db.select().from(users)).filter((row) => row.id !== '__system__'),
       ).toHaveLength(0)

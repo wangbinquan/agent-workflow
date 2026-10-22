@@ -20,6 +20,8 @@
 // case: two owners, one shared name, and two distinct frozen ids/runtime
 // profiles crossing generate → execute without a name-based mis-selection.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -40,7 +42,6 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   DW_GATE_CAUSE,
@@ -62,7 +63,6 @@ import {
 import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createUser } from './helpers/userFixture'
-import { nodeRuns } from '../src/db/schema'
 import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {
   WorkgroupTurnHostOperations,
@@ -100,6 +100,7 @@ const WRITER_NAME = 'aardvark-writer'
 const AUDITOR_NAME = 'basilisk-auditor'
 
 async function seedTwoAgents(db: DbClient): Promise<{ writerId: string; auditorId: string }> {
+  const { runtimes } = tablesOf(db)
   await db
     .insert(runtimes)
     .values({
@@ -306,13 +307,14 @@ async function seedTask(
   ownerUserId?: string,
 ): Promise<string> {
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, workgroupTaskState } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf-anchor-${taskId}`,
     name: `dw-anchor-${taskId}`,
     definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
     builtin: true,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'dw-task',
     workflowId: `wf-anchor-${taskId}`,
@@ -339,7 +341,7 @@ async function seedTask(
     workgroupConfigJson: JSON.stringify(config),
     ...(ownerUserId !== undefined ? { ownerUserId } : {}),
   })
-  await db.insert(workgroupTaskState).values({
+  await insertOne(db, workgroupTaskState, {
     taskId,
     gateStatus: 'idle',
     dwStateJson: JSON.stringify(dw),
@@ -412,7 +414,7 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
   test('save-as persists an id-canonical workflow (nodes carry agentId, not a token/name)', async () => {
     const app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'a'.repeat(64),
@@ -437,6 +439,7 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
       { status: 'done', outputs: { [ORCHESTRATOR_WORKFLOW_PORT]: JSON.stringify(TWO_NODE_GEN) } },
     ])
     await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
+    const { nodeRuns, workflows } = tablesOf(db)
     // (a gate holder exists — sanity: awaiting_review invariant held)
     const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.rerunCause === DW_GATE_CAUSE,
@@ -491,6 +494,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
         role: 'user',
         password: 'longEnoughPasswordB',
       })
+      const { runtimes, tasks, nodeRuns } = tablesOf(db)
       await db.insert(runtimes).values([
         {
           id: ulid(),
@@ -636,7 +640,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
             {
               db,
               taskRecoveryOperations: taskRecoveryOperations(db),
-              schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+              schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
                 .schedulerDriver,
               appHome,
               binaryOverride: ['bun', 'run', MOCK_OPENCODE],

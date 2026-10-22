@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeTestRoomContinuation } from './helpers/legacyTaskDrive'
 // RFC-370: resume and human-gate admission must await selected workspace reads.
 // Promise truthiness must never admit an absent workspace or skip a missing repo.
@@ -6,8 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import {
   assertWorktreePresentForResume,
@@ -26,18 +27,19 @@ function barrier() {
   })
   return { pending, release }
 }
-async function seed(db: ProviderNeutralDatabase, preparing = false) {
+async function seed(db: PersistenceDb, preparing = false) {
   const workflowId = ulid(),
     taskId = ulid(),
     workspace = `workspace://${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'workspace presence',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'presence',
     workflowId,
@@ -51,7 +53,7 @@ async function seed(db: ProviderNeutralDatabase, preparing = false) {
     startedAt: 1,
   })
   if (preparing)
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: '__repo_prep__',

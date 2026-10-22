@@ -9,6 +9,8 @@
 // project the failed node's RFC-145 failure code (failed-run oracle) and
 // taskNodeRunsProjection surfaces the per-run code.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   taskListItemsProjection,
@@ -18,84 +20,72 @@ import { composeOwnerIdentityQueries } from '@/modules/identity-access/compositi
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getTask } from '../src/services/task'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedFailedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   failureCode: string | null,
 ): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: workflowId,
-      name: 'wf',
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: 'ft',
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/r',
-      worktreePath: '/tmp/w',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'failed',
-      failedNodeId: 'agent_x',
-      errorSummary: 'no <workflow-output> envelope found in stdout',
-      inputs: '{}',
-      startedAt: Date.now(),
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-    })
-    .run()
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'wf',
+    definition: '{}',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: 'ft',
+    workflowId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/r',
+    worktreePath: '/tmp/w',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'failed',
+    failedNodeId: 'agent_x',
+    errorSummary: 'no <workflow-output> envelope found in stdout',
+    inputs: '{}',
+    startedAt: Date.now(),
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+  })
   // Older retry (must lose the freshest pick) + freshest failed run.
-  await db
-    .insert(nodeRuns)
-    .values({
-      id: '01OLD' + ulid().slice(5),
-      taskId,
-      nodeId: 'agent_x',
-      status: 'failed',
-      retryIndex: 0,
-      iteration: 0,
-      preSnapshot: null,
-      startedAt: Date.now() - 1000,
-      failureCode: null,
-    })
-    .run()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id: '01ZZZ' + ulid().slice(5),
-      taskId,
-      nodeId: 'agent_x',
-      status: 'failed',
-      retryIndex: 1,
-      iteration: 0,
-      preSnapshot: null,
-      startedAt: Date.now(),
-      failureCode,
-    })
-    .run()
+  await insertOne(db, nodeRuns, {
+    id: '01OLD' + ulid().slice(5),
+    taskId,
+    nodeId: 'agent_x',
+    status: 'failed',
+    retryIndex: 0,
+    iteration: 0,
+    preSnapshot: null,
+    startedAt: Date.now() - 1000,
+    failureCode: null,
+  })
+  await insertOne(db, nodeRuns, {
+    id: '01ZZZ' + ulid().slice(5),
+    taskId,
+    nodeId: 'agent_x',
+    status: 'failed',
+    retryIndex: 1,
+    iteration: 0,
+    preSnapshot: null,
+    startedAt: Date.now(),
+    failureCode,
+  })
   return { taskId }
 }
 
 describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -113,7 +103,7 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
     expect(row?.failureCode).toBe('port-validation-failed')
 
     const ownerRows = await taskListItemsProjection(
-      { db: db, owners: composeOwnerIdentityQueries(db) },
+      { db, owners: composeOwnerIdentityQueries(db) },
       {},
     )
     expect(ownerRows.find((r) => r.id === taskId)?.failureCode).toBe('port-validation-failed')
@@ -127,7 +117,7 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
 
   test('taskNodeRunsProjection surfaces per-run failureCode', async () => {
     const { taskId } = await seedFailedTask(db, 'clarify-required')
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     const coded = res.runs.find((r) => r.failureCode === 'clarify-required')
     expect(coded).toBeDefined()
   })

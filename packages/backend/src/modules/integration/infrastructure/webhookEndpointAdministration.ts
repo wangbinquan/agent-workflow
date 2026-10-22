@@ -1,26 +1,29 @@
 // RFC-359 W4-B4 —— webhook 端点管理：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { webhookEndpoints, webhookTriggers } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
 import { isUniqueConstraintViolation } from './uniqueConstraintViolation'
 
 export function createWebhookEndpointAdministration(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): WebhookEndpointAdministrationPort {
   return {
     async list() {
+      const { webhookEndpoints } = tablesOf(db)
       return await db.select().from(webhookEndpoints)
     },
     async get(id) {
+      const { webhookEndpoints } = tablesOf(db)
       return (
         (await db.select().from(webhookEndpoints).where(eq(webhookEndpoints.id, id)).limit(1))[0] ??
         null
       )
     },
     async getByUrlToken(urlToken) {
+      const { webhookEndpoints } = tablesOf(db)
       return (
         (
           await db
@@ -33,6 +36,7 @@ export function createWebhookEndpointAdministration(
     },
     async tryCreate(record) {
       try {
+        const { webhookEndpoints } = tablesOf(db)
         return (await db.insert(webhookEndpoints).values(record).returning())[0] ?? null
       } catch (error) {
         if (isUniqueConstraintViolation(error)) return null
@@ -40,6 +44,7 @@ export function createWebhookEndpointAdministration(
       }
     },
     async update(id, patch) {
+      const { webhookEndpoints } = tablesOf(db)
       return (
         (
           await db
@@ -51,6 +56,7 @@ export function createWebhookEndpointAdministration(
       )
     },
     async hasTriggerReferences(id) {
+      const { webhookTriggers } = tablesOf(db)
       return (
         (
           await db
@@ -62,6 +68,7 @@ export function createWebhookEndpointAdministration(
       )
     },
     async delete(id) {
+      const { webhookEndpoints } = tablesOf(db)
       return (
         (
           await db

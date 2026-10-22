@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync } from 'node:fs'
@@ -7,8 +9,6 @@ import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
-import { agents } from '../src/db/schema'
-
 const migrationsFolder = resolve(import.meta.dirname, '..', 'db', 'migrations')
 
 describe('db client', () => {
@@ -41,7 +41,8 @@ describe('db client', () => {
     const db = track(openDb({ path: dbPath, migrationsFolder }))
 
     const id = ulid()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id,
       name: 'test-agent',
       description: 'sample',

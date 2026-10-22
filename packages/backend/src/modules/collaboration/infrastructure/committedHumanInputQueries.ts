@@ -1,27 +1,23 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { ClarifyAnswerSchema, ClarifyQuestionSchema } from '@agent-workflow/shared'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  docVersions,
-  nodeRunOutputs,
-} from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type { CollaborationHumanInputQueries } from '../public/types'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import { readDocVersionBody, rowToDocVersion } from './review'
 
 export function createCommittedHumanInputQueries(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly reviewReader?: CommittedReviewArtifactReader
 }): CollaborationHumanInputQueries {
   const { db } = input
   return {
     async clarificationRounds(taskId) {
+      const { clarifyRounds } = tablesOf(db)
       const rows = await db
         .select()
         .from(clarifyRounds)
@@ -41,6 +37,7 @@ export function createCommittedHumanInputQueries(input: {
       }))
     },
     async reviewDecision(taskId, nodeRunId) {
+      const { collaborationGateOperations, docVersions, nodeRunOutputs } = tablesOf(db)
       const operations = await db
         .select()
         .from(collaborationGateOperations)

@@ -35,6 +35,8 @@
 //     ——顺带证明 SQLite 侧独立地有这道门、而且报同一个码。
 //   · 把 SQLite 的 `resumeKick` 里那句 `await assertChildTaskDrivable(...)` 拿掉
 //     ⇒ **只有 sqlite lane 的 C 红**，postgresql lane 全绿。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,8 +45,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionIntents, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -83,10 +84,7 @@ interface SeedOptions {
   readonly parentCallRowStatus?: string
 }
 
-async function seedFixture(
-  db: ProviderNeutralDatabase,
-  options: SeedOptions = {},
-): Promise<Fixture> {
+async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promise<Fixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc359-w10-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -99,13 +97,14 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
+  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
   const existing = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.id, USER_ID))
     .limit(1)
   if (existing.length === 0) {
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id: USER_ID,
       username: USER_ID,
       displayName: USER_ID,
@@ -116,16 +115,18 @@ async function seedFixture(
     })
   }
   const workflowId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: `w10-${workflowId}`, definition: JSON.stringify(DEFINITION) })
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: `w10-${workflowId}`,
+    definition: JSON.stringify(DEFINITION),
+  })
 
   // 子任务那格要先有一个父任务 + 一条父调用行。
   let parentTaskId: string | null = null
   let parentNodeRunId: string | null = null
   if (options.parentCallRowStatus !== undefined) {
     parentTaskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: parentTaskId,
       name: 'w10-parent',
       workflowId,
@@ -141,7 +142,7 @@ async function seedFixture(
       executionLineageId: parentTaskId,
     })
     parentNodeRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: parentNodeRunId,
       taskId: parentTaskId,
       nodeId: 'call1',
@@ -154,7 +155,7 @@ async function seedFixture(
   }
 
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'w10',
     workflowId,
@@ -185,7 +186,7 @@ async function seedFixture(
     ...(parentTaskId === null ? {} : { parentTaskId, parentNodeRunId, invocationDepth: 1 }),
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'doc',
@@ -197,7 +198,7 @@ async function seedFixture(
     errorMessage: 'boom',
   })
   if (options.repoPrepRun === true) {
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: REPO_PREP_NODE_ID,
@@ -251,6 +252,7 @@ async function resumeOutcome(
   } catch (error) {
     code = codeOf(error)
   }
+  const { tasks } = tablesOf(harness.db)
   const after = (await harness.db.select().from(tasks).where(eq(tasks.id, target)).limit(1))[0]
   return { code, status: after?.status ?? 'absent' }
 }
@@ -339,6 +341,7 @@ describeEachProvider('RFC-359 W10 —— resume 的准入面对拍', (harness) =
     fixture = await seedFixture(harness.db)
     const outcome = await resumeOutcome(harness, fixture)
     expect(outcome.code).toBe('no-throw')
+    const { taskExecutionIntents } = tablesOf(harness.db)
     const resumes = (
       await harness.db
         .select({

@@ -1,15 +1,12 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  employeeTypePackages,
-} from '../src/db/schema'
 import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
 import { createUser } from './helpers/userFixture'
 import { ValidationError } from '../src/util/errors'
@@ -39,7 +36,8 @@ describeEachProvider('Webhook Digital Employee trigger validation', (harness) =>
     })
     const employeeId = ulid()
     const now = Date.now()
-    await db.insert(employeeTypePackages).values({
+    const { employeeTypePackages, employeeDefinitions, employeeDefinitionRevisions } = tablesOf(db)
+    await insertOne(db, employeeTypePackages, {
       typeId: 'fixture',
       revision: 1,
       descriptorJson: JSON.stringify({
@@ -52,7 +50,7 @@ describeEachProvider('Webhook Digital Employee trigger validation', (harness) =>
       state: 'published',
       registeredAt: now,
     })
-    await db.insert(employeeDefinitions).values({
+    await insertOne(db, employeeDefinitions, {
       id: employeeId,
       name: 'fixture employee',
       typeId: 'fixture',
@@ -64,7 +62,7 @@ describeEachProvider('Webhook Digital Employee trigger validation', (harness) =>
       createdAt: now,
       updatedAt: now,
     })
-    await db.insert(employeeDefinitionRevisions).values({
+    await insertOne(db, employeeDefinitionRevisions, {
       employeeId,
       revision: 1,
       contentJson: '{not-json',

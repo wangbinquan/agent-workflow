@@ -6,11 +6,12 @@
 // (cross-project info disclosure on multi-user deployments). The route now
 // requires `path` to resolve inside a known cached_repos.localPath.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { cachedRepos } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { isKnownRepoPath } from '../src/services/repo'
 import { createUser } from './helpers/userFixture'
@@ -53,7 +54,7 @@ describeEachProviderHttpApplication(
     async function harness(): Promise<{
       app: Hono
       userToken: string
-      db: ProviderNeutralDatabase
+      db: PersistenceDb
     }> {
       const { app } = await scope.open()
       const db = scope.harness.db
@@ -83,7 +84,8 @@ describeEachProviderHttpApplication(
 
     test('a path outside every cached mirror is rejected even if it is a real repo dir', async () => {
       const { app, userToken, db } = await harness()
-      await db.insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id: 'cr1',
         urlRedacted: 'https://github.com/acme/x',
         urlHash: 'h1',

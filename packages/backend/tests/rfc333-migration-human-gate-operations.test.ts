@@ -1,3 +1,4 @@
+import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
@@ -6,7 +7,9 @@ import { MIGRATIONS } from './migration-freeze'
 
 function seedTasks(db: ReturnType<typeof createInMemoryDb>): void {
   for (const taskId of ['task-a', 'task-b', 'task-c', 'task-d']) {
-    db.run(sql`
+    rawExec(
+      db,
+      sql`
       INSERT INTO tasks (
         id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
         base_branch, branch, status, inputs, started_at
@@ -15,7 +18,8 @@ function seedTasks(db: ReturnType<typeof createInMemoryDb>): void {
         '/tmp/rfc333', '/tmp/rfc333', 'main', ${`agent-workflow/${taskId}`},
         'running', '{}', 1
       )
-    `)
+    `,
+    )
   }
 }
 
@@ -47,7 +51,9 @@ function insertOperation(
   const receiptJson = input.receiptJson ?? null
   const committedAt = state === 'completed' ? 10 : null
   const completedAt = state === 'completed' ? 11 : null
-  db.run(sql`
+  rawExec(
+    db,
+    sql`
     INSERT INTO collaboration_gate_operations (
       id, task_id, gate_kind, operation_kind, gate_ref,
       idempotency_key, request_hash, actor_user_id,
@@ -61,20 +67,24 @@ function insertOperation(
       ${state}, 1, 1, '{"schemaVersion":1,"kind":"review-open"}', ${receiptJson},
       1, 1, ${committedAt}, ${completedAt}
     )
-  `)
+  `,
+  )
 }
 
 describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff storage', () => {
   test('adds the operation journal and splits active intent uniqueness for one exact successor', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const tables = db.all<{ name: string }>(
+    const tables = rawRows<{ name: string }>(
+      db,
       sql`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,
     )
     expect(tables.map((row) => row.name)).toEqual(
       expect.arrayContaining(['collaboration_gate_operations', 'collaboration_gate_artifacts']),
     )
-    const operationIndexes = db.all<{ name: string; unique: number }>(
+    const operationIndexes = rawRows<{ name: string; unique: number }>(
+      db,
       sql`SELECT name, "unique" FROM pragma_index_list('collaboration_gate_operations')`,
+      { unique: 'int' },
     )
     expect(operationIndexes).toEqual(
       expect.arrayContaining([
@@ -96,8 +106,10 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
         }),
       ]),
     )
-    const intentIndexes = db.all<{ name: string; unique: number }>(
+    const intentIndexes = rawRows<{ name: string; unique: number }>(
+      db,
       sql`SELECT name, "unique" FROM pragma_index_list('task_execution_intents')`,
+      { unique: 'int' },
     )
     expect(intentIndexes).toEqual(
       expect.arrayContaining([
@@ -108,14 +120,16 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
     expect(intentIndexes.map((row) => row.name)).not.toContain(
       'idx_task_execution_intents_active_task',
     )
-    expect(db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+    expect(rawRows(db, sql`PRAGMA foreign_key_check`)).toEqual([])
   })
 
   test('enforces JSON/revision shapes and immutable committed receipts', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTasks(db)
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO collaboration_gate_operations (
           id, task_id, gate_kind, operation_kind, gate_ref,
           idempotency_key, request_hash, expected_task_revision,
@@ -124,10 +138,13 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
           'bad-json', 'task-a', 'review', 'open', 'bad-json',
           'bad-json', 'hash', 0, 0, 'preparing', '{', 1, 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO collaboration_gate_operations (
           id, task_id, gate_kind, operation_kind, gate_ref,
           idempotency_key, request_hash, expected_task_revision,
@@ -136,10 +153,13 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
           'negative-revision', 'task-a', 'review', 'open', 'negative-revision',
           'negative-revision', 'hash', -1, 0, 'preparing', '{}', 1, 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO collaboration_gate_operations (
           id, task_id, gate_kind, operation_kind, gate_ref,
           idempotency_key, request_hash, expected_task_revision,
@@ -150,10 +170,13 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
           'skipped-revision', 'hash', 0, 2, 4,
           'committed', '{}', '{}', 1, 1, 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO collaboration_gate_operations (
           id, task_id, gate_kind, operation_kind, gate_ref,
           idempotency_key, request_hash, expected_task_revision,
@@ -164,7 +187,8 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
           'missing-receipt', 'hash', 0, 0, 1,
           'committed', '{}', 1, 1, 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
 
     insertOperation(db, {
@@ -178,11 +202,14 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
     })
     expect(
       thrownCauseMessage(() =>
-        db.run(sql`
+        rawExec(
+          db,
+          sql`
           UPDATE collaboration_gate_operations
           SET result_gate_revision = 2
           WHERE id = 'completed'
-        `),
+        `,
+        ),
       ),
     ).toContain('human-gate-committed-receipt-immutable')
   })
@@ -244,7 +271,9 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
       gateRef: 'gate-artifact',
       key: 'artifact-operation',
     })
-    db.run(sql`
+    rawExec(
+      db,
+      sql`
       INSERT INTO collaboration_gate_artifacts (
         operation_id, artifact_key, artifact_kind, staged_path, final_path,
         sha256, byte_size, state, updated_at
@@ -252,9 +281,12 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
         'artifact-operation', 'doc:0001', 'review-doc', 'staged/doc-1', 'final/doc-1',
         'digest', 42, 'declared', 1
       )
-    `)
+    `,
+    )
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO collaboration_gate_artifacts (
           operation_id, artifact_key, artifact_kind, staged_path, final_path,
           sha256, byte_size, state, updated_at
@@ -262,10 +294,13 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
           'artifact-operation', 'doc:0002', 'review-doc', 'staged/doc-2', 'final/doc-1',
           'digest', 42, 'declared', 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO collaboration_gate_artifacts (
           operation_id, artifact_key, artifact_kind, staged_path, final_path,
           sha256, byte_size, state, updated_at
@@ -273,15 +308,20 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
           'missing-operation', 'doc:0001', 'review-doc', 'staged/missing', 'final/missing',
           'digest', 1, 'declared', 1
         )
-      `),
+      `,
+      ),
     ).toThrow()
-    db.run(sql`DELETE FROM collaboration_gate_operations WHERE id = 'artifact-operation'`)
+    rawExec(db, sql`DELETE FROM collaboration_gate_operations WHERE id = 'artifact-operation'`)
     expect(
-      db.all<{ count: number }>(sql`
+      rawRows<{ count: number }>(
+        db,
+        sql`
         SELECT count(*) AS count
         FROM collaboration_gate_artifacts
         WHERE operation_id = 'artifact-operation'
-      `),
+      `,
+        { count: 'int' },
+      ),
     ).toEqual([{ count: 0 }])
   })
 })

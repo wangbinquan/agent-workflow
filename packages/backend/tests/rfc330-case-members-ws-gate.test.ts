@@ -7,7 +7,7 @@
 import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { WS_CHANNELS } from '../src/ws/registry'
 
@@ -22,7 +22,7 @@ describeEachProvider('RFC-330 —— employee-case.members.changed 帧门', (har
   // `harness.db` 是**惰性** getter，只有 beforeEach 之后才有库：写在 describe 体里就是
   // **注册期**读取，harness 会当场抛 `ProviderHarness 只能在 test 体内读取`。
   // 本地单文件跑可能撞不上（取决于同进程里前一个文件留下的状态），CI 上必红。
-  const dbOf = (): ProviderNeutralDatabase => harness.db
+  const dbOf = (): PersistenceDb => harness.db
   const gate = WS_CHANNELS['tasks-list'].frameGate!
   const caseId = 'case-audience'
   const visibleUserIds = new Set(['previous-owner', 'next-owner', 'removed-member', 'added-member'])

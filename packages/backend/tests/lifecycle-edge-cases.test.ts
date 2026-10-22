@@ -10,6 +10,8 @@
 // Each block focuses on one paragraph of the design.md §失败模式 + 边界
 // so a regression there fails a specifically-named test.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -19,7 +21,6 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { docVersions, lifecycleAlerts, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   reconcileLifecycleAlerts,
   runLifecycleInvariants,
@@ -27,16 +28,14 @@ import {
   type LifecycleAlertRow,
 } from '../src/services/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const MIN_MS = 60_000
 const HOUR_MS = 60 * MIN_MS
 const T0 = Date.UTC(2026, 0, 1, 12, 0, 0)
 
-async function freshDb(
-  db: ProviderNeutralDatabase,
-): Promise<{ db: ProviderNeutralDatabase; cleanup: () => void }> {
+async function freshDb(db: PersistenceDb): Promise<{ db: PersistenceDb; cleanup: () => void }> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-edge-'))
   mkdirSync(tmp, { recursive: true })
 
@@ -44,7 +43,7 @@ async function freshDb(
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     status: 'pending' | 'running' | 'awaiting_review' | 'done' | 'failed'
     startedAt: number
@@ -53,9 +52,10 @@ async function seedTask(
   },
 ): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: opts.snapshotJson })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: opts.snapshotJson })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -175,7 +175,8 @@ describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully'
       startedAt: T0 - MIN_MS,
       snapshotJson: 'not-valid-json{{}',
     })
-    await env.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(env.db)
+    await insertOne(env.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'rev',
@@ -234,7 +235,8 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
       startedAt: T0,
       snapshotJson: REVIEW_ONLY_JSON,
     })
-    await env.db.insert(lifecycleAlerts).values({
+    const { lifecycleAlerts } = tablesOf(env.db)
+    await insertOne(env.db, lifecycleAlerts, {
       id: ulid(),
       taskId,
       rule: 'T1', // T1 will keep firing because we don't insert any awaiting_review node_run
@@ -261,7 +263,8 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
       startedAt: T0,
       snapshotJson: REVIEW_ONLY_JSON,
     })
-    await env.db.insert(lifecycleAlerts).values({
+    const { lifecycleAlerts } = tablesOf(env.db)
+    await insertOne(env.db, lifecycleAlerts, {
       id: ulid(),
       taskId,
       rule: 'T1',
@@ -287,7 +290,8 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
       startedAt: T0,
       snapshotJson: REVIEW_ONLY_JSON,
     })
-    await env.db.insert(lifecycleAlerts).values({
+    const { lifecycleAlerts } = tablesOf(env.db)
+    await insertOne(env.db, lifecycleAlerts, {
       id: ulid(),
       taskId,
       rule: 'T1',
@@ -335,7 +339,8 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
       snapshotJson: reviewJson,
     })
     const tBRun = ulid()
-    await env.db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(env.db)
+    await insertOne(env.db, nodeRuns, {
       id: tBRun,
       taskId: t1,
       nodeId: 'rev',
@@ -345,7 +350,7 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
       status: 'awaiting_review',
       startedAt: T0,
     })
-    await env.db.insert(docVersions).values({
+    await insertOne(env.db, docVersions, {
       id: ulid(),
       taskId: t1,
       reviewNodeId: 'rev',
@@ -471,6 +476,7 @@ describeEachProvider('RFC-053 — detail JSON round-trip with special characters
       now: T0,
       ownedRules: STUCK_RULES,
     })
+    const { lifecycleAlerts } = tablesOf(env.db)
     const row = (
       await env.db.select().from(lifecycleAlerts).where(eq(lifecycleAlerts.taskId, taskId))
     )[0]!
@@ -498,6 +504,7 @@ describeEachProvider('RFC-053 — detail JSON round-trip with special characters
       now: T0,
       ownedRules: STUCK_RULES,
     })
+    const { lifecycleAlerts } = tablesOf(env.db)
     const row = (
       await env.db.select().from(lifecycleAlerts).where(eq(lifecycleAlerts.taskId, taskId))
     )[0]!

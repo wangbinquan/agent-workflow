@@ -1,9 +1,10 @@
 // RFC-359 W4-B6 —— 事件响应规则存储：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, desc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { eventResponseRules } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { EventResponseRuleStorePort } from '../application/ports/responseRuleStore'
 import {
   eventResponseRuleDraftSchema,
@@ -11,7 +12,9 @@ import {
   type EventResponseRuleRecord,
 } from '../domain/responseRule'
 
-function recordOf(row: typeof eventResponseRules.$inferSelect): EventResponseRuleRecord {
+function recordOf(
+  row: PersistenceTables['eventResponseRules']['$inferSelect'],
+): EventResponseRuleRecord {
   return {
     id: row.id,
     ownerUserId: row.ownerUserId,
@@ -39,10 +42,9 @@ function matchesSubject(rule: EventResponseRuleRecord, subjectRef: string): bool
     : subjectRef.startsWith(rule.subjectPattern)
 }
 
-export function createEventResponseRuleStore(
-  db: ProviderNeutralDatabase,
-): EventResponseRuleStorePort {
+export function createEventResponseRuleStore(db: PersistenceDb): EventResponseRuleStorePort {
   const get = async (id: string): Promise<EventResponseRuleRecord | null> => {
+    const { eventResponseRules } = tablesOf(db)
     const row = (
       await db.select().from(eventResponseRules).where(eq(eventResponseRules.id, id)).limit(1)
     )[0]
@@ -50,6 +52,7 @@ export function createEventResponseRuleStore(
   }
   return {
     async list() {
+      const { eventResponseRules } = tablesOf(db)
       const rows = await db
         .select()
         .from(eventResponseRules)
@@ -58,6 +61,7 @@ export function createEventResponseRuleStore(
     },
     get,
     async matching(observation) {
+      const { eventResponseRules } = tablesOf(db)
       const rows = await db
         .select()
         .from(eventResponseRules)
@@ -77,7 +81,8 @@ export function createEventResponseRuleStore(
     },
     async create(input) {
       const draft = eventResponseRuleDraftSchema.parse(input.draft)
-      await db.insert(eventResponseRules).values({
+      const { eventResponseRules } = tablesOf(db)
+      await insertOne(db, eventResponseRules, {
         id: input.id,
         name: draft.name,
         ownerUserId: input.ownerUserId,
@@ -103,6 +108,7 @@ export function createEventResponseRuleStore(
       // may occur in the same wall-clock millisecond, so make it monotonic per
       // rule instead of letting an old queued delivery execute a new target.
       const definitionRevision = Math.max(input.now, current.updatedAt + 1)
+      const { eventResponseRules } = tablesOf(db)
       await db
         .update(eventResponseRules)
         .set({
@@ -123,10 +129,12 @@ export function createEventResponseRuleStore(
     },
     async remove(id) {
       if ((await get(id)) === null) return false
+      const { eventResponseRules } = tablesOf(db)
       await db.delete(eventResponseRules).where(eq(eventResponseRules.id, id))
       return true
     },
     async recordResult(input) {
+      const { eventResponseRules } = tablesOf(db)
       await db
         .update(eventResponseRules)
         .set({ lastFiredAt: input.now, lastStatus: input.state, lastError: input.error })

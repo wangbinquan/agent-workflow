@@ -18,6 +18,7 @@
 // 让这条红。守卫的是 Playwright 的 mcp-runtime-playground /
 // mcp-acl-session-termination 两条 e2e 所依赖的同一条产品路径。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -28,7 +29,6 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { runtimes } from '../src/db/schema'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import {
@@ -75,6 +75,7 @@ async function bootstrappedApp(
 ): Promise<{ app: Hono; sessionToken: string }> {
   const db = scope.harness.db
   await seedBuiltinRuntimes(new DrizzleRuntimeRegistryPersistence(db))
+  const { runtimes } = tablesOf(db)
   // 中立面没有 bun:sqlite 的同步终结符——改成 await。
   await db.update(runtimes).set({ model: 'openai/test-model' }).where(eq(runtimes.name, 'opencode'))
 

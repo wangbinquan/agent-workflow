@@ -1,10 +1,13 @@
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { execFileSync } from 'node:child_process'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import { workflows, users } from '@/db/schema'
 import {
   composeDaemonFusionModules,
   type DaemonFusionModules,
@@ -66,7 +69,7 @@ function coordinatorFor(input: {
 }) {
   return createTestTaskDriveCoordinator({
     deps: {
-      db: {} as unknown as DbClient,
+      db: inheritDatabaseHandle({}, schemaFixtureDb()) as unknown as DbClient,
       schedulerDriver: {
         async drive() {
           // 本判据不驱动引擎，只看协调器交出来的配置。
@@ -171,7 +174,8 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
         writeFileSync(configPath, '{}')
         const ownerUserId = ulid(),
           workflowId = ulid()
-        await harness.db.insert(users).values({
+        const { users, workflows } = tablesOf(harness.db)
+        await insertOne(harness.db, users, {
           id: ownerUserId,
           username: ownerUserId,
           displayName: 'Fusion',
@@ -182,7 +186,7 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
           createdAt: 1,
           updatedAt: 1,
         })
-        await harness.db.insert(workflows).values({
+        await insertOne(harness.db, workflows, {
           id: workflowId,
           name: workflowId,
           definition: JSON.stringify({ $schema_version: 5, inputs: [], nodes: [], edges: [] }),

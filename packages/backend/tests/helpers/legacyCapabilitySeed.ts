@@ -8,13 +8,13 @@
 // readiness 是**读时派生**（codeMatrixQuery），所以种子只落存量列的形状，不
 // 复刻已删 upsert 里的派生逻辑。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { codeTriggerDeliveries, repoCapabilityConfig } from '@/db/schema'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 export async function seedCapabilityCell(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly repoId: string
     readonly capability: string
@@ -42,6 +42,7 @@ export async function seedCapabilityCell(
     createdAt: now,
     updatedAt: now,
   }
+  const { repoCapabilityConfig } = tablesOf(db)
   await db
     .insert(repoCapabilityConfig)
     .values(values)
@@ -61,7 +62,7 @@ export async function seedCapabilityCell(
 }
 
 export async function seedDelivery(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly correlationId: string
     readonly codeHostEndpointId?: string | null
@@ -79,7 +80,8 @@ export async function seedDelivery(
 ): Promise<string> {
   const id = ulid()
   const now = input.now ?? Date.now()
-  await db.insert(codeTriggerDeliveries).values({
+  const { codeTriggerDeliveries } = tablesOf(db)
+  await insertOne(db, codeTriggerDeliveries, {
     id,
     correlationId: input.correlationId,
     codeHostEndpointId: input.codeHostEndpointId ?? null,

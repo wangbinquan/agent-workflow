@@ -8,14 +8,14 @@ import {
   type TokenCallRecord,
 } from './application/tokenCallAudit'
 import { allowsLegacyDaemonTestAccess } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { createAuthPersistence } from './infrastructure/authPersistence'
 import { createTokenCallAuditPersistence } from './infrastructure/tokenCallAudit'
 
 export interface CreateAuthRuntimeInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /**
    * Post-commit transport invalidation; never receives a DB handle. Defaults to the WS
    * revalidation hook (the daemon's live credential cache); standalone CLI / tests pass their own.
@@ -39,7 +39,7 @@ export function createAuthRuntimeFor(input: CreateAuthRuntimeInput): AuthRuntime
   })
 }
 
-export function createTokenCallAudit(db: ProviderNeutralDatabase): TokenCallAuditParticipant {
+export function createTokenCallAudit(db: PersistenceDb): TokenCallAuditParticipant {
   return createTokenCallAuditParticipant(createTokenCallAuditPersistence(db))
 }
 
@@ -49,14 +49,14 @@ export function createTokenCallAudit(db: ProviderNeutralDatabase): TokenCallAudi
  * root composition can replace each call site with one long-lived participant.
  */
 export const legacyTokenCallAudit = Object.freeze({
-  record(db: ProviderNeutralDatabase, record: TokenCallRecord, now?: number) {
+  record(db: PersistenceDb, record: TokenCallRecord, now?: number) {
     return createTokenCallAudit(db).record(record, now)
   },
-  prune(db: ProviderNeutralDatabase, retentionDays: number, now?: number) {
+  prune(db: PersistenceDb, retentionDays: number, now?: number) {
     return createTokenCallAudit(db).prune(retentionDays, now)
   },
   pruneSlice(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     retentionDays: number,
     cursor: unknown,
     now?: number,

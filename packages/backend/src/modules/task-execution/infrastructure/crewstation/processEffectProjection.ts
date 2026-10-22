@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionEffectAttempts, taskExecutionEffects } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
   ProcessEffectProjection,
@@ -20,7 +20,7 @@ export interface HostedProcessReceipt {
 /** Remote receipts use the existing effect/attempt journal. A remote process
  * is never assigned a fake PID, and native process recovery cannot claim it. */
 export function createHostedProcessEffectProjection<Outcome extends ProcessEffectOutcome>(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly request: unknown
   readonly writerWorkspace?: string
@@ -41,6 +41,7 @@ export function createHostedProcessEffectProjection<Outcome extends ProcessEffec
       await withTaskExecutionSerializable(input.db, async (tx) => {
         await input.fence.assertHeld(tx, lease)
         await assertTaskOwnerTx(tx, record.token, record.now)
+        const { taskExecutionEffects, taskExecutionEffectAttempts, nodeRuns } = tablesOf(tx)
         const attempt = (
           await tx
             .select({ taskId: taskExecutionEffects.taskId })

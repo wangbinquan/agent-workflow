@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type {
@@ -45,7 +45,7 @@ const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
  */
 export interface TaskDriverLifecycleDependencies {
   /** 状态读与（SQLite 侧）执行上下文的 legacy 连接。两个引擎都能用的中立句柄。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly module: TaskExecutionModule
   readonly claim: (intentId: string) => Promise<ClaimedTaskExecution>
   readonly persistence: TaskExecutionPersistence
@@ -55,7 +55,7 @@ export interface TaskDriverLifecycleDependencies {
    * SQLite 兼容层仍要在执行上下文里带上 legacy 连接（`legacyConnection` / `compatibility.db`），
    * 那是 `services/task` 那条启动路还没退役的残留（plan §5hn）。PG 不带。
    */
-  readonly legacyConnection?: ProviderNeutralDatabase
+  readonly legacyConnection?: PersistenceDb
 }
 
 export async function attachTaskDriver(
@@ -67,6 +67,7 @@ export async function attachTaskDriver(
   deps: Omit<TaskDriverLifecycleDependencies, 'finalizeWorkspace'>,
 ): Promise<TaskDriveAttachOutcome> {
   return withTaskReviewMutationLock(input.taskId, async () => {
+    const { tasks } = tablesOf(deps.db)
     // 中立读法：`await` 在 SQLite 上拿到的是同步结果、在 PostgreSQL 上是 Promise，
     // 两边都成立；`.all()` 那种「一边是数组、一边是 Promise」的写法只服务一个引擎。
     const row = (
@@ -228,7 +229,7 @@ export function createTaskDriverLifecyclePort(
  * 它手上只有一个 `db`，拿不到模块实例。退役之后这个便利构造也一并消失。
  */
 export function createDatabaseTaskDriverLifecyclePort(options: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence?: TaskExecutionPersistence
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly log: TaskExecutionTopologyLogger

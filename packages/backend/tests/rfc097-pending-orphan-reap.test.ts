@@ -16,6 +16,8 @@
 //   2. 对照：boot 收割之后经 launchTestTask 正常发起的任务完全不受影响（其 pending
 //      窗口在 boot 之后、同进程内，收割摸不到它），照常跑到 done。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -26,7 +28,6 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
-import { agents, nodeRuns, taskExecutionIntents, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { runGit } from '../src/util/git'
@@ -77,7 +78,8 @@ async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
   await seedTestDefaultOpencodeRuntime(db)
   const workerId = ulid()
-  await db.insert(agents).values({
+  const { agents, workflows } = tablesOf(db)
+  await insertOne(db, agents, {
     id: workerId,
     name: 'worker',
     description: 'test',
@@ -96,7 +98,7 @@ async function buildHarness(): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf-rfc097-reap',
     definition: JSON.stringify(definition),
@@ -115,9 +117,10 @@ async function buildHarness(): Promise<Harness> {
  *  且错误四元组已被 resume 清空，节点行仍是历史 failed（resumeTask 不改行状态）。 */
 async function seedCrashedResumeResidue(h: Harness): Promise<{ taskId: string; runId: string }> {
   const taskId = ulid()
+  const { workflows, tasks, nodeRuns } = tablesOf(h.db)
   const def = (await h.db.select().from(workflows).where(eq(workflows.id, h.workflowId)))[0]!
     .definition
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'rfc097-crashed-resume',
     workflowId: h.workflowId,
@@ -134,7 +137,7 @@ async function seedCrashedResumeResidue(h: Harness): Promise<{ taskId: string; r
     errorMessage: null,
   })
   const runId = ulid()
-  await h.db.insert(nodeRuns).values({
+  await insertOne(h.db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'work',
@@ -151,8 +154,9 @@ async function seedCrashedResumeResidue(h: Harness): Promise<{ taskId: string; r
 async function waitForTerminalTask(
   db: DbClient,
   taskId: string,
-): Promise<typeof tasks.$inferSelect> {
+): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
+    const { tasks } = tablesOf(db)
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
@@ -169,9 +173,10 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
 
   test('resume 中途崩溃残留的 pending 任务：reap 翻 interrupted(daemon-restart)，resumeTask 恢复跑到终态', async () => {
     const { taskId, runId } = await seedCrashedResumeResidue(h)
+    const { tasks, taskExecutionIntents, nodeRuns } = tablesOf(h.db)
     const taskBeforeReap = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const crashedIntentId = ulid()
-    await h.db.insert(taskExecutionIntents).values({
+    await insertOne(h.db, taskExecutionIntents, {
       id: crashedIntentId,
       taskId,
       kind: 'resume',

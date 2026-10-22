@@ -1,23 +1,29 @@
 // RFC-359 W4-B6 —— 工作区维护存储：一份实现，两个 provider 共用。
 
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import type { SQLWrapper } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   WorkspaceMaintenanceSqlStore,
   type WorkspaceMaintenanceSqlExecutor,
 } from './workspaceMaintenanceSqlStore'
 
-function executor(db: ProviderNeutralDatabase): WorkspaceMaintenanceSqlExecutor {
+function executor(db: PersistenceDb): WorkspaceMaintenanceSqlExecutor {
   return {
-    async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
-      return (await db.all(query)) as readonly T[]
+    db,
+    async all<T extends Record<string, unknown>>(
+      query: SQLWrapper,
+      codecs?: RawRowCodecs<T>,
+    ): Promise<readonly T[]> {
+      return await rawRows<T>(db, query, codecs)
     },
   }
 }
 
 export class DrizzleWorkspaceMaintenanceStore extends WorkspaceMaintenanceSqlStore {
-  constructor(db: ProviderNeutralDatabase) {
+  constructor(db: PersistenceDb) {
     super(executor(db))
   }
 }

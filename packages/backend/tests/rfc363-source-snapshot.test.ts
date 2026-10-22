@@ -1,10 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { cachedRepos, repoGroups, repoGroupNodes, tasks } from '@/db/schema'
 import { admitDaemonIdentity } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { trustedContextMetadata } from '@/modules/identity-access/application/operationContext'
@@ -39,7 +40,8 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
       lastFetchedAt: 1,
       createdAt: 1,
     }
-    await harness.db.insert(cachedRepos).values(repository)
+    const { cachedRepos } = tablesOf(harness.db)
+    await insertOne(harness.db, cachedRepos, repository)
     async function scope<T>(
       body: (
         owner: ReturnType<typeof createRepositoryLaunchSnapshotInTx>,
@@ -70,6 +72,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
   test('configuration revision excludes cache paths and fetch telemetry', async () => {
     const f = await fixture()
     const original = repositoryPreparationRevision(f.repository)
+    const { cachedRepos } = tablesOf(harness.db)
     await harness.db
       .update(cachedRepos)
       .set({
@@ -125,6 +128,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
       'snapshot-scope-ended',
     )
     expect(existsSync(f.repository.localPath)).toBe(false)
+    const { tasks } = tablesOf(harness.db)
     expect(await harness.db.select().from(tasks)).toEqual([])
   })
 
@@ -133,14 +137,13 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
     const root = ulid(),
       child = ulid(),
       empty = ulid()
+    const { repoGroups, repoGroupNodes, cachedRepos } = tablesOf(harness.db)
     for (const [id, name] of [
       [root, 'root'],
       [child, 'child'],
       [empty, 'empty'],
     ] as const)
-      await harness.db
-        .insert(repoGroups)
-        .values({ id, name, version: 1, createdAt: 1, updatedAt: 1 })
+      await insertOne(harness.db, repoGroups, { id, name, version: 1, createdAt: 1, updatedAt: 1 })
     await harness.db.insert(repoGroupNodes).values([
       { groupId: root, path: '', attachmentKind: null },
       { groupId: empty, path: '', attachmentKind: null },
@@ -235,6 +238,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
       'release',
     )
     expect(existsSync(input.appHome)).toBe(false)
+    const { tasks } = tablesOf(harness.db)
     expect(await harness.db.select().from(tasks)).toEqual([])
   })
 })

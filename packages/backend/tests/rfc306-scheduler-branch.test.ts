@@ -19,6 +19,8 @@
 // own chain and its own output node. It is the smallest graph in which "the
 // wrong branch ran" is observable rather than inferred.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -28,7 +30,6 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runGit } from '../src/util/git'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -70,7 +71,8 @@ async function seedAgent(
   branchPorts?: string[],
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -88,6 +90,7 @@ async function seedAgent(
 }
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
+  const { agents, workflows, tasks } = tablesOf(h.db)
   const rows = await h.db.select({ id: agents.id, name: agents.name }).from(agents)
   const byName = new Map(rows.map((r) => [r.name, r.id]))
   const canonical: WorkflowDefinition = {
@@ -101,14 +104,14 @@ async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<str
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonical),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'rfc306',
     workflowId,
@@ -198,6 +201,7 @@ function twoBranchDefinition(opts: { joinMode?: 'any' | 'all' } = {}): WorkflowD
 
 /** Freshest TOP-LEVEL row per node → its status (rows come back unordered). */
 async function statusByNode(db: DbClient, taskId: string): Promise<Map<string, string>> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const freshest = new Map<string, { id: string; status: string }>()
   for (const r of rows) {
@@ -237,6 +241,7 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
         }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('done')
 
@@ -296,6 +301,7 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
         }),
     )
 
+    const { tasks } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('done')
     const st = await statusByNode(h.db, taskId)
@@ -336,6 +342,7 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -390,6 +397,7 @@ describe('RFC-306 — join semantics at a merge point', () => {
     const st = await statusByNode(h.db, taskId)
     expect(st.get('greeter')).toBe('skipped')
     expect(st.get('merge')).toBe('done') // one live leg is enough
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
   })
 
@@ -419,6 +427,7 @@ describe('RFC-306 — join semantics at a merge point', () => {
     expect(st.get('fixer')).toBe('done')
     expect(st.get('greeter')).toBe('skipped')
     expect(st.get('merge')).toBe('skipped') // one dead leg is enough
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
   })
 })
@@ -466,6 +475,7 @@ describe('RFC-306 — human gates on a closed branch', () => {
     expect(st.get('rev')).toBe('skipped')
     // The whole point: nobody is waiting on a human.
     expect([...st.values()]).not.toContain('awaiting_review')
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
   })
 })

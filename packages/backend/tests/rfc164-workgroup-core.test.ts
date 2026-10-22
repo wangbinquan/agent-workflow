@@ -4,12 +4,13 @@
 // wake judgments), wake-set derivation and terminal-outcome decisions
 // (design §1.4/§4.2/§4.4/§5/§6).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows, workgroupAssignments, workgroupMemberCursors } from '../src/db/schema'
 // RFC-359 W4-D19c-tail：写面判据改指**生产**的账本（`createWorkgroupTurnsPersistence` 的
 // commit）。合一前只有 legacy 的 `casAssignmentStatus` / `advanceMemberCursor` 有具名形态，
 // 套件锁的是那份；生产两个 provider 走的是账本操作 `transition-assignment` /
@@ -53,7 +54,7 @@ import {
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 生产账本的持久化面（与两个 bootstrap 装的是同一条）。 */
-function turnsLedger(client: ProviderNeutralDatabase) {
+function turnsLedger(client: PersistenceDb) {
   return createWorkgroupTurnsPersistence({
     db: client,
     hostLedgerFactory: {
@@ -68,12 +69,13 @@ function turnsLedger(client: ProviderNeutralDatabase) {
 
 /** 旧调用面 → 账本操作：CAS 的 from 匹配即提交，冲突回 false。 */
 async function casAssignmentStatus(
-  client: ProviderNeutralDatabase,
+  client: PersistenceDb,
   assignmentId: string,
   from: WorkgroupAssignmentStatus,
   to: WorkgroupAssignmentStatus,
   set: Readonly<{ nodeRunId?: string | null }> = {},
 ): Promise<boolean> {
+  const { workgroupAssignments } = tablesOf(client)
   const row = (
     await client
       .select()
@@ -97,7 +99,7 @@ async function casAssignmentStatus(
 }
 
 async function advanceMemberCursor(
-  client: ProviderNeutralDatabase,
+  client: PersistenceDb,
   taskIdValue: string,
   memberId: string,
   messageId: string,
@@ -823,7 +825,7 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-164 core — casAssignmentStatus + advanceMemberCursor (DB)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let taskId: string
 
   beforeEach(async () => {
@@ -831,12 +833,13 @@ describeEachProvider('RFC-164 core — casAssignmentStatus + advanceMemberCursor
     const workflowId = ulid()
     taskId = ulid()
     const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: `wf-${workflowId}`,
       definition: JSON.stringify(def),
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'wg-core-task',
       executionLineageId: taskId,
@@ -857,7 +860,8 @@ describeEachProvider('RFC-164 core — casAssignmentStatus + advanceMemberCursor
 
   async function seedAssignment(status: string): Promise<string> {
     const id = ulid()
-    await db.insert(workgroupAssignments).values({
+    const { workgroupAssignments } = tablesOf(db)
+    await insertOne(db, workgroupAssignments, {
       id,
       taskId,
       round: 1,
@@ -876,6 +880,7 @@ describeEachProvider('RFC-164 core — casAssignmentStatus + advanceMemberCursor
     expect(await casAssignmentStatus(db, id, 'dispatched', 'running', { nodeRunId: 'nr1' })).toBe(
       true,
     )
+    const { workgroupAssignments } = tablesOf(db)
     const row = (
       await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, id))
     )[0]
@@ -900,6 +905,7 @@ describeEachProvider('RFC-164 core — casAssignmentStatus + advanceMemberCursor
     await advanceMemberCursor(db, taskId, 'm1', '01B')
     await advanceMemberCursor(db, taskId, 'm1', '01A') // stale — must not regress
     await advanceMemberCursor(db, taskId, 'm2', '01C')
+    const { workgroupMemberCursors } = tablesOf(db)
     const rows = await db
       .select()
       .from(workgroupMemberCursors)

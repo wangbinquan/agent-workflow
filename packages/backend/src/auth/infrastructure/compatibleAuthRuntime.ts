@@ -1,13 +1,13 @@
 import type { AuthRuntime } from '../application/authRuntime'
 import { createAuthRuntimeFor } from '../composition'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 export interface CompatibleAuthRuntimeBinding {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly auth?: never
 }
 
-export type CompatibleAuthRuntimeInput = ProviderNeutralDatabase | CompatibleAuthRuntimeBinding
+export type CompatibleAuthRuntimeInput = PersistenceDb | CompatibleAuthRuntimeBinding
 
 /** Compatibility inputs all resolve to the shared Promise runtime. */
 export function compatibleAuthRuntimeOf(

@@ -3,6 +3,9 @@
 // （提交 / continuation / 待处理 gate successor）、intent 终态化（按 epoch 过滤 + replay 授权释放）。
 // 此前 SQLite 侧四个薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 等同步内核，PG 侧各自整份实现。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
@@ -10,16 +13,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  taskExecutionOwners,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
   createTaskExecutionContext,
@@ -56,12 +50,13 @@ const rootPath = (taskId: string): readonly LineageSlot[] => [
 ]
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  db: PersistenceDb,
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -69,7 +64,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -90,11 +85,12 @@ async function seedTask(
 }
 
 async function seedClaimedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ token: OwnershipToken; context: TaskExecutionContextRef }> {
   const identity = createWorkerIdentity({ ownerId: `owner_${ulid()}`, daemonGeneration: 'gen-a' })
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: identity.ownerId,
     daemonGeneration: identity.daemonGeneration,
@@ -120,7 +116,8 @@ async function seedClaimedOwner(
   return { token, context }
 }
 
-async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
+async function taskRow(db: PersistenceDb, taskId: string) {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({
       status: tasks.status,
@@ -164,6 +161,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
       async publishNow(refs) {
         order.push('publish')
         const row = await taskRow(db, taskId)
+        const { committedEvents } = tablesOf(db)
         const events = await db
           .select({ id: committedEvents.id })
           .from(committedEvents)
@@ -185,6 +183,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
           async (tx) => {
             order.push('guard')
             expect(await taskRow(tx, taskId)).toEqual(before)
+            const { tasks } = tablesOf(tx)
             await tx.update(tasks).set({ name: 'guard-written' }).where(eq(tasks.id, taskId))
           },
         ),
@@ -192,18 +191,20 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
       order.push('returned')
       expect(order).toEqual(['guard', 'publish', 'returned'])
       expect(published).toEqual([{ status: 'running', eventIds: [`task-lifecycle:${taskId}:2`] }])
-      const committed = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+      const { tasks } = tablesOf(db)
+      const committed = await first(db.select().from(tasks).where(eq(tasks.id, taskId)))
       const sentinel = new Error('guard rollback')
       await expect(
         lifecycle.trySetWithGuard(
           { taskId, to: 'done', allowedFrom: ['running'], now: 30, reason: 'failed-guard' },
           async (tx) => {
+            const { tasks } = tablesOf(tx)
             await tx.update(tasks).set({ name: 'must-rollback' }).where(eq(tasks.id, taskId))
             throw sentinel
           },
         ),
       ).rejects.toBe(sentinel)
-      expect(await db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toEqual(committed)
+      expect(await first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toEqual(committed)
       expect(published).toHaveLength(1)
     } finally {
       registerAfterCommitEventPump(null)
@@ -291,6 +292,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
       now: 15,
       reason: 'fail-again',
     })
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ workspacePrunedAt: 15 }).where(eq(tasks.id, taskId))
     await expect(
       lifecycle.trySet({
@@ -377,6 +379,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
     const minted = await runWithTaskExecutionContext(context, () =>
       lifecycle.mint({ taskId, nodeId: 'm', status: 'pending', cause: 'initial' }),
     )
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ nodeId: nodeRuns.nodeId, status: nodeRuns.status })
       .from(nodeRuns)
@@ -397,6 +400,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— born-done 行与初始输出�
       cause: 'io-virtual',
       outputs: [{ portName: 'k1', content: 'AAA' }],
     })
+    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
     const outputs = await db
       .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
       .from(nodeRunOutputs)
@@ -435,7 +439,8 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 执行 intent 准入与终态�
     expect(submitted.intentId).toEqual(expect.any(String))
     expect(await intents.hasPendingGateSuccessor(taskId)).toBe(false)
     const gate = `intent_${ulid()}`
-    await db.insert(taskExecutionIntents).values({
+    const { taskExecutionIntents } = tablesOf(db)
+    await insertOne(db, taskExecutionIntents, {
       id: gate,
       taskId,
       kind: 'gate-continuation',
@@ -461,13 +466,14 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 执行 intent 准入与终态�
       now: 5,
       claimedOwnerEpoch: 3,
     })
-    const states = async () =>
-      (
+    const states = async () => {
+      return (
         await db
           .select({ id: taskExecutionIntents.id, state: taskExecutionIntents.state })
           .from(taskExecutionIntents)
           .where(eq(taskExecutionIntents.taskId, taskId))
       ).map((row) => [row.id, row.state] as const)
+    }
     expect(new Map(await states()).get(gate)).toBe('failed')
     expect(new Map(await states()).get(submitted.intentId)).toBe('pending')
     // 不带 epoch：pending + claimed 全部终态化；事务内参与者形态同一份。

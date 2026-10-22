@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import { createApprovalExecutionAdapter } from '../infrastructure/developmentApprovalAdapter'
 import { createAsyncDbAdapterBindingResolver } from '../infrastructure/developmentRequirementSourceAdapter'
@@ -85,7 +85,7 @@ function gateway(input: {
 
 /** RFC-359 W4-D6：一份装配，两个 provider 共用（绑定解析经中立 store 的 Promise 读）。 */
 export function composeApprovalGatewayRunnerFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: { readonly approvalMockUrl?: string } = {},
 ) {
   const store = createDevelopmentAdapterStore(db)
@@ -175,7 +175,7 @@ function selectedGateway(execution: SelectedApprovalExecution) {
 }
 
 export function composeSelectedApprovalGatewayRunnerFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   binding: ApprovalAdapterBinding,
 ) {
   const store = createDevelopmentAdapterStore(db)

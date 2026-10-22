@@ -25,12 +25,12 @@
 //   one freshness source of truth (the consumed-run id), recorded at the single
 //   content read-point.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { isNodeRunFresh } from '../src/services/freshness'
-import type { nodeRuns } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 // Minimal row: isNodeRunFresh reads only (id, consumedUpstreamRunsJson).
 function run(id: string, consumed?: Record<string, string>): Row {

@@ -7,13 +7,14 @@
 // runtime stages files or builds a subprocess. Project skills are deliberately
 // outside this managed set; disabled MCPs are not injected and must not block.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Agent, AgentSkillRef } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { Logger } from '@/util/log'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, mcps, skills } from '../src/db/schema'
 import { createAgent, getAgentById } from '../src/services/agent'
 import {
   findManagedInjectionNameConflict,
@@ -34,7 +35,7 @@ const NOOP_LOG: Logger = {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   opts: {
     dependsOn?: string[]
@@ -65,12 +66,13 @@ async function seedAgent(
 }
 
 async function seedManagedSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   name: string,
   ownerUserId: string,
 ): Promise<void> {
-  await db.insert(skills).values({
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
     id,
     name,
     description: '',
@@ -80,13 +82,14 @@ async function seedManagedSkill(
 }
 
 async function seedMcp(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   name: string,
   enabled: boolean,
   ownerUserId: string,
 ): Promise<void> {
-  await db.insert(mcps).values({
+  const { mcps } = tablesOf(db)
+  await insertOne(db, mcps, {
     id,
     name,
     description: '',
@@ -97,7 +100,7 @@ async function seedMcp(
   })
 }
 
-async function prepareRoot(db: ProviderNeutralDatabase, rootId: string) {
+async function prepareRoot(db: PersistenceDb, rootId: string) {
   const root = await getAgentById(db, rootId)
   if (root === null) throw new Error(`missing root id ${rootId}`)
   return resolveInjection(db, root, {
@@ -194,7 +197,7 @@ describe('RFC-223 PR-6 managed injection identity guard', () => {
 })
 
 describeEachProvider('RFC-223 PR-6 scheduler wiring is shared by both runtimes', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(async () => {
     db = harness.db
@@ -221,6 +224,7 @@ describeEachProvider('RFC-223 PR-6 scheduler wiring is shared by both runtimes',
     // RFC-359 AC-6：DDL 走夹具面（PostgreSQL 的业务客户端明确拒绝 DDL——
     // `postgresql-ddl-through-business-client`），改名走 drizzle 类型化 update。
     await harness.executeFixtureDdl('DROP INDEX IF EXISTS agents_name_unique')
+    const { agents } = tablesOf(db)
     await db.update(agents).set({ name: 'dep-one' }).where(eq(agents.id, depTwo.id))
 
     for (const root of roots) {
@@ -255,6 +259,7 @@ describeEachProvider('RFC-223 PR-6 scheduler wiring is shared by both runtimes',
       await harness.executeFixtureDdl('PRAGMA foreign_keys = OFF')
     }
     await harness.executeFixtureDdl('DROP INDEX IF EXISTS skills_name_unique')
+    const { skills } = tablesOf(db)
     await db.update(skills).set({ name: 'skill-one' }).where(eq(skills.id, 'skill-two-id'))
 
     for (const root of roots) {
@@ -302,6 +307,7 @@ describeEachProvider('RFC-223 PR-6 scheduler wiring is shared by both runtimes',
     }
 
     await harness.executeFixtureDdl('DROP INDEX IF EXISTS mcps_name_unique')
+    const { mcps } = tablesOf(db)
     await db.update(mcps).set({ name: 'mcp-one' }).where(eq(mcps.id, 'mcp-two-id'))
     await db.update(mcps).set({ name: 'mcp-one' }).where(eq(mcps.id, 'mcp-disabled-id'))
 

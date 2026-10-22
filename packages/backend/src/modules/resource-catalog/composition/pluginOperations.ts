@@ -1,6 +1,6 @@
 import type { Plugin } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { monotonicNow } from '@/util/time'
 import { createPluginApplication } from '../application/plugins/pluginApplication'
 import type {
@@ -42,7 +42,7 @@ export interface PluginCatalogCompositionDependencies extends Omit<
   PluginCatalogAdapterCompositionDependencies,
   'repository' | 'projection' | 'access' | 'acl'
 > {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }
 

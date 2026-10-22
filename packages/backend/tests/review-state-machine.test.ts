@@ -9,6 +9,7 @@
 // the e2e tests) + a tiny workflow: input → designer (agent producing
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -21,7 +22,6 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { docVersions, nodeRunOutputs, nodeRuns, reviewComments, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
@@ -211,13 +211,14 @@ async function buildHarness(): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
     },
   )
 
+  const { nodeRuns } = tablesOf(db)
   // Locate the review node_run row.
   const reviewRuns = await db
     .select()
@@ -267,6 +268,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   })
 
   test('scheduler parks review at awaiting_review + creates doc_version v1', async () => {
+    const { tasks, nodeRuns, docVersions } = tablesOf(h.db)
     // After launchTestTask runs synchronously, task should be awaiting_review.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)).limit(1))[0]
     expect(t?.status).toBe('awaiting_review')
@@ -316,6 +318,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(result.resumeRequired).toBe(true)
     expect(result.taskId).toBe(h.taskId)
 
+    const { nodeRuns, docVersions } = tablesOf(h.db)
     const run = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
     )[0]
@@ -348,6 +351,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       author: 'tester',
     })
 
+    const { nodeRunOutputs } = tablesOf(h.db)
     const outRows = await h.db
       .select()
       .from(nodeRunOutputs)
@@ -384,6 +388,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     // an upstream that emitted `markdown_file`. Existing harness produces
     // inline markdown; we don't need a second harness for this assertion.
     const pendingPath = 'docs/design-v1.md'
+    const { docVersions, nodeRunOutputs } = tablesOf(h.db)
     await h.db
       .update(docVersions)
       .set({ sourceFilePath: pendingPath })
@@ -438,6 +443,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(result.resumeRequired).toBe(true)
     expect(result.reviewIteration).toBe(1)
 
+    const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
     const run = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
     )[0]
@@ -501,6 +507,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       binaryOverride: h.stubOpencode,
     })
 
+    const { docVersions, tasks } = tablesOf(h.db)
     const dvs = await h.db
       .select()
       .from(docVersions)
@@ -545,6 +552,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(result.resumeRequired).toBe(true)
     expect(result.reviewIteration).toBe(1)
 
+    const { docVersions } = tablesOf(h.db)
     const dvs = await h.db
       .select()
       .from(docVersions)
@@ -710,6 +718,7 @@ describe('RFC-005 review REST endpoints', () => {
     const comment = (await addRes.json()) as { id: string }
     expect(comment.id).toBeTruthy()
 
+    const { reviewComments } = tablesOf(h.db)
     const stored = await h.db.select().from(reviewComments).where(eq(reviewComments.id, comment.id))
     expect(stored.length).toBe(1)
 
@@ -757,6 +766,7 @@ describe('RFC-005 review REST endpoints', () => {
     })
     expect(body.resumeRequired).toBeUndefined()
 
+    const { nodeRuns } = tablesOf(h.db)
     const run = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
     )[0]

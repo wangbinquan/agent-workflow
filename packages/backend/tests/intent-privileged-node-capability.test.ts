@@ -28,6 +28,8 @@
 // storage); changing a projected-but-not-rehydrated field is a 403. Nothing
 // states that rule in one place, so it is enumerated here.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createHash } from 'node:crypto'
@@ -47,8 +49,7 @@ import {
   parseIntentChangeset,
   type Permission,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { intentDrafts, intentSessions, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSession } from '@/modules/intent/application/session'
@@ -63,7 +64,7 @@ import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBin
 const PLAIN = 'user_plain_priv_0000000000'
 const BOSS = 'user_manager_priv_00000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 let persistence: IntentPersistence
 
@@ -83,7 +84,8 @@ const plain = actorOf(PLAIN, 'user')
 const boss = actorOf(BOSS, 'user', ['scripts:author', 'code-host-calls:author'])
 
 async function seedUser(id: string, role: 'user' | 'manager' | 'admin' = 'user'): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -91,7 +93,7 @@ async function seedUser(id: string, role: 'user' | 'manager' | 'admin' = 'user')
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 // RFC-359（AC-6）—— 两句写从 `.run()` 改成 `await`：`.run()` 是 bun:sqlite 的同步执行面，
@@ -106,7 +108,8 @@ async function installDraft(
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  await db.insert(intentDrafts).values({
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  await insertOne(db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -201,7 +204,8 @@ async function seedWorkflow(
 ): Promise<{ id: string; version: number }> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name,
     description: '',
@@ -212,7 +216,7 @@ async function seedWorkflow(
     builtin: false,
     createdAt: now,
     updatedAt: now,
-  } as typeof workflows.$inferInsert)
+  } as PersistenceTables['workflows']['$inferInsert'])
   return { id, version: 1 }
 }
 
@@ -292,6 +296,7 @@ async function applyAs(
 
 /** Read back the stored definition of a workflow row. */
 async function storedNodes(id: string): Promise<Array<Record<string, unknown>>> {
+  const { workflows } = tablesOf(db)
   const row = (await db.select().from(workflows).where(eq(workflows.id, id)))[0]
   return (JSON.parse(row!.definition) as { nodes: Array<Record<string, unknown>> }).nodes
 }
@@ -376,6 +381,7 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
           code: 'script-author-forbidden',
         },
       )
+      const { workflows } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
     })
 
@@ -383,6 +389,7 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
       await expect(applyAs(plain, createBundle([{ ...CODE_HOST_NODE }]))).rejects.toMatchObject({
         code: 'code-host-author-forbidden',
       })
+      const { workflows } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
     })
 
@@ -427,9 +434,9 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
       await expect(applyAs(plain, bundle)).rejects.toMatchObject({
         code: 'script-author-forbidden',
       })
+      const { workflows, agents } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
       // the agent op ran EARLIER in the same transaction and must be rolled back
-      const { agents } = await import('../src/db/schema')
       expect((await db.select().from(agents)).length).toBe(0)
     })
 
@@ -441,6 +448,7 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
       await expect(applyAs(plain, bundle)).rejects.toMatchObject({
         code: 'script-author-forbidden',
       })
+      const { workflows } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
     })
   })
@@ -821,6 +829,7 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
         ),
       )) as { applied: unknown[] }
       expect(receipt.applied.length).toBe(1)
+      const { workflows } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(1)
     })
 
@@ -898,6 +907,7 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
             manifestFor(wf.id, wf.version),
           ),
         ).rejects.toMatchObject({ code: 'intent-rename-unsupported' })
+        const { workflows } = tablesOf(db)
         const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]
         expect(row!.name).toBe(original)
       })

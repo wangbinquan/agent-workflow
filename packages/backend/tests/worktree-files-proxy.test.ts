@@ -8,13 +8,14 @@
 // 五个注册面合并成一个：每个 `describeEachProvider` 注册面都要现建一个 PostgreSQL 库并跑
 // 完整迁移（beforeAll，本机 ~1.5s），合并后这份开销只付一次。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { tasks } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -22,7 +23,7 @@ import {
 } from './helpers/providerHttpApplication'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   worktree: string
   outside: string
   taskId: string
@@ -31,7 +32,7 @@ interface Harness {
 }
 
 interface HarnessApplicationInput {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   token: string
   configPath: string
   opencodeVersion: string
@@ -39,7 +40,7 @@ interface HarnessApplicationInput {
 }
 
 async function buildHarness(
-  createDatabase: () => ProviderNeutralDatabase,
+  createDatabase: () => PersistenceDb,
   createApplication: (input: HarnessApplicationInput) => Promise<Harness['app']>,
   onDirectory: (directory: string) => void,
 ): Promise<Harness> {
@@ -58,7 +59,8 @@ async function buildHarness(
   const taskId = ulid()
   // Pre-create a workflow row (foreign key target).
   const workflowId = ulid()
-  await db.insert((await import('../src/db/schema')).workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -68,7 +70,7 @@ async function buildHarness(
     updatedAt: Date.now(),
   })
 
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,

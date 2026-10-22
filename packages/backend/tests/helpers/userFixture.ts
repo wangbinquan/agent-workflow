@@ -1,13 +1,13 @@
 // RFC-395 II-pre：用户测试夹具通过生产 identity-access 命令、查询和认证运行时建号与更新。
 // 保留测试使用的调用签名；密码实现、账户规则、授权写入与会话撤销仍由生产路径负责。
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 import type { CreateUserBody, PatchUserBody, UserPublic } from '@agent-workflow/shared'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { hashPassword } from '@/auth/passwords'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import type { users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import {
@@ -17,7 +17,7 @@ import {
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
-export type UserRow = typeof users.$inferSelect
+export type UserRow = PersistenceTables['users']['$inferSelect']
 export interface CreateUserInput extends Omit<CreateUserBody, 'additionalPermissions'> {
   additionalPermissions?: CreateUserBody['additionalPermissions']
   createdBy?: string | null
@@ -37,7 +37,7 @@ export interface SearchInput {
 }
 
 async function withIdentity<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   run: (runtime: ReturnType<typeof createIdentityAccessRuntime>) => Promise<T>,
 ): Promise<T> {
   const runtime = createIdentityAccessRuntime({ db })
@@ -61,35 +61,29 @@ async function withIdentity<T>(
   }
 }
 
-const userRepository = (db: ProviderNeutralDatabase) =>
+const userRepository = (db: PersistenceDb) =>
   createUserAccessRepository(db, new AuthorityFenceCache())
 
-export async function findById(db: ProviderNeutralDatabase, id: string): Promise<UserRow | null> {
+export async function findById(db: PersistenceDb, id: string): Promise<UserRow | null> {
   return (await userRepository(db).findAccessSnapshot(id))?.user ?? null
 }
 
-export async function findByUsername(
-  db: ProviderNeutralDatabase,
-  username: string,
-): Promise<UserRow | null> {
+export async function findByUsername(db: PersistenceDb, username: string): Promise<UserRow | null> {
   // 管理夹具包含系统行；生产 public directory 按设计不返回该行。
   if (username === SYSTEM_USER_ID) return findById(db, SYSTEM_USER_ID)
   const row = await userRepository(db).findByUsername(username)
   return row === null ? null : findById(db, row.id)
 }
 
-export async function listAllUsers(db: ProviderNeutralDatabase): Promise<UserRow[]> {
+export async function listAllUsers(db: PersistenceDb): Promise<UserRow[]> {
   return (await userRepository(db).listAccessSnapshots()).map(({ user }) => user)
 }
 
-export async function countNonSystemUsers(db: ProviderNeutralDatabase): Promise<number> {
+export async function countNonSystemUsers(db: PersistenceDb): Promise<number> {
   return (await listAllUsers(db)).filter((user) => user.id !== SYSTEM_USER_ID).length
 }
 
-export async function createUser(
-  db: ProviderNeutralDatabase,
-  input: CreateUserInput,
-): Promise<UserRow> {
+export async function createUser(db: PersistenceDb, input: CreateUserInput): Promise<UserRow> {
   return withIdentity(db, async (runtime) => {
     const operator = await runtime.localOperator.forUser(input.createdBy ?? SYSTEM_USER_ID)
     if (operator === null)
@@ -115,7 +109,7 @@ export async function createUser(
 }
 
 export async function patchUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   patch: PatchUserBody,
   now: number = Date.now(),
@@ -138,7 +132,7 @@ export async function patchUser(
 }
 
 export async function disableUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   now: number = Date.now(),
   actorId?: string,
@@ -148,7 +142,7 @@ export async function disableUser(
 }
 
 export async function enableUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   now: number = Date.now(),
 ): Promise<void> {
@@ -156,7 +150,7 @@ export async function enableUser(
 }
 
 export async function resetPassword(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: ResetPasswordInput,
   auth: AuthRuntime = createAuthRuntimeFor({ db }),
@@ -184,15 +178,12 @@ export async function resetPassword(
   })
 }
 
-export async function lookupUsersPublic(
-  db: ProviderNeutralDatabase,
-  ids: string[],
-): Promise<UserPublic[]> {
+export async function lookupUsersPublic(db: PersistenceDb, ids: string[]): Promise<UserPublic[]> {
   return withIdentity(db, async (runtime) => [...(await runtime.userDirectory.lookup(ids))])
 }
 
 export async function searchUsersPublic(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: SearchInput,
 ): Promise<UserPublic[]> {
   return withIdentity(db, async (runtime) => [
@@ -204,6 +195,6 @@ export async function searchUsersPublic(
   ])
 }
 
-export async function getUserGitCommitIdentity(db: ProviderNeutralDatabase, userId: string) {
+export async function getUserGitCommitIdentity(db: PersistenceDb, userId: string) {
   return withIdentity(db, (runtime) => runtime.getUserGitCommitIdentity.execute(userId))
 }

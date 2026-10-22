@@ -1,26 +1,27 @@
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // P-4-09: worktree GC scan.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { tasks, workflows } from '../src/db/schema'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { createWorktree, runGit } from '../src/util/git'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gc-'))
   const repoPath = join(appHome, 'repo')
   // init a real repo so createWorktree works.
@@ -39,7 +40,7 @@ async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
 
 async function seedDoneTask(
   h: Harness,
-  overrides: Partial<typeof tasks.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<{ taskId: string; worktreePath: string }> {
   const workflowId = ulid()
   const taskId = ulid()
@@ -49,14 +50,15 @@ async function seedDoneTask(
     taskId,
     appHome: h.appHome,
   })
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -125,6 +127,7 @@ describeEachProvider('runWorktreeGc', (harness) => {
     expect(r.removed).toBe(0)
     expect(r.skipped).toBe(1)
     expect(existsSync(worktreePath)).toBe(true)
+    const { tasks } = tablesOf(h.db)
     // task row not deleted either
     const [t] = await h.db.select().from(tasks)
     expect(t?.id).toBe(taskId)

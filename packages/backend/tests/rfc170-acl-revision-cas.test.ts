@@ -7,14 +7,15 @@
 // the in-transaction row snapshot. Also locks the referenced-user active check
 // (G5-P5).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, beforeEach } from 'bun:test'
 import { UpdateResourceAclBodySchema } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, users } from '../src/db/schema'
 import {
   getResourceAcl,
   updateResourceAcl,
@@ -29,12 +30,13 @@ function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   role: 'admin' | 'user',
   status: 'active' | 'disabled' = 'active',
 ): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id}`,
     displayName: id,
@@ -46,7 +48,7 @@ async function seedUser(
 }
 
 describeEachProvider('RFC-170 §8 — ACL aclRevision CAS', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let owner: Actor
   let admin: Actor
   const OWNER = 'user-owner'
@@ -62,7 +64,8 @@ describeEachProvider('RFC-170 §8 — ACL aclRevision CAS', (harness) => {
     owner = actorOfUser(OWNER, 'user')
     admin = actorOfUser(ADMIN, 'admin')
     const id = ulid()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id,
       name: 'a1',
       description: '',
@@ -165,8 +168,9 @@ describeEachProvider('RFC-170 §8 — ACL aclRevision CAS', (harness) => {
   })
 
   test('G5-P5: a referenced user disabled before the CAS is rejected in-tx (422)', async () => {
+    const { users } = tablesOf(db)
     // Disable OTHER, then try to grant to them.
-    await db.update(users).set({ status: 'disabled' }).where(eq(users.id, OTHER)).run()
+    await db.update(users).set({ status: 'disabled' }).where(eq(users.id, OTHER))
     await expect(
       updateResourceAcl(db, owner, 'agent', agentRow, {
         grants: [{ userId: OTHER, level: 'read' as const }],

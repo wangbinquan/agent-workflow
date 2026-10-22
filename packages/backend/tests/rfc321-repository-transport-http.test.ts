@@ -3,6 +3,8 @@
 // never echoes plaintext, and stays transactionally coupled to the admin
 // connection trust boundary.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
@@ -15,11 +17,6 @@ import { createPat } from './helpers/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
-import {
-  codeHostConnections,
-  repositoryTransportConnections,
-  userRepositoryTransportCredentials,
-} from '../src/db/schema'
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
@@ -72,7 +69,7 @@ async function fixture() {
   ])
   const app = (
     await openTestApplication(
-      { provider: 'sqlite', db: db },
+      { provider: 'sqlite', db },
       {
         token: DAEMON_TOKEN,
         opencodeVersion: null,
@@ -158,11 +155,13 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     expect(savedText).not.toContain(PERSONAL_TOKEN)
     expect(JSON.parse(savedText)).toMatchObject({ configured: true, tokenHint: '7001' })
 
-    const row = h.db
-      .select()
-      .from(userRepositoryTransportCredentials)
-      .where(eq(userRepositoryTransportCredentials.userId, h.alice.id))
-      .get()
+    const { userRepositoryTransportCredentials } = tablesOf(h.db)
+    const row = first(
+      h.db
+        .select()
+        .from(userRepositoryTransportCredentials)
+        .where(eq(userRepositoryTransportCredentials.userId, h.alice.id)),
+    )
     expect(row).toBeDefined()
     expect(row!.tokenEnc).not.toContain(PERSONAL_TOKEN)
     expect(box.unseal(row!.tokenEnc)).toBe(PERSONAL_TOKEN)
@@ -362,7 +361,12 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     })
     expect(rotated.status).toBe(200)
     expect(await rotated.json()).toMatchObject({ personalPushCredentialCount: 1 })
-    expect(h.db.select().from(userRepositoryTransportCredentials).all()).toHaveLength(1)
+    const {
+      userRepositoryTransportCredentials,
+      codeHostConnections,
+      repositoryTransportConnections,
+    } = tablesOf(h.db)
+    expect(queryRows(h.db.select().from(userRepositoryTransportCredentials))).toHaveLength(1)
 
     const rebind = await h.call(h.adminToken, 'PUT', '/api/code-hosts/gitlab', {
       baseUrl: 'https://gitlab.example/platform/api/v4',
@@ -381,7 +385,7 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
       code: 'code-host-transport-rebind-confirmation-required',
       details: { personalPushCredentialCount: 1 },
     })
-    expect(h.db.select().from(userRepositoryTransportCredentials).all()).toHaveLength(1)
+    expect(queryRows(h.db.select().from(userRepositoryTransportCredentials))).toHaveLength(1)
 
     const competingRebind = await h.call(h.adminToken, 'PUT', '/api/code-hosts/gitlab', {
       baseUrl: 'https://gitlab.example/competing/api/v4',
@@ -396,7 +400,7 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
       confirmCredentialRevocationDigest: conflict.details.confirmCredentialRevocationDigest,
     })
     expect(confirmed.status).toBe(200)
-    expect(h.db.select().from(userRepositoryTransportCredentials).all()).toHaveLength(0)
+    expect(queryRows(h.db.select().from(userRepositoryTransportCredentials))).toHaveLength(0)
 
     const staleCompetingWriter = await h.call(h.adminToken, 'PUT', '/api/code-hosts/gitlab', {
       baseUrl: 'https://gitlab.example/competing/api/v4',
@@ -408,7 +412,7 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     expect(await staleCompetingWriter.json()).toMatchObject({
       code: 'code-host-push-credential-stale',
     })
-    expect(h.db.select().from(codeHostConnections).get()?.baseUrl).toBe(
+    expect(first(h.db.select().from(codeHostConnections))?.baseUrl).toBe(
       'https://gitlab.example/platform/api/v4',
     )
 
@@ -431,14 +435,15 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
       confirmCredentialRevocationDigest: deleteBody.details.confirmCredentialRevocationDigest,
     })
     expect(deleted.status).toBe(200)
-    expect(h.db.select().from(repositoryTransportConnections).all()).toHaveLength(0)
-    expect(h.db.select().from(userRepositoryTransportCredentials).all()).toHaveLength(0)
+    expect(queryRows(h.db.select().from(repositoryTransportConnections))).toHaveLength(0)
+    expect(queryRows(h.db.select().from(userRepositoryTransportCredentials))).toHaveLength(0)
   })
 
   test('projection failure rolls both connection tables back to the old ciphertext and revision', async () => {
     const h = await fixture()
-    const integrationBefore = h.db.select().from(codeHostConnections).get()!
-    const projectionBefore = h.db.select().from(repositoryTransportConnections).get()!
+    const { codeHostConnections, repositoryTransportConnections } = tablesOf(h.db)
+    const integrationBefore = first(h.db.select().from(codeHostConnections))!
+    const projectionBefore = first(h.db.select().from(repositoryTransportConnections))!
     h.db.$client.exec(`
       CREATE TRIGGER rfc321_fail_projection_update
       BEFORE UPDATE ON repository_transport_connections
@@ -452,8 +457,8 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
       token: 'aw-fixture-must-rollback-3119', // gitleaks:allow
     })
     expect(failed.status).toBe(500)
-    const integrationAfter = h.db.select().from(codeHostConnections).get()!
-    const projectionAfter = h.db.select().from(repositoryTransportConnections).get()!
+    const integrationAfter = first(h.db.select().from(codeHostConnections))!
+    const projectionAfter = first(h.db.select().from(repositoryTransportConnections))!
     expect(integrationAfter.tokenEnc).toBe(integrationBefore.tokenEnc)
     expect(projectionAfter.globalTokenEnc).toBe(projectionBefore.globalTokenEnc)
     expect(projectionAfter.credentialRevision).toBe(projectionBefore.credentialRevision)

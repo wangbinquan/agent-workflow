@@ -8,16 +8,17 @@
 // Install path uses the test-only fake-npm.ts shim (see RFC-031 design §3.2)
 // so tests stay hermetic and offline.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { CreateAgent } from '@agent-workflow/shared'
-import { agents } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
@@ -47,8 +48,9 @@ const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 // These rows are reference fixtures for catalog operations. Keep the original
 // canonical ID arrays and default null owner; the catalog itself remains real.
-async function seedAgent(db: ProviderNeutralDatabase, input: CreateAgent): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgent(db: PersistenceDb, input: CreateAgent): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     ...input,
     id: ulid(),
     ownerUserId: null,
@@ -64,7 +66,8 @@ async function seedAgent(db: ProviderNeutralDatabase, input: CreateAgent): Promi
   })
 }
 
-async function getAgent(db: ProviderNeutralDatabase, name: string) {
+async function getAgent(db: PersistenceDb, name: string) {
+  const { agents } = tablesOf(db)
   const [row] = await db.select().from(agents).where(eq(agents.name, name)).limit(1)
   return row === undefined
     ? null
@@ -76,7 +79,7 @@ async function getAgent(db: ProviderNeutralDatabase, name: string) {
 
 describeEachProvider('Plugin catalog behavior', (harness) => {
   let pluginsDir = ''
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let catalog: PluginCatalogModule
   let binding: PluginServiceBinding
 
@@ -113,7 +116,7 @@ describeEachProvider('Plugin catalog behavior', (harness) => {
     return createLocalPluginInstaller(opts())
   }
 
-  function composeTestPluginCatalog(db: ProviderNeutralDatabase): PluginCatalogModule {
+  function composeTestPluginCatalog(db: PersistenceDb): PluginCatalogModule {
     return composePluginCatalog({
       db,
       resourceCatalog: composeResourceCatalogFor({ db }),

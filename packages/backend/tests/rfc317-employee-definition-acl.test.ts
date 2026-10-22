@@ -25,17 +25,18 @@
 //    revision，用真实员工做种子需要注册类型包，成本与被测边界不成比例；而
 //    `filterVisibleRows` 本身的行为已由 rfc099 矩阵逐类覆盖。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import ts from 'typescript'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { employeeDefinitions } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -52,7 +53,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Actor
   stranger: Actor
@@ -96,12 +97,13 @@ async function req(
 }
 
 async function seedEmployee(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   visibility: 'private' | 'public',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(employeeDefinitions).values({
+  const { employeeDefinitions } = tablesOf(db)
+  await insertOne(db, employeeDefinitions, {
     id,
     name: `rfc317-employee-${id.slice(-6)}`,
     typeId: 'rfc317-type',
@@ -118,7 +120,8 @@ async function seedEmployee(
   return id
 }
 
-async function snapshot(db: ProviderNeutralDatabase, id: string): Promise<unknown> {
+async function snapshot(db: PersistenceDb, id: string): Promise<unknown> {
+  const { employeeDefinitions } = tablesOf(db)
   const rows = await db.select().from(employeeDefinitions).where(eq(employeeDefinitions.id, id))
   return rows[0]
 }

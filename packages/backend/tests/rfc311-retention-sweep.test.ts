@@ -5,6 +5,8 @@
 // rows go, in-window rows stay, per-MCP probe windows keep the newest N, and
 // a 0 config disables each stage.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -12,24 +14,8 @@ import { ulid } from 'ulid'
 import { count, eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  mcpProbes,
-  mcps,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  userAccessAudit,
-  users,
-  intentSessions,
-  intentTurnEvents,
-  intentTurns,
-  tasks,
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggers,
-  workflows,
-} from '../src/db/schema'
 import {
   runRetentionSweep,
   type RetentionConfig,
@@ -47,14 +33,18 @@ const OFF: RetentionConfig = {
 }
 
 async function rowsIn(
-  db: ProviderNeutralDatabase,
-  table: typeof userAccessAudit | typeof mcpProbes | typeof memoryDistillEvents,
+  db: PersistenceDb,
+  table:
+    | PersistenceTables['userAccessAudit']
+    | PersistenceTables['mcpProbes']
+    | PersistenceTables['memoryDistillEvents'],
 ): Promise<number> {
   const r = await db.select({ n: count() }).from(table)
   return r[0]?.n ?? 0
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
+async function seedUser(db: PersistenceDb, id: string): Promise<void> {
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({ id, username: id, displayName: id, role: 'user', createdAt: NOW, updatedAt: NOW })
@@ -64,7 +54,8 @@ async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> 
 async function seedAudit(db: Db, createdAt: number): Promise<void> {
   await seedUser(db, 'u1')
   await seedUser(db, 'admin')
-  await db.insert(userAccessAudit).values({
+  const { userAccessAudit } = tablesOf(db)
+  await insertOne(db, userAccessAudit, {
     id: ulid(),
     targetUserId: 'u1',
     actorUserId: 'admin',
@@ -92,6 +83,7 @@ describe('RFC-311 — retention sweep', () => {
       NOW,
     )
     expect(swept.userAccessAudit).toBe(0)
+    const { userAccessAudit } = tablesOf(db)
     expect(await rowsIn(db, userAccessAudit)).toBe(1)
     expect(() => db.$client.exec('DELETE FROM user_access_audit')).toThrow(/append_only/)
   })
@@ -100,7 +92,8 @@ describe('RFC-311 — retention sweep', () => {
 describeEachProvider('RFC-311 — retention sweep', (harness) => {
   test('mcp_probes is a per-MCP upsert row (UNIQUE mcp_id) — retention rightly skips it', async () => {
     const db = harness.db
-    await db.insert(mcps).values({ id: 'm1', name: 'm1', type: 'local' })
+    const { mcps, mcpProbes } = tablesOf(db)
+    await insertOne(db, mcps, { id: 'm1', name: 'm1', type: 'local' })
     const probe = {
       id: ulid(),
       mcpId: 'm1',
@@ -110,10 +103,10 @@ describeEachProvider('RFC-311 — retention sweep', (harness) => {
       finishedAt: NOW + 5,
       createdAt: NOW,
     }
-    await db.insert(mcpProbes).values(probe)
+    await insertOne(db, mcpProbes, probe)
     let threw = false
     try {
-      await db.insert(mcpProbes).values({ ...probe, id: ulid() })
+      await insertOne(db, mcpProbes, { ...probe, id: ulid() })
     } catch {
       threw = true
     }
@@ -124,7 +117,8 @@ describeEachProvider('RFC-311 — retention sweep', (harness) => {
   test('memory_distill_events (event-stream family): pure-timestamp expiry', async () => {
     const db = harness.db
     const jobId = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs, memoryDistillEvents } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id: jobId,
       debounceKey: 'k1',
       sourceKind: 'review',
@@ -156,8 +150,9 @@ describeEachProvider('RFC-311 — retention sweep', (harness) => {
 // 全绿)—— proposal §5 C6 承诺六张表,此前只有 memory_distill_events 有正向断言,
 // 而 webhook_trigger_fires 恰恰是审计里增长最快的一张。
 describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness) => {
-  async function seedFires(db: ProviderNeutralDatabase, ages: readonly number[]): Promise<void> {
-    await db.insert(webhookEndpoints).values({
+  async function seedFires(db: PersistenceDb, ages: readonly number[]): Promise<void> {
+    const { webhookEndpoints, webhookTriggers, webhookTriggerFires } = tablesOf(db)
+    await insertOne(db, webhookEndpoints, {
       id: 'ep1',
       name: 'ep',
       provider: 'gitlab',
@@ -165,7 +160,7 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
       secretEnc: 'enc',
       createdAt: NOW,
     })
-    await db.insert(webhookTriggers).values({
+    await insertOne(db, webhookTriggers, {
       id: 'tr1',
       name: 'trigger',
       endpointId: 'ep1',
@@ -179,7 +174,7 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
       updatedAt: NOW,
     })
     for (const [i, ageDays] of ages.entries()) {
-      await db.insert(webhookTriggerFires).values({
+      await insertOne(db, webhookTriggerFires, {
         id: `fire-${i}`,
         deliveryId: `d-${i}`,
         triggerId: 'tr1',
@@ -190,7 +185,8 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
     }
   }
 
-  async function fireCount(db: ProviderNeutralDatabase): Promise<number> {
+  async function fireCount(db: PersistenceDb): Promise<number> {
+    const { webhookTriggerFires } = tablesOf(db)
     const r = await db.select({ n: count() }).from(webhookTriggerFires)
     return r[0]?.n ?? 0
   }
@@ -216,9 +212,10 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
     const db = harness.db
     await seedUser(db, 'u1')
     await seedFires(db, [200, 150])
-    await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+    const { workflows, tasks, webhookTriggerFires } = tablesOf(db)
+    await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
     const mkTask = async (id: string, status: 'awaiting_human' | 'done'): Promise<void> => {
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id,
         name: id,
         workflowId: 'wf1',
@@ -275,14 +272,23 @@ describeEachProvider('RFC-311 C6 — the other two event streams share the windo
   test('intent_turn_events past the window go; 0 disables', async () => {
     const db = harness.db
     await seedUser(db, 'u1')
-    await db
-      .insert(intentSessions)
-      .values({ id: 's1', ownerUserId: 'u1', createdAt: NOW, updatedAt: NOW })
-    await db
-      .insert(intentTurns)
-      .values({ id: 't1', sessionId: 's1', seq: 1, role: 'user', kind: 'message', createdAt: NOW })
+    const { intentSessions, intentTurns, intentTurnEvents } = tablesOf(db)
+    await insertOne(db, intentSessions, {
+      id: 's1',
+      ownerUserId: 'u1',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    await insertOne(db, intentTurns, {
+      id: 't1',
+      sessionId: 's1',
+      seq: 1,
+      role: 'user',
+      kind: 'message',
+      createdAt: NOW,
+    })
     for (const [i, ageDays] of [90, 45, 31, 29, 1].entries()) {
-      await db.insert(intentTurnEvents).values({
+      await insertOne(db, intentTurnEvents, {
         turnId: 't1',
         eventSeq: i,
         ts: NOW - ageDays * DAY,

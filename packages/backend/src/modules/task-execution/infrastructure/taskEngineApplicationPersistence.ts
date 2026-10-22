@@ -1,10 +1,11 @@
 // RFC-359 W4-B1 —— TaskEngine drive 快照读取 + 工作区 profile 更新：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { taskCollaborators, taskRepos, tasks } from '@/db/schema'
 import type {
   TaskEngineApplicationPersistence,
   TaskEngineDriveSnapshot,
@@ -12,34 +13,31 @@ import type {
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
 export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplicationPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async load(taskId: string): Promise<TaskEngineDriveSnapshot | null> {
-    const task = await this.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1).get()
+    const { tasks, taskRepos, taskCollaborators } = tablesOf(this.db)
+    const task = await first(this.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))
     if (task === undefined) return null
     const repositories = await this.db
       .select()
       .from(taskRepos)
       .where(eq(taskRepos.taskId, taskId))
       .orderBy(asc(taskRepos.repoIndex))
-      .all()
     const collaborators = await this.db
       .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
       .from(taskCollaborators)
       .where(eq(taskCollaborators.taskId, taskId))
-      .all()
     return { task, repositories, collaborators }
   }
 
   async findStatus(taskId: string) {
+    const { tasks } = tablesOf(this.db)
     return (
       (
-        await this.db
-          .select({ status: tasks.status })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .limit(1)
-          .get()
+        await first(
+          this.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1),
+        )
       )?.status ?? null
     )
   }
@@ -53,6 +51,7 @@ export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplic
         context: input.executionContext,
         now: input.now,
       })
+      const { taskRepos } = tablesOf(transaction)
       const rows = await transaction
         .update(taskRepos)
         .set({

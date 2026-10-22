@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: actual DE Case persistence/recomposition and complete bootstrap owner selection.
@@ -7,12 +9,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
-import {
-  cachedRepos,
-  employeeCases,
-  employeeReactionRounds,
-  employeeRoundWorkspaceStates,
-} from '@/db/schema'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
@@ -229,7 +225,9 @@ describeEachProvider(
         git(repo, 'push', '-q', 'origin', 'main', 'feature/selected')
         git(repo, 'fetch', '-q', 'origin')
         const db = harness.db
-        await db.insert(cachedRepos).values({
+        const { cachedRepos, employeeCases, employeeReactionRounds, employeeRoundWorkspaceStates } =
+          tablesOf(db)
+        await insertOne(db, cachedRepos, {
           id: 'selected-de-repo',
           urlHash: 'selected-de',
           urlEnc: null,
@@ -239,7 +237,7 @@ describeEachProvider(
           lastFetchedAt: 1,
           createdAt: 1,
         })
-        await db.insert(employeeCases).values({
+        await insertOne(db, employeeCases, {
           id: 'selected-de-case',
           employeeId: 'employee',
           employeeRevision: 1,
@@ -301,7 +299,7 @@ describeEachProvider(
           },
         ])
         const insertRound = async (plan: typeof initialPlan) => {
-          await db.insert(employeeReactionRounds).values({
+          await insertOne(db, employeeReactionRounds, {
             id: plan.roundRef,
             caseId: 'selected-de-case',
             caseRevision: 1,

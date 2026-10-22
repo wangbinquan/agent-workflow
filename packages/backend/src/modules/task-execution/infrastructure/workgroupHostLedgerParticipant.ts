@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 
-import { nodeRuns, tasks } from '@/db/schema'
 import type {
   WorkgroupHostLedgerFailRunOperation,
   WorkgroupHostLedgerMintReceipt,
@@ -11,7 +11,7 @@ import type {
   WorkgroupTaskRoomClarifyParticipantInTx,
 } from '../public/commands'
 import { WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID } from '../public/commands'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { generateNodeRunEnvelopeNonce } from '../application/buildNodeRunMintRecord'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
@@ -24,10 +24,11 @@ class WorkgroupHostLedgerConflict extends Error {
 }
 
 async function loadSnapshot(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   clarify: WorkgroupTaskRoomClarifyParticipantInTx,
   taskId: string,
 ): Promise<WorkgroupHostLedgerSnapshot | null> {
+  const { tasks, nodeRuns } = tablesOf(transaction)
   const taskRows = await transaction
     .select({ workgroupConfigJson: tasks.workgroupConfigJson })
     .from(tasks)
@@ -104,10 +105,11 @@ export function leaderClarifyParkedOf(
  * failureCode 留 NULL：封闭的 FAILURE_CODES 里没有「内部错误」这一档。
  */
 async function failPendingHostRun(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   taskId: string,
   operation: WorkgroupHostLedgerFailRunOperation,
 ): Promise<boolean> {
+  const { nodeRuns } = tablesOf(transaction)
   const rows = await transaction
     .select({ status: nodeRuns.status })
     .from(nodeRuns)
@@ -126,7 +128,7 @@ async function failPendingHostRun(
 }
 
 async function applyOperation(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   taskId: string,
   operation: Exclude<WorkgroupHostLedgerOperation, WorkgroupHostLedgerFailRunOperation>,
 ): Promise<WorkgroupHostLedgerMintReceipt | null> {
@@ -157,6 +159,7 @@ async function applyOperation(
   }
 
   operation.kind satisfies 'stamp-host-run-round'
+  const { nodeRuns } = tablesOf(transaction)
   const changed = await transaction
     .update(nodeRuns)
     .set({ wgRound: operation.wgRound })
@@ -178,7 +181,7 @@ async function applyOperation(
 
 /** Bind TaskExecution host-ledger mechanics to one caller-reserved PG transaction. */
 export function createWorkgroupHostLedgerParticipantInTx(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   clarify: WorkgroupTaskRoomClarifyParticipantInTx,
 ): WorkgroupHostLedgerParticipantInTx {
   return Object.freeze({

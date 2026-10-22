@@ -24,14 +24,15 @@
 // End-to-end downstream re-run after a cross-clarify is covered by the
 // combination scenarios (S13/S15) running the real scheduler.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -46,7 +47,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // designer entry mints the designer rerun. The RFC-074 no-eager-cascade contract this file locks
 // is unchanged — the dispatch still mints ONLY the frontier designer rerun, never downstream rows.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -139,11 +140,12 @@ function cascadeDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = cascadeDef()
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'cascade',
     description: '',
@@ -151,7 +153,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -172,13 +174,14 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedDoneRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<typeof nodeRuns.$inferInsert> = {},
+  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -232,6 +235,7 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
       expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
+      const { nodeRuns } = tablesOf(db)
       // Designer's new pending row carries clarifyIteration=1.
       const designerRows = await db
         .select()
@@ -308,6 +312,7 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
         answers: [makeAns('q1')],
         actor,
       })
+      const { nodeRuns } = tablesOf(db)
       const rev1Count = (
         await db
           .select()
@@ -344,6 +349,7 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
         answers: [makeAns('q1')],
         actor,
       })
+      const { nodeRuns } = tablesOf(db)
       // The cross-clarify node itself is reachable from designer ONLY via
       // a clarify-channel edge (to_designer → __external_feedback__), so
       // the BFS skips it. The cross-clarify node_run minted by
@@ -388,6 +394,7 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
         answers: [makeAns('q1')],
         actor,
       })
+      const { nodeRuns } = tablesOf(db)
       const rev1Rows = await db
         .select()
         .from(nodeRuns)

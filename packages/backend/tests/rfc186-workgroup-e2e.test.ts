@@ -8,6 +8,8 @@
 // 10 tasks 0 done). This drives it for real via `scenario-opencode` (per-agent,
 // per-turn scripted opencode) so the first green is regression-locked.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -17,7 +19,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DAEMON_RESTART_ERROR_SUMMARY, DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, users, workgroupAssignments } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -139,6 +140,7 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
 }
 
 async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<string> {
+  const { users } = tablesOf(db)
   // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
   // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
   await db
@@ -234,6 +236,7 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, groupId)
 
+      const { tasks, nodeRuns, workgroupAssignments } = tablesOf(h.db)
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
 
@@ -265,6 +268,7 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
       })
       const task = await launch(h, groupId)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
 
@@ -343,9 +347,10 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
         ],
       }
       const taskId = ulid()
+      const { tasks, nodeRuns } = tablesOf(h.db)
       // The task was interrupted by a daemon restart BEFORE the leader's first
       // turn completed (the common case): status=interrupted, no host node_runs.
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         id: taskId,
         name: 'rec',
         workflowId: WORKGROUP_HOST_WORKFLOW_ID,

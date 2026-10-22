@@ -15,7 +15,7 @@
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import type {
   MergeRequestFactsCollectorPort,
@@ -147,7 +147,7 @@ async function deliverAndDrain(
 }
 
 async function runOrder(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   order: readonly { readonly key: string; readonly mergeBefore?: boolean }[],
 ): Promise<{
   status: string

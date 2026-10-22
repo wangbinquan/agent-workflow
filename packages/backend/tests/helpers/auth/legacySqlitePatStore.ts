@@ -2,12 +2,14 @@
 // design as user_sessions but with optional scopes (PAT narrows the actor's
 // effective account permissions; never widens them — see auth/actor.ts).
 
-// RFC-359 AC-6：`db` 的类型放宽成 `ProviderNeutralDatabase`。
+// RFC-359 AC-6：`db` 的类型放宽成 `PersistenceDb`。
 // 这些夹具只用 drizzle 的中立面（select / insert / update，全部 await），没有任何 bun:sqlite
 // 的同步 API，所以两个引擎都跑得通。放宽是**向后兼容**的——`DbClient` 本身就是
-// `BaseSQLiteDatabase<'sync', …>` 的子类型，既有的 SQLite 调用点一个字都不用改。
+// `PersistenceDb` 的子类型，既有的 SQLite 调用点一个字都不用改。
 // 之所以必须放宽：AC-6 要把行为用例迁到 `describeEachProvider`，而**每一个 HTTP 用例都要先建会话**，
 // 会话夹具卡在 `DbClient` 上就等于整条路堵死。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { randomBytes } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -17,13 +19,12 @@ import {
   type PatPurpose,
   type Permission,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { userPats, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { sha256Hex } from '@/util/hash'
 
 export interface CreatePatInput {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   userId: string
   name: string
   scopes?: ReadonlyArray<Permission>
@@ -73,7 +74,8 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
     revokedAt: null,
     purpose,
   }
-  await input.db.insert(userPats).values(row)
+  const { userPats } = tablesOf(input.db)
+  await insertOne(input.db, userPats, row)
   return {
     token,
     meta: {
@@ -90,7 +92,7 @@ export async function createPat(input: CreatePatInput): Promise<CreatePatResult>
 }
 
 export interface ResolvedPat {
-  user: typeof users.$inferSelect
+  user: PersistenceTables['users']['$inferSelect']
   scopes: ReadonlyArray<Permission>
   /** RFC-247 D2 — the purpose gate reads this; see auth/session.ts. */
   purpose: PatPurpose
@@ -100,7 +102,7 @@ export interface ResolvedPat {
 }
 
 export async function lookupActivePat(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   raw: string,
   now: number = Date.now(),
 ): Promise<ResolvedPat | null> {
@@ -110,12 +112,13 @@ export async function lookupActivePat(
 
 /** RFC-212 — hash-keyed twin of `lookupActivePat`; see lookupActiveSessionByHash. */
 export async function lookupActivePatByHash(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   hash: string,
   now: number = Date.now(),
   opts: { touch?: boolean } = {},
 ): Promise<ResolvedPat | null> {
   const touch = opts.touch ?? true
+  const { userPats, users } = tablesOf(db)
   const rows = await db.select().from(userPats).where(eq(userPats.tokenHash, hash)).limit(1)
   const pat = rows[0]
   if (!pat) return null
@@ -149,10 +152,11 @@ function safeParseScopes(raw: string): Permission[] {
 }
 
 export async function revokePat(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   patId: string,
   now: number = Date.now(),
 ): Promise<void> {
+  const { userPats } = tablesOf(db)
   await db.update(userPats).set({ revokedAt: now }).where(eq(userPats.id, patId))
   // RFC-212 — close any live WS the revoked PAT opened.
   triggerRevalidation('pat-revoked')
@@ -165,8 +169,9 @@ export async function revokePat(
  * this cannot become a credential-recovery path.
  */
 export async function listAllPats(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<Array<PatPublic & { userId: string }>> {
+  const { userPats } = tablesOf(db)
   const rows = await db.select().from(userPats)
   return rows.map((r) => ({
     id: r.id,
@@ -181,10 +186,8 @@ export async function listAllPats(
   }))
 }
 
-export async function listPatsForUser(
-  db: ProviderNeutralDatabase,
-  userId: string,
-): Promise<PatPublic[]> {
+export async function listPatsForUser(db: PersistenceDb, userId: string): Promise<PatPublic[]> {
+  const { userPats } = tablesOf(db)
   const rows = await db
     .select()
     .from(userPats)

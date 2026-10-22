@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDemoResourceCatalogSeedParticipant } from '../application/demoResourceCatalogSeed'
 import { createDemoResourceCatalogSeedPersistence } from '../infrastructure/demoResourceCatalogSeed'
 import type { DemoResourceCatalogSeedParticipant } from '../public/participants'
@@ -8,7 +8,7 @@ import type { DemoResourceCatalogSeedParticipant } from '../public/participants'
  * 而 `createDemoResourceCatalogSeedPersistence` 本来就收中立客户端。收成一份（plan §5ds）。
  */
 export function composeDemoResourceCatalogSeedParticipant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DemoResourceCatalogSeedParticipant {
   return createDemoResourceCatalogSeedParticipant(createDemoResourceCatalogSeedPersistence(db))
 }

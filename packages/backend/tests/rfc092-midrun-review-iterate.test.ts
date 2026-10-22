@@ -21,6 +21,8 @@
 // 状态。prompt 证据走 mock 落盘 argv（scheduler-audit-s05 的
 // MOCK_OPENCODE_CAPTURE_ARGV_TO 模式：argv[1] 即完整 user prompt）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -30,7 +32,6 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id freshness）
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   addReviewComment,
   submitReviewDecision,
@@ -151,7 +152,8 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -171,12 +173,13 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc092-s1-review',
     definition: JSON.stringify(definition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc092-midrun-review-iterate',
     id: taskId,
     workflowId,
@@ -207,6 +210,7 @@ async function waitFor<T>(
 }
 
 async function topLevelRuns(db: DbClient, taskId: string, nodeId: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select()
     .from(nodeRuns)
@@ -338,6 +342,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       }, 'parked review while slow sibling is still running')
       revRunId = revRun.id
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       // RFC-333 T7 将 review 投影与任务停泊合并为一次 TaskParkTx；
       // slow sibling 仍在同一次活调度调用中运行，所以这里锁定新的
       // awaiting_review 状态，后续 iterate 仍由这次调用自取。
@@ -399,6 +404,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     await runPromise
     await continuationPromise
 
+    const { tasks, nodeRuns, docVersions } = tablesOf(h.db)
     // 正确语义（RFC-092 §1.2）：slow settle 后的 tick 经 pending-bypass 先自取
     // author 的 rerun 行、再自取翻回 pending 的 review 行 → 新一轮 review 停泊。
     // 任务以真实的 awaiting_review 收场，绝不是 'scheduler stalled' 假失败。

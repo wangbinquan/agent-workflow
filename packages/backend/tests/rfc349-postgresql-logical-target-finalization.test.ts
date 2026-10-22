@@ -2,6 +2,7 @@
 // committed schema-finalize transaction must be safe to observe again after a
 // process crash before the external operation manifest advances.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
@@ -129,7 +130,7 @@ function fixture(input: {
   let baselineCommitted = false
   let stage = 'copying'
   let releases = 0
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql) {
       statements.push(sql)
       if (sql.includes('pg_try_advisory_lock')) return rows([{ acquired: true }])
@@ -169,7 +170,7 @@ function fixture(input: {
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection

@@ -13,6 +13,8 @@
 // The happy-path per-repo resolution + prefixed merge are unit-covered in
 // structural-diff-refselect.test.ts and structural-diff-multi-repo-merge.test.ts.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -23,7 +25,6 @@ import { removeTempDirSync } from './fixtures/tempDir'
 import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { launchTestTask } from './helpers/productionTaskLaunch'
-import { nodeRuns, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -59,7 +60,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf-node',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -111,7 +113,8 @@ describe('RFC-089 P3 — structural node scope, multi-repo', () => {
     // so per-repo compute fails → caught → graceful 'pruned'. The POINT is the
     // multi-repo branch runs at all instead of throwing unsupported.
     const nrId = 'nr-multi'
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: nrId,
       taskId: task.id,
       nodeId: 'n1',
@@ -135,7 +138,8 @@ describe('RFC-089 P3 — structural node scope, multi-repo', () => {
     h = await buildHarness(2)
     const task = await twoRepoTask(h)
     const nrId = 'nr-readonly'
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: nrId,
       taskId: task.id,
       nodeId: 'n1',

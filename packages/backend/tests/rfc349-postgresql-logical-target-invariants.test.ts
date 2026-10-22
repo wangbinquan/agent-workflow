@@ -3,6 +3,7 @@
 // oracles run through the already-reserved migration connection; there is no
 // second connection or nested transaction hidden in the verifier.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 import {
   POSTGRESQL_LOGICAL_TARGET_INVARIANT_IDS,
@@ -92,13 +93,13 @@ function contract(tables: readonly LogicalTableContract[]): LogicalSchemaContrac
 describe('RFC-349 PostgreSQL logical-target business invariants', () => {
   test('the canonical 182-table contract binds every closed D11 invariant', async () => {
     const statements: string[] = []
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe(sql) {
         statements.push(sql)
         return rows([])
       },
       release() {},
-    }
+    })
 
     await verifyPostgresqlLogicalTargetBusinessInvariants({
       connection,
@@ -132,13 +133,13 @@ describe('RFC-349 PostgreSQL logical-target business invariants', () => {
 
   test('a partially present invariant family fails closed before SQL runs', async () => {
     let queryCount = 0
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe() {
         queryCount += 1
         return rows([])
       },
       release() {},
-    }
+    })
 
     let failure: unknown
     try {
@@ -160,13 +161,13 @@ describe('RFC-349 PostgreSQL logical-target business invariants', () => {
   })
 
   test('reports the exact invariant, table and business key', async () => {
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe(sql) {
         expect(sql).toContain('rfc349-invariant:intent-apply-convergence')
         return rows([{ invariant_table: 'intent_apply_journal', invariant_key: 'apply-7' }])
       },
       release() {},
-    }
+    })
 
     let failure: unknown
     try {
@@ -191,7 +192,7 @@ describe('RFC-349 PostgreSQL logical-target business invariants', () => {
 describe('RFC-349 PostgreSQL identity next-value collision oracle', () => {
   test('restores sequence state and rejects a colliding next value', async () => {
     const calls: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe(sql, parameters) {
         calls.push({ sql, parameters })
         if (sql.includes('pg_get_serial_sequence')) {
@@ -205,7 +206,7 @@ describe('RFC-349 PostgreSQL identity next-value collision oracle', () => {
         return rows([])
       },
       release() {},
-    }
+    })
 
     let failure: unknown
     try {
@@ -228,7 +229,7 @@ describe('RFC-349 PostgreSQL identity next-value collision oracle', () => {
 
   test('accepts a strictly greater next value without committing a probe row', async () => {
     const statements: string[] = []
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe(sql) {
         statements.push(sql)
         if (sql.includes('pg_get_serial_sequence')) {
@@ -242,7 +243,7 @@ describe('RFC-349 PostgreSQL identity next-value collision oracle', () => {
         return rows([])
       },
       release() {},
-    }
+    })
 
     await verifyPostgresqlLogicalTargetIdentitySequences({
       connection,

@@ -101,7 +101,11 @@ function scenario(side: Side, control: Control) {
     },
   }
   const owner = loadActualOwner(side, {
-    agents: table,
+    tablesOf: (handle: unknown) => {
+      expect(handle).toBe(transaction)
+      return { agents: table }
+    },
+    first: async (query: { limit(count: number): Promise<unknown[]> }) => (await query.limit(1))[0],
     eq: (column: unknown, id: string) => ({ column, id }),
     ValidationError,
     parseAgentDependencyIds,
@@ -163,7 +167,7 @@ for (const side of ['semantics', 'package'] as const) {
         expect(s.queries[0]).toEqual({
           id: 'loaded',
           columns: side === 'semantics' ? ['dependsOn'] : ['id', 'dependsOn'],
-          terminal: side === 'semantics' ? 'limit' : 'get',
+          terminal: 'limit',
         })
       }
     })

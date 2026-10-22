@@ -23,10 +23,11 @@
 //   the platform's reason; a refusal is not requested again right away;
 // - a client or platform without the operation never upgrades, and the wire
 //   and bootstrap wiring follow the CS RFC-043 contract.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hostedTaskWorkspaces, hostedWorkspaceCommands } from '@/db/schema'
 import { HostedRuntimeCapabilitiesSchema } from '@/modules/runtime-management/composition/crewstationRuntimeManagement'
 import {
   createHostedTaskWorkspaces,
@@ -307,7 +308,8 @@ describeEachProvider('RFC-370 V21 durable parents follow the release task image'
     /** A registered parent, idle since long ago, on the earlier image. */
     const register = async (owner: string, platform: Partial<BusinessTask> = {}) => {
       const id = `cs-${owner}`
-      await harness.db.insert(hostedTaskWorkspaces).values({
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      await insertOne(harness.db, hostedTaskWorkspaces, {
         taskId: owner,
         requestKey: `aw-task:installation:${owner}`,
         businessTaskId: id,
@@ -334,10 +336,12 @@ describeEachProvider('RFC-370 V21 durable parents follow the release task image'
       upgrades,
       otherWork,
       pass: () => lifecycle.pass(new AbortController().signal),
-      journal: async () =>
-        (await harness.db.select().from(hostedWorkspaceCommands))
+      journal: async () => {
+        const { hostedWorkspaceCommands } = tablesOf(harness.db)
+        return (await harness.db.select().from(hostedWorkspaceCommands))
           .map((row) => `${row.executionId} ${row.state}`)
-          .sort(),
+          .sort()
+      },
       advance: (ms: number) => {
         clock += ms
       },

@@ -14,14 +14,15 @@
 // a change that demands confirmation from EVERYONE pass silently, and that
 // change is a UX regression rather than a security improvement.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import type { Hono } from 'hono'
 import { createPat } from './helpers/auth/patStore'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertTokenDeleteConfirm } from '../src/services/deleteConfirm'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import {
@@ -60,7 +61,7 @@ describe('RFC-247 assertTokenDeleteConfirm — the rule itself', () => {
 })
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   userId: string
   ownedAgentId: string
@@ -77,7 +78,8 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
     password: 'pw12345678',
   })
   const ownedAgentId = 'rfc247-delete-owner-agent'
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ownedAgentId,
     name: 'RFC 247 delete owner agent',
     ownerUserId: user.id,

@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { bootDeclaration } from './helpers/daemonProgramSource'
 // RFC-170 §invariant④ / §10 (T-BOOT) — managed snapshot integrity reverify +
 // the isSkillAvailableThisBoot gate. A durable 'snapshot-authoritative' flag is
@@ -11,8 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skills, skillVersions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   commitSkillVersion,
   ensureInitialSkillVersion,
@@ -42,10 +44,9 @@ import {
   skillVersionRelPath,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
-async function versionStateOf(db: ProviderNeutralDatabase, id: string): Promise<string> {
-  return (
-    await db.select({ v: skills.versionState }).from(skills).where(eq(skills.id, id)).all()
-  )[0]!.v
+async function versionStateOf(db: PersistenceDb, id: string): Promise<string> {
+  const { skills } = tablesOf(db)
+  return (await db.select({ v: skills.versionState }).from(skills).where(eq(skills.id, id)))[0]!.v
 }
 
 function snapshotSkillMd(appHome: string, skillId: string, v: number): string {
@@ -53,7 +54,7 @@ function snapshotSkillMd(appHome: string, skillId: string, v: number): string {
 }
 
 describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: SkillFsOptions
 
@@ -250,12 +251,11 @@ describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
         { id: skill!.id, name: skill!.name, contentVersion: 1 },
       ),
     ).toBe('verified')
+    const { skills } = tablesOf(db)
     expect(
-      await db
-        .select({ version: skills.contentVersion })
-        .from(skills)
-        .where(eq(skills.id, skill!.id))
-        .get(),
+      await first(
+        db.select({ version: skills.contentVersion }).from(skills).where(eq(skills.id, skill!.id)),
+      ),
     ).toEqual({ version: 2 })
     expect(await versionStateOf(db, skill!.id)).toBe('snapshot-authoritative')
     expect(isSkillBootVerified(skill!.id)).toBe(true)
@@ -272,40 +272,35 @@ describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
           (staging) => writeFileSync(join(staging, 'SKILL.md'), 'v2'),
           { source: 'editor', authorUserId: '__system__' },
         )
-        await db
-          .delete(skillVersions)
-          .where(
-            eq(
-              skillVersions.id,
-              (
-                await db
-                  .select({
-                    id: skillVersions.id,
-                    versionIndex: skillVersions.versionIndex,
-                  })
-                  .from(skillVersions)
-                  .where(eq(skillVersions.skillId, skill!.id))
-                  .all()
-              ).find((row) => row.versionIndex === 1)!.id,
-            ),
-          )
-          .run()
+        const { skillVersions } = tablesOf(db)
+        await db.delete(skillVersions).where(
+          eq(
+            skillVersions.id,
+            (
+              await db
+                .select({
+                  id: skillVersions.id,
+                  versionIndex: skillVersions.versionIndex,
+                })
+                .from(skillVersions)
+                .where(eq(skillVersions.skillId, skill!.id))
+            ).find((row) => row.versionIndex === 1)!.id,
+          ),
+        )
       } else {
         const v1 = skillVersionAbs(appHome, skill!.id, 1)
         const v2 = skillVersionAbs(appHome, skill!.id, 2)
         cpSync(v1, v2, { recursive: true })
-        await db
-          .insert(skillVersions)
-          .values({
-            id: ulid(),
-            skillId: skill!.id,
-            versionIndex: 2,
-            filesPath: skillVersionRelPath(skill!.id, 2),
-            source: 'editor',
-            authorUserId: '__system__',
-            contentHash: hashDir(v2),
-          })
-          .run()
+        const { skillVersions } = tablesOf(db)
+        await insertOne(db, skillVersions, {
+          id: ulid(),
+          skillId: skill!.id,
+          versionIndex: 2,
+          filesPath: skillVersionRelPath(skill!.id, 2),
+          source: 'editor',
+          authorUserId: '__system__',
+          contentHash: hashDir(v2),
+        })
       }
       activateBootReverify()
       expect(await runBootSnapshotReverify(db, fsOpts)).toEqual({ verified: 0, quarantined: 1 })
@@ -339,7 +334,8 @@ describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
       '---\nname: legacy\ndescription: d\n---\nold body',
       'utf-8',
     )
-    await db.insert(skills).values({
+    const { skills } = tablesOf(db)
+    await insertOne(db, skills, {
       id,
       name: 'legacy',
       description: 'd',

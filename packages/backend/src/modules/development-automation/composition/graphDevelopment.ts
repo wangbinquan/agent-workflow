@@ -4,7 +4,7 @@ import {
   GraphEvidenceBindingSchema,
   type GraphImplementationBasis,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   EmployeeCaseDetailProjectionParticipant,
   EmployeeCaseDetailProjectionInputV1,
@@ -52,7 +52,7 @@ export { createGraphCaseIntake } from '../application/graph-development/caseInta
 export { isGraphPlan } from '../application/graph-development/reactionMaterial'
 
 export function composeGraphDevelopment(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   cases: GraphDesignCasePort
   readCase(caseId: string): Promise<{ projectionJson: string }>

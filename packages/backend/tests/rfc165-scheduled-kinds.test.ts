@@ -19,6 +19,8 @@
 //   K7 compat: create without launchKind defaults to 'workflow' (old
 //      clients keep working byte-for-byte).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -30,7 +32,6 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, scheduledTasks, tasks, users } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/composition/taskRouteLaunch'
 import {
@@ -101,16 +102,16 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
     }),
     workgroup: composeWorkgroupLaunchResourceOperations({ db, integrity: integrity.launch }),
     workspace: createTaskRouteWorkspaceParticipant({
-      db: db,
+      db,
       sourceContexts: identityAccess.taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
+      repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
       appHome,
     }),
     coordinator: createTestTaskDriveCoordinator({
       deps: { db, schedulerDriver, configPath },
       appHome,
       repositoryPreparation: composeDeferredRepositoryPreparation({
-        repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
+        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
         db,
         appHome,
       }),
@@ -191,7 +192,8 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
     const builtinId = ulid()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id: builtinId,
       name: 'sys',
       description: '',
@@ -484,6 +486,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       },
       { actor: actorFor(ownerId) },
     )
+    const { scheduledTasks, users, tasks } = tablesOf(db)
     // Display metadata can be stale/corrupt without changing identity. Fire
     // must resolve solely by agentId and never fall back to this name.
     await db
@@ -542,6 +545,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       },
       { actor: actorFor(ownerId) },
     )
+    const { scheduledTasks, tasks } = tablesOf(db)
     await db
       .update(scheduledTasks)
       .set({
@@ -596,6 +600,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       },
       { actor: actorFor(ownerId) },
     )
+    const { scheduledTasks, tasks } = tablesOf(db)
     await db
       .update(scheduledTasks)
       .set({
@@ -635,7 +640,7 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'a'.repeat(64),

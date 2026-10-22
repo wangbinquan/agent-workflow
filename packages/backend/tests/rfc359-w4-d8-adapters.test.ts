@@ -3,21 +3,15 @@
 // CAS 落库、未声明读 fail closed、唯一冲突映射、选择器漂移回滚、建号一笔提交），外加旧 SQLite 版只在真库上
 // 才暴露的行为（并发同名 → username-taken 而不是裸驱动错误）。末尾一条源码锁保证该族不再出现 provider 专属文件。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  authLoginPolicy,
-  oidcProviders,
-  userAccessAudit,
-  userIdentities,
-  userPermissionGrants,
-  users,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/infrastructure/oidcIdentityCrossContext'
 import {
@@ -32,7 +26,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly username?: string
     readonly email?: string | null
@@ -42,7 +36,8 @@ async function seedUser(
   } = {},
 ): Promise<string> {
   const id = `u_d8_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: input.username ?? id,
     email: input.email ?? null,
@@ -56,7 +51,7 @@ async function seedUser(
 }
 
 async function seedProvider(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   selectors: {
     readonly subjectClaim?: string
     readonly usernameClaim?: string
@@ -65,7 +60,8 @@ async function seedProvider(
   } = {},
 ): Promise<string> {
   const id = `provider_${ulid()}`
-  await db.insert(oidcProviders).values({
+  const { oidcProviders } = tablesOf(db)
+  await insertOne(db, oidcProviders, {
     id,
     slug: id,
     displayName: 'Corporate SSO',
@@ -177,6 +173,7 @@ describeEachProvider('RFC-359 W4-D8 —— identity-access 账户 / 授权持久
     })
     expect(repository.readAuthorityFence(id)).toEqual({ status: 'disabled', accessRevision: 5 })
 
+    const { users } = tablesOf(harness.db)
     // 旁路写者（另一个进程 / CLI 直写库）：SQLite 的同步读看得见，PG 只能等下一次授权读预热。
     await harness.db.update(users).set({ accessRevision: 9 }).where(eq(users.id, id))
     expect(repository.readAuthorityFence(id)).toEqual({
@@ -205,6 +202,7 @@ describeEachProvider('RFC-359 W4-D8 —— identity-access 账户 / 授权持久
         return 'committed'
       }),
     ).toBe('committed')
+    const { users } = tablesOf(harness.db)
     expect((await harness.db.select().from(users).where(eq(users.id, id)))[0]).toMatchObject({
       displayName: 'Updated',
       accessRevision: 5,
@@ -272,6 +270,7 @@ describeEachProvider('RFC-359 W4-D8 —— identity-access 账户 / 授权持久
     )
     expect(duplicate).toBeInstanceOf(UserAccessError)
     expect(duplicate).toMatchObject({ kind: 'conflict', code: 'username-taken' })
+    const { users } = tablesOf(harness.db)
     expect(
       await harness.db.select({ id: users.id }).from(users).where(eq(users.username, 'alice')),
     ).toHaveLength(1)
@@ -323,6 +322,7 @@ describeEachProvider('RFC-359 W4-D8 —— identity-access 账户 / 授权持久
     expect(error).toBeInstanceOf(DomainError)
     expect(error).toMatchObject({ code: 'provider-config-changed' })
     expect(await oidc.findByProviderSubject(providerId, 'subject-1')).toBeNull()
+    const { userAccessAudit } = tablesOf(harness.db)
     expect(
       await harness.db
         .select()
@@ -333,6 +333,7 @@ describeEachProvider('RFC-359 W4-D8 —— identity-access 账户 / 授权持久
 
   test('OIDC：建号一笔提交用户 / 默认授权 / 审计 / 身份 / profile 快照；重名与重复主体各报各的 conflict', async () => {
     const providerId = await seedProvider(harness.db, CLAIMS)
+    const { authLoginPolicy, users, userPermissionGrants, userAccessAudit } = tablesOf(harness.db)
     await harness.db
       .update(authLoginPolicy)
       .set({ oidcDefaultRole: 'user' })
@@ -452,6 +453,7 @@ describeEachProvider('RFC-359 W4-D8 —— identity-access 账户 / 授权持久
       now: NOW,
       identity: { providerId, subject: 'invited-subject', email: null, emailVerified: true },
     })
+    const { users, userIdentities } = tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -501,6 +503,6 @@ test('源码锁：identity-access 的账户 / OIDC 持久化不再有 provider �
     expect(source).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update|\$client/i,
     )
-    expect(source).toContain('ProviderNeutralDatabase')
+    expect(source).toContain('PersistenceDb')
   }
 })

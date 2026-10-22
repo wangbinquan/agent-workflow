@@ -12,6 +12,8 @@
 // DIRECTLY and never imports services/skill.ts. skill.ts imports THIS — one
 // direction only.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   ResourceVisibility,
   SkillContent,
@@ -23,15 +25,11 @@ import type {
 import { structuredPatch } from 'diff'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills, skillVersions } from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
 /** RFC-359 W4-D23b：版本机器改吃中立句柄，两个 provider 共用同一套发布阶梯。 */
-type SkillVersionDb = ProviderNeutralDatabase
+type SkillVersionDb = PersistenceDb
 import {
   abandonOperation,
   advancePhase,
@@ -74,8 +72,8 @@ export interface SkillVersionFsOptions {
   versionReader?: SkillVersionContentReader
 }
 
-type SkillRow = typeof skills.$inferSelect
-type SkillVersionRow = typeof skillVersions.$inferSelect
+type SkillRow = PersistenceTables['skills']['$inferSelect']
+type SkillVersionRow = PersistenceTables['skillVersions']['$inferSelect']
 
 export { skillVersionRelPath } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
@@ -167,11 +165,13 @@ export function gitStyleDirDiff(
 // --- db helpers ------------------------------------------------------------
 
 async function loadSkillRow(db: SkillVersionDb, skillId: string): Promise<SkillRow | null> {
+  const { skills } = tablesOf(db)
   const rows = (await db.select().from(skills).where(eq(skills.id, skillId))) as SkillRow[]
   return rows[0] ?? null
 }
 
 async function versionRows(db: SkillVersionDb, skillId: string): Promise<SkillVersionRow[]> {
+  const { skillVersions } = tablesOf(db)
   return (await db
     .select()
     .from(skillVersions)
@@ -214,6 +214,7 @@ export async function ensureInitialSkillVersion(
   if (hash === null) return
   const now = Date.now()
   await databaseSessionFor(db).transaction(async (tx) => {
+    const { skills, skillVersions } = tablesOf(tx)
     await tx
       .update(skills)
       .set({
@@ -225,7 +226,7 @@ export async function ensureInitialSkillVersion(
         updatedAt: now,
       })
       .where(eq(skills.id, skillId))
-    await tx.insert(skillVersions).values({
+    await insertOne(tx, skillVersions, {
       id: ulid(),
       skillId,
       versionIndex: 1,
@@ -271,6 +272,7 @@ export async function backfillLegacySkillVersions(
 ): Promise<{ backfilled: number; husksRemoved: number }> {
   const log = createLogger('skill-version-backfill')
   const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
+  const { skills } = tablesOf(db)
   const rows = (await db
     .select()
     .from(skills)
@@ -301,6 +303,7 @@ export async function backfillLegacySkillVersions(
         continue
       }
       await databaseSessionFor(db).transaction(async (tx) => {
+        const { skills } = tablesOf(tx)
         await tx.delete(skills).where(eq(skills.id, row.id))
         return null
       })
@@ -362,7 +365,7 @@ export interface SkillVersionCommitOpts {
    * RFC-101 PR-B hook: run extra writes (e.g. fuse memories) inside the SAME
    * transaction as the version bump, given the new version number.
    */
-  txExtra?: (tx: DatabaseTransaction, newVersion: number) => void | Promise<void>
+  txExtra?: (tx: PersistenceTx, newVersion: number) => void | Promise<void>
   /**
    * RFC-170 §6a/T7② — skip opening a version-write op (lock+recovery). Set by a
    * caller that ALREADY holds the skill's op lock (e.g. reserve/createManagedSkill,
@@ -393,7 +396,7 @@ export interface SkillVersionCommitOpts {
  * the caller's await window slips through unfenced and returns the substitute's row.
  */
 async function assertCompositePrecondition(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   skillId: string,
   commit: SkillVersionCommitOpts,
 ): Promise<void> {
@@ -568,7 +571,7 @@ export async function stageSkillVersion(
  * 返回 null 表示没有新版本行。
  */
 export async function commitSkillVersionInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   staged: StagedSkillVersion,
   commit: SkillVersionCommitOpts,
 ): Promise<SkillVersionRow | null> {
@@ -582,15 +585,16 @@ export async function commitSkillVersionInTx(
   }
   const id = ulid()
   const now = Date.now()
-  const skillSet: Partial<typeof skills.$inferInsert> = {
+  const skillSet: Partial<PersistenceTables['skills']['$inferInsert']> = {
     contentVersion: staged.newVersion,
     updatedAt: now,
     // RFC-170 §invariant④: a freshly-written snapshot IS the authority.
     versionState: 'snapshot-authoritative',
   }
   if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
+  const { skills, skillVersions } = tablesOf(tx)
   await tx.update(skills).set(skillSet).where(eq(skills.id, staged.skillId))
-  await tx.insert(skillVersions).values({
+  await insertOne(tx, skillVersions, {
     id,
     skillId: staged.skillId,
     versionIndex: staged.newVersion,
@@ -814,7 +818,7 @@ export interface RestoreResult {
  */
 export interface SkillRestoreMembershipPort {
   unfuseForRestore(
-    tx: DatabaseTransaction,
+    tx: PersistenceTx,
     request: { readonly skillId: string; readonly targetVersion: number },
   ): readonly string[] | Promise<readonly string[]>
 }
@@ -903,6 +907,7 @@ export async function reconcileSkillLiveFiles(
   opts: SkillVersionFsOptions,
 ): Promise<void> {
   const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
+  const { skills } = tablesOf(db)
   const rows = (await db.select().from(skills)) as SkillRow[]
   for (const skill of rows) {
     try {

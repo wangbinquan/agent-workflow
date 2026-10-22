@@ -39,25 +39,19 @@
 // 「两个写手都已经读完了」这件事经语句录制器观测（`harness.recordStatements()`），不是等墙钟；
 // SQLite 上录不到（写手还没开始），等待自然走到上限后放行，两条路都不依赖时序。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { Column, Table } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  employeeCases,
-  employeeOsOutbox,
-  eventObserverRuns,
-  memories,
-  observerActivations,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeCasePersistence } from '@/modules/digital-employee/application/ports/runtimeStore'
 import type { EmployeeCaseRecord } from '@/modules/digital-employee/domain/runtimeModel'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
@@ -108,7 +102,7 @@ function id(prefix: string): string {
 }
 
 /** `services/*` 的形参仍写着 legacy 的 bun:sqlite 句柄类型；事务面早已中立。 */
-function legacy(db: ProviderNeutralDatabase): DbClient {
+function legacy(db: PersistenceDb): DbClient {
   return db as unknown as DbClient
 }
 
@@ -129,8 +123,8 @@ interface Brake {
  */
 async function holdAggregateRoot(
   harness: ProviderHarness,
-  table: SQLiteTable,
-  idColumn: SQLiteColumn,
+  table: Table,
+  idColumn: Column,
   rowId: string,
 ): Promise<Brake> {
   let open: () => void = () => {}
@@ -279,6 +273,7 @@ describeEachProvider('RFC-359 W6-T28 L1 —— 终止过的案件不得被并发
     await seedCase(store, caseId)
 
     const recording = recorderFor(harness)
+    const { employeeCases } = tablesOf(db)
     const brake = await holdAggregateRoot(harness, employeeCases, employeeCases.id, caseId)
     // 用户点「终止」。
     const terminating = store.terminateCase(caseId, 'completed', NOW + 1)
@@ -292,7 +287,7 @@ describeEachProvider('RFC-359 W6-T28 L1 —— 终止过的案件不得被并发
     await blocking
     expect(terminated.state).toBe('terminal')
 
-    const row = await db.select().from(employeeCases).where(eq(employeeCases.id, caseId)).get()
+    const row = await firstRow(db.select().from(employeeCases).where(eq(employeeCases.id, caseId)))
     expect(
       row?.state,
       '「终止」已经返回了一条 terminal 记录：案件不得在并发的 block 之后回到 blocked（那样还能被 resume 复活）',
@@ -310,6 +305,7 @@ describeEachProvider('RFC-359 W6-T28 L2 —— 案件行与生命周期事件必
     await seedCase(store, caseId)
 
     const recording = recorderFor(harness)
+    const { employeeCases, employeeOsOutbox } = tablesOf(db)
     const brake = await holdAggregateRoot(harness, employeeCases, employeeCases.id, caseId)
     // 用户点「终止」，同一时刻运行时 tick 按预算耗尽也要终止它。
     const byUser = store.terminateCase(caseId, 'completed', NOW + 1)
@@ -319,7 +315,7 @@ describeEachProvider('RFC-359 W6-T28 L2 —— 案件行与生命周期事件必
     await brake.release()
 
     const [first, second] = await Promise.all([byUser, byBudget])
-    const row = await db.select().from(employeeCases).where(eq(employeeCases.id, caseId)).get()
+    const row = await firstRow(db.select().from(employeeCases).where(eq(employeeCases.id, caseId)))
     expect(row?.state).toBe('terminal')
     expect(row?.terminalKind, '先落地的那笔终止才是真相').toBe('completed')
     expect(second.terminalKind, '两次调用不得各自回一个不同的终止原因').toBe(first.terminalKind)
@@ -429,6 +425,7 @@ describeEachProvider('RFC-359 W6-T28 L3 —— 观察者结算不得吞掉运行
       // 刹车挂在**运行行**上（结算在读完 activation 之后、写回 activation 之前会写它），
       // 于是 nudge 走的那张表完全不被挡——这正是生产里的时序。
       const recording = recorderFor(harness)
+      const { eventObserverRuns, observerActivations } = tablesOf(db)
       const brake = await holdAggregateRoot(
         harness,
         eventObserverRuns,
@@ -441,11 +438,12 @@ describeEachProvider('RFC-359 W6-T28 L3 —— 观察者结算不得吞掉运行
       // 等 nudge 真的落库（wakeEpoch 前进）再放行；修好之后 nudge 会被结算持有的行锁挡住，
       // 这个等待自然走到上限，放行后它排在结算之后落地——两种时序下断言相同。
       for (let attempt = 0; attempt < 60; attempt += 1) {
-        const row = await db
-          .select({ wakeEpoch: observerActivations.wakeEpoch })
-          .from(observerActivations)
-          .where(eq(observerActivations.sourceId, source.sourceRef.id))
-          .get()
+        const row = await firstRow(
+          db
+            .select({ wakeEpoch: observerActivations.wakeEpoch })
+            .from(observerActivations)
+            .where(eq(observerActivations.sourceId, source.sourceRef.id)),
+        )
         if ((row?.wakeEpoch ?? 0) > run.wakeEpoch) break
         await settle(1)
       }
@@ -454,11 +452,13 @@ describeEachProvider('RFC-359 W6-T28 L3 —— 观察者结算不得吞掉运行
       expect(await nudging).toBe(true)
     }
 
-    const activation = await db
-      .select()
-      .from(observerActivations)
-      .where(eq(observerActivations.sourceId, source.sourceRef.id))
-      .get()
+    const { observerActivations } = tablesOf(db)
+    const activation = await firstRow(
+      db
+        .select()
+        .from(observerActivations)
+        .where(eq(observerActivations.sourceId, source.sourceRef.id)),
+    )
     // 「立刻」的两种合法写法：nudge 自己写的 `nudgeAt`（它排在结算之后落地），或结算看见
     // `wakeEpoch` 前进后写的 `settleAt`。丢掉这一笔的症状只有一个——`settleAt + pollIntervalMs`。
     expect(
@@ -485,6 +485,7 @@ describeEachProvider('RFC-359 W6-T28 L4 —— 同一条候选记忆只能被裁
     })
 
     const recording = recorderFor(harness)
+    const { memories } = tablesOf(db)
     const brake = await holdAggregateRoot(harness, memories, memories.id, candidate.id)
     const approving = catalog.commands.promote(candidate.id, { action: 'approve' }, 'u_admin_a')
     await waitForReads(recording, /\bmemories\b/i, 1)
@@ -502,7 +503,7 @@ describeEachProvider('RFC-359 W6-T28 L4 —— 同一条候选记忆只能被裁
     expect((rejected as PromiseRejectedResult).reason).toMatchObject({
       code: 'memory-not-candidate',
     })
-    const row = await db.select().from(memories).where(eq(memories.id, candidate.id)).get()
+    const row = await firstRow(db.select().from(memories).where(eq(memories.id, candidate.id)))
     expect(row?.status, '库里的状态必须就是那个成功者的裁决').toBe('approved')
   })
 })
@@ -526,13 +527,14 @@ const NO_OP_RECOVERY_MUTATIONS: TaskRecoveryMutationOperations = {
   },
 }
 
-function recoveryOperations(db: ProviderNeutralDatabase): TaskRecoveryOperations {
+function recoveryOperations(db: PersistenceDb): TaskRecoveryOperations {
   return createTaskRecoveryOperations(db, NO_OP_RECOVERY_MUTATIONS)
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const workflowId = id('wf')
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -544,12 +546,13 @@ async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const taskId = (over.id as string | undefined) ?? id('task')
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -580,6 +583,7 @@ describeEachProvider('RFC-359 W6-T28 L5 —— 自动恢复的滑动窗口必须
     const config = { maxPerWindow: 1, windowMs: 3_600_000 }
 
     const recording = recorderFor(harness)
+    const { tasks } = tablesOf(db)
     const brake = await holdAggregateRoot(harness, tasks, tasks.id, taskId)
     // auto-repair 与 heartbeat-kill 是两条各自定时的 loop，可以同时盯上同一个任务。
     const byRepair = operations.recordAutoRecoveryAttempt({ taskId, config, now: NOW })
@@ -598,14 +602,15 @@ describeEachProvider('RFC-359 W6-T28 L5 —— 自动恢复的滑动窗口必须
       'maxPerWindow = 1 时第二次尝试必须触发隔离',
     ).toBe(true)
 
-    const row = await db
-      .select({
-        attempts: tasks.autoRecoveryAttempts,
-        suspended: tasks.autoRecoverySuspended,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get()
+    const row = await firstRow(
+      db
+        .select({
+          attempts: tasks.autoRecoveryAttempts,
+          suspended: tasks.autoRecoverySuspended,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    )
     expect(row?.attempts).toBe(2)
     expect(row?.suspended, '闸门跳了就必须落库，否则下一轮 loop 还会继续自动重跑').toBe(true)
   })
@@ -652,6 +657,7 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     await waitForQueued(getTaskWriteSem(secondChild), 1, '第二笔删除停到自己的写锁上')
 
     const recording = recorderFor(harness)
+    const { tasks } = tablesOf(db)
     const brake = await holdAggregateRoot(harness, tasks, tasks.id, parentId)
     releaseFirst()
     releaseSecond()
@@ -660,11 +666,12 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
 
     await Promise.all([deletingFirst, deletingSecond])
 
-    const parent = await db
-      .select({ branchStartedAt: tasks.branchStartedAt })
-      .from(tasks)
-      .where(eq(tasks.id, parentId))
-      .get()
+    const parent = await firstRow(
+      db
+        .select({ branchStartedAt: tasks.branchStartedAt })
+        .from(tasks)
+        .where(eq(tasks.id, parentId)),
+    )
     expect(
       parent?.branchStartedAt,
       '两个子任务都删光之后，父行的物化列必须退回它自己的 started_at——' +

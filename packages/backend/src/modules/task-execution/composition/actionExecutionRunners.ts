@@ -8,6 +8,7 @@
 // 这里把校验、宿主快照合成、结果投影、取消语义写一次；provider 只出现在两件事上：
 // 「怎么启动一个借用工作区的宿主任务」与「怎么取消它」——由 `ActionExecutionEnvironment` 注入。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,8 +22,7 @@ import {
   type TaskStatus,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { initialBuiltinResourceAcl } from '@/services/resourceAcl'
@@ -121,7 +121,7 @@ export interface ActionHostTaskLaunch {
 
 export interface ActionExecutionEnvironment {
   /** 宿主工作流播种、原始脚本定义与任务状态读取——两个引擎同一段 drizzle。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly agents: Readonly<{
     get(id: string): Promise<{
       readonly id: string
@@ -178,9 +178,8 @@ function parseScriptRef(value: string): { workflowId: string; digest: string } |
 }
 
 /** 数字员工宿主工作流的幂等播种（RFC-310）。两个引擎同一条 upsert。 */
-export async function ensureDigitalEmployeeHostWorkflow(
-  db: ProviderNeutralDatabase,
-): Promise<void> {
+export async function ensureDigitalEmployeeHostWorkflow(db: PersistenceDb): Promise<void> {
+  const { workflows } = tablesOf(db)
   await db
     .insert(workflows)
     .values({
@@ -255,10 +254,8 @@ async function assertWorkspace(input: {
   return { ok: true, platformInputPaths }
 }
 
-async function readTaskStatus(
-  db: ProviderNeutralDatabase,
-  executionRef: string,
-): Promise<TaskStatus | null> {
+async function readTaskStatus(db: PersistenceDb, executionRef: string): Promise<TaskStatus | null> {
+  const { tasks } = tablesOf(db)
   const row = (
     await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, executionRef)).limit(1)
   )[0]
@@ -407,6 +404,7 @@ export function createScriptActionExecutionRunner(
           'scriptRef must be workflow-id@definition-sha256',
         )
       }
+      const { workflows } = tablesOf(env.db)
       const row = (
         await env.db
           .select({ definition: workflows.definition })

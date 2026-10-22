@@ -1,5 +1,5 @@
 import type { Skill } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertDeleteConfirm, assertTokenDeleteConfirm } from '@/services/deleteConfirm'
 import {
   canViewResource,
@@ -36,7 +36,7 @@ import { createFileSkillLifecycleContentStore } from '../infrastructure/local/fi
 import { createFileSkillDeletionContentStore } from '../infrastructure/local/fileSkillDeletionContentStore'
 
 export interface SkillCatalogCompositionDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly content?: SkillContentReader
   readonly versionReader?: SkillVersionContentReader

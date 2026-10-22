@@ -201,8 +201,10 @@ function filesCallingTableMethod(root: string, method: string, table: string): s
       if (matched) return
       if (
         ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === method &&
+        ((ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === method) ||
+          (method === 'insert' &&
+            ts.isIdentifier(node.expression) &&
+            node.expression.text === 'insertOne')) &&
         node.arguments.some((argument) => ts.isIdentifier(argument) && argument.text === table)
       ) {
         matched = true

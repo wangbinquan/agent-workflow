@@ -24,6 +24,7 @@
 //   - check the cascadeSiblingReviews call in submitReviewDecision iterate branch
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -34,7 +35,6 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { docVersions, nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
@@ -215,7 +215,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
@@ -223,6 +223,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
   )
 
   const idFor = async (nodeId: string): Promise<string> => {
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select()
       .from(nodeRuns)
@@ -272,6 +273,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
     cleanupHarness = h.cleanup
 
+    const { nodeRuns, docVersions } = tablesOf(h.db)
     // All three review node_runs land in awaiting_review after the upstream
     // agent runs (handled by the scheduler harness).
     const before = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
@@ -338,6 +340,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
         .schedulerDriver,
       awaitScheduler: true,
     })
+    const { nodeRuns } = tablesOf(h.db)
     const proposalDone = (
       await h.db
         .select()
@@ -377,6 +380,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
       expectedReviewIteration: 0,
     })
 
+    const { nodeRuns } = tablesOf(h.db)
     // Siblings remain awaiting_review (no cascade).
     const proposalAfter = (
       await h.db
@@ -400,6 +404,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
     cleanupHarness = h.cleanup
 
+    const { docVersions } = tablesOf(h.db)
     // RFC-014 updated: the block lists `- {portName}: {sourceFilePath}` lines
     // pulled from doc_versions.source_file_path. The harness emits inline
     // markdown (kind='markdown', no sourceFilePath); to exercise the new
@@ -471,6 +476,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
     cleanupHarness = h.cleanup
 
+    const { docVersions } = tablesOf(h.db)
     // Seed sourceFilePath on the sibling doc_versions before the decision —
     // simulates the upstream agent having used `kind: markdown_file` outputs
     // that wrote into worktree-relative paths.
@@ -524,6 +530,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
     cleanupHarness = h.cleanup
 
+    const { docVersions } = tablesOf(h.db)
     // The harness emitted v0 for all three ports. Confirm the desc query
     // would in fact prefer a higher reviewIteration if it existed.
     const dvForProposal = await h.db

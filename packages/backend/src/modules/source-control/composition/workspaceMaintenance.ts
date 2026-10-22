@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createWorkspaceMaintenanceCommand } from '../application/workspaceMaintenance'
 import type {
   WorkspaceMaintenanceFilesystem,
@@ -33,7 +33,7 @@ function filesystem(input: WorkspaceMaintenanceCompositionInput) {
 
 /** RFC-359 W3-T15-B / W4-B6：一份 store，调用方（boot / 测试）看不见 provider。 */
 export function composeWorkspaceMaintenanceCommand(
-  input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
+  input: WorkspaceMaintenanceCompositionInput & { readonly db: PersistenceDb },
 ): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
   return createWorkspaceMaintenanceCommand({
     store: new DrizzleWorkspaceMaintenanceStore(input.db),

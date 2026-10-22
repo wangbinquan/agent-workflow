@@ -30,30 +30,20 @@
 // exclusion / dispatch-time trigger_run_id binding are GONE — the per-node queue model
 // (buildExternalFeedbackContext / markClarifyRoundsConsumedBy) replaces them.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-} from '@/db/schema'
-
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 // RFC-311 (audit L2-5) — this file's per-task run fetches never consume the
 // heavy columns (prompt_text, iso/inventory/startup JSON, pre-snapshots…), but
 // two of them run INSIDE the dispatch write transaction, so the big-TEXT
 // decode extended write-lock hold time. All four share this light projection;
 // the compiler flags any future consumer of a column missing here.
-function dispatchRunColumns() {
+function dispatchRunColumns(db: object) {
+  const { nodeRuns } = tablesOf(db)
   return {
     id: nodeRuns.id,
     seq: nodeRuns.seq,
@@ -83,7 +73,7 @@ function dispatchRunColumns() {
 }
 
 type DispatchRunRow = Pick<
-  typeof nodeRuns.$inferSelect,
+  PersistenceTables['nodeRuns']['$inferSelect'],
   keyof ReturnType<typeof dispatchRunColumns>
 >
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
@@ -210,7 +200,7 @@ interface PreparedQuestionDispatchDecision {
   readonly capture: { envelope?: QuestionDispatchReceiptEnvelope }
 }
 
-type TaskQuestionRow = typeof taskQuestions.$inferSelect
+type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
 
 const EMPTY_RESULT: DispatchTaskQuestionsResult = {
   reruns: [],
@@ -243,7 +233,7 @@ function decisionResultFromEnvelope(
 }
 
 async function replayCommittedQuestionDispatch(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   entryIds: readonly string[]
   actor: DispatchTaskQuestionsActor
@@ -251,6 +241,7 @@ async function replayCommittedQuestionDispatch(input: {
 }): Promise<DispatchTaskQuestionsDecisionResult | null> {
   const gateRef = `questions:${input.taskId}`
   const payload = questionDispatchPayload(input.entryIds)
+  const { collaborationGateOperations } = tablesOf(input.db)
   const rows = await input.db
     .select()
     .from(collaborationGateOperations)
@@ -302,7 +293,7 @@ async function replayCommittedQuestionDispatch(input: {
 }
 
 async function ensureLegacyQuestionGateRevisionTx(input: {
-  tx: DatabaseTransaction
+  tx: PersistenceTx
   operations: HumanGateOperationJournal
   taskId: string
   expectedTaskRevision: number
@@ -423,7 +414,7 @@ const CAUSE_PRIORITY: Record<CauseClass, number> = {
  * nothing stamped) when ANY requested clarify entry is unsealed.
  */
 async function assertRequestedEntriesSealed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   requested: TaskQuestionRow[],
 ): Promise<void> {
   const clarifyEntries = requested.filter((e) => e.sourceKind !== 'manual')
@@ -433,6 +424,7 @@ async function assertRequestedEntriesSealed(
   // backfills no per-entry sealed_at). Resolve those rounds; only entries on a non-answered
   // round are genuinely unsealed.
   const originIds = Array.from(new Set(unsealed.map((e) => e.originNodeRunId)))
+  const { clarifyRounds } = tablesOf(db)
   const rounds = await db
     .select({
       origin: clarifyRounds.intermediaryNodeRunId,
@@ -494,12 +486,13 @@ function mapEntryShards(
 }
 
 export async function resolveEntryShardKeys(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   entries: TaskQuestionRow[],
 ): Promise<Map<string, string | null>> {
   const originIds = entryOriginIds(entries)
   const shardByOrigin = new Map<string, string | null>()
   if (originIds.length > 0) {
+    const { clarifyRounds } = tablesOf(db)
     const rounds = await db
       .select({
         origin: clarifyRounds.intermediaryNodeRunId,
@@ -563,7 +556,7 @@ function computeUpstreamFrontier(
  * scheduler cascade. Resume is the caller's job.
  */
 export async function dispatchTaskQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -586,7 +579,7 @@ export async function dispatchTaskQuestions(
  * lifecycle release, one canonical continuation, and the replay receipt share
  * the same transaction. The returned continuation ref is composition-only. */
 export async function dispatchTaskQuestionsWithDecision(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -621,7 +614,7 @@ export async function dispatchTaskQuestionsWithDecision(
  *  are cleared, but dispatch filters on neither, so the stale id would still dispatch withdrawn
  *  work. Returns EMPTY_RESULT when nothing is queued. */
 export async function dispatchDeferredTaskQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   actor: DispatchTaskQuestionsActor,
   opts?: {
@@ -633,6 +626,7 @@ export async function dispatchDeferredTaskQuestions(
   },
 ): Promise<DispatchTaskQuestionsResult> {
   return await getTaskQuestionWriteSem(taskId).run(async () => {
+    const { taskQuestions } = tablesOf(db)
     const deferred = await db
       .select({ id: taskQuestions.id })
       .from(taskQuestions)
@@ -757,7 +751,7 @@ function selectDispatchBatch(requested: TaskQuestionRow[]): {
  *  prechecks, resolve per-entry shards, and precompute the mint plans (all
  *  async reads happen HERE so the commit tx body stays purely synchronous). */
 async function planDispatchFrontier(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   snapshot: string,
   byTarget: Map<string, TaskQuestionRow[]>,
@@ -865,7 +859,7 @@ async function planDispatchFrontier(
 }
 
 async function dispatchTaskQuestionsLocked(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -875,6 +869,7 @@ async function dispatchTaskQuestionsLocked(
   },
   committedEventIdentity?: DispatchTaskQuestionsCommittedEventIdentity,
 ): Promise<DispatchTaskQuestionsResult> {
+  const { tasks, taskQuestions } = tablesOf(db)
   // 0. RFC-132 PR-B (universal deferred model): every task dispatches through this ONE path now
   //    (the route routes ALL clarify answers to autoDispatchClarifyRound → dispatchTaskQuestions).
   //    The legacy immediate-mint path is route-unreachable, so there is no double-mint risk to gate
@@ -1098,7 +1093,7 @@ async function dispatchTaskQuestionsLocked(
 }
 
 async function prepareQuestionDispatchDecision(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   entryIds: readonly string[]
   actor: DispatchTaskQuestionsActor
@@ -1108,21 +1103,23 @@ async function prepareQuestionDispatchDecision(input: {
   capture: PreparedQuestionDispatchDecision['capture']
 }): Promise<PreparedQuestionDispatchDecision> {
   const gateRef = `questions:${input.taskId}`
+  const { collaborationGateOperations } = tablesOf(input.db)
   const latestGateRevision =
     (
-      await input.db
-        .select({ revision: collaborationGateOperations.resultGateRevision })
-        .from(collaborationGateOperations)
-        .where(
-          and(
-            eq(collaborationGateOperations.gateKind, 'questions'),
-            eq(collaborationGateOperations.gateRef, gateRef),
-            isNotNull(collaborationGateOperations.resultGateRevision),
-          ),
-        )
-        .orderBy(desc(collaborationGateOperations.resultGateRevision))
-        .limit(1)
-        .get()
+      await first(
+        input.db
+          .select({ revision: collaborationGateOperations.resultGateRevision })
+          .from(collaborationGateOperations)
+          .where(
+            and(
+              eq(collaborationGateOperations.gateKind, 'questions'),
+              eq(collaborationGateOperations.gateRef, gateRef),
+              isNotNull(collaborationGateOperations.resultGateRevision),
+            ),
+          )
+          .orderBy(desc(collaborationGateOperations.resultGateRevision))
+          .limit(1),
+      )
     )?.revision ?? 0
   const capturedGateRevision =
     input.args.expectedGateRevision ?? (latestGateRevision === 0 ? 1 : latestGateRevision)
@@ -1159,7 +1156,7 @@ async function prepareQuestionDispatchDecision(input: {
  *  retryable-error mapping and post-commit broadcasts/result assembly. Runs
  *  with question-write lock B held by the dispatchTaskQuestions entry. */
 async function commitDispatchPlan(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   actor: DispatchTaskQuestionsActor,
   plan: {
@@ -1197,6 +1194,7 @@ async function commitDispatchPlan(
   const plannedByEntry = new Map(
     dispatchEntries.map((e) => [e.id, { target: effectiveTarget(e), origin: e.originNodeRunId }]),
   )
+  const { taskQuestions } = tablesOf(db)
   const gateNodeRunId =
     dispatchEntries[0]?.originNodeRunId ??
     (deferredEntries[0] === undefined
@@ -1242,6 +1240,7 @@ async function commitDispatchPlan(
     // read→plan→stamp pipeline) — see the wrapper above; this block runs lock-held.
     {
       await databaseSessionFor(db).transaction(async (tx) => {
+        const { tasks, taskQuestions, nodeRuns, nodeRunOutputs } = tablesOf(tx)
         // PostgreSQL READ COMMITTED 下「先 SELECT 再 CAS」要靠任务聚合根行锁在同任务的并发派发之间串行；
         // SQLite 的 BEGIN IMMEDIATE 本就全库独占（no-op）。
         await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)
@@ -1355,7 +1354,7 @@ async function commitDispatchPlan(
         // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
         // runs + output ids ONCE for both.
         const txRuns = await tx
-          .select(dispatchRunColumns())
+          .select(dispatchRunColumns(tx))
           .from(nodeRuns)
           .where(eq(nodeRuns.taskId, taskId))
         const txOutputIds: ReadonlySet<string> =
@@ -1423,7 +1422,6 @@ async function commitDispatchPlan(
                 eq(taskQuestions.confirmation, 'open'),
               ),
             )
-            .run()
         }
         // RFC-140 W2 — stamp the auto-serial redispatch marker on the auto-split-DEFERRED entries
         // (same tx = atomic with the batch's dispatched_at stamp; lock B is held across the whole
@@ -1444,7 +1442,6 @@ async function commitDispatchPlan(
                 isNull(taskQuestions.dispatchedAt),
               ),
             )
-            .run()
         }
         const nodeRunMint = createNodeRunMintParticipantInTx(tx)
         for (const p of mintPlans) {
@@ -1465,7 +1462,6 @@ async function commitDispatchPlan(
                 ne(taskQuestions.sourceKind, 'manual'),
               ),
             )
-            .run()
         }
         if (decision !== undefined && operations !== undefined && begun !== undefined) {
           const rerunNodeRunIds = mintPlans.map((plan) => plan.preId)
@@ -1856,7 +1852,7 @@ function findOpenDispatchTarget(
  * node's open run finishes.
  */
 async function assertNoInFlightDispatch(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   affected: ReadonlySet<string>,
   mintCauseByTarget: ReadonlyMap<string, CauseClass>,
@@ -1864,6 +1860,7 @@ async function assertNoInFlightDispatch(
    *  does not block. `undefined` = shard-blind (pre-172b). See findOpenDispatchTarget. */
   mintShardsByTarget?: ReadonlyMap<string, ReadonlySet<string | null>>,
 ): Promise<void> {
+  const { taskQuestions, nodeRuns } = tablesOf(db)
   // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): span ANY deferred role (self/questioner/designer),
   // not designer-only — a home with an in-flight self/questioner dispatch must block a later
   // designer dispatch (and vice-versa), or the same-home reruns double-mint (cross-batch
@@ -1882,7 +1879,7 @@ async function assertNoInFlightDispatch(
     )
   if (entries.length === 0) return
   const runs = await db
-    .select(dispatchRunColumns())
+    .select(dispatchRunColumns(db))
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
@@ -1993,12 +1990,13 @@ function ledgerDesc(l: LedgerResolution): string {
 }
 
 export async function resolveBorrowForNode(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<string | null> {
+  const { taskQuestions } = tablesOf(db)
   // Hot-path gate: both remaining ledgers (designer + deferred self/questioner) are
   // dispatched-only — a task with NO dispatched entries has no ledger at all → no borrow, no
   // conflict. (RFC-132 ③: the immediate quick-channel ledger is gone; RFC-131 T4 already made
@@ -2072,12 +2070,13 @@ export async function resolveBorrowForNode(
  * conflicting agents in one continuation. Returns the borrowed agentName, or null.
  */
 async function resolveDeferredSelfQuestionerBorrowForNode(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<LedgerResolution> {
+  const { taskQuestions, clarifyRounds, nodeRuns } = tablesOf(db)
   // Control-channel DISPATCHED self/questioner entries (dispatched_at set). Include no-override
   // rows so a "borrow X + run self" mix on one home is DETECTED (P2-1), not first-picked, AND so
   // an OPEN RUN-SELF dispatch is counted as an open ledger (Codex impl-gate run-self fix).
@@ -2112,7 +2111,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
     )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
   const runs = await db
-    .select(dispatchRunColumns())
+    .select(dispatchRunColumns(db))
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   const runById = new Map(runs.map((r) => [r.id, r]))
@@ -2185,12 +2184,13 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
  * designer dispatch is reported `{ open: true, borrowAgentName: null }`.
  */
 async function resolveDesignerBorrowForNode(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<LedgerResolution> {
+  const { taskQuestions, nodeRuns } = tablesOf(db)
   const entries = await db
     .select()
     .from(taskQuestions)
@@ -2209,7 +2209,7 @@ async function resolveDesignerBorrowForNode(
   if (candidates.length === 0) return CLOSED_LEDGER
 
   const runs = await db
-    .select(dispatchRunColumns())
+    .select(dispatchRunColumns(db))
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
@@ -2258,7 +2258,7 @@ async function resolveDesignerBorrowForNode(
  * override to ANY agent node — designer or not — carries the answer without a graph edge.
  */
 async function assertSafeFrontierTarget(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   targetNodeId: string,
 ): Promise<void> {
@@ -2287,7 +2287,7 @@ async function assertSafeFrontierTarget(
  * question set, not the graph designer's siblings).
  */
 async function assertDesignerReady(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   targetNodeId: string,
   group: TaskQuestionRow[],
@@ -2311,6 +2311,7 @@ async function assertDesignerReady(
   // the rounds of a nested loop's different outer rounds never gate (or satisfy)
   // each other.
   const originFrames = new Map<string, string | null>()
+  const { nodeRuns } = tablesOf(db)
   for (const row of await db
     .select({ id: nodeRuns.id, seq: nodeRuns.seq, containerRunId: nodeRuns.containerRunId })
     .from(nodeRuns)
@@ -2358,7 +2359,7 @@ interface FrontierMintPlan {
  * the same dispatch transaction.
  */
 export async function buildFrontierMintPlan(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   targetNodeId: string,
   // RFC-127 借壳: the node whose agent X is borrowed (null = home runs its own agent).
@@ -2377,6 +2378,7 @@ export async function buildFrontierMintPlan(
   // member inheritance set and regress it to `unsafe-dispatch-target`.
   shardKey: string | null | undefined,
 ): Promise<FrontierMintPlan> {
+  const { nodeRuns } = tablesOf(db)
   const targetRuns = await db
     .select()
     .from(nodeRuns)

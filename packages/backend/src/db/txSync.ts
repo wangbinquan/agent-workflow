@@ -20,6 +20,7 @@
 // `tx.select(…).all()` / `.get()`, `tx.update(…).run()`, `tx.insert(…).run()`,
 // `tx.delete(…).run()`. Never `await`.
 
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { observeDbTransaction, type DbClient } from './client'
 import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
 
@@ -39,7 +40,7 @@ export function dbTxSync<T>(db: DbClient, fn: (tx: DbTxSync) => NotPromise<T>): 
   try {
     return db.transaction(
       (tx) => {
-        const result: unknown = fn(tx)
+        const result: unknown = fn(inheritDatabaseHandle(tx, db))
         if (
           result instanceof Promise ||
           (result !== null &&

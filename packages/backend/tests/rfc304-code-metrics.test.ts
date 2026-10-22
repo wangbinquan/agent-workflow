@@ -14,12 +14,13 @@
 // So the tests below pin the four buckets as four, and pin the two cases where
 // the signals DISAGREE, since those are the ones a single rate destroys.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { codeFindings, codeWorkItems, codeWorkRounds } from '../src/db/schema'
 import {
   createCodeMetricsQuery as createCodeMetricsQueryFromPort,
   DEFAULT_METRICS_WINDOW_MS,
@@ -32,20 +33,21 @@ import { errorHandler } from '../src/util/errors'
 
 const NOW = 1_700_000_000_000
 
-const createCodeMetricsQuery = (db: ProviderNeutralDatabase) =>
+const createCodeMetricsQuery = (db: PersistenceDb) =>
   createCodeMetricsQueryFromPort(createCodeMetricsRead(db))
 
 describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
   })
 
   let seq = 0
-  const finding = async (over: Partial<typeof codeFindings.$inferInsert> = {}) => {
+  const finding = async (over: Partial<PersistenceTables['codeFindings']['$inferInsert']> = {}) => {
     seq += 1
-    await db.insert(codeFindings).values({
+    const { codeFindings } = tablesOf(db)
+    await insertOne(db, codeFindings, {
       id: `f-${String(seq)}`,
       codeHostEndpointId: 'ep-1',
       stableProjectId: '41823',
@@ -130,11 +132,12 @@ describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
 })
 
 describeEachProvider('RFC-304 T58 — run counts', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(async () => {
     db = harness.db
-    await db.insert(codeWorkItems).values({
+    const { codeWorkItems } = tablesOf(db)
+    await insertOne(db, codeWorkItems, {
       id: 'item-1',
       codeHostEndpointId: 'ep-1',
       stableProjectId: '41823',
@@ -149,9 +152,10 @@ describeEachProvider('RFC-304 T58 — run counts', (harness) => {
   })
 
   let rseq = 0
-  const round = async (over: Partial<typeof codeWorkRounds.$inferInsert> = {}) => {
+  const round = async (over: Partial<PersistenceTables['codeWorkRounds']['$inferInsert']> = {}) => {
     rseq += 1
-    await db.insert(codeWorkRounds).values({
+    const { codeWorkRounds } = tablesOf(db)
+    await insertOne(db, codeWorkRounds, {
       id: `r-${String(rseq)}`,
       workItemId: 'item-1',
       roundSeq: rseq,
@@ -225,7 +229,7 @@ describeEachProvider('RFC-304 T58 — run counts', (harness) => {
 // every code to be NAMED by some test; naming it in a tautology would satisfy
 // that guard while proving nothing, which is worse than the gap it closes.
 describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
-  const appWith = (db: ProviderNeutralDatabase) => {
+  const appWith = (db: PersistenceDb) => {
     const app = new Hono()
     const actor = buildActor({
       user: {
@@ -247,9 +251,9 @@ describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
     return app
   }
 
-  const get = async (db: ProviderNeutralDatabase, path: string) => await appWith(db).request(path)
+  const get = async (db: PersistenceDb, path: string) => await appWith(db).request(path)
 
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetRouteMetaRegistry()
     db = harness.db

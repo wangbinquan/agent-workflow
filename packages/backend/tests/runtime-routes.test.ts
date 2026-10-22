@@ -5,7 +5,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -27,7 +27,7 @@ const SCOPE_OPTIONS = {
 
 interface Harness {
   app: Hono
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /** 作用域现建的 app home——本文件把桩二进制也写在它下面，用完随作用域一起删。 */
   tmp: string
   configPath: string

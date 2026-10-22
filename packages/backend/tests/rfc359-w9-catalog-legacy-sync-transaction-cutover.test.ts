@@ -34,25 +34,17 @@
 //
 // 那几条 create 路径仍钉在 `dbTxSync` 上（体内的提交臂被 aggregateAdapters 的
 // `(tx: DbTxSync, …) => …` 参与者契约共用），在 PostgreSQL 客户端上 `dbTxSync` 拿到的是
-// sqlite-proxy 的**异步** `transaction`，返回一个没人 await 的 Promise ⇒ 写既不落库也不报错。
+// PostgreSQL 的**异步** `transaction`，返回一个没人 await 的 Promise ⇒ 写既不落库也不报错。
 // 所以夹具一律直接 `insert`，不借用尚未切换的写路径。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import {
-  agents,
-  resourceGrants,
-  scheduledTasks,
-  tasks,
-  users,
-  workflows,
-  workgroupTaskState,
-  workgroups,
-} from '@/db/schema'
 import { deleteAgent, renameAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { deleteWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { deleteWorkgroup } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
@@ -91,7 +83,8 @@ const stranger = actorFor(OTHER)
 
 async function seedUser(harness: ProviderHarness, id: string): Promise<void> {
   const now = Date.now()
-  await harness.db.insert(users).values({
+  const { users } = tablesOf(harness.db)
+  await insertOne(harness.db, users, {
     id,
     username: id,
     displayName: id,
@@ -99,7 +92,7 @@ async function seedUser(harness: ProviderHarness, id: string): Promise<void> {
     status: 'active',
     createdAt: now,
     updatedAt: now,
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 interface SeededAgent {
@@ -111,7 +104,7 @@ interface SeededAgent {
 
 async function seedAgent(
   harness: ProviderHarness,
-  overrides: Partial<typeof agents.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['agents']['$inferInsert']> = {},
 ): Promise<SeededAgent> {
   const now = Date.now()
   const row = {
@@ -138,7 +131,8 @@ async function seedAgent(
     updatedAt: now,
     ...overrides,
   }
-  await harness.db.insert(agents).values(row as typeof agents.$inferInsert)
+  const { agents } = tablesOf(harness.db)
+  await insertOne(harness.db, agents, row as PersistenceTables['agents']['$inferInsert'])
   return {
     id: row.id,
     name: row.name,
@@ -149,7 +143,7 @@ async function seedAgent(
 
 async function seedWorkflow(
   harness: ProviderHarness,
-  overrides: Partial<typeof workflows.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['workflows']['$inferInsert']> = {},
 ): Promise<{ id: string; version: number }> {
   const now = Date.now()
   const row = {
@@ -167,13 +161,14 @@ async function seedWorkflow(
     updatedAt: now,
     ...overrides,
   }
-  await harness.db.insert(workflows).values(row as typeof workflows.$inferInsert)
+  const { workflows } = tablesOf(harness.db)
+  await insertOne(harness.db, workflows, row as PersistenceTables['workflows']['$inferInsert'])
   return { id: row.id, version: row.version }
 }
 
 async function seedWorkgroup(
   harness: ProviderHarness,
-  overrides: Partial<typeof workgroups.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['workgroups']['$inferInsert']> = {},
 ): Promise<{ id: string; version: number }> {
   const now = Date.now()
   const row = {
@@ -193,18 +188,20 @@ async function seedWorkgroup(
     updatedAt: now,
     ...overrides,
   }
-  await harness.db.insert(workgroups).values(row as typeof workgroups.$inferInsert)
+  const { workgroups } = tablesOf(harness.db)
+  await insertOne(harness.db, workgroups, row as PersistenceTables['workgroups']['$inferInsert'])
   return { id: row.id, version: row.version }
 }
 
 /** 一行非终态任务；`workflowId` 必填，按被测的引用面挂 sourceAgentId / workgroupId。 */
 async function seedRunningTask(
   harness: ProviderHarness,
-  overrides: Partial<typeof tasks.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await harness.db.insert(tasks).values({
+  const { tasks } = tablesOf(harness.db)
+  await insertOne(harness.db, tasks, {
     id,
     name: 'running task',
     workflowId: overrides.workflowId ?? ulid(),
@@ -219,7 +216,7 @@ async function seedRunningTask(
     createdAt: now,
     updatedAt: now,
     ...overrides,
-  } as typeof tasks.$inferInsert)
+  } as PersistenceTables['tasks']['$inferInsert'])
   return id
 }
 
@@ -229,7 +226,8 @@ async function seedSchedule(
   payload: Record<string, string>,
 ): Promise<void> {
   const now = Date.now()
-  await harness.db.insert(scheduledTasks).values({
+  const { scheduledTasks } = tablesOf(harness.db)
+  await insertOne(harness.db, scheduledTasks, {
     id: ulid(),
     name: 'nightly',
     ownerUserId: OWNER,
@@ -239,7 +237,7 @@ async function seedSchedule(
     enabled: true,
     createdAt: now,
     updatedAt: now,
-  } as typeof scheduledTasks.$inferInsert)
+  } as PersistenceTables['scheduledTasks']['$inferInsert'])
 }
 
 async function grantView(
@@ -248,28 +246,32 @@ async function grantView(
   resourceId: string,
   userId: string,
 ): Promise<void> {
-  await harness.db.insert(resourceGrants).values({
+  const { resourceGrants } = tablesOf(harness.db)
+  await insertOne(harness.db, resourceGrants, {
     resourceType: type,
     resourceId,
     userId,
     level: 'read',
     addedBy: OWNER,
     addedAt: Date.now(),
-  } as typeof resourceGrants.$inferInsert)
+  } as PersistenceTables['resourceGrants']['$inferInsert'])
 }
 
 async function agentRow(
   harness: ProviderHarness,
   id: string,
-): Promise<typeof agents.$inferSelect | undefined> {
+): Promise<PersistenceTables['agents']['$inferSelect'] | undefined> {
+  const { agents } = tablesOf(harness.db)
   return (await harness.db.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
 }
 
 async function workflowExists(harness: ProviderHarness, id: string): Promise<boolean> {
+  const { workflows } = tablesOf(harness.db)
   return (await harness.db.select().from(workflows).where(eq(workflows.id, id)).limit(1)).length > 0
 }
 
 async function workgroupExists(harness: ProviderHarness, id: string): Promise<boolean> {
+  const { workgroups } = tablesOf(harness.db)
   return (
     (await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)).length > 0
   )
@@ -774,6 +776,7 @@ describeEachProvider('RFC-359 W9 —— catalog legacy 删除 / 改名面的中�
       })
 
       expect(ok).toBe(false)
+      const { workgroupTaskState } = tablesOf(harness.db)
       const rows = await harness.db
         .select()
         .from(workgroupTaskState)

@@ -21,7 +21,7 @@ import {
   scheduledTaskRuntime,
   taskExecutionResourceBinding,
 } from './helpers/integrationTriggerResourceBinding'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 const directories: string[] = []
 afterEach(() => {
@@ -37,7 +37,7 @@ function barrier() {
 }
 
 function fixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   resumeWait?: () => Promise<void>,
   recoveryTick?: () => Promise<void>,
 ) {

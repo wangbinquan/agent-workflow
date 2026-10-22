@@ -1,5 +1,7 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 // RFC-300 T14 — real Webhook dispatcher -> executor -> task driver -> terminal
 // CAS -> owner release -> physical cleanup. No launch/cancel fake is injected.
@@ -21,16 +23,6 @@ import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import {
-  cachedRepos,
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-  webhookTriggerFires,
-  webhookTriggers,
-} from '../src/db/schema'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
 import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
@@ -234,7 +226,15 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   const parsed = parseGitUrl(repoUrl)
   if (parsed === null) throw new Error('fixture URL did not parse')
   const cacheKey = gitUrlCacheKeyWith(parsed, sha1Hex)
-  await db.insert(cachedRepos).values({
+  const {
+    cachedRepos,
+    webhookEndpoints,
+    webhookTriggers,
+    webhookDeliveries,
+    webhookTriggerFires,
+    tasks,
+  } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id: 'cached-rfc300',
     urlHash: cacheKey.hash,
     urlEnc: box.seal(repoUrl),
@@ -244,7 +244,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     lastFetchedAt: Date.now(),
     createdAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'endpoint-rfc300',
     name: 'RFC 300 endpoint',
     provider: 'gitlab',
@@ -302,7 +302,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     ] as const
   ).entries()) {
     const triggerId = `trigger-rfc300-${index}`
-    await db.insert(webhookTriggers).values({
+    await insertOne(db, webhookTriggers, {
       id: triggerId,
       name: `${one.space}-${one.terminal}`,
       endpointId: endpoint.id,
@@ -332,7 +332,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
       raw: {},
     }
     const deliveryId = ulid()
-    await db.insert(webhookDeliveries).values({
+    await insertOne(db, webhookDeliveries, {
       id: deliveryId,
       endpointId: endpoint.id,
       eventUuid: event.eventUuid,
@@ -480,7 +480,16 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   const repoUrl = remoteUrlFor(originRepo)
   const parsed = parseGitUrl(repoUrl)
   if (parsed === null) throw new Error('fixture URL did not parse')
-  await db.insert(cachedRepos).values({
+  const {
+    cachedRepos,
+    webhookEndpoints,
+    webhookTriggers,
+    webhookTriggerFires,
+    tasks,
+    webhookMrControlEffects,
+    webhookMrControlTargets,
+  } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id: 'cached-rfc303',
     urlHash: gitUrlCacheKeyWith(parsed, sha1Hex).hash,
     urlEnc: box.seal(repoUrl),
@@ -490,7 +499,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     lastFetchedAt: Date.now(),
     createdAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'endpoint-rfc303',
     name: 'RFC 303 endpoint',
     provider: 'gitlab',
@@ -498,7 +507,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     secretEnc: box.seal('rfc303-secret'),
     enabled: true,
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'trigger-rfc303',
     name: 'stop-on-terminal',
     endpointId: 'endpoint-rfc303',

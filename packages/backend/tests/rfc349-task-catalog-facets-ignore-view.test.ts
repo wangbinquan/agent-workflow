@@ -20,20 +20,21 @@
 // 只有一份实现之后，PostgreSQL 侧的同一组契约由共享场景在真库上覆盖
 // （`rfc357-postgresql-page.integration.test.ts`），不必也不该在这里再假造一个 provider。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TASK_LIST_VIEWS, type TaskOperationsFacets, type TaskStatus } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { ValidationError } from '@/util/errors'
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(): Actor {
   return buildActor({
@@ -69,7 +70,8 @@ async function catalogSource(db: Db): Promise<TaskCatalogSource> {
 }
 
 async function seed(db: Db): Promise<void> {
-  await db.insert(users).values({
+  const { users, workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'catalog-admin',
     username: 'catalog-admin',
     displayName: 'Catalog Admin',
@@ -78,7 +80,7 @@ async function seed(db: Db): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -87,7 +89,7 @@ async function seed(db: Db): Promise<void> {
   for (const [index, row] of FIXTURE.entries()) {
     startedAt += 1000
     const id = `task-${String(index + 1).padStart(3, '0')}`
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id,
       name: `task ${index + 1}`,
       workflowId: 'wf1',
@@ -109,7 +111,7 @@ async function seed(db: Db): Promise<void> {
       repoCount: 1,
     })
     for (let alert = 0; alert < (row.alerts ?? 0); alert += 1) {
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: `${id}-alert-${alert}`,
         taskId: id,
         rule: 'stuck',

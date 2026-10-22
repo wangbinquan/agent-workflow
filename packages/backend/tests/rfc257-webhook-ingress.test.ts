@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 // RFC-257 T5 — 入站端点集成锁：状态码语义矩阵逐行（design §3.3 / AC-1..5）+
 // 三段式（响应先于分发完成返回）+ 去重（AC-3 含 rejected 后重投可落地）+
@@ -6,9 +8,8 @@ import { composeWebhookIngressTransport } from '@/modules/integration/compositio
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
 import type {
   EventCenterCodeHostDeliveryDispatcher,
   WebhookDispatcher,
@@ -55,7 +56,7 @@ afterEach(() => {
 })
 
 /** 由 `describeEachProvider` 的 `beforeEach` 在每个用例前指向当前引擎的空库。 */
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 async function harness(opts?: {
   dispatcher?: IngressDispatcher
@@ -63,12 +64,13 @@ async function harness(opts?: {
   omitDispatcher?: boolean
   digitalEmployeeEventCenter?: EventCenterModule
 }): Promise<{
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   calls: DispatchCall[]
 }> {
   const fake = fakeDispatcher()
-  await db.insert(webhookEndpoints).values({
+  const { webhookEndpoints, webhookTriggers } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'gitlab',
     provider: 'gitlab',
@@ -76,7 +78,7 @@ async function harness(opts?: {
     secretEnc: box.seal(SECRET),
     enabled: opts?.enabled ?? true,
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'trigger-ingress-fixture',
     name: '入口回归规则',
     endpointId: 'ep-1',
@@ -140,7 +142,8 @@ function post(
 const URL_OK = '/webhooks/gitlab/aw_whk_tok1'
 const H_OK = { 'x-gitlab-token': SECRET, 'x-gitlab-event-uuid': 'uuid-1' }
 
-async function deliveryRows(database: ProviderNeutralDatabase) {
+async function deliveryRows(database: PersistenceDb) {
+  const { webhookDeliveries } = tablesOf(database)
   return await database.select().from(webhookDeliveries)
 }
 
@@ -424,7 +427,8 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
       async () => {
         let now = 1_000_000
         const limiters = createWebhookRateLimiters(() => now)
-        await db.insert(webhookEndpoints).values({
+        const { webhookEndpoints } = tablesOf(db)
+        await insertOne(db, webhookEndpoints, {
           id: 'ep-1',
           name: 'gitlab',
           provider: 'gitlab',
@@ -491,6 +495,7 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
       const { db, app } = await harness()
       const accepted = await post(app, URL_OK, pushBody(), H_OK)
       const acceptedId = ((await accepted.json()) as { deliveryId: string }).deliveryId
+      const { webhookDeliveries } = tablesOf(db)
       await db
         .update(webhookDeliveries)
         .set({ status: 'processing' })

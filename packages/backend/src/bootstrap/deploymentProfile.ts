@@ -5,7 +5,7 @@ import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/c
 import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
 import type { HumanGateArtifactRecovery } from '@/modules/collaboration/public/commands'
 import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
 import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
@@ -126,7 +126,7 @@ export interface DeploymentSelections {
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
-  beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
+  beforeEventObservationWrite?: (tx: PersistenceDb) => Promise<void>
   humanGateArtifactRecovery?: HumanGateArtifactRecovery
   databaseBackup?: DatabaseBackupEffects
   archivedNodeEvents?: TaskArchivedEventsReader

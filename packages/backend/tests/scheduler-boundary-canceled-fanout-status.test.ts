@@ -21,6 +21,8 @@
 // RED until dispatchFanoutShard distinguishes canceled shards and the
 //   wrapper-fanout finalizer marks the wrapper row 'canceled' on cancel.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -29,7 +31,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -59,7 +60,8 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -79,14 +81,15 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -187,6 +190,7 @@ describe('regression: cancelling a running wrapper-fanout must mark the wrapper 
     const abortOnceFanoutIsLive = (async () => {
       const deadline = Date.now() + 20_000
       for (;;) {
+        const { nodeRuns } = tablesOf(h.db)
         const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
         const wrapperStarted = rows.some((row) => row.nodeId === 'fan')
         const shardRunning = rows.some((row) => row.nodeId === 'inner' && row.status === 'running')
@@ -224,6 +228,7 @@ describe('regression: cancelling a running wrapper-fanout must mark the wrapper 
     await abortOnceFanoutIsLive
     if (abortFailure !== undefined) throw abortFailure
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // Sanity: the task itself ends 'canceled' via the signal short-circuit.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')

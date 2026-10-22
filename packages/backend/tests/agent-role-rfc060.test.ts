@@ -14,10 +14,10 @@
 //     outputWrapperPortNames) coexist without trampling each other.
 //  8. RFC-194: explicit empty sidecar maps survive update as `{}` tombstones.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
-import { agents as agentsTable } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 
@@ -37,18 +37,16 @@ function basePayload(name: string) {
   }
 }
 
-async function readFmExtraRaw(
-  db: ProviderNeutralDatabase,
-  name: string,
-): Promise<Record<string, unknown>> {
-  const rows = await db.select().from(agentsTable)
+async function readFmExtraRaw(db: PersistenceDb, name: string): Promise<Record<string, unknown>> {
+  const { agents } = tablesOf(db)
+  const rows = await db.select().from(agents)
   const row = rows.find((r) => r.name === name)
   if (row === undefined) throw new Error(`no agent row '${name}'`)
   return JSON.parse(row.frontmatterExtra) as Record<string, unknown>
 }
 
 describeEachProvider('RFC-060 PR-B — role round-trip', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -100,7 +98,7 @@ describeEachProvider('RFC-060 PR-B — role round-trip', (harness) => {
 })
 
 describeEachProvider('RFC-060 PR-B — outputWrapperPortNames round-trip', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -135,7 +133,7 @@ describeEachProvider('RFC-060 PR-B — outputWrapperPortNames round-trip', (harn
 })
 
 describeEachProvider('RFC-060 PR-B — coexistence with RFC-005 outputKinds', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })

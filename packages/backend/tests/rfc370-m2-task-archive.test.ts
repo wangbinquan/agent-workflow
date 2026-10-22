@@ -2,20 +2,14 @@
 // lists object parts that are `task-archive` publications of the neutral
 // journal; object-backed sources are linked, never copied, and no archived byte
 // is stored in the database.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import {
-  hostedObjectPublications,
-  nodeExecutionEventSources,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import type { HostedStoredObject } from '@/platform/crewstation/objectStorage'
 import {
@@ -74,12 +68,13 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
         publications: journal.publications,
         workspaces,
       })
-    await db.insert(workflows).values({ id: 'wf', name: 'archive', definition: '{}' })
+    const { workflows, tasks, nodeRuns, nodeExecutionEventSources } = tablesOf(db)
+    await insertOne(db, workflows, { id: 'wf', name: 'archive', definition: '{}' })
     for (const [id, parentTaskId] of [
       ['parent', null],
       ['child', 'parent'],
     ] as const)
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id,
         name: id,
         workflowId: 'wf',
@@ -94,7 +89,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
         finishedAt: 2,
         parentTaskId,
       })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'run',
       taskId: 'parent',
       nodeId: 'node',
@@ -102,7 +97,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
       startedAt: 1,
       finishedAt: 2,
     })
-    await db.insert(nodeExecutionEventSources).values({ sourceKey: 'cs:event:1', nodeRunId: 'run' })
+    await insertOne(db, nodeExecutionEventSources, { sourceKey: 'cs:event:1', nodeRunId: 'run' })
     return {
       db,
       f,
@@ -131,6 +126,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
   test('whole tree, JSONL chunks and file objects survive removal of live task rows and a cold receiver', async () => {
     const f = await setup()
     for (let offset = 0; offset < 2001; offset += 500) {
+      const { nodeRunEvents } = tablesOf(f.db)
       await f.db.insert(nodeRunEvents).values(
         Array.from({ length: Math.min(500, 2001 - offset) }, (_, index) => ({
           nodeRunId: 'run',
@@ -148,6 +144,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     )
     expect(result.archived).toHaveLength(1)
     expect([...result.archived[0]!.taskIds].sort()).toEqual(['child', 'parent'])
+    const { tasks } = tablesOf(f.db)
     expect(await f.db.select().from(tasks)).toHaveLength(0)
     const second = f.reopen()
     const root = 'cs-archive:tasks/parent'
@@ -195,6 +192,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
       { ...first.locations, now: 100 * 86400_000 },
     )
     expect(lost).toBe(true)
+    const { tasks } = tablesOf(f.db)
     expect(await f.db.select().from(tasks)).toHaveLength(2)
     const second = f.reopen()
     const recovery = createDrizzleTaskArchiveMaintenanceCommand(f.db, second)
@@ -218,6 +216,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     )
     expect(await binding.content.list('cs-archive:tasks/.tmp-parent/runs')).toEqual(['parent'])
     await binding.content.remove('cs-archive:tasks/.tmp-parent', true)
+    const { hostedObjectPublications } = tablesOf(f.db)
     const states = (
       await f.db
         .select()
@@ -241,6 +240,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     await expect(
       binding.content.appendText('cs-archive:tasks/.tmp-parent/db/tasks.jsonl', '{}\n'),
     ).rejects.toThrow('lost archive fence')
+    const { tasks } = tablesOf(f.db)
     expect(await f.db.select().from(tasks).where(eq(tasks.id, 'parent'))).toHaveLength(1)
     expect(await binding.content.exists('cs-archive:tasks/parent')).toBe(false)
     expect(() => binding.content.resolve('cs-archive:tasks', '..', 'escape')).toThrow(

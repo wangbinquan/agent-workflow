@@ -19,13 +19,14 @@
 // This drives the whole trip: export from one database, import into another,
 // and check the far end can actually use what arrived.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { agents, capabilityTemplates, users } from '../src/db/schema'
 import { opSlug, resourceTypeOfOp } from '../src/services/bundle/provider'
 import { translateDecisions } from '../src/services/resourcePackage/commit'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -37,7 +38,7 @@ import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const tempDirs: string[] = []
@@ -59,8 +60,9 @@ const ACTOR = {
   ]),
 } as never
 
-async function seedSource(db: ProviderNeutralDatabase): Promise<{ templateId: string }> {
-  await db.insert(users).values({
+async function seedSource(db: PersistenceDb): Promise<{ templateId: string }> {
+  const { users, agents, capabilityTemplates } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'U1',
@@ -68,10 +70,10 @@ async function seedSource(db: ProviderNeutralDatabase): Promise<{ templateId: st
     status: 'active',
     createdAt: 1,
     updatedAt: 1,
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 
   const agentId = ulid()
-  await db.insert(agents).values({
+  await insertOne(db, agents, {
     id: agentId,
     name: 'department-reviewer',
     description: 'reviews',
@@ -81,13 +83,13 @@ async function seedSource(db: ProviderNeutralDatabase): Promise<{ templateId: st
     visibility: 'private',
     createdAt: 1,
     updatedAt: 1,
-  } as typeof agents.$inferInsert)
+  } as PersistenceTables['agents']['$inferInsert'])
 
   // RFC-309 — one template carries both halves. The pair this replaced existed
   // so a package had to pull the framework along with the binding; there is
   // nothing left to dangle.
   const templateId = ulid()
-  await db.insert(capabilityTemplates).values({
+  await insertOne(db, capabilityTemplates, {
     id: templateId,
     name: 'team ci-fix',
     description: 'scripts and slots in one row',
@@ -103,12 +105,12 @@ async function seedSource(db: ProviderNeutralDatabase): Promise<{ templateId: st
     visibility: 'private',
     createdAt: 1,
     updatedAt: 1,
-  } as typeof capabilityTemplates.$inferInsert)
+  } as PersistenceTables['capabilityTemplates']['$inferInsert'])
 
   return { templateId }
 }
 
-const exportOf = async (db: ProviderNeutralDatabase, type: string, id: string) =>
+const exportOf = async (db: PersistenceDb, type: string, id: string) =>
   await exportResourcePackage(db, ACTOR, { type, id } as never, {
     appHome: freshHome(),
     exportedAt: 1,
@@ -117,7 +119,7 @@ const exportOf = async (db: ProviderNeutralDatabase, type: string, id: string) =
 function registerProviderInstanceCase(
   name: string,
   databaseCount: number,
-  register: (freshDb: () => ProviderNeutralDatabase) => void,
+  register: (freshDb: () => PersistenceDb) => void,
 ): void {
   describeEachProvider(
     name,
@@ -268,7 +270,8 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
         //    apply 引擎的 capability-template 臂自己做。判据因此从「lower 出来的 payload」
         //    改成**落库那一行**：更强，而且走的是用户真会走的那条路。
         const destination = freshDb()
-        await destination.insert(users).values({
+        const { users, agents, capabilityTemplates } = tablesOf(destination)
+        await insertOne(destination, users, {
           id: 'u1',
           username: 'u1',
           displayName: 'U1',
@@ -276,8 +279,8 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
           status: 'active',
           createdAt: 1,
           updatedAt: 1,
-        } as typeof users.$inferInsert)
-        await destination.insert(agents).values({
+        } as PersistenceTables['users']['$inferInsert'])
+        await insertOne(destination, agents, {
           id: destinationAgentId,
           name: 'department-reviewer',
           description: 'destination agent',
@@ -287,7 +290,7 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
           visibility: 'public',
           createdAt: 1,
           updatedAt: 1,
-        } as typeof agents.$inferInsert)
+        } as PersistenceTables['agents']['$inferInsert'])
 
         const appHome = freshHome()
         const box = createSecretBoxFromKey(randomBytes(32))
@@ -343,6 +346,7 @@ describe('RFC-304 T17a — the far end', () => {
         expect(types).toContain('capability_template')
         expect(types.filter((t) => t === 'capability_template')).toHaveLength(1)
 
+        const { capabilityTemplates } = tablesOf(source)
         // And the source row is untouched by having been exported.
         const [stillThere] = await source
           .select()

@@ -6,7 +6,7 @@
 //
 //   ① 双 provider **共用一份实现**的文件——PG 侧只是一个具名工厂转调它。
 //      实例：`modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts`
-//      （RFC-350），db 形参类型是 `BaseSQLiteDatabase<'sync' | 'async', …>`，
+//      （RFC-350），db 形参类型是 `PersistenceDb`，
 //      两个 provider 跑的是同一段 SQL，而文件名不带前缀。
 //   ② 直接吃 `PostgresqlDatabaseClient` / PG 事务、但按领域命名的文件
 //      （`retentionSweeper.ts` / `employeePlatformWorkItemPersistence.ts` … 等）。
@@ -28,27 +28,24 @@ import { join, relative, sep } from 'node:path'
  *
  * `sql.raw(` 是 2026-09-07（RFC-359 W7 第二波）补进来的：判据初版只认模板字面量
  * `` sql` `` 与查询构造器调用，于是**整篇只用 `sql.raw('…')` 的文件一个都不进语料**——
- * 它们恰恰是最该被陷阱守卫看住的一类，因为 raw 文本完全绕开查询构造器，`compilePostgresqlSql`
- * 那层极窄改写之外没有任何东西替它做方言适配。实例：
+ * 它们恰恰是最该被陷阱守卫看住的一类，因为 raw 文本不经查询构造器；原生驱动不替业务 SQL 做方言适配。实例：
  * `modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts` 的
  * `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`（W5-T20 头注释把它记成了已知盲区）。
  * 扩面实测只多 2 个文件（275 → 277），四条共用守卫都没有因此暴露新债。
  */
 const BUILDS_SQL =
-  /\.(from|insert|update|delete|selectDistinct)\(|\bsql\s*(<[^>]*>)?`|\bsql\.raw\(/u
+  /\.(from|insert|update|delete|selectDistinct)\(|\b(?:sql\s*(<[^>]*>)?`|sql\.raw\(|rawRows\(|rawFirst\(|rawExec\(|insertOne\()/u
 
 /**
  * 拿得到 PostgreSQL 执行句柄的痕迹：
  * - `PostgresqlDatabaseClient` / `PostgresqlTransaction`：PG 专属客户端与事务；
- * - `BaseSQLiteDatabase<'sync' | 'async'`：drizzle 里同时覆盖 bun:sqlite（同步）与
- *   sqlite-proxy（异步，即本仓的 PG 客户端）的基类——双 provider 共用实现的标记；
- * - `ProviderNeutralDatabase` / `DatabaseTransaction` / `databaseSessionFor(`：RFC-359 的中立句柄与
+ * - `PersistenceDb` / `PersistenceTx` / `databaseSessionFor(`：RFC-359 的中立句柄与
  *   统一事务原语——W4 起「一份实现、两个 provider 共用」的适配器只拿这些类型，不再出现
  *   provider 名，但它们的每一句 SQL 都同样在 PostgreSQL 上执行（2026-09-05 实测：前三批合一
  *   后按旧判据执行面从 204 掉到 191，掉出去的正是这些中立文件——陷阱守卫对它们全盲）。
  */
 const TOUCHES_POSTGRESQL =
-  /PostgresqlDatabaseClient|PostgresqlTransaction|BaseSQLiteDatabase<\s*'sync'\s*\|\s*'async'|ProviderNeutralDatabase|\bDatabaseTransaction\b|databaseSessionFor\(/u
+  /PostgresqlDatabaseClient|PostgresqlTransaction|PersistenceDb|\bPersistenceTx\b|databaseSessionFor\(|tablesOf\(|engineOf\(/u
 
 export interface PostgresqlSurfaceFile {
   /** 相对 `packages/backend/src` 的路径，永远用 `/` 分隔（Windows 上也一样）。 */

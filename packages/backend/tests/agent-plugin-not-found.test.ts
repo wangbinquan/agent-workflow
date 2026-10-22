@@ -11,7 +11,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent, updateAgent } from '../src/services/agent'
 import {
   composePluginServiceBindingForTest,
@@ -55,7 +55,7 @@ function agentInput(name: string, plugins: string[] = []): Parameters<typeof cre
 }
 
 describeEachProvider('agent.plugins save-time guard', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let binding: PluginServiceBinding
   beforeEach(() => {
     db = harness.db

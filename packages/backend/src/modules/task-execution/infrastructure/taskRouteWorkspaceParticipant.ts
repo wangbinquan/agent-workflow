@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { prepareScratchWorkspace } from './scratchWorkspacePreparation'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
@@ -19,11 +20,10 @@ import {
   type SpaceKind,
   type StartTask,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import { tasks } from '@/db/schema'
 import type {
   MaterializedRepo,
   WorkspaceCleanupHookEvent,
@@ -37,7 +37,7 @@ import type {
 
 export interface TaskRouteWorkspaceDependencies {
   readonly sourceContexts: (authority: RequestAuthority, taskId: string) => IdempotentCommandContext
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly appHome: string
   readonly secretBox?: SecretBox
@@ -205,7 +205,7 @@ export function createTaskWorkspaceMaterializer(
         const workspace = await prepareDeferredWorkspace(dependencies, { ...input, authority })
         return Object.freeze({
           ...workspace,
-          admit: (transaction: ProviderNeutralDatabase) =>
+          admit: (transaction: PersistenceDb) =>
             admitDeferredRepositoryPreparation({
               transaction,
               binding: dependencies.repositoryPreparation,
@@ -292,6 +292,7 @@ export function createTaskWorkspaceMaterializer(
       )
       const head = repositories[0]
       const repoGroupId = input.task.repoGroupId ?? null
+      const { tasks } = tablesOf(dependencies.db)
       const repoGroupName =
         repoGroupId === null
           ? null

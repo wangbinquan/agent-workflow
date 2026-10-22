@@ -4,23 +4,22 @@
 // 同 baseline 重放不产生第二行；不同 baseline（新 head 重跑）各自成行；读侧
 // hasUploadPublicationReceipt 供 arm 幂等判定与事实投影。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
 import {
   hasUploadPublicationReceipt,
   recordUploadPublicationReceipt,
 } from '../src/modules/development-automation/infrastructure/uploadPublicationReceipt'
-import { developmentMissions } from '../src/db/schema'
-
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seededPlan(
-  db: ProviderNeutralDatabase,
-): Promise<{ db: ProviderNeutralDatabase; planId: string }> {
+async function seededPlan(db: PersistenceDb): Promise<{ db: PersistenceDb; planId: string }> {
   const now = Date.now()
-  await db.insert(developmentMissions).values({
+  const { developmentMissions } = tablesOf(db)
+  await insertOne(db, developmentMissions, {
     id: 'm-1',
     revision: 0,
     epoch: 0,

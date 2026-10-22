@@ -4,18 +4,15 @@
 // fire / early / ordinal 不清零、writable action 单活），并把 launch 事务（上传认领 + plan）、快照 + 决策原子操作与
 // 读模型（分页 / facets / counts / 详情 / MR 投影 / effect 台账 / 决策 trace）也钉在两个引擎上。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { asc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentFactSnapshots,
-  developmentRepositoryUploadPlans,
-  missionInputUploads,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MissionPersistence,
   MissionRow,
@@ -83,7 +80,7 @@ function missionRow(overrides: Partial<MissionRow> = {}): MissionRow {
 }
 
 async function newStore(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ store: MissionPersistence; missionId: string }> {
   const store = createMissionPersistence(db)
   const row = missionRow()
@@ -126,6 +123,7 @@ describeEachProvider('RFC-359 W4-D10 —— Mission 持久化', (harness) => {
     if (requirementBundleRef === null) throw new Error('requirement snapshot reference missing')
     const cells = await createFactSnapshotReader(harness.db).getCells(requirementBundleRef)
     expect(cells).toEqual(Object.assign({}, ...writes.map((input) => input.patch)))
+    const { developmentFactSnapshots } = tablesOf(harness.db)
     const snapshots = await harness.db
       .select()
       .from(developmentFactSnapshots)
@@ -158,6 +156,7 @@ describeEachProvider('RFC-359 W4-D10 —— Mission 持久化', (harness) => {
       }),
     ).rejects.toThrow('roll back the requirement write')
     expect(await store.getMission(missionId)).toEqual(before)
+    const { developmentFactSnapshots } = tablesOf(harness.db)
     expect(
       await harness.db
         .select()
@@ -185,6 +184,7 @@ describeEachProvider('RFC-359 W4-D10 —— Mission 持久化', (harness) => {
           now: NOW,
         }),
       ).toEqual({ ok: false, code })
+      const { developmentFactSnapshots } = tablesOf(harness.db)
       expect(
         await harness.db
           .select()
@@ -207,7 +207,8 @@ describeEachProvider('RFC-359 W4-D10 —— Mission 持久化', (harness) => {
     expect(second.mission.id).toBe(row.id)
 
     const uploadRef = ulid()
-    await harness.db.insert(missionInputUploads).values({
+    const { missionInputUploads, developmentRepositoryUploadPlans } = tablesOf(harness.db)
+    await insertOne(harness.db, missionInputUploads, {
       id: uploadRef,
       actorUserId: 'actor-1',
       originalName: 'spec.md',
@@ -731,6 +732,6 @@ test('源码锁：Mission 持久化与读模型不再有 provider 专属文件',
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update/i)
-    expect(source).toContain('ProviderNeutralDatabase')
+    expect(source).toContain('PersistenceDb')
   }
 })

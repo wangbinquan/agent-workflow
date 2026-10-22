@@ -26,16 +26,15 @@
 //   If this file goes RED again, that is a SIGNAL to re-audit §6.1, not a
 //   licence to edit the expectations.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { isFresherNodeRun } from '../src/services/scheduler'
-import type { nodeRuns } from '../src/db/schema'
-
 // `isFresherNodeRun` now reads only `id` (the clarifyIteration column was
 // dropped in PR-C). The equivalence pickers below still simulate the RETIRED
 // comparator, so the synthetic row carries a local `clarifyIteration` field
 // that no longer exists on the real schema type — hence a test-local Row that
 // augments $inferSelect with it.
-type Row = typeof nodeRuns.$inferSelect & { clarifyIteration: number }
+type Row = PersistenceTables['nodeRuns']['$inferSelect'] & { clarifyIteration: number }
 
 // We build a minimal row and cast — deliberately NOT mirroring the whole schema
 // so this baseline does not drift when unrelated node_runs columns are added.

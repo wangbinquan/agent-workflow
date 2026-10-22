@@ -3,21 +3,11 @@
 // code-history 组合层返回相同的 readiness、issues、repairActions 和度量计数。
 // 矩阵还保留批读上界：增加格子数量不能退回逐格查询；空仓库只读取配置表。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  cachedRepos,
-  capabilityTemplates,
-  codeFindings,
-  codeHostConnections,
-  codeWorkItems,
-  codeWorkRounds,
-  repoCapabilityConfig,
-  webhookEndpoints,
-  webhookTriggers,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import type { CodeMatrixRow, CodeMetricsSummary } from '@/modules/code-capability/public/queries'
@@ -53,8 +43,9 @@ function byCapability(rows: readonly CodeMatrixRow[]): CodeMatrixRow[] {
 // ---------------------------------------------------------------------------
 
 /** 一个能配得通的部署：一个启用的 gitlab endpoint + 一个 gitlab 连接 + 一个仓库。 */
-async function seedGitlabDeployment(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(webhookEndpoints).values({
+async function seedGitlabDeployment(db: PersistenceDb): Promise<void> {
+  const { webhookEndpoints, codeHostConnections, cachedRepos } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id: GITLAB_ENDPOINT,
     name: 'gl',
     provider: 'gitlab',
@@ -62,7 +53,7 @@ async function seedGitlabDeployment(db: ProviderNeutralDatabase): Promise<void> 
     secretEnc: 'sealed',
     enabled: true,
   })
-  await db.insert(codeHostConnections).values({
+  await insertOne(db, codeHostConnections, {
     provider: 'gitlab',
     baseUrl: 'https://gitlab.example.com/api/v4',
     repositoryUrlPrefixesJson: JSON.stringify(['https://gitlab.example.com/']),
@@ -71,7 +62,7 @@ async function seedGitlabDeployment(db: ProviderNeutralDatabase): Promise<void> 
     connectionGeneration: 'gen-gitlab',
     updatedAt: NOW,
   })
-  await db.insert(cachedRepos).values({
+  await insertOne(db, cachedRepos, {
     id: REPO,
     urlHash: 'aabbccdd',
     urlRedacted: 'https://gitlab.example.com/group/app.git',
@@ -81,15 +72,17 @@ async function seedGitlabDeployment(db: ProviderNeutralDatabase): Promise<void> 
   })
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(agents).values({ id, name: id, bodyMd: 'x', createdAt: NOW, updatedAt: NOW })
+async function seedAgent(db: PersistenceDb, id: string): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, { id, name: id, bodyMd: 'x', createdAt: NOW, updatedAt: NOW })
 }
 
 async function seedTemplate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { id: string; capability: string; agentBySlot: Readonly<Record<string, string>> },
 ): Promise<void> {
-  await db.insert(capabilityTemplates).values({
+  const { capabilityTemplates } = tablesOf(db)
+  await insertOne(db, capabilityTemplates, {
     id: input.id,
     name: input.id,
     capability: input.capability,
@@ -100,10 +93,11 @@ async function seedTemplate(
 }
 
 async function seedTrigger(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { id: string; endpointId: string; capability: string; events: readonly string[] },
 ): Promise<void> {
-  await db.insert(webhookTriggers).values({
+  const { webhookTriggers } = tablesOf(db)
+  await insertOne(db, webhookTriggers, {
     id: input.id,
     name: input.id,
     endpointId: input.endpointId,
@@ -118,11 +112,12 @@ async function seedTrigger(
 }
 
 async function seedCell(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { repoId?: string; capability: string; templateId: string | null; enabled: boolean },
 ): Promise<void> {
   const repoId = input.repoId ?? REPO
-  await db.insert(repoCapabilityConfig).values({
+  const { repoCapabilityConfig } = tablesOf(db)
+  await insertOne(db, repoCapabilityConfig, {
     id: `cell-${repoId}-${input.capability}`,
     repoId,
     capability: input.capability,
@@ -134,7 +129,7 @@ async function seedCell(
 }
 
 async function seedFinding(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     id: string
     capability: string
@@ -144,7 +139,8 @@ async function seedFinding(
     createdAt: number
   },
 ): Promise<void> {
-  await db.insert(codeFindings).values({
+  const { codeFindings } = tablesOf(db)
+  await insertOne(db, codeFindings, {
     id: input.id,
     codeHostEndpointId: GITLAB_ENDPOINT,
     stableProjectId: 'proj-1',
@@ -161,7 +157,7 @@ async function seedFinding(
 }
 
 async function seedRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     id: string
     workItemId: string
@@ -171,7 +167,8 @@ async function seedRound(
     endedAt: number | null
   },
 ): Promise<void> {
-  await db.insert(codeWorkRounds).values({
+  const { codeWorkRounds } = tablesOf(db)
+  await insertOne(db, codeWorkRounds, {
     id: input.id,
     workItemId: input.workItemId,
     roundSeq: input.roundSeq,
@@ -183,10 +180,11 @@ async function seedRound(
 }
 
 async function seedWorkItem(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { id: string; capability: string },
 ): Promise<void> {
-  await db.insert(codeWorkItems).values({
+  const { codeWorkItems } = tablesOf(db)
+  await insertOne(db, codeWorkItems, {
     id: input.id,
     codeHostEndpointId: GITLAB_ENDPOINT,
     stableProjectId: 'proj-1',
@@ -399,7 +397,8 @@ describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎�
     // 两个 provider 都配了 endpoint（真实部署：一边 GitLab 一边 GitHub），
     // 而这个仓库的 URL 哪个连接的前缀都不匹配 —— `resolveRepoEndpoint` 无法判定归属。
     await seedGitlabDeployment(db)
-    await db.insert(webhookEndpoints).values({
+    const { webhookEndpoints, codeHostConnections, cachedRepos } = tablesOf(db)
+    await insertOne(db, webhookEndpoints, {
       id: GITHUB_ENDPOINT,
       name: 'gh',
       provider: 'github',
@@ -407,7 +406,7 @@ describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎�
       secretEnc: 'sealed',
       enabled: true,
     })
-    await db.insert(codeHostConnections).values({
+    await insertOne(db, codeHostConnections, {
       provider: 'github',
       baseUrl: 'https://api.github.com',
       repositoryUrlPrefixesJson: JSON.stringify([]),
@@ -418,7 +417,7 @@ describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎�
     })
     // 覆盖掉 gitlab 部署种下的仓库 URL：换成谁都不认的自建域名。
     await db.delete(cachedRepos)
-    await db.insert(cachedRepos).values({
+    await insertOne(db, cachedRepos, {
       id: REPO,
       urlHash: 'ddccbbaa',
       urlRedacted: 'https://git.internal.example/group/app.git',

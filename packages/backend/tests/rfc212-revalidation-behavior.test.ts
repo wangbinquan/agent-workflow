@@ -11,6 +11,8 @@
 // rides on the existing real-server WS suites once the frame path is unchanged;
 // this file owns the decision logic. See design/RFC-212 §7.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { ServerWebSocket } from 'bun'
 import { eq } from 'drizzle-orm'
@@ -20,7 +22,6 @@ import { createLogger } from '../src/util/log'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, taskCollaborators, userSessions, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import { revokeSession } from './helpers/auth/sessionStore'
 import { disableUser, patchUser } from './helpers/userFixture'
@@ -139,11 +140,16 @@ async function seedUser(
 
 async function seedTask(db: DbClient, ownerUserId: string): Promise<string> {
   const workflowId = `wf_${ownerUserId}`
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: '{}', createdAt: 0, updatedAt: 0 })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'wf',
+    definition: '{}',
+    createdAt: 0,
+    updatedAt: 0,
+  })
   const taskId = `task_${ownerUserId}`
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -201,7 +207,8 @@ describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
     const owner = await seedUser(db, 'owner', 'user')
     const member = await seedUser(db, 'member', 'user')
     const taskId = await seedTask(db, owner.id)
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId,
       userId: member.id,
       role: 'collaborator',
@@ -269,6 +276,7 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
     const conn = fakeConn(user.actor, user.credential, { kind: 'workflows' })
     trackConnection(conn.ws)
 
+    const { userSessions } = tablesOf(db)
     await revokeSession(db, (await db.select().from(userSessions).limit(1))[0]!.id)
     await revalidateAllConnections({ log }, 'session-revoked')
     expect(conn.closes).toEqual([{ code: WS_CLOSE_AUTH_REVOKED, reason: 'auth-revoked' }])
@@ -422,6 +430,7 @@ describe('RFC-212 AC-8 — revalidation does not write last_used_at', () => {
     const user = await seedUser(db, 'alice', 'user')
     const conn = fakeConn(user.actor, user.credential, { kind: 'workflows' })
     trackConnection(conn.ws)
+    const { userSessions } = tablesOf(db)
     const before = (await db.select().from(userSessions).limit(1))[0]!.lastUsedAt
 
     await revalidateAllConnections({ log }, 'resource-acl-changed', before + 60_000)

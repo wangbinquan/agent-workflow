@@ -2,17 +2,12 @@
 // creation 在同一个事务里提交。RFC-359 W4-D2：一份实现，两个 provider 共用——事务走统一原语，MR 流的序列化锁经
 // 引擎能力矩阵 `advisoryLock` 表达（PG：pg_advisory_xact_lock；SQLite：独占事务下无需第二把锁），
 // 与启动预留（mrTerminalControlPersistence）共用同一把 `${endpointId}:${streamKey}` 键。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNull, lt, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  webhookDeliveries,
-  csWebhookVerifications,
-  webhookMrControlEffects,
-  webhookMrLaunchGuards,
-  webhookMrStreamStates,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   AcceptedVerifiedDelivery,
@@ -31,7 +26,7 @@ import {
 import { truncateDeliveryBody } from '../domain/webhookDelivery'
 
 export function createVerifiedWebhookDeliveryPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): VerifiedWebhookDeliveryPersistencePort {
   return {
     accept: (input) =>
@@ -43,7 +38,7 @@ export function createVerifiedWebhookDeliveryPersistence(
 
 /** Integration-owned transaction participant; CS transport receipts commit atomically with MR facts. */
 export async function acceptVerifiedWebhookDeliveryInTransaction(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
   input: VerifiedWebhookDeliveryInput,
 ): Promise<AcceptedVerifiedDelivery> {
   const factKey = isMrAssociatedEvent(input.event)
@@ -60,6 +55,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
   // Manual replay is an explicit new processing request. Original ingress
   // facts dedupe by UUID or exact-body fallback; replay rows are excluded.
   if (!isReplay && (factKey !== null || input.event.eventUuid !== null)) {
+    const { webhookDeliveries, webhookMrControlEffects } = tablesOf(tx)
     const duplicate = (
       await tx
         .select({
@@ -119,6 +115,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
   const isTerminal = input.event.eventType === 'mr_closed' || input.event.eventType === 'mr_merged'
   if (isReplay && isTerminal && input.replay?.terminalRootRevision !== null) {
     streamRevision = input.replay!.terminalRootRevision
+    const { webhookDeliveries, webhookMrControlEffects } = tablesOf(tx)
     const rootDelivery = (
       await tx
         .select({ stateAfter: webhookDeliveries.mrStateAfter })
@@ -146,6 +143,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
     // its first row exists, so a terminal transition cannot miss a
     // concurrently inserted launch guard.
     await engineOf(tx).advisoryLock(tx, `${input.endpointId}:${identity.streamKey}`)
+    const { webhookMrStreamStates, webhookMrControlEffects, webhookMrLaunchGuards } = tablesOf(tx)
     const currentRow = (
       await tx
         .select()
@@ -195,7 +193,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
 
     if (linearized.effectKind !== null) {
       effectId = ulid()
-      await tx.insert(webhookMrControlEffects).values({
+      await insertOne(tx, webhookMrControlEffects, {
         id: effectId,
         deliveryId,
         endpointId: input.endpointId,
@@ -233,6 +231,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
     }
   }
 
+  const { csWebhookVerifications, webhookDeliveries } = tablesOf(tx)
   const transportReceiptRef =
     input.transportReceiptRef ??
     (input.replay === undefined
@@ -244,7 +243,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
             .where(eq(csWebhookVerifications.deliveryId, input.replay.rootDeliveryId))
             .limit(1)
         )[0]?.reference ?? null))
-  await tx.insert(webhookDeliveries).values({
+  await insertOne(tx, webhookDeliveries, {
     id: deliveryId,
     endpointId: input.endpointId,
     eventUuid: isReplay ? null : input.event.eventUuid,
@@ -264,7 +263,7 @@ export async function acceptVerifiedWebhookDeliveryInTransaction(
   })
 
   if (transportReceiptRef)
-    await tx.insert(csWebhookVerifications).values({ deliveryId, transportReceiptRef })
+    await insertOne(tx, csWebhookVerifications, { deliveryId, transportReceiptRef })
 
   return {
     kind: 'inserted',

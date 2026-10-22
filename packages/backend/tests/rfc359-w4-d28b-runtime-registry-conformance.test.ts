@@ -11,12 +11,13 @@
 //   · `updateRuntime(executionProfileChanged)` —— 画像变更要在同一笔事务里把活跃试跑会话拦下。
 // 前两个在 PG 上跑在 SERIALIZABLE、在 SQLite 上跑在 BEGIN IMMEDIATE，判据仍必须相同。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, mcps, mcpRuntimeTestSessions, runtimes, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeInsertRecord } from '../src/modules/runtime-management/application/ports/runtimeRegistry'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -41,7 +42,7 @@ const NO_BUILTINS: ReadonlySet<string> = new Set<string>()
 /** `mcp_runtime_test_sessions_hash_shape` 要求 64 位 hex（两个引擎上都是 CHECK 约束）。 */
 const HASH = 'a'.repeat(64)
 
-function registryOf(db: ProviderNeutralDatabase): DrizzleRuntimeRegistryPersistence {
+function registryOf(db: PersistenceDb): DrizzleRuntimeRegistryPersistence {
   return new DrizzleRuntimeRegistryPersistence(db)
 }
 
@@ -104,7 +105,8 @@ describeEachProvider('RFC-359 W4-D28b —— runtime 注册表合一后两引擎
     const second = `rt_${ulid()}`
     await registry.insertRuntime(insertRecord(second))
     const agentName = `agent_${ulid()}`
-    await harness.db.insert(agents).values({ id: ulid(), name: agentName, runtime: second })
+    const { agents } = tablesOf(harness.db)
+    await insertOne(harness.db, agents, { id: ulid(), name: agentName, runtime: second })
 
     const inUse = await registry.deleteRuntime({
       name: second,
@@ -142,7 +144,8 @@ describeEachProvider('RFC-359 W4-D28b —— runtime 注册表合一后两引擎
 
     // 会话行对 mcps / users 都是 RESTRICT 外键，PG 上真的会拦——各自播一行自有的。
     const ownerUserId = `u_${ulid()}`
-    await harness.db.insert(users).values({
+    const { users, mcps, mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: ownerUserId,
       username: ownerUserId,
       displayName: 'd28b',
@@ -160,10 +163,14 @@ describeEachProvider('RFC-359 W4-D28b —— runtime 注册表合一后两引擎
     ] as const) {
       // `uniq_..._owner_mcp_live`：同一 (mcp, owner) 只能有一个活着的会话，各给一个 mcp。
       const mcpId = `mcp_${ulid()}`
-      await harness.db
-        .insert(mcps)
-        .values({ id: mcpId, name: mcpId, type: 'local', createdAt: 1, updatedAt: 1 })
-      await harness.db.insert(mcpRuntimeTestSessions).values({
+      await insertOne(harness.db, mcps, {
+        id: mcpId,
+        name: mcpId,
+        type: 'local',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      await insertOne(harness.db, mcpRuntimeTestSessions, {
         id,
         mcpId,
         ownerUserId,
@@ -235,6 +242,7 @@ describeEachProvider('RFC-359 W4-D28b —— runtime 注册表合一后两引擎
       await registry.invalidateInheritedRuntimeProbeReceipts({ protocols: ['opencode'], now: 2 }),
     ).toBe(1)
 
+    const { runtimes } = tablesOf(harness.db)
     const rows = await harness.db
       .select({ name: runtimes.name, fence: runtimes.probeFence })
       .from(runtimes)

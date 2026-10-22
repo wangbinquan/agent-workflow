@@ -15,6 +15,8 @@
 //      the leader aggregation barrier waits for terminal states only
 //      (awaiting_human does NOT block it — design.md §D3-3).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 
 import { eq } from 'drizzle-orm'
@@ -27,15 +29,8 @@ import {
   type WorkgroupAssignment,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-  workgroupMessages,
-} from '../src/db/schema'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
@@ -84,7 +79,7 @@ const log = createLogger('rfc185-fanout-test')
 const PLANNER_AGENT_ID = 'wg-agent-planner'
 const CODER_AGENT_ID = 'wg-agent-coder'
 
-async function getWorkgroupForTest(db: ProviderNeutralDatabase, name: string) {
+async function getWorkgroupForTest(db: PersistenceDb, name: string) {
   const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
   return row === undefined ? null : getWorkgroupById(db, row.id)
 }
@@ -415,19 +410,20 @@ describe('RFC-185 — wake set fans out; leader barrier is terminal-state only',
 // ---------------------------------------------------------------------------
 
 async function seedEngineTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   config: WorkgroupRuntimeConfig,
 ): Promise<{ taskId: string }> {
   const taskId = ulid()
   const snapshot = buildWorkgroupHostSnapshot(config)
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: ulid(),
     name: `host-anchor-${taskId}`,
     definition: '{}',
     builtin: true,
   })
   const workflowRow = (await db.select().from(workflows).limit(1))[0]
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'wg-fanout-task',
     workflowId: workflowRow?.id ?? ulid(),
@@ -518,7 +514,7 @@ const FAN_OUT_3 = [
 ]
 
 describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -537,6 +533,7 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind, JSON.stringify(result)).toBe('ok')
 
+    const { workgroupAssignments, workgroupMessages, nodeRuns } = tablesOf(db)
     const assignments = await db
       .select()
       .from(workgroupAssignments)
@@ -629,6 +626,7 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind).toBe('ok')
 
+    const { workgroupAssignments, workgroupMessages } = tablesOf(db)
     const assignments = await db
       .select()
       .from(workgroupAssignments)
@@ -662,7 +660,7 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -696,6 +694,7 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     expect(requests[1]?.promptTemplate).toContain('Protocol errors')
     expect(requests[1]?.promptTemplate).toContain("duplicate member 'coder'")
 
+    const { workgroupAssignments } = tablesOf(db)
     // only the retried SINGLE dispatch landed — never two concurrent instances
     const assignments = await db
       .select()
@@ -755,7 +754,8 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
   // （消息回合是单发的，maxAttempts=1），断言逐条保留。
   const mentionCoder = async (taskId: string): Promise<string> => {
     const messageId = ulid()
-    await db.insert(workgroupMessages).values({
+    const { workgroupMessages } = tablesOf(db)
+    await insertOne(db, workgroupMessages, {
       id: messageId,
       taskId,
       round: 0,
@@ -769,12 +769,16 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     })
     return messageId
   }
-  const memberLedger = async (taskId: string): Promise<Array<[number, string | null]>> =>
-    (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
-      .filter((run) => run.nodeId === WG_MEMBER_NODE_ID)
-      // 按 retryIndex 排——同毫秒铸出的 ULID 之间没有稳定序。
-      .sort((a, b) => a.retryIndex - b.retryIndex)
-      .map((run) => [run.retryIndex, run.rerunCause])
+  const memberLedger = async (taskId: string): Promise<Array<[number, string | null]>> => {
+    const { nodeRuns } = tablesOf(db)
+    return (
+      (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .filter((run) => run.nodeId === WG_MEMBER_NODE_ID)
+        // 按 retryIndex 排——同毫秒铸出的 ULID 之间没有稳定序。
+        .sort((a, b) => a.retryIndex - b.retryIndex)
+        .map((run) => [run.retryIndex, run.rerunCause])
+    )
+  }
 
   test('runtime stream retry is independent of the message-turn attempt budget', async () => {
     const config = cfg({
@@ -976,6 +980,7 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     })
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind).toBe('ok')
+    const { workgroupAssignments } = tablesOf(db)
     const assignments = await db
       .select()
       .from(workgroupAssignments)
@@ -995,6 +1000,7 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     const hooks: WorkgroupEngineHooks = {
       runHostNode: async (req) => {
         requests.push(req)
+        const { tasks } = tablesOf(db)
         const row = (
           await db
             .select({ workgroupConfigJson: tasks.workgroupConfigJson })
@@ -1017,6 +1023,7 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     expect(result.kind).toBe('ok')
     expect(requests).toHaveLength(1)
 
+    const { tasks } = tablesOf(db)
     const row = (
       await db
         .select({ workgroupConfigJson: tasks.workgroupConfigJson })
@@ -1040,7 +1047,7 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let agentId: string
   beforeEach(async () => {
     db = harness.db

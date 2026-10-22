@@ -60,7 +60,7 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
 
     for (const path of neutralPaths) {
       const text = source(path)
-      expect(text).toContain('ProviderNeutralDatabase')
+      expect(text).toContain('PersistenceDb')
       expect(text).not.toContain('PostgresqlDatabaseClient')
       expect(text).not.toMatch(
         /\bDbClient\b|\bDbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core|createSqlite|as\s+(?:unknown|DbClient|PostgresqlDatabaseClient)/,
@@ -70,7 +70,7 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
     // RFC-359 W4-B2：目录摘要查询只有一份（catalogQuery.ts）；搜索谓词用两个方言同义的 `instr(lower(…))`
     // （PostgreSQL 基线里有同名 shim），不再各写一份方言。
     const query = source('src/modules/resource-catalog/infrastructure/catalogQuery.ts')
-    expect(query).toContain('instr(lower(')
+    expect(query).toContain('engine.instr(sql`lower(')
     expect(query).not.toContain('position(lower(')
     expect(query).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|\bDbTxSync\b/)
     expect(query).toContain("from '../application/skills/skillToken'")
@@ -87,6 +87,6 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
 
     const sharedQuery = source('src/modules/resource-catalog/infrastructure/catalogQuery.ts')
     expect(sharedQuery).toContain('createResourceCatalogSummaryReadPort')
-    expect(sharedQuery).toContain('instr(lower(')
+    expect(sharedQuery).toContain('engine.instr(sql`lower(')
   })
 })

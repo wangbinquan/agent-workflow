@@ -33,7 +33,7 @@ import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MaintenanceWorkerGraph,
   MaintenanceWorkerGraphFactory,
@@ -46,7 +46,7 @@ type GraphInput = Parameters<MaintenanceWorkerGraphFactory>[0]
 type Request = GraphInput['request']
 type AdapterInput<R extends Request> = Omit<GraphInput, 'request'> & { readonly request: R }
 interface MaintenanceWorkerAdapter {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly eventsArchiveStore: EventsArchiveStore
   readonly storage: MaintenanceSystemOperations['storage']
   readonly resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand

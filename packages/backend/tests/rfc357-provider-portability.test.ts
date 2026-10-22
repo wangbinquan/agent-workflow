@@ -9,13 +9,15 @@
 // 真库执行面由 `rfc357-postgresql-page.integration.test.ts` + CI 的 postgres lane 承担；
 // 这个文件只负责前提与源码形状，普通跑批里就能跑。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { tasks } from '@/db/schema'
-import { compilePostgresqlSql } from '@/platform/persistence/postgresqlSql'
+import { PgDialect } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 const PAGE_DIR = resolve(
   import.meta.dir,
@@ -143,6 +145,8 @@ describe('RFC-357 delta 4 — the sort key cannot hit the NULL-ordering reversal
   // SQLite 的 DESC 把 NULL 排最后、PostgreSQL 排最前。排序键是 branch_started_at，
   // 它 NOT NULL DEFAULT 0，所以这条差异在本页不成立——但那是**前提**，钉住它。
   test('branch_started_at is NOT NULL, which is why ORDER BY … DESC is provider-agnostic here', () => {
+    const db = schemaFixtureDb()
+    const { tasks } = tablesOf(db)
     expect(tasks.branchStartedAt.name).toBe('branch_started_at')
     expect(tasks.branchStartedAt.getSQLType()).toBe('integer')
     expect(tasks.branchStartedAt.notNull).toBe(true)
@@ -183,27 +187,30 @@ describe('RFC-357 delta 6 — the SQLite functions the query calls have PostgreS
     expect(pageSource()).not.toMatch(/IN \('text', 'string'\)/u)
   })
 
-  test('the query itself now calls only `instr`, and no other SQLite-only function', () => {
+  test('the query uses capabilities and contains no raw SQLite-only function', () => {
     const source = pageSource()
+    expect(source).toContain('engineOf(db).instr(')
     const called = new Set(
       [
         ...source.matchAll(
-          /\b(json_valid|json_type|json_extract|instr|unixepoch|hex|randomblob)\s*\(/gu,
+          /(?<![.\w])(?:json_valid|json_type|json_extract|instr|unixepoch|hex|randomblob)\s*\(/gu,
         ),
       ].map((match) => match[1]!),
     )
     expect(
       [...called].sort(),
       'JSON 取值必须经能力矩阵渲染；页源码里再出现 shim 调用就是又手写了一份方言',
-    ).toEqual(['instr'])
+    ).toEqual([])
   })
 })
 
 describe('RFC-357 delta 7 — bind markers compile, and the row-value boundary survives it', () => {
-  test('the SQLite placeholder compiler rewrites ? into $n without touching row values', () => {
-    const compiled = compilePostgresqlSql(
-      'SELECT * FROM t WHERE (t.branch_started_at, t.id) < (?, ?) ORDER BY t.branch_started_at DESC LIMIT ?',
+  test('the native PostgreSQL dialect binds tuple values in their original order', () => {
+    const query = new PgDialect().sqlToQuery(
+      sql`SELECT * FROM t WHERE (t.branch_started_at, t.id) < (${1}, ${'id'}) ORDER BY t.branch_started_at DESC LIMIT ${20}`,
     )
+    const compiled = query.sql
+    expect(query.params).toEqual([1, 'id', 20])
     expect(compiled).toContain('(t.branch_started_at, t.id) < ($1, $2)')
     expect(compiled).toContain('LIMIT $3')
   })

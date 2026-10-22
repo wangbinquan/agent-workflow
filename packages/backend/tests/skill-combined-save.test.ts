@@ -9,7 +9,7 @@ import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
   deleteSkill,
@@ -21,7 +21,7 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { ConflictError, ValidationError } from '../src/util/errors'
 
-async function getSkill(db: ProviderNeutralDatabase, name: string) {
+async function getSkill(db: PersistenceDb, name: string) {
   return (await listSkills(db)).find((skill) => skill.name === name) ?? null
 }
 
@@ -33,7 +33,7 @@ const T6_ACTOR = buildActor({
 })
 
 describeEachProvider('RFC-170 T4 — combined save with token OCC', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string

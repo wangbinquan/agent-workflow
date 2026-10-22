@@ -1,9 +1,9 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
 
-import { plugins, resourceBundleApplies, skills, skillVersions } from '@/db/schema'
 import type {
   ResourcePackageSkillArtifactOwner,
   ResourcePackagePluginArtifactOwner,
@@ -225,6 +225,7 @@ describeEachProviderHttpApplication(
       for (const failure of [false, true]) {
         test(`${kind} multipart apply uses the complete selected prototype owner for ${failure ? 'failure' : 'success'}`, async () => {
           const selected = new SelectedPackageArtifacts(failure, async (artifact) => {
+            const { resourceBundleApplies } = tablesOf(scope.harness.db)
             const rows = await scope.harness.db.select().from(resourceBundleApplies)
             expect(rows).toHaveLength(1)
             expect(rows[0]!.state).toBe('prepared')
@@ -236,6 +237,7 @@ describeEachProviderHttpApplication(
             resourcePackagePluginArtifacts: selected,
             resourcePackageSkillContent: selected,
           })
+          const { skills, plugins, skillVersions } = tablesOf(scope.harness.db)
           const beforeSkills = await scope.harness.db.select().from(skills)
           const beforePlugins = await scope.harness.db.select().from(plugins)
           const zip = packageBytes(kind)

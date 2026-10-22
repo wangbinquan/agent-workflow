@@ -15,6 +15,8 @@
 //     404 task-not-found（RFC-285 B1 与不存在同形）；未知 nodeRunId 404。
 // 如果本文件变红，先对照 design/RFC-142-review-history-echo/design.md D3-D5。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -27,16 +29,6 @@ import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskCollaborators,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   dispatchReviewNode,
   getReviewDetail,
@@ -228,11 +220,12 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
 
   async function seed(): Promise<{
     taskId: string
-    task: typeof tasks.$inferSelect
+    task: PersistenceTables['tasks']['$inferSelect']
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks } = tablesOf(db)
+    await insertOne(db, agents, {
       id: CASE_GEN_AGENT_ID,
       name: 'caseGen',
       description: '',
@@ -262,7 +255,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       edges: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -270,7 +263,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       version: 1,
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'rounds',
       workflowId,
@@ -289,7 +282,8 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   }
 
   async function seedSrc(taskId: string, id: string, marker: string): Promise<void> {
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId: 'src',
@@ -299,9 +293,11 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: id, portName: 'cases', content: PATHS.join('\n') })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: id,
+      portName: 'cases',
+      content: PATHS.join('\n'),
+    })
     for (const p of PATHS) {
       const abs = join(worktree, p)
       mkdirSync(dirname(abs), { recursive: true })
@@ -310,7 +306,8 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   }
 
   async function insertComment(docVersionId: string, text: string): Promise<void> {
-    await db.insert(reviewComments).values({
+    const { reviewComments } = tablesOf(db)
+    await insertOne(db, reviewComments, {
       id: ulid(),
       docVersionId,
       anchorSectionPath: 'p0',
@@ -327,6 +324,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   }
 
   function pendingDocs(taskId: string) {
+    const { docVersions } = tablesOf(db)
     return db
       .select()
       .from(docVersions)
@@ -369,6 +367,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       awaitScheduler: true,
     })
 
+    const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(db)
     // 模拟上游重跑完成：iterate 铸出的 fresh pending src 行置 done + 补输出。
     const srcRerun = (
       await db
@@ -386,9 +385,11 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(nodeRuns.id, srcRerun.id))
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: srcRerun.id, portName: 'cases', content: PATHS.join('\n') })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: srcRerun.id,
+      portName: 'cases',
+      content: PATHS.join('\n'),
+    })
 
     // The no-op owner settles the exact intent but deliberately does not run
     // TaskEngine's pending → running claim used by this direct service fixture.
@@ -514,7 +515,8 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   test('单文档评审 → []', async () => {
     const { taskId } = await seed()
     const reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -526,7 +528,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     })
     mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
     writeFileSync(join(appHome, 'doc_versions/v1.md'), '# single')
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: ulid(),
       taskId,
       reviewNodeId: 'rev_1',
@@ -566,7 +568,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           appHome,
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
@@ -609,11 +611,14 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
       edges: [],
     }
     const workflowId = ulid()
-    await db
-      .insert(workflows)
-      .values({ id: workflowId, name: 'wf', definition: JSON.stringify(definition) })
+    const { workflows, tasks, taskCollaborators, nodeRuns, docVersions } = tablesOf(db)
+    await insertOne(db, workflows, {
+      id: workflowId,
+      name: 'wf',
+      definition: JSON.stringify(definition),
+    })
     taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 't142',
       workflowId,
@@ -627,7 +632,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
       startedAt: Date.now(),
       ownerUserId: owner.id,
     })
-    await db.insert(taskCollaborators).values({
+    await insertOne(db, taskCollaborators, {
       taskId,
       userId: owner.id,
       role: 'owner',
@@ -635,7 +640,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
       addedAt: Date.now(),
     })
     reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -648,7 +653,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
     mkdirSync(join(appHome, 'dv'), { recursive: true })
     for (const i of [0, 1]) {
       writeFileSync(join(appHome, `dv/item${i}.md`), `# Item ${i}\n`)
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId,
         reviewNodeId: 'rev_1',

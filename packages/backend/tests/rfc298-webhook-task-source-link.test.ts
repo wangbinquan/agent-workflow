@@ -1,4 +1,6 @@
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-298 — task detail derives a minimal webhook source link from the task's
@@ -9,27 +11,24 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test } from 'bun:test'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import { tasks, workflows } from '../src/db/schema'
 import { getTask } from '../src/services/task'
 
-function seedWorkflowWrite(db: ProviderNeutralDatabase) {
+function seedWorkflowWrite(db: PersistenceDb) {
   const id = ulid()
   const now = Date.now()
-  const write = db
-    .insert(workflows)
-    .values({
-      id,
-      name: 'RFC-298 fixture workflow',
-      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { workflows } = tablesOf(db)
+  const write = insertOne(db, workflows, {
+    id,
+    name: 'RFC-298 fixture workflow',
+    definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+    createdAt: now,
+    updatedAt: now,
+  })
   return { id, write }
 }
 
 function seedTaskWrite(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
   options: {
     triggerContextJson?: string | null
@@ -41,28 +40,26 @@ function seedTaskWrite(
 ) {
   const id = ulid()
   const now = Date.now()
-  const write = db
-    .insert(tasks)
-    .values({
-      id,
-      name: `RFC-298 task ${id}`,
-      workflowId,
-      workflowSnapshot: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-      repoPath: '/tmp/rfc298-repo',
-      worktreePath: `/tmp/rfc298-${id}`,
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'done',
-      inputs: '{}',
-      startedAt: now - 100,
-      finishedAt: now,
-      triggerContextJson: options.triggerContextJson ?? null,
-      parentTaskId: options.parentTaskId ?? null,
-      webhookTriggerId: options.webhookTriggerId ?? null,
-      webhookFireId: options.webhookFireId ?? null,
-      ...lineage?.(id),
-    })
-    .run()
+  const { tasks } = tablesOf(db)
+  const write = insertOne(db, tasks, {
+    id,
+    name: `RFC-298 task ${id}`,
+    workflowId,
+    workflowSnapshot: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+    repoPath: '/tmp/rfc298-repo',
+    worktreePath: `/tmp/rfc298-${id}`,
+    baseBranch: 'main',
+    branch: `agent-workflow/${id}`,
+    status: 'done',
+    inputs: '{}',
+    startedAt: now - 100,
+    finishedAt: now,
+    triggerContextJson: options.triggerContextJson ?? null,
+    parentTaskId: options.parentTaskId ?? null,
+    webhookTriggerId: options.webhookTriggerId ?? null,
+    webhookFireId: options.webhookFireId ?? null,
+    ...lineage?.(id),
+  })
   return { id, write }
 }
 
@@ -75,13 +72,13 @@ type FixtureLineage = {
 function createProviderSeeds() {
   const lineageByTaskId = new Map<string, FixtureLineage>()
   return {
-    async seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+    async seedWorkflow(db: PersistenceDb): Promise<string> {
       const { id, write } = seedWorkflowWrite(db)
       await write
       return id
     },
     async seedTask(
-      db: ProviderNeutralDatabase,
+      db: PersistenceDb,
       workflowId: string,
       options: Parameters<typeof seedTaskWrite>[2] = {},
     ): Promise<string> {
@@ -181,7 +178,8 @@ describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
     const detail = await getTask(db, childTaskId)
     expect(detail?.parentTaskId).toBe(parentTaskId)
     expect(detail?.webhookSourceLink).toEqual({ kind: 'pipeline', url: pipelineUrl })
-    const stored = (await db.select().from(tasks).all()).find((row) => row.id === childTaskId)
+    const { tasks } = tablesOf(db)
+    const stored = (await db.select().from(tasks)).find((row) => row.id === childTaskId)
     expect(stored?.webhookTriggerId).toBeNull()
     expect(stored?.webhookFireId).toBeNull()
   })

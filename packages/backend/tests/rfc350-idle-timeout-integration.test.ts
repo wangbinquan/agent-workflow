@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-350 —— 端到端：真库 + 真 cancelTask + 真归档器，把「超时 → 终结 → 出库」
 // 这条链整条跑一遍。
@@ -20,9 +22,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { cancelViaEngine } from './helpers/cancelEngine'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, recoveryEvents, taskRepos, tasks, users, workflows } from '../src/db/schema'
 import {
   composeTaskIdleTimeoutOperations,
   createTaskIdleTimeoutPersistence,
@@ -35,7 +36,7 @@ const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 const IDLE_CONFIG = { enabled: true, idleHours: 24 }
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let uninstall: (() => void) | undefined
 
 function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
@@ -50,7 +51,8 @@ function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
 }
 
 async function seedBase(): Promise<void> {
-  await db.insert(users).values({
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -58,7 +60,7 @@ async function seedBase(): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 async function seedTask(seed: {
@@ -68,7 +70,8 @@ async function seedTask(seed: {
   parentTaskId?: string
   deletedAt?: number
 }): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -88,7 +91,7 @@ async function seedTask(seed: {
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
     ...(seed.deletedAt === undefined ? {} : { deletedAt: seed.deletedAt }),
   })
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -98,7 +101,8 @@ async function seedTask(seed: {
 }
 
 async function seedRun(taskId: string, id: string, startedAt: number): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -132,6 +136,7 @@ async function statusOf(taskId: string): Promise<{
   errorMessage: string | null
   finishedAt: number | null
 } | null> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({
       status: tasks.status,
@@ -145,6 +150,7 @@ async function statusOf(taskId: string): Promise<{
 }
 
 async function taskCount(): Promise<number> {
+  const { tasks } = tablesOf(db)
   const rows = await db.select({ n: count() }).from(tasks)
   return rows[0]?.n ?? 0
 }
@@ -190,6 +196,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
       expect(row?.finishedAt).not.toBeNull()
     }
 
+    const { recoveryEvents } = tablesOf(db)
     const audits = await db
       .select({ taskId: recoveryEvents.taskId, kind: recoveryEvents.kind })
       .from(recoveryEvents)

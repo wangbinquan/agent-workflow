@@ -14,13 +14,14 @@
 // reason somebody copied. So the absence of a base has to make the merge do
 // LESS, not guess.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { capabilityTemplates } from '../src/db/schema'
 import {
   mergeFromUpstream as mergeFromUpstreamWithPort,
   readUpstreamReport as readUpstreamReportWithPort,
@@ -51,16 +52,16 @@ import { errorHandler } from '../src/util/errors'
 const NOW = 1_700_000_000_000
 
 const readUpstreamReport = async (
-  db: ProviderNeutralDatabase,
-  row: typeof capabilityTemplates.$inferSelect,
+  db: PersistenceDb,
+  row: PersistenceTables['capabilityTemplates']['$inferSelect'],
 ) => {
   const report = await readUpstreamReportWithPort(createTemplateUpstreamPersistence(db), row.id)
   if (report === null) throw new Error(`no template ${row.id}`)
   return report
 }
 const mergeFromUpstream = (
-  db: ProviderNeutralDatabase,
-  row: typeof capabilityTemplates.$inferSelect,
+  db: PersistenceDb,
+  row: PersistenceTables['capabilityTemplates']['$inferSelect'],
   actor: Actor,
   now?: number,
 ) => mergeFromUpstreamWithPort(createTemplateUpstreamPersistence(db), row.id, actor, now)
@@ -78,8 +79,9 @@ const AUTHOR = {
   source: 'session',
 } as unknown as Actor
 
-function createProviderTemplateRows(db: ProviderNeutralDatabase) {
+function createProviderTemplateRows(db: PersistenceDb) {
   async function row(id: string) {
+    const { capabilityTemplates } = tablesOf(db)
     const found = (
       await db.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id))
     )[0]
@@ -88,7 +90,10 @@ function createProviderTemplateRows(db: ProviderNeutralDatabase) {
   }
 
   /** Move upstream on, the way a department fixing a script would. */
-  async function moveUpstream(patch: Partial<typeof capabilityTemplates.$inferInsert>) {
+  async function moveUpstream(
+    patch: Partial<PersistenceTables['capabilityTemplates']['$inferInsert']>,
+  ) {
+    const { capabilityTemplates } = tablesOf(db)
     await db
       .update(capabilityTemplates)
       .set({ updatedAt: NOW + 5_000, ...patch })
@@ -98,8 +103,9 @@ function createProviderTemplateRows(db: ProviderNeutralDatabase) {
 }
 
 /** The department original every case in this file descends from. */
-async function seedUpstreamTemplate(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(capabilityTemplates).values({
+async function seedUpstreamTemplate(db: PersistenceDb): Promise<void> {
+  const { capabilityTemplates } = tablesOf(db)
+  await insertOne(db, capabilityTemplates, {
     id: 'up-1',
     name: 'department review',
     capability: 'mr-review',
@@ -113,13 +119,14 @@ async function seedUpstreamTemplate(db: ProviderNeutralDatabase): Promise<void> 
 }
 
 describeEachProvider('RFC-309 T16 — reading where a copy stands', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let row: ReturnType<typeof createProviderTemplateRows>['row']
   let moveUpstream: ReturnType<typeof createProviderTemplateRows>['moveUpstream']
 
   beforeEach(async () => {
     db = await harness.db
-    await db.insert(capabilityTemplates).values({
+    const { capabilityTemplates } = tablesOf(db)
+    await insertOne(db, capabilityTemplates, {
       id: 'up-1',
       name: 'department review',
       capability: 'mr-review',
@@ -166,6 +173,7 @@ describeEachProvider('RFC-309 T16 — reading where a copy stands', (harness) =>
     // The case the three-way diff exists for. A two-way comparison sees "these
     // rows differ" and has to ask a person about a change nobody disputes.
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db
       .update(capabilityTemplates)
       .set({ agentBySlotJson: JSON.stringify({ reviewer: 'agent-ours' }), updatedAt: NOW + 2_000 })
@@ -183,6 +191,7 @@ describeEachProvider('RFC-309 T16 — reading where a copy stands', (harness) =>
 
   test('both sides moved the SAME field ⇒ a real conflict', async () => {
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db
       .update(capabilityTemplates)
       .set({
@@ -202,6 +211,7 @@ describeEachProvider('RFC-309 T16 — reading where a copy stands', (harness) =>
     // `current` would say "nothing to do" about a link that can never be
     // followed again — the most misleading of the four states.
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db.delete(capabilityTemplates).where(eq(capabilityTemplates.id, 'up-1'))
 
     const report = await readUpstreamReport(db, await row(copy.id))
@@ -211,13 +221,14 @@ describeEachProvider('RFC-309 T16 — reading where a copy stands', (harness) =>
 })
 
 describeEachProvider('RFC-309 T16 — merging only what was not overridden', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let row: ReturnType<typeof createProviderTemplateRows>['row']
   let moveUpstream: ReturnType<typeof createProviderTemplateRows>['moveUpstream']
 
   beforeEach(async () => {
     db = await harness.db
-    await db.insert(capabilityTemplates).values({
+    const { capabilityTemplates } = tablesOf(db)
+    await insertOne(db, capabilityTemplates, {
       id: 'up-1',
       name: 'department review',
       capability: 'mr-review',
@@ -233,6 +244,7 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
 
   test('takes upstream’s change, keeps ours, and rebases the link', async () => {
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db
       .update(capabilityTemplates)
       .set({ agentBySlotJson: JSON.stringify({ reviewer: 'agent-ours' }), updatedAt: NOW + 2_000 })
@@ -261,6 +273,7 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
 
   test('a genuine conflict is left ALONE — the merge never picks a side', async () => {
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db
       .update(capabilityTemplates)
       .set({
@@ -286,6 +299,7 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
     // as the only change and reports `keep-local`, retiring a disagreement
     // nobody settled.
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db
       .update(capabilityTemplates)
       .set({
@@ -341,12 +355,13 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
 })
 
 describeEachProvider('RFC-309 T16 — merging only what was not overridden', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let row: ReturnType<typeof createProviderTemplateRows>['row']
 
   beforeEach(async () => {
     db = await harness.db
-    await db.insert(capabilityTemplates).values({
+    const { capabilityTemplates } = tablesOf(db)
+    await insertOne(db, capabilityTemplates, {
       id: 'up-1',
       name: 'department review',
       capability: 'mr-review',
@@ -367,6 +382,7 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
 
   test('an orphaned copy refuses with its own code, not the same one', async () => {
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
+    const { capabilityTemplates } = tablesOf(db)
     await db.delete(capabilityTemplates).where(eq(capabilityTemplates.id, 'up-1'))
     expect(await mergeFromUpstream(db, await row(copy.id), AUTHOR, NOW + 9_000)).toEqual({
       ok: false,
@@ -378,13 +394,14 @@ describeEachProvider('RFC-309 T16 — merging only what was not overridden', (ha
 describeEachProvider(
   'RFC-309 T16 — a copy with no recorded base (everything made before 0175)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let row: ReturnType<typeof createProviderTemplateRows>['row']
     let moveUpstream: ReturnType<typeof createProviderTemplateRows>['moveUpstream']
 
     beforeEach(async () => {
       db = await harness.db
-      await db.insert(capabilityTemplates).values({
+      const { capabilityTemplates } = tablesOf(db)
+      await insertOne(db, capabilityTemplates, {
         id: 'up-1',
         name: 'department review',
         capability: 'mr-review',
@@ -401,6 +418,7 @@ describeEachProvider(
     /** A copy exactly as RFC-304 wrote them: link and digest, no base values. */
     async function legacyCopy(): Promise<string> {
       const copy = await copyTemplate(db, await row('up-1'), COPIER, 'legacy copy', NOW + 1_000)
+      const { capabilityTemplates } = tablesOf(db)
       await db
         .update(capabilityTemplates)
         .set({ baseSnapshotJson: null })
@@ -465,7 +483,7 @@ describeEachProvider(
 // every route-thrown error code to be NAMED by a test reads this file for them.
 describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went wrong', (harness) => {
   const TOKEN = 'aw-fixture-upstream-token'
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let row: ReturnType<typeof createProviderTemplateRows>['row']
   let app: Hono
 
@@ -548,7 +566,8 @@ describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went w
     // upstream" and "the upstream was deleted" send the reader to different
     // places, and one code for both sends half of them to the wrong one.
     const source = await row('up-1')
-    await db.insert(capabilityTemplates).values({
+    const { capabilityTemplates } = tablesOf(db)
+    await insertOne(db, capabilityTemplates, {
       ...source,
       id: 'orphan-1',
       name: 'orphan copy',
@@ -563,7 +582,7 @@ describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went w
 })
 
 // RFC-375: writes use the live operation API; persistence reads inspect stored receipts.
-function templateOperations(db: ProviderNeutralDatabase, now?: number) {
+function templateOperations(db: PersistenceDb, now?: number) {
   return composeCapabilityTemplateOperations({
     db,
     ...(now === undefined ? {} : { now: () => now }),
@@ -576,13 +595,13 @@ function templateOperations(db: ProviderNeutralDatabase, now?: number) {
     },
   })
 }
-async function storedTemplate(db: ProviderNeutralDatabase, id: string) {
+async function storedTemplate(db: PersistenceDb, id: string) {
   const row = await createCapabilityTemplatePersistence(db).load(id)
   if (row === null) throw new Error(`missing template ${id}`)
   return row
 }
 async function copyTemplate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   source: { readonly id: string },
   actor: Actor,
   name?: string,

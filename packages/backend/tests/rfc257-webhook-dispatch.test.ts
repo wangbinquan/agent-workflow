@@ -7,28 +7,16 @@
 //
 // RFC-359 AC-6：整份文件跑双引擎——库由 harness 现建（`describeEachProvider`），
 // `harness()` 只在那个库上种夹具，不再自建 SQLite 内存库。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { webhookTriggerContextOf, type CodeHostEvent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from './helpers/userFixture'
-import {
-  cachedRepos,
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  employeeTypePackages,
-  tasks,
-  users,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggers,
-  webhookTriggerStreams,
-  workflows,
-} from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import {
@@ -49,7 +37,7 @@ import type { WebhookEndpointRow } from '../src/services/webhook/dispatcherTypes
 const box = createSecretBoxFromKey(Buffer.alloc(32, 9))
 
 /** harness 现建的库；每个用例前由 `seedFixture` 指过来（库本身每个用例被清空回迁移态）。 */
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 function seedFixture(providerHarness: ProviderHarness): void {
   db = providerHarness.db
@@ -76,7 +64,7 @@ function ev(overrides: Partial<CodeHostEvent> = {}): CodeHostEvent {
 }
 
 type Harness = {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   deps: WebhookDispatchDeps
   /** daemon 单例语义（start.ts 只创建一次）：互斥队列在实例内，跨 dispatch 共享。 */
   dispatcher: ReturnType<typeof createWebhookDispatcher>
@@ -102,7 +90,8 @@ async function harness(): Promise<Harness> {
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, webhookEndpoints, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'audit-wf',
     description: '',
@@ -112,7 +101,7 @@ async function harness(): Promise<Harness> {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'gitlab',
     provider: 'gitlab',
@@ -135,7 +124,7 @@ async function harness(): Promise<Harness> {
       if (invoker.type !== 'webhook') throw new Error('expected webhook invoker')
       const taskId = ulid()
       // supersede 查询依赖真实 tasks 行（running），fake launch 落一行。
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         // SQLite 的 `rfc328_tasks_lineage_after_insert` 会补这两列，PostgreSQL 按设计没有
         // 对应触发器——直插 `tasks` 的夹具自己给，两个引擎的物理行才一样。
@@ -189,10 +178,11 @@ async function harness(): Promise<Harness> {
 
 async function insertTrigger(
   h: Harness,
-  overrides: Partial<typeof webhookTriggers.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['webhookTriggers']['$inferInsert']> = {},
 ): Promise<string> {
   const id = overrides.id ?? ulid()
-  await h.db.insert(webhookTriggers).values({
+  const { webhookTriggers } = tablesOf(h.db)
+  await insertOne(h.db, webhookTriggers, {
     id,
     name: overrides.name ?? '修到绿',
     endpointId: 'ep-1',
@@ -210,7 +200,8 @@ async function insertTrigger(
 
 async function insertReceivedDelivery(h: Harness, event: CodeHostEvent): Promise<string> {
   const id = ulid()
-  await h.db.insert(webhookDeliveries).values({
+  const { webhookDeliveries } = tablesOf(h.db)
+  await insertOne(h.db, webhookDeliveries, {
     id,
     endpointId: 'ep-1',
     eventUuid: event.eventUuid,
@@ -228,6 +219,7 @@ async function dispatchOnce(h: Harness, event: CodeHostEvent): Promise<string> {
 }
 
 async function firesOf(h: Harness, triggerId?: string) {
+  const { webhookTriggerFires } = tablesOf(h.db)
   return h.db
     .select()
     .from(webhookTriggerFires)
@@ -235,6 +227,7 @@ async function firesOf(h: Harness, triggerId?: string) {
 }
 
 async function deliveryStatus(h: Harness, id: string) {
+  const { webhookDeliveries } = tablesOf(h.db)
   const row = (
     await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).limit(1)
   )[0]
@@ -342,16 +335,13 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
   })
 
   describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
-    async function seedCached(
-      db: ProviderNeutralDatabase,
-      url: string,
-      id = 'cr-1',
-    ): Promise<void> {
+    async function seedCached(db: PersistenceDb, url: string, id = 'cr-1'): Promise<void> {
       const { createHash } = await import('node:crypto')
       const { parseGitUrl, gitUrlCacheKeyWith } = await import('@agent-workflow/shared')
       const sha1 = (s: string) => createHash('sha1').update(s).digest('hex')
       const key = gitUrlCacheKeyWith(parseGitUrl(url)!, sha1)
-      await db.insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id,
         urlHash: key.hash,
         urlEnc: box.seal(url),
@@ -368,6 +358,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
         kind: 'cached',
         cachedRepoId: 'cr-1',
       })
+      const { cachedRepos } = tablesOf(h.db)
       // 合一前这半条另起一个内存库；harness 是一个文件一个库，于是改成先撤掉 http 那行再种
       // ssh 那行——解析器按 [repoHttpUrl, repoSshUrl] 顺序查 hash，两行并存时永远是 http 那行
       // 先命中，ssh 这一侧就测不到了。判据本身一格未动。
@@ -384,8 +375,9 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       const { parseGitUrl, gitUrlCacheKeyWith } = await import('@agent-workflow/shared')
       const sha1 = (s: string) => createHash('sha1').update(s).digest('hex')
       const key = gitUrlCacheKeyWith(parseGitUrl(HTTP_URL)!, sha1)
+      const { cachedRepos } = tablesOf(h.db)
       // 伪造碰撞行：hash 与事件仓相同，但封存的真身是另一个仓
-      await h.db.insert(cachedRepos).values({
+      await insertOne(h.db, cachedRepos, {
         id: 'cr-evil',
         urlHash: key.hash,
         urlEnc: box.seal('https://gitlab.example.com/other/repo.git'),
@@ -470,6 +462,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       }
       // invoker 的 fireId = fires 行 id；tasks 行 stamped（AC-18 归属链）
       for (const fire of fires) {
+        const { tasks } = tablesOf(h.db)
         const task = (
           await h.db.select().from(tasks).where(eq(tasks.webhookFireId, fire.id)).limit(1)
         )[0]
@@ -480,7 +473,8 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
 
     test('零命中 → ignored(no-trigger-matched)；异 endpoint 触发器不参与', async () => {
       const h = await harness()
-      await h.db.insert(webhookEndpoints).values({
+      const { webhookEndpoints } = tablesOf(h.db)
+      await insertOne(h.db, webhookEndpoints, {
         id: 'ep-2',
         name: 'other',
         provider: 'gitlab',
@@ -523,6 +517,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       await dispatchOnce(h, ev({ author: { username: 'dev-a' } }))
       fires = await firesOf(h, t)
       expect(fires[3]?.outcome).toBe('launched')
+      const { webhookTriggerStreams } = tablesOf(h.db)
       const stream = (
         await h.db
           .select()
@@ -548,6 +543,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       // 串行化下第二个 fire 必须看见并取消第一个的任务 —— 无互斥时两者都查不到
       // 对方（check-then-act 交错），此断言红。
       expect(h.canceled).toEqual([h.launched[0]!.taskId])
+      const { tasks } = tablesOf(h.db)
       const alive = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
       expect(alive.length).toBe(1) // 每流至多一个活任务
     })
@@ -555,6 +551,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
     test('owner 失效 → skipped-owner-invalid；目标 workflow 不可用同码（AC-13）', async () => {
       const h = await harness()
       const t = await insertTrigger(h)
+      const { users } = tablesOf(h.db)
       await h.db.update(users).set({ status: 'disabled' }).where(eq(users.id, h.ownerId))
       await dispatchOnce(h, ev())
       let fires = await firesOf(h, t)
@@ -662,6 +659,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       const dispatch = dispatchOnce(h, ev())
       await firstBlocked
 
+      const { webhookTriggers } = tablesOf(h.db)
       // 同一次 dispatch 已把两行 parse 成 matched snapshot；让第二行在队列中
       // 等待时切到 scratch，证明它仍完整执行旧的 event-repo 一代。
       await h.db
@@ -687,6 +685,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       h.launchError.current = new Error('repo-fetch-failed: gateway down')
       await dispatchOnce(h, ev())
       expect((await firesOf(h, t))[0]?.outcome).toBe('launch-failed')
+      const { webhookTriggers } = tablesOf(h.db)
       const row = (
         await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, t)).limit(1)
       )[0]
@@ -724,6 +723,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
         }),
         templateSyntaxVersion: 1,
       })
+      const { webhookTriggers } = tablesOf(h.db)
       const stored = (
         await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, id)).limit(1)
       )[0]!
@@ -790,6 +790,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
     test('parseTriggerRow：四列逐列容错原因', async () => {
       const h = await harness()
       const id = await insertTrigger(h)
+      const { webhookTriggers } = tablesOf(h.db)
       const row = (
         await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, id)).limit(1)
       )[0]!
@@ -819,7 +820,8 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
     /** 必填 git 输入 + 无分支事件 = 渲染出空 ref，`workflow-inputs-invalid`。 */
     async function gitInputWorkflow(h: Harness): Promise<string> {
       const id = ulid()
-      await h.db.insert(workflows).values({
+      const { workflows } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id,
         name: 'git-input-wf',
         description: '',
@@ -849,6 +851,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       expect(fires.map((f) => f.outcome)).toEqual(['launch-failed'])
       expect(fires[0]?.error ?? '').toContain('launch inputs failed validation')
       expect(h.launched.length).toBe(0)
+      const { webhookTriggers } = tablesOf(h.db)
       const row = (
         await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, t)).limit(1)
       )[0]!
@@ -863,6 +866,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       await dispatchOnce(h, ev())
       const fires = await firesOf(h, t)
       expect(fires.map((f) => f.outcome)).toEqual(['skipped-owner-invalid'])
+      const { webhookTriggers } = tablesOf(h.db)
       const row = (
         await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, t)).limit(1)
       )[0]!
@@ -874,7 +878,13 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
     test('one EventDelivery starts one Case with exact provenance and records the Case result', async () => {
       const h = await harness()
       const now = Date.now()
-      await h.db.insert(employeeTypePackages).values({
+      const {
+        employeeTypePackages,
+        employeeDefinitions,
+        employeeDefinitionRevisions,
+        webhookDeliveries,
+      } = tablesOf(h.db)
+      await insertOne(h.db, employeeTypePackages, {
         typeId: 'event-work-start-fixture',
         revision: 1,
         descriptorJson: JSON.stringify({
@@ -887,7 +897,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
         state: 'published',
         registeredAt: now,
       })
-      await h.db.insert(employeeDefinitions).values({
+      await insertOne(h.db, employeeDefinitions, {
         id: 'employee-1',
         name: 'event work-start employee',
         typeId: 'event-work-start-fixture',
@@ -899,7 +909,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
         createdAt: now,
         updatedAt: now,
       })
-      await h.db.insert(employeeDefinitionRevisions).values({
+      await insertOne(h.db, employeeDefinitionRevisions, {
         employeeId: 'employee-1',
         revision: 1,
         contentJson: '{}',

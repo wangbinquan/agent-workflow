@@ -8,7 +8,7 @@ import type { Hono } from 'hono'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -17,14 +17,14 @@ import {
 
 const TOKEN = 'a'.repeat(64)
 
-interface H<TDb extends ProviderNeutralDatabase, TApp = Hono> {
+interface H<TDb extends PersistenceDb, TApp = Hono> {
   db: TDb
   app: TApp
   appHome: string
   cleanup: () => void
 }
 
-type BuildAppInput<TDb extends ProviderNeutralDatabase> = {
+type BuildAppInput<TDb extends PersistenceDb> = {
   token: string
   configPath: string
   opencodeVersion: string
@@ -32,7 +32,7 @@ type BuildAppInput<TDb extends ProviderNeutralDatabase> = {
   db: TDb
 }
 
-function buildWithPorts<TDb extends ProviderNeutralDatabase, TApp>(
+function buildWithPorts<TDb extends PersistenceDb, TApp>(
   createDatabase: () => TDb,
   compose: (input: BuildAppInput<TDb>, appHome: string) => TApp,
 ): H<TDb, TApp> {
@@ -64,13 +64,13 @@ function buildWithPorts<TDb extends ProviderNeutralDatabase, TApp>(
 
 function registerProviderApplication(
   name: string,
-  register: (useApplication: () => H<ProviderNeutralDatabase>) => void,
+  register: (useApplication: () => H<PersistenceDb>) => void,
 ): void {
   describeEachProvider(name, (harness) => {
     describe('application lifetime', () => {
-      let pending: H<ProviderNeutralDatabase, Promise<ProviderHttpApplication>> | undefined
+      let pending: H<PersistenceDb, Promise<ProviderHttpApplication>> | undefined
       let application: ProviderHttpApplication | undefined
-      let current: H<ProviderNeutralDatabase> | undefined
+      let current: H<PersistenceDb> | undefined
       beforeEach(async () => {
         pending = buildWithPorts(
           () => harness.db,
@@ -135,7 +135,7 @@ const skillMd = (name: string, desc = 'd') =>
   `---\nname: ${name}\ndescription: ${desc}\n---\nbody\n`
 
 registerProviderApplication('POST /api/skills/import-zip/parse', (useApplication) => {
-  let h: H<ProviderNeutralDatabase>
+  let h: H<PersistenceDb>
   beforeEach(() => {
     h = useApplication()
   })
@@ -183,7 +183,7 @@ registerProviderApplication('POST /api/skills/import-zip/parse', (useApplication
 registerProviderApplication(
   'POST /api/skills/import-zip/parse (provider slice 3)',
   (useApplication) => {
-    let h: H<ProviderNeutralDatabase>
+    let h: H<PersistenceDb>
     beforeEach(() => {
       h = useApplication()
     })
@@ -231,7 +231,7 @@ registerProviderApplication(
 )
 
 registerProviderApplication('POST /api/skills/import-zip/commit', (useApplication) => {
-  let h: H<ProviderNeutralDatabase>
+  let h: H<PersistenceDb>
   beforeEach(() => {
     h = useApplication()
   })
@@ -310,7 +310,7 @@ registerProviderApplication('POST /api/skills/import-zip/commit', (useApplicatio
 registerProviderApplication(
   'POST /api/skills/import-zip/commit (provider slice 3)',
   (useApplication) => {
-    let h: H<ProviderNeutralDatabase>
+    let h: H<PersistenceDb>
     beforeEach(() => {
       h = useApplication()
     })

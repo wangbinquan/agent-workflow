@@ -7,7 +7,7 @@
 
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import type { DigitalEmployeeContent } from '../src/modules/development-automation/domain/digitalEmployee'
 import {
@@ -35,9 +35,7 @@ const EMPLOYEE_CONTENT: DigitalEmployeeContent = {
   defaultPolicyRef: { id: 'pol-1', revision: 1 },
 }
 
-async function seedPublished(
-  db: ProviderNeutralDatabase,
-): Promise<{ employeeId: string; policyId: string }> {
+async function seedPublished(db: PersistenceDb): Promise<{ employeeId: string; policyId: string }> {
   const policy = await createAutomationPolicy(db, {
     name: 'p',
     ownerUserId: null,

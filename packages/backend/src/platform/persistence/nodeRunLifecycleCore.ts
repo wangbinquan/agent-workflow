@@ -17,9 +17,9 @@
 // ⚠️ 本文件必须保持叶子：只许依赖 `@agent-workflow/shared` / `@/db/schema` 的类型 / `@/util/errors`。
 // 往这里加任何指向 services/ 或 modules/ 的 import 都会把上面那条环装回来。
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
-import type { nodeRuns } from '@/db/schema'
 import { ConflictError } from '@/util/errors'
 
 const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES: ReadonlySet<NodeRunStatus> = new Set([
@@ -54,7 +54,7 @@ export function assertNodeRunSourceTerminationAdmission(
  */
 export type NodeRunStatusUpdateExtra = Partial<
   Pick<
-    typeof nodeRuns.$inferInsert,
+    PersistenceTables['nodeRuns']['$inferInsert'],
     | 'finishedAt'
     | 'startedAt'
     | 'errorMessage'

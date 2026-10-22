@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleMemoryInjectionReadStore } from '../../src/modules/memory/infrastructure/memoryInjectionReadStore'
 import type { MemoryInjectionQueries } from '../../src/modules/memory/public/queries'
 import {
@@ -6,13 +6,11 @@ import {
   loadInjectedSnapshotFromFirstAttempt,
 } from '../../src/modules/memory/application/injection/injectMemory'
 
-export function sqliteMemoryInjectionStore(
-  db: ProviderNeutralDatabase,
-): DrizzleMemoryInjectionReadStore {
+export function sqliteMemoryInjectionStore(db: PersistenceDb): DrizzleMemoryInjectionReadStore {
   return new DrizzleMemoryInjectionReadStore(db)
 }
 
-export function sqliteMemoryInjectionQueries(db: ProviderNeutralDatabase): MemoryInjectionQueries {
+export function sqliteMemoryInjectionQueries(db: PersistenceDb): MemoryInjectionQueries {
   const store = sqliteMemoryInjectionStore(db)
   return Object.freeze({
     injectForRun: async (input: Parameters<MemoryInjectionQueries['injectForRun']>[0]) =>

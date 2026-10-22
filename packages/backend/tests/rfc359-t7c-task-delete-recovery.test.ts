@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W1-T7c —— 任务删除认领的崩溃恢复，两个引擎各跑一遍。
 //
@@ -14,24 +16,19 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   over: { readonly parentTaskId?: string; readonly status?: 'done' | 'running' } = {},
 ): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-t7c',
     description: '',
@@ -39,7 +36,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -67,7 +64,7 @@ function plan(taskId: string, over: Partial<Record<'worktrees', unknown>> = {}):
   })
 }
 
-async function claimTree(db: ProviderNeutralDatabase, rootTaskId: string, cleanupPlanJson: string) {
+async function claimTree(db: PersistenceDb, rootTaskId: string, cleanupPlanJson: string) {
   const persistence = createTaskExecutionPersistence(db)
   const members = await persistence.terminalMaintenance.snapshotTree(rootTaskId)
   const claim = await persistence.terminalMaintenance.claim({
@@ -80,7 +77,8 @@ async function claimTree(db: ProviderNeutralDatabase, rootTaskId: string, cleanu
   return { persistence, members, claim }
 }
 
-async function claimState(db: ProviderNeutralDatabase, claimId: string) {
+async function claimState(db: PersistenceDb, claimId: string) {
+  const { taskExecutionMaintenanceClaims } = tablesOf(db)
   return (
     await db
       .select({ state: taskExecutionMaintenanceClaims.state })
@@ -89,7 +87,8 @@ async function claimState(db: ProviderNeutralDatabase, claimId: string) {
   )[0]?.state
 }
 
-async function taskExists(db: ProviderNeutralDatabase, taskId: string): Promise<boolean> {
+async function taskExists(db: PersistenceDb, taskId: string): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length > 0
 }
 
@@ -111,6 +110,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     expect(await taskExists(db, root)).toBe(false)
     expect(await taskExists(db, child)).toBe(false)
     expect(await claimState(db, claim.claimId)).toBe('completed')
+    const { taskExecutionMaintenanceMembers } = tablesOf(db)
     const active = await db
       .select({ taskId: taskExecutionMaintenanceMembers.taskId })
       .from(taskExecutionMaintenanceMembers)
@@ -143,6 +143,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     await seedTask(db, root)
     const { persistence, claim } = await claimTree(db, root, plan(root))
     await persistence.terminalMaintenance.transition({ claim, to: 'recovery-required', now: 51 })
+    const { tasks } = tablesOf(db)
     await db.delete(tasks).where(eq(tasks.id, root))
     expect(await recoverInterruptedTaskDeletes(db)).toEqual({
       completed: [root],

@@ -4,6 +4,9 @@
 // rollback, retry, filesystem and committed-frame assertions share the same
 // public entry points; only trigger DDL and native fixture teardown differ.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, type Dirent } from 'node:fs'
@@ -18,19 +21,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents as agentsTable,
-  clarifyRounds,
-  collaborationGateArtifacts,
-  collaborationGateOperations,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
@@ -137,7 +128,7 @@ function filesBelow(root: string): string[] {
 }
 
 async function seedReview(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   worktree: string,
 ): Promise<{
   taskId: string
@@ -145,7 +136,8 @@ async function seedReview(
   reviewNode: WorkflowNode
 }> {
   const agentId = ulid()
-  await db.insert(agentsTable).values({
+  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, agents, {
     id: agentId,
     name: 'rfc333-review-source',
     description: '',
@@ -175,7 +167,7 @@ async function seedReview(
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc333-review-open-fault',
     description: '',
@@ -183,7 +175,7 @@ async function seedReview(
     version: 1,
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc333-review-open-fault',
     workflowId,
@@ -202,7 +194,7 @@ async function seedReview(
     ]),
   })
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'source',
@@ -212,7 +204,7 @@ async function seedReview(
     startedAt: Date.now() - 10,
     finishedAt: Date.now(),
   })
-  await db.insert(nodeRunOutputs).values({
+  await insertOne(db, nodeRunOutputs, {
     nodeRunId: sourceRunId,
     portName: 'cases',
     content: joinMarkdownDocs(REVIEW_DOCS),
@@ -224,7 +216,7 @@ async function seedReview(
   }
 }
 
-async function seedClarify(db: ProviderNeutralDatabase): Promise<{
+async function seedClarify(db: PersistenceDb): Promise<{
   taskId: string
   sourceRunId: string
 }> {
@@ -238,7 +230,8 @@ async function seedClarify(db: ProviderNeutralDatabase): Promise<{
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc333-clarify-open-fault',
     description: '',
@@ -247,7 +240,7 @@ async function seedClarify(db: ProviderNeutralDatabase): Promise<{
     schemaVersion: 3,
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc333-clarify-open-fault',
     workflowId,
@@ -266,7 +259,7 @@ async function seedClarify(db: ProviderNeutralDatabase): Promise<{
     ]),
   })
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'source',
@@ -324,28 +317,35 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       )
       expect(error.message).toContain('rfc333-second-doc')
 
+      const {
+        docVersions,
+        nodeRuns,
+        tasks,
+        collaborationGateOperations,
+        collaborationGateArtifacts,
+      } = tablesOf(db)
       const docs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
       const reviewRuns = await db
         .select()
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'review'))
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).get())!
+      const task = (await first(db.select().from(tasks).where(eq(tasks.id, taskId))))!
       const allFiles = filesBelow(appHome)
       const canonicalFiles = allFiles.filter(
         (file) => file.startsWith('runs/') && !file.startsWith('runs/.human-gate-staging/'),
       )
       const stagedFiles = allFiles.filter((file) => file.startsWith('runs/.human-gate-staging/'))
-      const operation = await db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.taskId, taskId))
-        .get()
+      const operation = await first(
+        db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.taskId, taskId)),
+      )
       const artifacts = await db
         .select()
         .from(collaborationGateArtifacts)
         .where(eq(collaborationGateArtifacts.operationId, operation!.id))
-        .all()
 
       const observed = {
         docRows: docs.length,
@@ -380,23 +380,24 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       })
       expect(retried.kind).toBe('awaiting_review')
       expect(
-        await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)).all(),
+        await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)),
       ).toHaveLength(3)
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()).filter(
+        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
           (row) => row.nodeId === 'review',
         ),
       ).toHaveLength(1)
-      expect(await db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+      expect(await first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
         status: 'awaiting_review',
         lifecycleEventRevision: 2,
       })
       expect(
-        await db
-          .select()
-          .from(collaborationGateOperations)
-          .where(eq(collaborationGateOperations.id, operation!.id))
-          .get(),
+        await first(
+          db
+            .select()
+            .from(collaborationGateOperations)
+            .where(eq(collaborationGateOperations.id, operation!.id)),
+        ),
       ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
       expect(
         (
@@ -404,7 +405,6 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
             .select()
             .from(collaborationGateArtifacts)
             .where(eq(collaborationGateArtifacts.operationId, operation!.id))
-            .all()
         ).map((artifact) => artifact.state),
       ).toEqual(['finalized', 'finalized', 'finalized'])
       expect(
@@ -469,22 +469,28 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
         }),
       )
       expect(error.message).toContain('rfc333-task-park')
+      const {
+        docVersions,
+        nodeRuns,
+        tasks,
+        collaborationGateOperations,
+        collaborationGateArtifacts,
+      } = tablesOf(db)
+      expect(await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))).toEqual([])
       expect(
-        await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)).all(),
-      ).toEqual([])
-      expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()).filter(
+        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
           (row) => row.nodeId === 'review',
         ),
       ).toEqual([])
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)).get())?.status).toBe(
+      expect((await first(db.select().from(tasks).where(eq(tasks.id, taskId))))?.status).toBe(
         'running',
       )
-      const operation = (await db
-        .select()
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.taskId, taskId))
-        .get())!
+      const operation = (await first(
+        db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.taskId, taskId)),
+      ))!
       expect(operation.state).toBe('prepared')
       expect(
         (
@@ -492,7 +498,6 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
             .select()
             .from(collaborationGateArtifacts)
             .where(eq(collaborationGateArtifacts.operationId, operation.id))
-            .all()
         ).map((artifact) => artifact.state),
       ).toEqual(['staged', 'staged', 'staged'])
       expect(
@@ -575,23 +580,23 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       const error = await failureOf(() => createClarifyRound(request))
       expect(error.message).toContain('rfc333-clarify-round')
 
+      const { clarifyRounds, nodeRuns, tasks, taskQuestions, collaborationGateOperations } =
+        tablesOf(db)
       const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       const clarifyRuns = await db
         .select()
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'clarify'))
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).get())!
+      const task = (await first(db.select().from(tasks).where(eq(tasks.id, taskId))))!
       const questions = await db
         .select()
         .from(taskQuestions)
         .where(eq(taskQuestions.taskId, taskId))
-        .all()
       const operations = await db
         .select()
         .from(collaborationGateOperations)
         .where(eq(collaborationGateOperations.taskId, taskId))
-        .all()
 
       const observed = {
         rounds: rounds.length,
@@ -614,25 +619,26 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       const retried = await createClarifyRound(request)
       expect(retried.round.id).toBe(operations[0]!.id + ':round')
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()).filter(
+        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
           (row) => row.nodeId === 'clarify',
         ),
       ).toHaveLength(1)
       expect(
-        await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+        await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)),
       ).toHaveLength(1)
       expect(
-        await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+        await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
       ).toHaveLength(1)
-      expect(await db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+      expect(await first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
         status: 'awaiting_human',
       })
       expect(
-        await db
-          .select()
-          .from(collaborationGateOperations)
-          .where(eq(collaborationGateOperations.taskId, taskId))
-          .get(),
+        await first(
+          db
+            .select()
+            .from(collaborationGateOperations)
+            .where(eq(collaborationGateOperations.taskId, taskId)),
+        ),
       ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
       expect(frames.filter((frame) => frame.type === 'clarify.created')).toHaveLength(1)
     } finally {

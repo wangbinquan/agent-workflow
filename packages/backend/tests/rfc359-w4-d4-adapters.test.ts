@@ -4,23 +4,15 @@
 // 可见性与管理权由中立 participant 在同一事务里回答；scope 迁移把两个 participant 与 OCC 收在一个事务里
 // （含测试缝下的回滚）；融合 participant 的选中 / 定序 / provenance 与仓库 scope 的存在性。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { MemoryWsMessage } from '@agent-workflow/shared'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  cachedRepos,
-  memories,
-  memoryScopeMoveEvents,
-  repoGroups,
-  resourceGrants,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AuthenticatedPrincipal,
   CommandContext,
@@ -54,12 +46,10 @@ function authorityOf(actor: Actor): MemoryScopeAuthority {
   return Object.freeze({ authority: {} as RequestAuthority, actor })
 }
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'user',
-): Promise<string> {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'user'): Promise<string> {
   const id = `u_d4_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -71,9 +61,10 @@ async function seedUser(
   return id
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = `agt_d4_${ulid()}`
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name: id,
     description: 'd4',
@@ -90,9 +81,10 @@ async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Prom
   return id
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedWorkflow(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = `wf_d4_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: id,
     definition: '{"$schema_version":1,"nodes":[],"edges":[]}',
@@ -103,16 +95,22 @@ async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): P
 }
 
 async function seedGrant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   resourceType: 'agent' | 'workflow',
   resourceId: string,
   userId: string,
   level: 'read' | 'write',
   addedBy: string,
 ): Promise<void> {
-  await db
-    .insert(resourceGrants)
-    .values({ resourceType, resourceId, userId, level, addedBy, addedAt: NOW })
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
+    resourceType,
+    resourceId,
+    userId,
+    level,
+    addedBy,
+    addedAt: NOW,
+  })
 }
 
 /** 测试用命令上下文工厂：只回答「这个上下文是谁铸的」，与 identity-access 夹具同形，两个引擎共用。 */
@@ -370,7 +368,8 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
     const workflowId = await seedWorkflow(db, owner)
     await seedGrant(db, 'agent', agentId, reader, 'read', owner)
     const repoId = `repo_d4_${ulid()}`
-    await db.insert(cachedRepos).values({
+    const { cachedRepos, memoryScopeMoveEvents, workflows } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: repoId,
       localPath: `/tmp/${repoId}`,
@@ -504,6 +503,7 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
     const raced = await candidate()
     const faulted = catalogOf({
       afterMoveAuthorizationInTransaction: async (tx) => {
+        const { workflows } = tablesOf(tx)
         await tx.delete(workflows).where(eq(workflows.id, workflowId))
       },
     })
@@ -564,6 +564,7 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
         }),
     )
     expect(fused).toEqual([first, second].sort())
+    const { memories, cachedRepos, repoGroups } = tablesOf(db)
     expect((await db.select().from(memories).where(eq(memories.id, first)))[0]).toMatchObject({
       status: 'fused',
       fusedIntoSkillId: 'skl_d4',
@@ -589,16 +590,14 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
 
     const repoId = `repo_d4_${ulid()}`
     const groupId = `grp_d4_${ulid()}`
-    await db.insert(cachedRepos).values({
+    await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: repoId,
       localPath: `/tmp/${repoId}`,
       lastFetchedAt: NOW,
       createdAt: NOW,
     })
-    await db
-      .insert(repoGroups)
-      .values({ id: groupId, name: groupId, createdAt: NOW, updatedAt: NOW })
+    await insertOne(db, repoGroups, { id: groupId, name: groupId, createdAt: NOW, updatedAt: NOW })
     const repositories = createRepositoryScopeAuthorizationInTx(repositoryScopeExistenceReads)
     const facts = await harness.session.transaction(async (tx) => ({
       repo: await repositories.exists(tx, { kind: 'repo', id: repoId }),

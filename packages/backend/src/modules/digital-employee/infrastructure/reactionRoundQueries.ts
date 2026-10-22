@@ -4,10 +4,10 @@
 // `@/db/schema` 取 `employeeReactionRounds`。搬回本 context 之后：表与列只有 OS 知道，
 // 「已结算」这个判据也只有一处（下面那个常量），而不是散在别人的 where 子句里。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { employeeReactionRounds } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { EmployeeReactionRoundQueryPort } from '../public/types'
 
@@ -18,11 +18,10 @@ import type { EmployeeReactionRoundQueryPort } from '../public/types'
  */
 const SETTLED_ROUND_STATES = ['completed'] as const
 
-export function createReactionRoundQueries(
-  db: ProviderNeutralDatabase,
-): EmployeeReactionRoundQueryPort {
+export function createReactionRoundQueries(db: PersistenceDb): EmployeeReactionRoundQueryPort {
   return Object.freeze({
     async frozenPlan(roundRef: string) {
+      const { employeeReactionRounds } = tablesOf(db)
       const row = (
         await db
           .select({
@@ -40,6 +39,7 @@ export function createReactionRoundQueries(
       // 常量——将来结算态变成多值时，改常量 + 这一处 where，别处无需跟进。
       // 最近结算的排最前；settled_at 为 NULL 的行两个引擎都排最后（SQLite 的缺省，PG 显式 nulls last）。
       const [settled] = SETTLED_ROUND_STATES
+      const { employeeReactionRounds } = tablesOf(db)
       const row = (
         await db
           .select({ id: employeeReactionRounds.id })

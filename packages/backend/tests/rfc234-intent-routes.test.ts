@@ -5,18 +5,18 @@
 //  admin read-only audit, in-flight 409, and the route-boundary error codes
 //  `intent-invalid` / `invalid-json` (named here for route-error-code-coverage).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Hono } from 'hono'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { agents, intentSessions } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
@@ -36,7 +36,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 // 在 `dispatchIntentTurn(...)` 入参里现取 `deps.runTurn`），**不是**装载期捕获。所以文件里
 // 那两处「换一套 stub 重建应用」可以直接塌成「换 `currentRunFn` 目标」——不必重开应用
 // （重开会换掉 app home，把用例中途写进去的东西一起丢掉）。
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let app: Hono
 let ownerToken: string
 let strangerToken: string
@@ -248,6 +248,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       commits: Array<{ draftId: string }>
     }
     expect(settledDetail.commits[0]?.draftId).toBe(detail.currentDraft.id)
+    const { agents } = tablesOf(db)
     // 中立面没有 bun:sqlite 的同步终结符：查询回数组，取第一行。
     const agentRow = (
       await db
@@ -560,6 +561,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       (d) => (d as { session: { inFlight: boolean } }).session.inFlight === false,
     )
 
+    const { intentSessions } = tablesOf(db)
     // Simulate an in-flight turn and assert the structural 409.
     await db
       .update(intentSessions)
@@ -646,6 +648,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       },
     ])
 
+    const { agents } = tablesOf(db)
     // Mounted labels are a current actor-safe projection, never a historical
     // name leak. Revocation and deletion both keep the neutral mount shell.
     await db
@@ -749,6 +752,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       (value) => (value as { session: { inFlight: boolean } }).session.inFlight === false,
     )
 
+    const { intentSessions } = tablesOf(db)
     await db
 
       .update(intentSessions)
@@ -819,6 +823,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       expect(created.status).toBe(201)
       ids[name] = ((await created.json()) as { id: string }).id
     }
+    const { agents } = tablesOf(db)
     await db
       .update(agents)
       .set({ ownerUserId: strangerUserId, visibility: 'public' })

@@ -1,5 +1,5 @@
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { graphEmployeeTypePackage } from '@/modules/development-automation/composition/graphDevelopment'
@@ -63,7 +63,7 @@ type EventAutomationContexts = Parameters<
   }
 
 export function composeDaemonIntegrationModules(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly secretBox: SecretBox
   readonly configuration: ApplicationConfigurationQueries
   readonly scheduledTaskRuntime: DaemonScheduledTaskModules['scheduledTaskRuntime']

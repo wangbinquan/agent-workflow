@@ -15,29 +15,34 @@
 //   5. schedulerMintCause merge rule (对抗检视修订 #11) branch-by-branch —
 //      see also rfc098-rerun-cause-gates.test.ts for the gate truth table.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { eq, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { mintNodeRun, schedulerMintCause } from '../src/services/nodeRunMint'
 
 const TASK_ID = 'task-mint'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 describeEachProvider('node run persistence', (harness) => {
   beforeEach(async () => {
     db = harness.db
-    await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-    await db.run(sql`
+    await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
+    await rawExec(
+      db,
+      sql`
     INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
       base_branch, branch, status, inputs, started_at, schema_version, execution_lineage_id, lineage_slot_path_json)
     VALUES (${TASK_ID}, 'mint', 'wf', '{}', '/tmp/r', '/tmp/w', 'main', 'b', 'running', '{}', 1, 1, ${TASK_ID}, ${JSON.stringify([{ stableNodeKey: 'task-root', frozenOccurrenceKey: TASK_ID, workflowRevision: null }])})
-  `)
+  `,
+    )
   })
 
   async function readRow(id: string) {
+    const { nodeRuns } = tablesOf(db)
     const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]
     expect(row).toBeDefined()
     return row!
@@ -195,6 +200,7 @@ describeEachProvider('node run persistence', (harness) => {
           cause: 'commit-push',
         }),
       ).rejects.toThrow(/frontier invisibility/)
+      const { nodeRuns } = tablesOf(db)
       const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, TASK_ID))
       expect(rows.length).toBe(0)
     })

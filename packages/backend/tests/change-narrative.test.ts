@@ -11,6 +11,8 @@
 //  - prompt is pure: carries node intents, never user ids (rfc099 isolation)
 //  - extractJsonObject / parseNumstatZ / computeContentDigest unit matrices
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -26,9 +28,8 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { runtimes, taskCollaborators, tasks, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { createLogger } from '@/util/log'
@@ -61,7 +62,7 @@ import {
 } from '../src/services/systemAgentRun'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-const buildNarrativeInput = (db: ProviderNeutralDatabase, task: Task) =>
+const buildNarrativeInput = (db: PersistenceDb, task: Task) =>
   buildNarrativeInputWithPort(createCodeWorkspaceRead(db), task)
 
 let home: string
@@ -105,7 +106,7 @@ function actorFor(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-async function seedWorld(db: ProviderNeutralDatabase): Promise<{
+async function seedWorld(db: PersistenceDb): Promise<{
   task: Task
   owner: Actor
   collaborator: Actor
@@ -122,12 +123,13 @@ async function seedWorld(db: ProviderNeutralDatabase): Promise<{
   const { dir, commit } = await makeRepoWithChange()
   const taskId = `01NR${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: '导读测试任务',
     workflowId,
@@ -144,7 +146,7 @@ async function seedWorld(db: ProviderNeutralDatabase): Promise<{
     baseCommit: commit,
     ownerUserId: ownerId,
   })
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId,
     userId: collabId,
     role: 'collaborator',
@@ -279,14 +281,12 @@ describe('computeContentDigest', () => {
 })
 
 describeEachProvider('triggerChangeNarrative', (harness) => {
-  function deps(
-    db: ProviderNeutralDatabase,
-    runFn: ChangeNarrativeDeps['runFn'],
-  ): ChangeNarrativeDeps {
+  function deps(db: PersistenceDb, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
     const runtimes = runtimeRegistryPersistence(db)
     const base: ChangeNarrativeDeps = {
       workspace: createCodeWorkspaceRead(db),
       async requireMember(actor, taskId) {
+        const { tasks } = tablesOf(db)
         const rows = await db
           .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
           .from(tasks)
@@ -543,6 +543,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     const db = harness.db
     const w = await seedWorld(db)
     const runFn: ChangeNarrativeDeps['runFn'] = async () => {
+      const { taskCollaborators, tasks } = tablesOf(db)
       await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, w.task.id))
       await db.delete(tasks).where(eq(tasks.id, w.task.id))
       return okRun(GOOD_OUTPUT)
@@ -555,7 +556,8 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
   test('RFC-239 config: deps.runtimeName selects the per-feature runtime row', async () => {
     const db = harness.db
     const w = await seedWorld(db)
-    await db.insert(runtimes).values({
+    const { runtimes } = tablesOf(db)
+    await insertOne(db, runtimes, {
       id: 'rt-narr',
       name: 'narr-claude',
       protocol: 'claude-code',

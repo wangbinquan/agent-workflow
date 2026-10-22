@@ -14,13 +14,14 @@
 // frontend's useClarifyWs hook tests landing in PR-C) catch that — here
 // we lock the payload shape end-to-end through the runtime path.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRoundWithDecision } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
@@ -38,9 +39,7 @@ const QUESTION = {
   ],
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-): Promise<{ taskId: string; sourceRunId: string }> {
+async function seedTask(db: PersistenceDb): Promise<{ taskId: string; sourceRunId: string }> {
   const taskId = `task_${ulid()}`
   const def: WorkflowDefinition = {
     $schema_version: 3,
@@ -53,7 +52,8 @@ async function seedTask(
     outputs: [],
   }
   const wfId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify(def),
@@ -61,7 +61,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -80,7 +80,7 @@ async function seedTask(
     startedAt: Date.now(),
   })
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',

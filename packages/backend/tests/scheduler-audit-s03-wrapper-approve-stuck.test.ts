@@ -23,9 +23,9 @@
 //
 // 纯函数直测，仿 dispatch-frontier.test.ts 的 run()/def() 形态。
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import {
   isDispatchable,
   wrapperHasFreshInnerWork,
@@ -33,7 +33,7 @@ import {
 } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 // RFC-354: every inner row hangs off its wrapper GENERATION row (`containerRunId`);
 // membership — not iteration arithmetic — is what makes a row "inside" the wrapper.

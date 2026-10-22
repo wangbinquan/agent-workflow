@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   assertTaskExecutionContext,
   createTaskExecutionContext as createProviderTaskExecutionContext,
@@ -16,13 +16,13 @@ import { createTaskExecutionPersistence } from './taskExecutionPersistence'
  * 它是 `rfc349-provider-cutover` 账本里那条边的键，改名要连账本一起动。
  */
 export interface SqliteTaskExecutionContext extends TaskExecutionContext {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }
 
 export function createTaskExecutionContext(input: {
   readonly intentId: string
   readonly token: OwnershipToken
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }): SqliteTaskExecutionContext {
   const context = createProviderTaskExecutionContext({
     intentId: input.intentId,

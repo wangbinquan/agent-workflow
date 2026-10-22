@@ -4,13 +4,10 @@
 // row and launch preparation are both gone, and drops the task's own
 // `hosted_task_artifacts` rows. It replaces the old "material GC inside task
 // archive" and "event archive retire inside events archive" side effects.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import {
-  hostedObjectPublications,
-  hostedTaskArtifacts,
-  taskWorkspacePreparations,
-} from '@/db/schema'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { createHostedTaskObjectSweep } from '@/modules/task-execution/infrastructure/crewstation/hostedObjectSweep'
 import { retainHostedTaskArtifactInTx } from '@/modules/task-execution/infrastructure/crewstation/taskArtifacts'
@@ -45,8 +42,9 @@ describeEachProvider('RFC-370 hosted task object sweep', (harness) => {
             }),
         },
       )
-    const states = async (owner: string) =>
-      new Map(
+    const states = async (owner: string) => {
+      const { hostedObjectPublications } = tablesOf(harness.db)
+      return new Map(
         (
           await harness.db
             .select()
@@ -54,13 +52,15 @@ describeEachProvider('RFC-370 hosted task object sweep', (harness) => {
             .where(eq(hostedObjectPublications.owner, owner))
         ).map((row) => [row.scope, row.state] as const),
       )
+    }
     return { journal, fence, artifact, states }
   }
 
   test('publications of deleted tasks are released and their artifact rows dropped; live and launching tasks keep theirs', async () => {
     const { journal, fence, artifact, states } = setup()
     await seedTask(harness.db, 'live-task')
-    await harness.db.insert(taskWorkspacePreparations).values({
+    const { taskWorkspacePreparations, hostedTaskArtifacts } = tablesOf(harness.db)
+    await insertOne(harness.db, taskWorkspacePreparations, {
       id: 'launching-task',
       admissionKey: 'admission',
       requestDigest: 'd'.repeat(64),

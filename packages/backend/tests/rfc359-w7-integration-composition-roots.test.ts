@@ -19,6 +19,8 @@
 // 唯一一个**真的**按 provider 分叉过的（工具连接目录：一份写成同步 `.get()`、一份 `await`）
 // 已按 RFC-359 AC-1 / plan §5ft 合一——见文件下半部那段注释。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { randomBytes } from 'node:crypto'
@@ -29,16 +31,7 @@ import { ulid } from 'ulid'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentAdapterDefinitionRevisions,
-  developmentAdapterDefinitions,
-  tasks,
-  users,
-  webhookEndpoints,
-  webhookMrStreamStates,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
@@ -71,19 +64,20 @@ const T0 = 1_700_000_000_000
  * 两个 cast 把中立客户端还原成别名在签名上声明的具体类型——运行时是同一个对象，
  * 装配别名的函数体也只用中立 query builder。**没有**因此放宽断言：下面每次调用都真的打库。
  */
-function asSqlite(db: ProviderNeutralDatabase): DbClient {
+function asSqlite(db: PersistenceDb): DbClient {
   return db as unknown as DbClient
 }
 
-function asPostgresql(db: ProviderNeutralDatabase): PostgresqlDatabaseClient {
+function asPostgresql(db: PersistenceDb): PostgresqlDatabaseClient {
   return db as unknown as PostgresqlDatabaseClient
 }
 
 const secretBox = createSecretBoxFromKey(randomBytes(32))
 
-async function seedEndpoint(db: ProviderNeutralDatabase): Promise<string> {
+async function seedEndpoint(db: PersistenceDb): Promise<string> {
   const id = `we_${ulid()}`
-  await db.insert(webhookEndpoints).values({
+  const { webhookEndpoints } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id,
     name: `endpoint-${id.slice(-6)}`,
     provider: 'gitlab',
@@ -98,10 +92,11 @@ async function seedEndpoint(db: ProviderNeutralDatabase): Promise<string> {
   return id
 }
 
-async function seedUser(db: ProviderNeutralDatabase, role: 'admin' | 'user' = 'admin') {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'admin') {
   const id = `u_${ulid()}`
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -158,11 +153,12 @@ function adapterContent(purpose: 'requirement-source' | 'pipeline-gate' | 'appro
 }
 
 async function seedAdapter(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   purpose: 'requirement-source' | 'pipeline-gate' | 'approval-gateway',
 ): Promise<{ id: string; revision: number }> {
   const id = `da_${ulid()}`
-  await db.insert(developmentAdapterDefinitions).values({
+  const { developmentAdapterDefinitions, developmentAdapterDefinitionRevisions } = tablesOf(db)
+  await insertOne(db, developmentAdapterDefinitions, {
     id,
     name: `adapter-${id.slice(-6).toLowerCase()}`,
     draftJson: '{}',
@@ -175,7 +171,7 @@ async function seedAdapter(
     archivedAt: null,
     purpose,
   })
-  await db.insert(developmentAdapterDefinitionRevisions).values({
+  await insertOne(db, developmentAdapterDefinitionRevisions, {
     adapterId: id,
     revision: 1,
     contentJson: JSON.stringify(adapterContent(purpose)),
@@ -228,6 +224,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
 
     await sqlite.mark({ deliveryId: first.deliveryId, status: 'matched', reason: null })
     await postgresql.touchEndpointLastDelivery(endpointId, T0 + 5)
+    const { webhookEndpoints } = tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -559,7 +556,8 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
         'webhook-mr-launch-terminal',
       )
 
-      await harness.db.insert(webhookMrStreamStates).values({
+      const { webhookMrStreamStates } = tablesOf(harness.db)
+      await insertOne(harness.db, webhookMrStreamStates, {
         endpointId,
         streamKey: 'refs/mr/1',
         projectId: '77',
@@ -599,12 +597,13 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     expect(await policy(row, 'done')).toEqual({ prune: false })
 
     const workflowId = `wf_${ulid()}`
-    await harness.db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
       id: workflowId,
       name: `wf-${workflowId.slice(-6).toLowerCase()}`,
       definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [] }),
     })
-    await harness.db.insert(tasks).values({
+    await insertOne(harness.db, tasks, {
       id: row.taskId,
       name: 'webhook task',
       workflowId,

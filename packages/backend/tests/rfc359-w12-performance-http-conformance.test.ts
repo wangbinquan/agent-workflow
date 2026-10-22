@@ -1,5 +1,7 @@
 // RFC-359 AC11: functional evidence for the actual HTTP benchmark graph.
 // These small fixtures establish live query/response behavior, not full-corpus P95.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   CachedRepoPageSchema,
   OverviewResponseSchema,
@@ -15,21 +17,7 @@ import { join } from 'node:path'
 
 import { PERF_CORPUS_ENTRY, type PerfCorpusDimensions } from '../../../scripts/perf-corpus'
 import { readPerformanceCorpusReceipt, seedPerformanceCorpus } from '../../../scripts/perf-seed'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  clarifyRounds,
-  docVersions,
-  employeeCases,
-  employeeContextRecords,
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  workflows,
-  workgroupTaskState,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
   contentDigest,
@@ -87,13 +75,14 @@ async function json(app: Hono, path: string): Promise<unknown> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
-  status: typeof tasks.$inferInsert.status,
-  extra: Partial<typeof tasks.$inferInsert> = {},
+  status: PersistenceTables['tasks']['$inferInsert']['status'],
+  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<void> {
   const now = Date.now()
-  await db.insert(tasks).values({
+  const { tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId: PERF_CORPUS_ENTRY.workflowId,
@@ -123,7 +112,7 @@ async function seedTask(
     ]),
     ...extra,
   })
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId: id,
     userId: PERF_CORPUS_ENTRY.userId,
     role: 'owner',
@@ -206,6 +195,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
     const { app } = await fixture(harness)
     const first = TaskCatalogPageSchema.parse(await json(app, '/api/task-catalog?limit=50'))
     const target = first.items[0]!
+    const { tasks, cachedRepos } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({ name: 'changed after HTTP construction', status: 'running' })
@@ -257,6 +247,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
         }),
       ),
     })
+    const { nodeRuns, docVersions, clarifyRounds, workgroupTaskState } = tablesOf(db)
     await db.insert(nodeRuns).values([
       { id: 'http-review-run', taskId: 'http-review', nodeId: 'review', status: 'awaiting_review' },
       { id: 'http-asker-run', taskId: 'http-clarify', nodeId: 'writer', status: 'done' },
@@ -268,7 +259,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       },
     ])
     writeFileSync(join(appHome, 'http-review.md'), '# A real review artifact\n')
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: 'http-doc',
       taskId: 'http-review',
       reviewNodeId: 'review',
@@ -280,7 +271,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       bodyPath: 'http-review.md',
       decision: 'pending',
     })
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: 'http-round',
       taskId: 'http-clarify',
       kind: 'self',
@@ -291,7 +282,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       questionsJson: '[]',
       status: 'awaiting_human',
     })
-    await db.insert(workgroupTaskState).values({
+    await insertOne(db, workgroupTaskState, {
       taskId: 'http-workgroup',
       gateStatus: 'awaiting_confirmation',
       updatedAt: Date.now(),
@@ -349,7 +340,13 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       exactCollaborationBindings: [],
       compiledClosureDigest: contentDigest({ fixture: 'http-case' }),
     })
-    await db.insert(employeeDefinitions).values({
+    const {
+      employeeDefinitions,
+      employeeDefinitionRevisions,
+      employeeCases,
+      employeeContextRecords,
+    } = tablesOf(db)
+    await insertOne(db, employeeDefinitions, {
       id: 'http-employee',
       name: configuration.displayName,
       typeId: descriptor.typeRef.typeId,
@@ -360,14 +357,14 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       createdAt: now,
       updatedAt: now,
     })
-    await db.insert(employeeDefinitionRevisions).values({
+    await insertOne(db, employeeDefinitionRevisions, {
       employeeId: 'http-employee',
       revision: 1,
       contentJson: JSON.stringify(content),
       contentDigest: contentDigest(content),
       createdAt: now,
     })
-    await db.insert(employeeCases).values({
+    await insertOne(db, employeeCases, {
       id: 'http-case',
       name: 'A persisted employee case',
       employeeId: 'http-employee',
@@ -381,7 +378,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       createdAt: now,
       updatedAt: now,
     })
-    await db.insert(employeeContextRecords).values({
+    await insertOne(db, employeeContextRecords, {
       id: 'http-context',
       caseId: 'http-case',
       typeId: 'fixture-context',
@@ -420,7 +417,8 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
   test('overview retains its real owner queries across requests', async () => {
     const { app } = await fixture(harness)
     const before = OverviewResponseSchema.parse(await json(app, '/api/overview'))
-    await harness.db.insert(workflows).values({
+    const { workflows } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
       id: 'http-extra-workflow',
       name: 'HTTP extra workflow',
       definition: '{"nodes":[],"edges":[],"inputs":[]}',

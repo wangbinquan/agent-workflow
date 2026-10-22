@@ -7,7 +7,7 @@
 // once, an unobservable outcome is a failure, an output gap marks truncation.
 import { expect, test } from 'bun:test'
 import { DAEMON_SHUTDOWN_ABORT_REASON, type WorkflowNode } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskScriptRunRequest } from '@/modules/task-execution/application/ports/taskScriptRunFamily'
 import { createHostedTaskScriptRunFamily } from '@/modules/task-execution/infrastructure/crewstation/taskScriptRunFamily'
 import {
@@ -128,7 +128,7 @@ function fixture(options: {
   }
   const family = createHostedTaskScriptRunFamily({
     taskId: 'task',
-    db: {} as ProviderNeutralDatabase,
+    db: {} as PersistenceDb,
     fence: {
       current: () => ({ epoch: 1, leaseId: 'l', instanceId: 'i' }),
       assertHeld: unavailable,

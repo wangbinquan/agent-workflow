@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { createWorkflow, getWorkflow } from '../infrastructure/legacy/workflow'
 import {
@@ -9,7 +9,7 @@ import {
 } from '@agent-workflow/shared'
 
 /** Resource Catalog owns built-in workflow persistence and exact-revision collisions. */
-export function composeBuiltinWorkflowCatalog(db: ProviderNeutralDatabase) {
+export function composeBuiltinWorkflowCatalog(db: PersistenceDb) {
   return {
     async ensure(id: string, definition: CreateWorkflow) {
       const existing = await getWorkflow(db, id)

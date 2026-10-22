@@ -1,10 +1,21 @@
+// RFC-395 I-b: retain every RFC-349 client behavior through native bun-sql.
 // RFC-349 T3/T5 — proves the runtime query client uses the pgTable projection,
 // PostgreSQL bind markers/native booleans, and one reserved session per atomic
 // transaction instead of a synchronous SQLite shadow connection.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { createPostgresqlDatabaseSession } from '@/platform/persistence/databaseTransaction'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  first,
+  rawRows,
+  rawExec,
+  rawFirst,
+  affectedRows,
+} from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { agents } from '@/db/schema'
 import {
   createPostgresqlDatabaseClient,
   PostgresqlGenerationFenceError,
@@ -50,12 +61,12 @@ function fixture() {
     const response = queued.shift() ?? {}
     return result(response.objects ?? [], response.values ?? [], response.count)
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: (query, parameters) => run('reserved', query, parameters),
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -94,11 +105,11 @@ describe('RFC-349 PostgreSQL database client', () => {
     fake.queued.push({ values: [['agent-1', true]] })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
+    const { agents } = tablesOf(db)
     const rows = await db
       .select({ id: agents.id, enabled: agents.syncOutputsOnIterate })
       .from(agents)
       .where(sql`${agents.syncOutputsOnIterate} = ${true}`)
-      .all()
 
     expect(rows).toEqual([{ id: 'agent-1', enabled: true }])
     expect(fake.executions).toHaveLength(1)
@@ -112,7 +123,8 @@ describe('RFC-349 PostgreSQL database client', () => {
     fake.queued.push({ values: [] })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
-    expect(await db.select({ id: agents.id }).from(agents).limit(1).get()).toBeUndefined()
+    const { agents } = tablesOf(db)
+    expect(await first(db.select({ id: agents.id }).from(agents).limit(1))).toBeUndefined()
   })
 
   test('normalizes mutation count and supports object-mode raw queries', async () => {
@@ -127,14 +139,17 @@ describe('RFC-349 PostgreSQL database client', () => {
     )
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
-    const mutation = await db.insert(agents).values({ id: 'agent-1', name: 'Agent' }).run()
-    expect((mutation as { changes?: number }).changes).toBe(1)
-    expect(await db.all<{ one: number }>(sql`select 1 as one`)).toEqual([{ one: 1 }])
+    const { agents } = tablesOf(db)
+    const mutation = await db.insert(agents).values({ id: 'agent-1', name: 'Agent' })
+    expect(affectedRows(mutation)).toBe(1)
+    expect(await rawRows<{ one: number }>(db, sql`select 1 as one`, { one: 'int' })).toEqual([
+      { one: 1 },
+    ])
     const businessWrite = fake.executions.find((execution) =>
       execution.sql.includes('insert into "agent_workflow"."agents"'),
     )!
-    expect(businessWrite.parameters).toContain(false)
-    expect(businessWrite.sql).toContain('(extract(epoch from clock_timestamp()) * 1000)')
+    expect(businessWrite.sql).toContain('default')
+    expect(businessWrite.parameters).toEqual(['agent-1', 'Agent'])
     expect(
       fake.executions.some((execution) => execution.sql.includes('database_generations')),
     ).toBe(true)
@@ -153,11 +168,9 @@ describe('RFC-349 PostgreSQL database client', () => {
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     const receipt = await db.transaction(async (transaction) => {
-      const mutation = await transaction
-        .insert(agents)
-        .values({ id: 'agent-1', name: 'Agent' })
-        .run()
-      return (mutation as { changes?: number }).changes
+      const { agents } = tablesOf(transaction)
+      const mutation = await insertOne(transaction, agents, { id: 'agent-1', name: 'Agent' })
+      return affectedRows(mutation)
     })
 
     expect(receipt).toBe(1)
@@ -194,9 +207,12 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('does not route SQLite physical operations to the pool', async () => {
     const fake = fixture()
     const db = createPostgresqlDatabaseClient(fake.runtime)
-    await expect(db.run(sql`PRAGMA quick_check`)).rejects.toThrow(
-      'SQLite-only database operation cannot run on PostgreSQL',
+    const failure = await Promise.resolve(rawExec(db, sql`PRAGMA quick_check`)).catch(
+      (error: unknown) => error,
     )
+    const cause = failure instanceof Error ? failure.cause : undefined
+    expect(cause).toBeInstanceOf(Error)
+    expect(String(cause)).toContain('SQLite-only database operation cannot run on PostgreSQL')
     expect(fake.executions).toHaveLength(0)
   })
 
@@ -207,7 +223,8 @@ describe('RFC-349 PostgreSQL database client', () => {
 
     let failure: unknown
     try {
-      await db.insert(agents).values({ id: 'agent-1', name: 'Agent' }).run()
+      const { agents } = tablesOf(db)
+      await db.insert(agents).values({ id: 'agent-1', name: 'Agent' })
     } catch (error) {
       failure = error
     }
@@ -242,8 +259,9 @@ describe('RFC-349 PostgreSQL database client', () => {
     )
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
-    await db.insert(agents).values({ id: 'agent-1', name: 'Agent' }).run()
-    await db.insert(agents).values({ id: 'agent-2', name: 'Agent' }).run()
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, { id: 'agent-1', name: 'Agent' })
+    await db.insert(agents).values({ id: 'agent-2', name: 'Agent' })
 
     const markers = fake.executions.filter((execution) => execution.sql.startsWith('WITH marked'))
     expect(markers).toHaveLength(1)
@@ -265,7 +283,7 @@ describe('RFC-349 PostgreSQL database client', () => {
 test('deployment write guard shares the reserved transaction, rejects before mutation, and leaves reads available', async () => {
   const fake = fixture()
   const guardFailure = new Error('worker lease replaced')
-  const rejectsGuard = async (operation: PromiseLike<unknown>) => {
+  const rejectsGuard = async (operation: unknown) => {
     const error = await Promise.resolve(operation).then(
       () => undefined,
       (failure: unknown) => failure,
@@ -277,23 +295,37 @@ test('deployment write guard shares the reserved transaction, rejects before mut
   const db = createPostgresqlDatabaseClient(fake.runtime, {
     async beforeWrite(tx) {
       calls += 1
-      await tx.all(sql`SELECT id FROM hosted_execution_control WHERE id = ${'global'} FOR UPDATE`)
+      await rawRows(
+        tx,
+        sql`SELECT id FROM hosted_execution_control WHERE id = ${'global'} FOR UPDATE`,
+      )
       throw guardFailure
     },
   })
-  await db.all(sql`SELECT 1`)
+  await rawRows(db, sql`SELECT 1`)
   expect(calls).toBe(0)
   const statements = [
-    () => db.run(sql`INSERT INTO agents (id) VALUES (${'guarded'})`),
-    () => db.all(sql`UPDATE agents SET name = ${'x'} RETURNING id`),
-    () => db.get(sql`DELETE FROM agents RETURNING id`),
-    () => db.values(sql`UPDATE agents SET name = ${'x'} RETURNING id`),
-    () => db.update(agents).set({ name: 'x' }).returning(),
+    () => rawExec(db, sql`INSERT INTO agents (id) VALUES (${'guarded'})`),
+    () => rawRows(db, sql`UPDATE agents SET name = ${'x'} RETURNING id`),
+    () => rawFirst(db, sql`DELETE FROM agents RETURNING id`),
     () =>
-      db
-        .insert(agents)
-        .values({ id: 'guarded', name: 'guarded', bodyMd: '', createdAt: 1, updatedAt: 1 })
-        .run(),
+      Promise.resolve(rawRows(db, sql`UPDATE agents SET name = ${'x'} RETURNING id`)).then((rows) =>
+        rows.map((row) => Object.values(row)),
+      ),
+    () => {
+      const { agents } = tablesOf(db)
+      return db.update(agents).set({ name: 'x' }).returning()
+    },
+    () => {
+      const { agents } = tablesOf(db)
+      return insertOne(db, agents, {
+        id: 'guarded',
+        name: 'guarded',
+        bodyMd: '',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+    },
   ]
   for (const statement of statements) {
     const offset = fake.executions.length
@@ -309,8 +341,9 @@ test('deployment write guard shares the reserved transaction, rejects before mut
   const offset = fake.executions.length
   await rejectsGuard(
     db.transaction(async (tx) => {
-      await tx.all(sql`SELECT 1`)
-      await tx.update(agents).set({ name: 'x' }).run()
+      await rawRows(tx, sql`SELECT 1`)
+      const { agents } = tablesOf(tx)
+      await tx.update(agents).set({ name: 'x' })
     }),
   )
   const transaction = fake.executions.slice(offset)
@@ -347,15 +380,65 @@ test('deployment write guard runs once per transaction and again for the next on
     { count: 0 }, // commit
   )
   await db.transaction(async (tx) => {
-    await tx.insert(agents).values({ id: 'agent-1', name: 'Agent' }).run()
-    await tx.insert(agents).values({ id: 'agent-2', name: 'Agent' }).run()
+    const { agents } = tablesOf(tx)
+    await insertOne(tx, agents, { id: 'agent-1', name: 'Agent' })
+    await insertOne(tx, agents, { id: 'agent-2', name: 'Agent' })
   })
   expect(calls).toBe(1)
   await db.transaction(async (tx) => {
-    await tx.insert(agents).values({ id: 'agent-3', name: 'Agent' }).run()
+    const { agents } = tablesOf(tx)
+    await insertOne(tx, agents, { id: 'agent-3', name: 'Agent' })
   })
   expect(calls).toBe(2)
   expect(fake.executions.filter((execution) => /^insert/i.test(execution.sql.trim()))).toHaveLength(
     3,
   )
+})
+
+// RFC-395 I-b: native transaction configuration and savepoints stay on the reserved connection.
+test('snapshot isolation is set by native PgTransactionConfig before its first read', async () => {
+  const fake = fixture()
+  fake.queued.push({}, {}, { objects: [{ one: 1 }] }, {})
+  const db = createPostgresqlDatabaseClient(fake.runtime)
+  const session = createPostgresqlDatabaseSession(db)
+  expect(
+    await session.snapshotRead((tx) => Promise.resolve(rawFirst(tx, sql`select 1 as one`))),
+  ).toEqual({ one: 1 })
+  expect(fake.executions.map((row) => row.sql.toLowerCase())).toEqual([
+    'begin',
+    'set transaction isolation level repeatable read read only',
+    'select 1 as one',
+    'commit',
+  ])
+  expect(fake.executions.every((row) => row.owner === 'reserved')).toBe(true)
+  expect(fake.releases).toBe(1)
+})
+
+test('native savepoints inherit the session tables and roll back independently', async () => {
+  const fake = fixture()
+  const db = createPostgresqlDatabaseClient(fake.runtime)
+  const failure = new Error('nested-failure')
+  await db.transaction(async (tx) => {
+    expect(tablesOf(tx)).toBe(tablesOf(db))
+    await expect(
+      tx.transaction(async (nested) => {
+        expect(tablesOf(nested)).toBe(tablesOf(db))
+        throw failure
+      }),
+    ).rejects.toBe(failure)
+    await tx.transaction(async (nested) => {
+      await rawRows(nested, sql`select 1`)
+    })
+  })
+  expect(fake.executions.every((row) => row.owner === 'reserved')).toBe(true)
+  expect(fake.executions.map((row) => row.sql)).toEqual([
+    'BEGIN',
+    'SAVEPOINT fixture_savepoint_1',
+    'ROLLBACK TO SAVEPOINT fixture_savepoint_1',
+    'SAVEPOINT fixture_savepoint_2',
+    'select 1',
+    'RELEASE SAVEPOINT fixture_savepoint_2',
+    'COMMIT',
+  ])
+  expect(fake.releases).toBe(1)
 })

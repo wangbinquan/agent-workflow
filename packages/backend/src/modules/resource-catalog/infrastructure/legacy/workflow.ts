@@ -1,4 +1,6 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 // Workflow service — CRUD on the workflows table.
 //
 // Definition is stored as a JSON string in the DB and parsed at this boundary.
@@ -42,7 +44,6 @@ import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 
-import { scheduledTasks, tasks, workflows } from '@/db/schema'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import {
   ConflictError,
@@ -83,10 +84,7 @@ import {
   canViewResourceForTx,
   resolveResourceAccessForTx,
 } from '@/modules/resource-catalog/infrastructure/resourceAclTransaction'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import { assertNotBuiltin } from '@/services/systemResources'
 import {
@@ -111,14 +109,14 @@ export {
   workflowToDetail,
 }
 
-type WorkflowRow = typeof workflows.$inferSelect
+type WorkflowRow = PersistenceTables['workflows']['$inferSelect']
 
 export interface WorkflowWriteInTxGuard {
   /**
    * Check executed in the exact transaction immediately before the workflow
    * INSERT/UPDATE. The transaction awaits completion of this guard.
    */
-  assert(tx: DatabaseTransaction): void | Promise<void>
+  assert(tx: PersistenceTx): void | Promise<void>
 }
 
 export interface CreateWorkflowOptions {
@@ -134,17 +132,16 @@ export interface CreateWorkflowOptions {
   beforeWriteTransaction?: () => void | Promise<void>
 }
 
-// RFC-359：函数体就是一条中立 select（同文件的 `getWorkflow` 早已是 `ProviderNeutralDatabase`）。
+// RFC-359：函数体就是一条中立 select（同文件的 `getWorkflow` 早已是 `PersistenceDb`）。
 // 入参此前写 `DbClient` 是纯类型债，它把这个读面挡在双引擎用例之外。
-export async function listWorkflows(db: ProviderNeutralDatabase): Promise<Workflow[]> {
+export async function listWorkflows(db: PersistenceDb): Promise<Workflow[]> {
+  const { workflows } = tablesOf(db)
   const rows = await db.select().from(workflows)
   return rows.map(rowToWorkflow)
 }
 
-export async function getWorkflow(
-  db: ProviderNeutralDatabase,
-  id: string,
-): Promise<WorkflowDetail | null> {
+export async function getWorkflow(db: PersistenceDb, id: string): Promise<WorkflowDetail | null> {
+  const { workflows } = tablesOf(db)
   const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
   const row = rows[0]
   return row ? rowToWorkflowDetail(row) : null
@@ -166,6 +163,7 @@ export async function getWorkflowAclRow(
   visibility: ResourceVisibility
   builtin: boolean
 } | null> {
+  const { workflows } = tablesOf(db)
   const rows = await db
     .select({
       id: workflows.id,
@@ -189,7 +187,7 @@ export async function getWorkflowAclRow(
 }
 
 export async function createWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateWorkflow,
   opts?: CreateWorkflowOptions,
 ): Promise<WorkflowDetail> {
@@ -270,7 +268,7 @@ export async function createWorkflow(
  * name allocation and target INSERT share one synchronous transaction.
  */
 export async function copyWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   sourceId: string,
   input: CopyWorkflowRequest,
   actor: Actor,
@@ -283,24 +281,26 @@ export async function copyWorkflow(
   }
 
   const inserted = await databaseSessionFor(db).transaction(async (tx) => {
+    const { workflows } = tablesOf(tx)
     // Gate only on ACL identity first: an invisible corrupt workflow must be
     // indistinguishable from an absent one and must never reach JSON parsing.
-    const aclRow = await tx
-      .select({
-        id: workflows.id,
-        ownerUserId: workflows.ownerUserId,
-        visibility: workflows.visibility,
-        builtin: workflows.builtin,
-      })
-      .from(workflows)
-      .where(eq(workflows.id, sourceId))
-      .get()
+    const aclRow = await first(
+      tx
+        .select({
+          id: workflows.id,
+          ownerUserId: workflows.ownerUserId,
+          visibility: workflows.visibility,
+          builtin: workflows.builtin,
+        })
+        .from(workflows)
+        .where(eq(workflows.id, sourceId)),
+    )
     if (aclRow === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', aclRow))) {
       throwWorkflowNotFound(sourceId)
     }
     assertNotBuiltin('workflow', aclRow)
 
-    const currentRow = await tx.select().from(workflows).where(eq(workflows.id, sourceId)).get()
+    const currentRow = await first(tx.select().from(workflows).where(eq(workflows.id, sourceId)))
     if (currentRow === undefined) throwWorkflowNotFound(sourceId)
     const source = rowToWorkflow(currentRow)
     const currentRevision = workflowRevisionOf(source)
@@ -334,7 +334,6 @@ export async function copyWorkflow(
         .select({ name: workflows.name })
         .from(workflows)
         .where(eq(workflows.ownerUserId, actor.user.id))
-        .all()
     ).map((row) => row.name)
     // RFC-264: persist the PARSED name — the schema is also the normalizer, so
     // ignoring its output would store an unfolded copy name.
@@ -384,7 +383,7 @@ export interface PreparedWorkflowSave {
 }
 
 export async function prepareWorkflowSave(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: UpdateWorkflow,
   principal: WorkflowWritePrincipal,
@@ -526,7 +525,7 @@ export async function prepareWorkflowSave(
 }
 
 export async function commitWorkflowSaveInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   p: PreparedWorkflowSave,
 ): Promise<{ receipt: SaveWorkflowReceipt; committed: boolean }> {
   const {
@@ -539,7 +538,8 @@ export async function commitWorkflowSaveInTx(
     fenceableAgentIds,
   } = p
   const opts = { inTxGuard: p.inTxGuard }
-  const currentRow = await tx.select().from(workflows).where(eq(workflows.id, id)).get()
+  const { workflows } = tablesOf(tx)
+  const currentRow = await first(tx.select().from(workflows).where(eq(workflows.id, id)))
   if (currentRow === undefined) throwWorkflowNotFound(id)
 
   const access = await assertPrincipalCanEditInTx(tx, principal, currentRow)
@@ -615,18 +615,19 @@ export async function commitWorkflowSaveInTx(
   }
 
   const updatedAt = Date.now()
-  const returned = await tx
-    .update(workflows)
-    .set({
-      name: normalizedSnapshot.name,
-      description: normalizedSnapshot.description,
-      definition: definitionStorage,
-      version: currentRow.version + 1,
-      updatedAt,
-    })
-    .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
-    .returning()
-    .get()
+  const returned = await first(
+    tx
+      .update(workflows)
+      .set({
+        name: normalizedSnapshot.name,
+        description: normalizedSnapshot.description,
+        definition: definitionStorage,
+        version: currentRow.version + 1,
+        updatedAt,
+      })
+      .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
+      .returning(),
+  )
   if (returned === undefined) {
     // Defensive CAS-loss surface. In the synchronous SQLite transaction this
     // should be unreachable, but never manufacture a success receipt.
@@ -649,7 +650,7 @@ export async function commitWorkflowSaveInTx(
 }
 
 export async function updateWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: UpdateWorkflow,
   principal: WorkflowWritePrincipal,
@@ -681,7 +682,7 @@ export async function updateWorkflow(
 }
 
 export async function deleteWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: DeleteWorkflow,
   principal: WorkflowWritePrincipal,
@@ -702,6 +703,7 @@ export async function deleteWorkflow(
     deletedVersion: number
     audience: WorkflowDeletedAudienceContext
   }>(async (tx) => {
+    const { workflows, scheduledTasks } = tablesOf(tx)
     const [currentRow] = await tx.select().from(workflows).where(eq(workflows.id, id)).limit(1)
     if (currentRow === undefined) throwWorkflowNotFound(id)
     await assertPrincipalCanGovernForTx(tx, principal, currentRow)
@@ -838,7 +840,7 @@ export function scheduledRowsReferencingWorkflow<
  *  runs assertRefsUsableInTx + this core per created workflow, exactly like
  *  createWorkflow's own composition above). */
 export async function insertWorkflowInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     id: string
     name: string
@@ -876,23 +878,25 @@ export async function insertWorkflowInTx(
     input.builtin || input.visibility === 'public'
       ? initialBuiltinResourceAcl(input.ownerUserId)
       : initialPrivateResourceAcl(input.ownerUserId)
-  const inserted = await tx
-    .insert(workflows)
-    .values({
-      id: input.id,
-      name: input.name,
-      description: input.description,
-      definition: serializeWorkflowDefinitionStorageV1(input.definition),
-      version: 1,
-      // RFC-231: user resources are private; framework built-ins stay public.
-      ...initialAcl,
-      // RFC-104: built-in is internal-only and never accepted from HTTP.
-      builtin: input.builtin,
-      createdAt: input.now,
-      updatedAt: input.now,
-    })
-    .returning()
-    .get()
+  const { workflows } = tablesOf(tx)
+  const inserted = await first(
+    tx
+      .insert(workflows)
+      .values({
+        id: input.id,
+        name: input.name,
+        description: input.description,
+        definition: serializeWorkflowDefinitionStorageV1(input.definition),
+        version: 1,
+        // RFC-231: user resources are private; framework built-ins stay public.
+        ...initialAcl,
+        // RFC-104: built-in is internal-only and never accepted from HTTP.
+        builtin: input.builtin,
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .returning(),
+  )
   if (inserted === undefined) throw new Error('workflow insert returned no row')
   return inserted
 }
@@ -911,9 +915,10 @@ export function broadcastWorkflowCreated(created: WorkflowDetail): void {
  * 终态引用不再阻删——展示层按悬空软链容忍（E2）。
  */
 async function countNonTerminalReferencingTasksForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   workflowId: string,
 ): Promise<number> {
+  const { tasks } = tablesOf(tx)
   const rows = await tx
     .select({ id: tasks.id })
     .from(tasks)
@@ -934,10 +939,8 @@ export function workflowSnapshotHashOf(snapshot: WorkflowDraftSnapshot): Workflo
   return hashWorkflowSnapshot(normalized)
 }
 
-async function loadRawWorkflow(
-  db: ProviderNeutralDatabase,
-  id: string,
-): Promise<WorkflowRow | null> {
+async function loadRawWorkflow(db: PersistenceDb, id: string): Promise<WorkflowRow | null> {
+  const { workflows } = tablesOf(db)
   const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
   return rows[0] ?? null
 }
@@ -947,7 +950,7 @@ async function loadRawWorkflow(
  * 系统主体（导入 / 内部改写）不走 ACL，按 `own` 处理。
  */
 async function assertPrincipalCanEditPreflight(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
 ): Promise<ResourceAccess> {
@@ -964,7 +967,7 @@ async function assertPrincipalCanEditPreflight(
 
 /** In-tx twin of the save gate — the authoritative one (the preflight is UX). */
 async function assertPrincipalCanEditInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
 ): Promise<ResourceAccess> {
@@ -988,7 +991,7 @@ async function assertPrincipalCanEditInTx(
  * 存在」。路由层已经判过一次（routes/workflows.ts），这里是事务内的权威复检。
  */
 async function assertPrincipalCanGovernForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
 ): Promise<void> {

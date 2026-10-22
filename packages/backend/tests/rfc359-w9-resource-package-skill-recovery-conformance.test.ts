@@ -43,6 +43,8 @@
 // 合一后的判定函数是中立的 `domain/resourcePackageSkillRecovery.ts`
 // （`resourcePackageSkillRecoveryDisposition`），两个引擎调同一份。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -59,7 +61,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { resourceBundleApplies, skillVersions, skills } from '@/db/schema'
 import type { ResourcePackageApplyArtifactRecoveryPort } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createSqliteResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
@@ -217,7 +218,8 @@ describeEachProvider(
       if (liveTree !== null) writeTree(liveDirectory, liveTree)
 
       if (options.contentVersion !== null) {
-        await harness.db.insert(skills).values({
+        const { skills, skillVersions } = tablesOf(harness.db)
+        await insertOne(harness.db, skills, {
           id: SKILL_ID,
           name: 'w9-recovery',
           description: '',
@@ -237,7 +239,7 @@ describeEachProvider(
         if (!sqliteSide()) {
           const versionDirectory = skillVersionAbs(appHome, SKILL_ID, ARTIFACT_VERSION)
           writeTree(versionDirectory, STAGED_TREE)
-          await harness.db.insert(skillVersions).values({
+          await insertOne(harness.db, skillVersions, {
             id: `${SKILL_ID}-v${ARTIFACT_VERSION}`,
             skillId: SKILL_ID,
             versionIndex: ARTIFACT_VERSION,
@@ -253,7 +255,8 @@ describeEachProvider(
         }
       }
 
-      await harness.db.insert(resourceBundleApplies).values({
+      const { resourceBundleApplies } = tablesOf(harness.db)
+      await insertOne(harness.db, resourceBundleApplies, {
         id: JOURNAL_ID,
         scope: 'package',
         key: `key-${JOURNAL_ID}`,
@@ -270,6 +273,7 @@ describeEachProvider(
 
     /** 跑收敛，返回错误码（成功 = `'<resolved>'`）。 */
     async function rollForward(): Promise<string> {
+      const { resourceBundleApplies } = tablesOf(harness.db)
       const rows = await harness.db
         .select()
         .from(resourceBundleApplies)

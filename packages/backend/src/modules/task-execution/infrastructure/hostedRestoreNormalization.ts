@@ -9,11 +9,11 @@
 //     instance, and boot recovery cancels and settles it instead of adopting it;
 //   · platform recovery requests still in flight end as failed: resuming a
 //     task now is the user's informed choice, not a backup-era request's.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { DAEMON_RESTART_ERROR_SUMMARY, LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedExecutionBindings, hostedRecoveryRequests, nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedRestoreNormalizationParticipant } from '@/modules/system-operations/public/participants'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 import { terminalizeTaskExecutionIntentsUncheckedInTx } from './taskExecutionIntentTerminalPersistence'
@@ -25,7 +25,8 @@ export const RESTORE_INTERRUPTION_MESSAGE =
 export function createHostedRestoreTaskNormalization(): HostedRestoreNormalizationParticipant {
   return {
     name: 'task-execution',
-    async normalize(tx: ProviderNeutralDatabase, { now }) {
+    async normalize(tx: PersistenceDb, { now }) {
+      const { tasks, nodeRuns, hostedExecutionBindings, hostedRecoveryRequests } = tablesOf(tx)
       const suspended = await tx
         .update(tasks)
         .set({ autoRecoverySuspended: true })

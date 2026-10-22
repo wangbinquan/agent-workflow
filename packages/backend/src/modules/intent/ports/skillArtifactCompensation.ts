@@ -13,8 +13,7 @@
 // （目录 swap + 内容哈希），另一个是**读旧 journal 行**时才走的兼容面。端口按消费者的真实
 // 需要划，不按对称美感划。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /**
  * RFC-359 —— **合一之前**由 SQLite 那台 apply 引擎写下的 journal 工件，前滚时要的原语。
@@ -27,7 +26,7 @@ import type { DatabaseTransaction } from '@/platform/persistence/databaseTransac
 export interface LegacyIntentSkillArtifactCompat {
   /** 把一个已提交的技能版本发布成 live files/。 */
   publishStagedSkillVersion(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     options: { readonly appHome: string },
     staged: unknown,
   ): void | Promise<void>
@@ -35,10 +34,10 @@ export interface LegacyIntentSkillArtifactCompat {
   unmarkSkillBootVerified(skillId: string): void
   /** 收尾一个 skill operation（在调用方的事务里）。 */
   // RFC-359 W4-D23b：op 原语迁到中立事务后是异步的。
-  finishOperation(tx: DatabaseTransaction, operationId: string): void | Promise<void>
+  finishOperation(tx: PersistenceTx, operationId: string): void | Promise<void>
   /** 读一个 skill operation 的当前状态；`undefined` = 不存在。 */
   loadSkillOperationState(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     operationId: string,
   ):
     | { readonly active: number; readonly phase: string }

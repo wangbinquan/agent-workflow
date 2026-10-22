@@ -12,6 +12,8 @@
 // refused it; the standalone SQLite daemon never showed it. The dispatch now
 // fences with the explicit context first (explicit > ambient > ownerless, as
 // `fenceTaskWrite`), and the public lookup is the provider-neutral one.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,8 +22,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -83,10 +84,11 @@ function launch(taskId: string): CanonicalContinuationRequest {
 }
 
 /** A running task whose durable owner is claimed, with the writer's answer done. */
-async function seedClaimedReviewTask(db: ProviderNeutralDatabase) {
+async function seedClaimedReviewTask(db: PersistenceDb) {
   const taskId = `t370rv_${ulid()}`
   const snapshot = JSON.stringify(definition())
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc370-review-context',
     description: '',
@@ -94,7 +96,7 @@ async function seedClaimedReviewTask(db: ProviderNeutralDatabase) {
     version: 1,
     schemaVersion: 6,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -111,7 +113,7 @@ async function seedClaimedReviewTask(db: ProviderNeutralDatabase) {
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const writerRun = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: writerRun,
     taskId,
     nodeId: WRITER,
@@ -119,7 +121,7 @@ async function seedClaimedReviewTask(db: ProviderNeutralDatabase) {
     retryIndex: 0,
     iteration: 0,
   })
-  await db.insert(nodeRunOutputs).values({
+  await insertOne(db, nodeRunOutputs, {
     nodeRunId: writerRun,
     portName: 'answer',
     content: 'The report uses **red**.',
@@ -161,6 +163,7 @@ describeEachProvider(
           executionContext: seeded.context,
         }),
       ).resolves.toMatchObject({ kind: 'awaiting_review', message: 'awaiting_review' })
+      const { tasks, nodeRuns, docVersions } = tablesOf(harness.db)
       const task = await harness.db
         .select({ status: tasks.status })
         .from(tasks)
@@ -189,6 +192,7 @@ describeEachProvider(
           mechanics.dispatchReviewNode(request(seeded.taskId)),
         ),
       ).resolves.toMatchObject({ kind: 'awaiting_review' })
+      const { tasks } = tablesOf(harness.db)
       const task = await harness.db
         .select({ status: tasks.status })
         .from(tasks)
@@ -212,6 +216,7 @@ describeEachProvider(
       await expect(mechanics.dispatchReviewNode(request(seeded.taskId))).rejects.toThrow(
         'ownerless task mutation refused durable owner',
       )
+      const { tasks } = tablesOf(harness.db)
       const task = await harness.db
         .select({ status: tasks.status })
         .from(tasks)

@@ -1,6 +1,7 @@
 // RFC-359 W4-B1 批 2g —— node run 生命周期（mint / transition / set + 事务内参与者）：一份实现，两个 provider 共用。
 // 此前 SQLite 侧薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 的同步内核；现在端口两侧都走统一写事务 + owner 围栏。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   allowedFromStatusesForEvent,
   nextNodeRunStatus,
@@ -8,8 +9,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   NodeRunLifecycleParticipantInTx,
@@ -49,6 +49,7 @@ async function rowForUpdate(
     sourceTerminationFence: 'closed' | 'merged' | null
   }>
 > {
+  const { nodeRuns, tasks } = tablesOf(tx)
   const rows = await tx
     .select({
       status: nodeRuns.status,
@@ -103,6 +104,7 @@ export function createNodeRunLifecycleParticipantInTx(
           `node_run ${input.nodeRunId} does not belong to task ${input.taskId}`,
         )
       }
+      const { nodeRuns } = tablesOf(tx)
       const identity = (
         await tx
           .select({ nodeId: nodeRuns.nodeId })
@@ -142,7 +144,7 @@ export function createNodeRunLifecycleParticipantInTx(
 }
 
 export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async mint(input: NodeRunMintInput): Promise<string> {
     const { executionContext, outputs, ...request } = input
@@ -151,19 +153,17 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
       const nodeRunId = await createNodeRunMintParticipantInTx(tx).mint(request)
       // 初始输出与行同一事务：见端口注释（io-virtual 行不得在没有输出的状态下被看见）。
       if (outputs !== undefined && outputs.length > 0) {
-        await tx
-          .insert(nodeRunOutputs)
-          .values(
-            outputs.map((output) => ({
-              nodeRunId,
-              portName: output.portName,
-              content: output.content,
-              kind: output.kind ?? null,
-              archiveJson: output.archiveJson ?? null,
-              active: output.active ?? true,
-            })),
-          )
-          .run()
+        const { nodeRunOutputs } = tablesOf(tx)
+        await tx.insert(nodeRunOutputs).values(
+          outputs.map((output) => ({
+            nodeRunId,
+            portName: output.portName,
+            content: output.content,
+            kind: output.kind ?? null,
+            archiveJson: output.archiveJson ?? null,
+            active: output.active ?? true,
+          })),
+        )
       }
       return nodeRunId
     })
@@ -181,6 +181,7 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
         fence: row.sourceTerminationFence,
         to,
       })
+      const { nodeRuns } = tablesOf(tx)
       const updated = await tx
         .update(nodeRuns)
         .set({ status: to, ...(input.extra ?? {}) })
@@ -207,6 +208,7 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
   }
 
   async loadEnvelopeNonce(nodeRunId: string): Promise<string> {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
       .select({ envelopeNonce: nodeRuns.envelopeNonce })
       .from(nodeRuns)

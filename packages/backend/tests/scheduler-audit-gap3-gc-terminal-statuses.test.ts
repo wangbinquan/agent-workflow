@@ -28,24 +28,24 @@
 // worktree"的另一半由 setTaskStatus 的 revival 门保护（pruned→410 / pruning→409 /
 // 目录缺失→补墓碑+410，services/lifecycle.ts），专项锁见 rfc165-workspace-gc.test.ts。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { tasks, taskRepos, workflows } from '../src/db/schema'
-
 import { createWorktree, runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()
 const DAY_MS = 24 * 60 * 60 * 1000
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   repoPath: string
   cleanup: () => void
@@ -53,7 +53,7 @@ interface Harness {
 
 // Real git repo in a temp dir (no network, no stash) — same harness shape as
 // gc.test.ts so createWorktree/removeWorktree operate on genuine worktrees.
-async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap3-gc-'))
   const repoPath = join(appHome, 'repo')
   await runGit(appHome, ['init', '-q', '-b', 'main', 'repo'])
@@ -71,18 +71,19 @@ async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
 
 async function seedTask(
   h: Harness,
-  overrides: Partial<typeof tasks.$inferInsert>,
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -157,14 +158,15 @@ describeEachProvider(
           appHome: h.appHome,
         })
         const workflowId = ulid()
-        await h.db.insert(workflows).values({
+        const { workflows, tasks } = tablesOf(h.db)
+        await insertOne(h.db, workflows, {
           id: workflowId,
           name: 'wf',
           definition: '{}',
           createdAt: Date.now(),
           updatedAt: Date.now(),
         })
-        await h.db.insert(tasks).values({
+        await insertOne(h.db, tasks, {
           name: 'fixture-task',
           id: taskId,
           workflowId,
@@ -225,7 +227,8 @@ describeEachProvider(
           (await runGit(h.repoPath, ['worktree', 'add', '-q', '-b', branch, worktreePath, 'HEAD']))
             .exitCode,
         ).toBe(0)
-        await h.db.insert(taskRepos).values({
+        const { taskRepos } = tablesOf(h.db)
+        await insertOne(h.db, taskRepos, {
           taskId,
           repoIndex,
           repoPath: h.repoPath,

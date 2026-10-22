@@ -4,20 +4,15 @@
 // exhaustion, and non-fast-forward auto-merge → re-push. The framework owns
 // git; the message/repair generators are injected (production wraps opencode).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import {
-  nodeRuns,
-  tasks,
-  workflows,
-  taskExecutionEffects,
-  taskExecutionEffectAttempts,
-} from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
 import type { CommitPushMeta } from '@agent-workflow/shared'
@@ -41,7 +36,7 @@ import {
 interface Fixture {
   repo: string
   remote: string
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
@@ -85,9 +80,10 @@ exit 0
   // against the bun:sqlite dialect. The same rows through the neutral query
   // builder run unchanged on both engines.
   const db = harness.db
-  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
   const taskId = 'task-cpr'
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'cpr',
     workflowId: 'wf',
@@ -111,7 +107,7 @@ exit 0
   // RFC-098 WP-10: the commit container row is born 'running' and the mint
   // factory enforces "born-running ⟹ child row" (frontier invisibility), so
   // the fixture provides the triggering agent run the way production does.
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'parent-agent-run',
     taskId,
     nodeId: 'agent-1',
@@ -161,6 +157,7 @@ async function readMeta(
   f: Fixture,
   nodeRunId: string,
 ): Promise<{ status: string; meta: CommitPushMeta }> {
+  const { nodeRuns } = tablesOf(f.db)
   const row = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
   return { status: row.status, meta: JSON.parse(row.commitPushJson!) as CommitPushMeta }
 }
@@ -640,6 +637,7 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
         await entered.promise
         expect(generated).toBe(0)
         expect(locks).toEqual(['acquire'])
+        const { nodeRuns } = tablesOf(f.db)
         const running = (
           await f.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f.taskId))
         ).filter((row) => row.rerunCause === 'commit-push')
@@ -770,6 +768,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
             ),
           )
           await enteredBeforeOutcome(barrier.entered, pending)
+          const { nodeRuns, taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(f.db)
           const running = (
             await f.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f.taskId))
           ).filter((row) => row.rerunCause === 'commit-push')

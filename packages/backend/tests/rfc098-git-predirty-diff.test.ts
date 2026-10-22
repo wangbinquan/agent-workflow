@@ -24,6 +24,8 @@
 // 但 shim 支持显式内容控制——hash 语义必须能写"相同内容"）。
 // 确定性：本地 git、无网络、无 sleep。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -32,7 +34,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { DELETED_BLOB_SENTINEL, gitBlobHashes, runGit } from '../src/util/git'
@@ -131,7 +132,8 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
 
   test('改又改回不出现；改过的保留；重建的保留；持续删除扣除；新文件保留', async () => {
     h = await buildHarness()
-    await h.db.insert(agents).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, agents, {
       id: 'agent-writer',
       name: 'writer',
       description: 'test',
@@ -157,12 +159,12 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db.insert(workflows).values({
+    await insertOne(h.db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
     })
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       name: 'rfc098-predirty-task',
       id: taskId,
       workflowId,

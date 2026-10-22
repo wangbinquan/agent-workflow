@@ -4,30 +4,10 @@
 // W2 moves the remaining row projections into infrastructure adapters.
 export { and, desc, eq, inArray, ne } from 'drizzle-orm'
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, or, type Placeholder, type SQL, type SQLWrapper } from 'drizzle-orm'
 import { chunkedAll } from '@/util/sqlChunk'
-import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
-import { taskCollaborators, tasks } from './schema'
-import type * as schema from './schema'
-
-/**
- * RFC-357 —— 两个 provider 客户端的公共基类型。
- *
- * `DbClient`（bun:sqlite，同步）与 `PostgresqlDatabaseClient`（remote，异步，实际上是
- * drizzle 的 sqlite-proxy）都可赋值给它，于是同一段 query builder / `db.all(sql)` 在
- * `await` 之后两边行为一致。先例见 RFC-350 的 `taskIdleTimeoutPersistence.ts`。
- *
- * 放在这条平台词汇线上而不是某个模块里：它是**持久化的词汇**，不是谁的领域概念；
- * 定义在模块内会让每个跨模块使用者都记一条「legacy 指向模块内部」的越界边。
- */
-export type ProviderNeutralDatabase = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>
-
-export type ProviderNeutralDatabaseForMode<TMode extends 'sync' | 'async'> = BaseSQLiteDatabase<
-  TMode,
-  unknown,
-  typeof schema
->
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 // ---------------------------------------------------------------------------
 // 任务可见性判据（RFC-359 AC-11）
 // ---------------------------------------------------------------------------
@@ -50,7 +30,7 @@ export type ProviderNeutralDatabaseForMode<TMode extends 'sync' | 'async'> = Bas
  * 读侧句柄：只需要 `select`——库、事务、以及只暴露读面的窄类型都能传进来
  * （判据只读，不关心事务边界）。
  */
-export type TaskVisibilityReader = Pick<ProviderNeutralDatabase, 'select'>
+export type TaskVisibilityReader = Pick<PersistenceDb, 'select'>
 
 /**
  * 请求者的闭合投影。判据只认这两件事，不认整个 `Actor`。
@@ -84,12 +64,14 @@ export interface TaskVisibilityRowRef {
   readonly ownerUserId: SQLWrapper
 }
 
-export function defaultTaskVisibilityRowRef(): TaskVisibilityRowRef {
+export function defaultTaskVisibilityRowRef(db: object): TaskVisibilityRowRef {
+  const { tasks } = tablesOf(db)
   return { id: tasks.id, ownerUserId: tasks.ownerUserId }
 }
 
 /** 「我参与的任务 id」子查询。判据与它的分块版本共用同一份，两条路不可能漂。 */
 export function taskCollaboratorTaskIds(db: TaskVisibilityReader, userId: string | Placeholder) {
+  const { taskCollaborators } = tablesOf(db)
   return db
     .select({ taskId: taskCollaborators.taskId })
     .from(taskCollaborators)
@@ -110,7 +92,7 @@ export function taskCollaboratorTaskIds(db: TaskVisibilityReader, userId: string
 export function taskVisibilityCondition(
   db: TaskVisibilityReader,
   subject: TaskVisibilitySubject,
-  ref: TaskVisibilityRowRef = defaultTaskVisibilityRowRef(),
+  ref: TaskVisibilityRowRef = defaultTaskVisibilityRowRef(db),
 ): SQL | undefined {
   if (subject.canReadAllTasks) return undefined
   return or(
@@ -137,15 +119,16 @@ export async function visibleTaskIdsFor(
 ): Promise<ReadonlySet<string>> {
   if (taskIds.length === 0) return new Set()
   const visibility = taskVisibilityCondition(db, subject)
-  const rows = await chunkedAll([...new Set(taskIds)], (chunk) =>
-    db
+  const rows = await chunkedAll([...new Set(taskIds)], (chunk) => {
+    const { tasks } = tablesOf(db)
+    return db
       .select({ id: tasks.id })
       .from(tasks)
       .where(
         visibility === undefined
           ? inArray(tasks.id, chunk)
           : and(inArray(tasks.id, chunk), visibility),
-      ),
-  )
+      )
+  })
   return new Set(rows.map((row) => row.id))
 }

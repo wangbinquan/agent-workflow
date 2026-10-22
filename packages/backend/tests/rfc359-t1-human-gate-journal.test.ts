@@ -7,28 +7,25 @@
 // 不移植的一条：SQLite 触发器 `human-gate-committed-receipt-immutable`（receipt 不可改）——触发器
 // 还没投影到 PostgreSQL（RFC-359 W3-T16b），留在 SQLite 黄金锁里。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  collaborationGateArtifacts,
-  collaborationGateOperations,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import { HumanGateOperationError } from '@/modules/collaboration/domain/humanGateOperation'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_969_612_066
 const TASK_ID = 'task-359-journal'
 
-async function seedTask(db: ProviderNeutralDatabase, taskId = TASK_ID): Promise<void> {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId = TASK_ID): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: taskId,
     description: '',
@@ -36,7 +33,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId = TASK_ID): Promise<
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -90,7 +87,7 @@ async function expectOperationError(
 const journal = new DatabaseHumanGateOperationJournal()
 
 function begin(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   operationId: string,
   value: CanonicalHumanGateRequest,
   idempotencyKey: string,
@@ -308,18 +305,20 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         receiptJson: '{"parked":true}',
         now: NOW + 5,
       })
+      const { collaborationGateArtifacts } = tablesOf(tx)
       expect(
         (
-          await tx
-            .select({ state: collaborationGateArtifacts.state })
-            .from(collaborationGateArtifacts)
-            .where(
-              and(
-                eq(collaborationGateArtifacts.operationId, 'operation-artifacts'),
-                eq(collaborationGateArtifacts.artifactKey, 'doc:0001'),
+          await first(
+            tx
+              .select({ state: collaborationGateArtifacts.state })
+              .from(collaborationGateArtifacts)
+              .where(
+                and(
+                  eq(collaborationGateArtifacts.operationId, 'operation-artifacts'),
+                  eq(collaborationGateArtifacts.artifactKey, 'doc:0001'),
+                ),
               ),
-            )
-            .get()
+          )
         )?.state,
       ).toBe('consumed')
       await expectOperationError(
@@ -367,12 +366,14 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         throw new Error('inject-rollback')
       }),
     ).rejects.toThrow('inject-rollback')
+    const { collaborationGateOperations } = tablesOf(harness.db)
     expect(
-      await harness.db
-        .select({ id: collaborationGateOperations.id })
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.id, 'operation-rolled-back'))
-        .get(),
+      await first(
+        harness.db
+          .select({ id: collaborationGateOperations.id })
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, 'operation-rolled-back')),
+      ),
     ).toBeUndefined()
   })
 
@@ -405,6 +406,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         operation: { id: 'legacy-operation', state: 'completed', resultGateRevision: 1 },
       })
     })
+    const { collaborationGateOperations } = tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -420,12 +422,12 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
     await harness.session.transaction(async (tx) => {
       await begin(tx, 'op-expired', request({ gateRef: 'review:expired' }), 'k-expired')
       await begin(tx, 'op-never', request({ gateRef: 'review:never' }), 'k-never')
+      const { collaborationGateOperations } = tablesOf(tx)
       // 模拟「从未被认领」：清掉租约到期时间。
       await tx
         .update(collaborationGateOperations)
         .set({ claimExpiresAt: null })
         .where(eq(collaborationGateOperations.id, 'op-never'))
-        .run()
     })
     const claimed = await persistence.claimRecoveryBatch({
       now: NOW + 60_000,

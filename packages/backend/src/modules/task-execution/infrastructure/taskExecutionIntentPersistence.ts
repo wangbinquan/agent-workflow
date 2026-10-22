@@ -1,11 +1,11 @@
 // RFC-359 W4-B1 批 2g —— 执行 intent 准入（提交 / continuation）：一份实现，两个 provider 共用。
 // 此前 SQLite 侧薄壳套 `sqliteTaskExecutionIntent.ts` / `sqliteTaskExecutionIntentAdmission.ts` 的同步内核；两者暂留给 legacy 同步调用方。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { taskExecutionIntents } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { isPostgresqlSerializationFailure } from '@/platform/persistence/postgresqlSerializationRetry'
 import { TaskExecutionError } from '../application/taskExecutionError'
@@ -46,9 +46,10 @@ export function admissionSerializationConflict(
 }
 
 export class DrizzleTaskExecutionIntentPersistence implements TaskExecutionIntentPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async hasPendingGateSuccessor(taskId: string): Promise<boolean> {
+    const { taskExecutionIntents } = tablesOf(this.db)
     const rows = await this.db
       .select({ id: taskExecutionIntents.id })
       .from(taskExecutionIntents)

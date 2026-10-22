@@ -4,6 +4,8 @@
 // session 响应里**——非 admin 与一切 PAT（含 admin 自己的 PAT）拿 null + 尾 4
 // 位 hint；写动作对非 admin 一律 403（方法门）；触发器全量只读（D1 推翻
 // owner-404 读语义）；投递列表+详情（含 body）全员可读、replay 仍 admin。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
@@ -16,16 +18,6 @@ import {
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
-import {
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-  webhookTriggers,
-  workflows,
-} from '../src/db/schema'
-
 const URL_TOKEN = 'aw_whk_visibility_tok_abcd'
 
 async function harness(scope: ProviderHttpApplicationScope) {
@@ -64,7 +56,16 @@ async function harness(scope: ProviderHttpApplicationScope) {
     await createPat({ db, userId: user.id, name: 'user-pat', scopes: [], purpose: 'general' })
   ).token
 
-  await db.insert(webhookEndpoints).values({
+  const {
+    webhookEndpoints,
+    workflows,
+    webhookTriggers,
+    webhookDeliveries,
+    tasks,
+    webhookMrControlEffects,
+    webhookMrControlTargets,
+  } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'gitlab',
     provider: 'gitlab',
@@ -76,7 +77,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
   })
   const workflowId = ulid()
   const managerWorkflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -87,7 +88,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: managerWorkflowId,
     name: 'manager-wf',
     description: '',
@@ -99,7 +100,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     updatedAt: Date.now(),
   })
   // admin 名下的触发器——user 全量只读可见性的被测对象（D1）。
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'tr-owned-by-admin',
     name: '别人的触发器',
     endpointId: 'ep-1',
@@ -111,7 +112,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     launchRefId: workflowId,
     launchPayload: JSON.stringify({ inputs: {} }),
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'tr-owned-by-manager',
     name: 'manager 的触发器',
     endpointId: 'ep-1',
@@ -123,7 +124,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     launchRefId: managerWorkflowId,
     launchPayload: JSON.stringify({ inputs: {} }),
   })
-  await db.insert(webhookDeliveries).values({
+  await insertOne(db, webhookDeliveries, {
     id: 'dl-1',
     endpointId: 'ep-1',
     eventUuid: 'uuid-1',
@@ -135,7 +136,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     ['task-visible', user.id],
     ['task-hidden', admin.id],
   ] as const) {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id,
       name: id,
       workflowId,
@@ -152,7 +153,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
       workspacePrunedAt: now,
     })
   }
-  await db.insert(webhookMrControlEffects).values({
+  await insertOne(db, webhookMrControlEffects, {
     id: 'effect-1',
     deliveryId: 'dl-1',
     endpointId: 'ep-1',
@@ -167,7 +168,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     updatedAt: now,
   })
   for (const taskId of ['task-visible', 'task-hidden']) {
-    await db.insert(webhookMrControlTargets).values({
+    await insertOne(db, webhookMrControlTargets, {
       effectId: 'effect-1',
       taskId,
       priorStatus: 'running',

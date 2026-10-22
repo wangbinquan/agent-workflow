@@ -13,6 +13,9 @@
 // second call and throw 409 — this is the idempotency story we have today
 // (PR-D / PR-E may add outbox semantics later).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,7 +24,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -73,13 +75,14 @@ async function buildHarness(
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -109,6 +112,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
   test('R1 resume from failed flips task→pending and clears error fields', async () => {
     h = await buildHarness('failed')
+    const { tasks } = tablesOf(h.db)
     await h.db
       .update(tasks)
       .set({ errorSummary: 'boom', errorMessage: 'detail', failedNodeId: 'doc' })
@@ -246,6 +250,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       edges: [],
     }
     const finishedAt = Date.now() - 10
+    const { tasks } = tablesOf(h.db)
     await h.db
       .update(tasks)
       .set({
@@ -293,7 +298,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('failed')
     const doneId = ulid()
     const finishedAt = Date.now() - 500
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: doneId,
       taskId: h.taskId,
       nodeId: 'doc',
@@ -311,7 +317,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     const realSha = await gitStashSnapshot(h.repoPath)
     expect(realSha).not.toBe('')
     const failedId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: failedId,
       taskId: h.taskId,
       nodeId: 'doc',
@@ -349,7 +355,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
   test("R8b snapshot lost: resumeTask throws 409 'snapshot-lost', task flips failed (errorSummary='snapshot-lost'), worktree untouched", async () => {
     h = await buildHarness('failed')
     const failedId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: failedId,
       taskId: h.taskId,
       nodeId: 'doc',
@@ -406,7 +413,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     writeFileSync(join(h.repoPath, 'README.md'), '# native-session-snapshot\n')
     const realSha = await gitStashSnapshot(h.repoPath)
     const failedId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks, runtimeSessionLeases } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: failedId,
       taskId: h.taskId,
       nodeId: 'doc',
@@ -444,14 +452,15 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     ).rejects.toMatchObject({ code: 'live-child-survived' })
 
     expect(
-      h.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, h.taskId)).get(),
+      first(h.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, h.taskId))),
     ).toEqual({ status: 'failed' })
     expect(
-      h.db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.sessionId, 'resume-held-native'))
-        .get(),
+      first(
+        h.db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(eq(runtimeSessionLeases.sessionId, 'resume-held-native')),
+      ),
     ).toEqual({ holder: failedId })
   })
 })

@@ -5,15 +5,16 @@
 // （`../application/repositoryScopeAuthorization.ts`）把它包成带私有 brand 的 participant。
 // 判据（仅 `resource-acl:bypass` 可管）也只在那一处。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import { cachedRepos, repoGroups } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { RepositoryScopeExistenceReads } from '../application/repositoryScopeAuthorization'
 import type { RepositoryScopeTarget } from '../public/participants'
 
-const reads: RepositoryScopeExistenceReads<DatabaseTransaction> = {
+const reads: RepositoryScopeExistenceReads<PersistenceTx> = {
   async exists(transaction, target: RepositoryScopeTarget) {
+    const { cachedRepos, repoGroups } = tablesOf(transaction)
     const table = target.kind === 'repo' ? cachedRepos : repoGroups
     const rows = await transaction
       .select({ id: table.id })
@@ -27,5 +28,4 @@ const reads: RepositoryScopeExistenceReads<DatabaseTransaction> = {
 // 导出的是**事实读取器**，不是 capability——名字也不叫 `create*`：capability-forge 守卫按
 // 「返回敏感类型且名为 create/mint」判定 owner 工厂，而 owner 工厂必须唯一。
 // 装配方拿它去调 `createRepositoryScopeAuthorizationInTx` 铸能力。
-export const repositoryScopeExistenceReads: RepositoryScopeExistenceReads<DatabaseTransaction> =
-  reads
+export const repositoryScopeExistenceReads: RepositoryScopeExistenceReads<PersistenceTx> = reads

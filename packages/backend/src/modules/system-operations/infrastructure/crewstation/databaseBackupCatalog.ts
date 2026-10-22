@@ -2,10 +2,10 @@
 // verification is lightweight: the catalog row plus a platform `stat` proving
 // the archive object still exists with its recorded size and digest. The
 // restore Job downloads and verifies the bytes it imports.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { desc, eq } from 'drizzle-orm'
 import { HostedBackupCatalogSchema, HostedBackupVerificationSchema } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedDatabaseBackups } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { CrewStationApiError } from '@/platform/crewstation/platformApi'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -13,7 +13,7 @@ import type { HostedBackupCatalogQueries } from '../../application/ports/adminBa
 import { HostedBackupContents, hostedBackupReference } from './databaseBackupFormat'
 
 export function createHostedBackupCatalog(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly objects: Pick<CrewStationStreamObjectStorage, 'stat'>
   readonly protectedBackupIds: () => Promise<readonly string[]>
   readonly now?: () => number
@@ -21,6 +21,7 @@ export function createHostedBackupCatalog(input: {
   return {
     async list() {
       const protectedIds = new Set(await input.protectedBackupIds())
+      const { hostedDatabaseBackups } = tablesOf(input.db)
       const rows = await input.db
         .select()
         .from(hostedDatabaseBackups)
@@ -39,6 +40,7 @@ export function createHostedBackupCatalog(input: {
       })
     },
     async verify(id) {
+      const { hostedDatabaseBackups } = tablesOf(input.db)
       const [row] = await input.db
         .select()
         .from(hostedDatabaseBackups)

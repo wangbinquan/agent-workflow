@@ -2,13 +2,14 @@
 // 任务执行读模型（状态投影 / 执行结果 / 调用图工作区）、任务生命周期 WS 投影、子任务预算查询。
 // 另有一条源码锁：provider 命名的孪生文件不得复活。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleChildTaskBudgetQueries } from '@/modules/task-execution/infrastructure/childTaskBudgetQueries'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createDatabaseTaskLifecycleWsProjection } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
@@ -17,12 +18,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  db: PersistenceDb,
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<{ id: string; workflowId: string }> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `wf-name-${workflowId.slice(-6)}`,
     description: '',
@@ -30,7 +32,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -64,7 +66,8 @@ describeEachProvider('RFC-359 W4-B1 批 2b —— 任务执行读模型', (harne
     const db = harness.db
     const { id } = await seedTask(db, { status: 'done', finishedAt: 2 })
     const runId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId: id,
       nodeId: 'n',

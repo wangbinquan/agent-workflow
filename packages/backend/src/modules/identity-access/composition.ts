@@ -1,5 +1,5 @@
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
 import { GetUserPresence } from './application/queries/getUserPresence'
 import {
@@ -126,7 +126,7 @@ export type IdentityAccessFixtureRuntime = Omit<IdentityAccessRuntime, 'contexts
 
 export interface CreateIdentityAccessRuntimeInput {
   /** 两个 provider 同一份持久化（RFC-359 W4-D8）；装配入口收中立句柄。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly events?: RuntimeIdentityAccessEventSink
   readonly presenceProjection?: RuntimePresenceProjectionSink
   readonly id?: () => string
@@ -272,13 +272,13 @@ function buildIdentityAccessRuntime(
 
 /** Explicit local/test fixture factory. Production daemon/server code receives
  * one createIdentityAccessRuntime result from its bootstrap root. */
-export function composeIdentityAccess(db: ProviderNeutralDatabase): IdentityAccessFixtureRuntime {
+export function composeIdentityAccess(db: PersistenceDb): IdentityAccessFixtureRuntime {
   return buildIdentityAccessRuntime({}, neutralPersistence(db), true)
 }
 
 export { createEventAutomationDelegatedContextBinding } from './application/adapters/event-automation-adapter'
 
-function neutralPersistence(db: ProviderNeutralDatabase): IdentityAccessPersistence {
+function neutralPersistence(db: PersistenceDb): IdentityAccessPersistence {
   // 围栏缓存与写事务绑在同一份：提交后刷新的就是围栏读的那份。
   const fenceCache = new AuthorityFenceCache()
   return {

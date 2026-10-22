@@ -35,20 +35,14 @@
 // 就写在这个文件里当 oracle——它是被替换掉的那段 SQL 的逐字副本，不是重新推导的等价物。
 // 另外用 JS 侧手算的期望值对一遍账，防的是「两个 SQL 形状一起错」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { sql, type SQL } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  lifecycleAlerts,
-  scheduledTasks,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -163,8 +157,9 @@ const REPO_SEEDS = [
   { id: 'repo-scheduled', hasSubmodules: true, lastSubmoduleSyncOk: false },
 ] as const
 
-async function seedBase(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seedBase(db: PersistenceDb): Promise<void> {
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
     displayName: 'admin',
@@ -172,14 +167,15 @@ async function seedBase(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'nightly', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'nightly', definition: '{}' })
 }
 
-async function seedTasks(db: ProviderNeutralDatabase, seeds: readonly TaskSeed[]): Promise<void> {
+async function seedTasks(db: PersistenceDb, seeds: readonly TaskSeed[]): Promise<void> {
   let index = 0
   for (const seed of seeds) {
     index += 1
-    await db.insert(tasks).values({
+    const { tasks, taskRepos, lifecycleAlerts } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: seed.id,
       name: `task ${seed.id}`,
       workflowId: 'wf1',
@@ -203,7 +199,7 @@ async function seedTasks(db: ProviderNeutralDatabase, seeds: readonly TaskSeed[]
       ...(seed.cachedRepoId === undefined ? {} : { cachedRepoId: seed.cachedRepoId }),
     })
     if (seed.taskRepoCachedRepoId !== undefined) {
-      await db.insert(taskRepos).values({
+      await insertOne(db, taskRepos, {
         taskId: seed.id,
         repoIndex: 0,
         repoPath: '/repos/r',
@@ -215,7 +211,7 @@ async function seedTasks(db: ProviderNeutralDatabase, seeds: readonly TaskSeed[]
       })
     }
     for (let n = 0; n < seed.openAlerts; n += 1) {
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: `al-open-${seed.id}-${n}`,
         taskId: seed.id,
         rule: `R${n}`,
@@ -226,7 +222,7 @@ async function seedTasks(db: ProviderNeutralDatabase, seeds: readonly TaskSeed[]
       })
     }
     for (let n = 0; n < seed.resolvedAlerts; n += 1) {
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: `al-done-${seed.id}-${n}`,
         taskId: seed.id,
         rule: `C${n}`,
@@ -239,11 +235,12 @@ async function seedTasks(db: ProviderNeutralDatabase, seeds: readonly TaskSeed[]
   }
 }
 
-async function seedRepos(db: ProviderNeutralDatabase): Promise<void> {
+async function seedRepos(db: PersistenceDb): Promise<void> {
   let index = 0
   for (const repo of REPO_SEEDS) {
     index += 1
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: repo.id,
       urlHash: `hash-${repo.id}`,
       urlRedacted: `git@github.com:acme/${repo.id}.git`,
@@ -255,7 +252,8 @@ async function seedRepos(db: ProviderNeutralDatabase): Promise<void> {
       lastSubmoduleSyncOk: repo.lastSubmoduleSyncOk,
     })
   }
-  await db.insert(scheduledTasks).values({
+  const { scheduledTasks } = tablesOf(db)
+  await insertOne(db, scheduledTasks, {
     id: 'sched-1',
     name: 'nightly',
     ownerUserId: 'admin',
@@ -273,7 +271,9 @@ async function seedRepos(db: ProviderNeutralDatabase): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** `taskListPage/query.ts` 的 `facet_values` 改写前：`SUM(CASE … OR EXISTS(…) …)`。 */
-const legacyAttentionFacets = sql`
+const legacyAttentionFacets = (db: object) => {
+  const { lifecycleAlerts, tasks } = tablesOf(db)
+  return sql`
   SELECT
     COUNT(*) AS facet_all,
     COALESCE(SUM(CASE
@@ -285,9 +285,12 @@ const legacyAttentionFacets = sql`
       THEN 1 ELSE 0 END), 0) AS facet_attention
   FROM ${tasks} t
 `
+}
 
 /** 同一格，改写后的形状：预聚合 + LEFT JOIN。 */
-const reshapedAttentionFacets = sql`
+const reshapedAttentionFacets = (db: object) => {
+  const { tasks, lifecycleAlerts } = tablesOf(db)
+  return sql`
   SELECT
     COUNT(*) AS facet_all,
     COALESCE(SUM(CASE
@@ -301,16 +304,21 @@ const reshapedAttentionFacets = sql`
     WHERE la.resolved_at IS NULL
   ) open_alerts ON open_alerts.task_id = t.id
 `
+}
 
 /**
  * 定时臂的两种形态：空集（生产在无 payload 引用时渲染 `false`），以及命中两个 id——
  * 其中 `repo-many` 同时又是 explicit，用来锁住 `¬E ∧ ¬L ∧ S` 那一格不许重复计数。
  */
 const NO_SCHEDULE: SQL = sql`false`
-const ONE_SCHEDULE: SQL = sql`${cachedRepos.id} in (${'repo-scheduled'}, ${'repo-many'})`
+const ONE_SCHEDULE = (db: object) => {
+  const { cachedRepos } = tablesOf(db)
+  return sql`${cachedRepos.id} in (${'repo-scheduled'}, ${'repo-many'})`
+}
 
 /** `repositoryWorkspaceSqlStore` 的 facets 改写前：两个相关 EXISTS 打在 CASE 里。 */
-function legacyRepoFacets(scheduled: SQL): SQL {
+function legacyRepoFacets(db: object, scheduled: SQL): SQL {
+  const { taskRepos, cachedRepos, tasks } = tablesOf(db)
   return sql`
     SELECT
       count(*) AS all_count,
@@ -337,7 +345,8 @@ function legacyRepoFacets(scheduled: SQL): SQL {
  * `not …` 前缀，同一个仓库就会被数两次——`repo-many` 既有 task_repos 引用又有遗留直挂
  * 时正好命中这个坑，语料里 `k-legacy` / `k-ref-*` 就是为它铺的。
  */
-function reshapedRepoFacets(scheduled: SQL): SQL {
+function reshapedRepoFacets(db: object, scheduled: SQL): SQL {
+  const { taskRepos, cachedRepos, tasks } = tablesOf(db)
   const explicit = sql`exists (
     select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id}
   )`
@@ -366,8 +375,8 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
     await seedBase(db)
     await seedTasks(db, TASK_SEEDS)
 
-    const legacy = numbers(await db.all(legacyAttentionFacets))
-    const reshaped = numbers(await db.all(reshapedAttentionFacets))
+    const legacy = numbers(await rawRows(db, legacyAttentionFacets(db)))
+    const reshaped = numbers(await rawRows(db, reshapedAttentionFacets(db)))
     expect(
       reshaped,
       '预聚合 LEFT JOIN 与相关 EXISTS 的结果分叉了。最可能的原因：\n' +
@@ -388,8 +397,8 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
       TASK_SEEDS.map((seed) => ({ ...seed, openAlerts: 0, resolvedAlerts: 0 })),
     )
 
-    const legacy = numbers(await db.all(legacyAttentionFacets))
-    const reshaped = numbers(await db.all(reshapedAttentionFacets))
+    const legacy = numbers(await rawRows(db, legacyAttentionFacets(db)))
+    const reshaped = numbers(await rawRows(db, reshapedAttentionFacets(db)))
     expect(reshaped, 'LEFT JOIN 被写成 INNER JOIN 时这里会掉到 0').toEqual(legacy)
     // 只剩 status 那条臂：{k-both, k-status-only}。
     expect(reshaped).toEqual({ facet_all: TASK_SEEDS.length, facet_attention: 2 })
@@ -403,10 +412,10 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
 
     for (const [label, scheduled] of [
       ['空定时集合', NO_SCHEDULE],
-      ['定时集合命中两个仓库（其中一个同时是 explicit）', ONE_SCHEDULE],
+      ['定时集合命中两个仓库（其中一个同时是 explicit）', ONE_SCHEDULE(db)],
     ] as const) {
-      const legacy = numbers(await db.all(legacyRepoFacets(scheduled)))
-      const reshaped = numbers(await db.all(reshapedRepoFacets(scheduled)))
+      const legacy = numbers(await rawRows(db, legacyRepoFacets(db, scheduled)))
+      const reshaped = numbers(await rawRows(db, reshapedRepoFacets(db, scheduled)))
       expect(
         reshaped,
         `${label}时互斥三格与原来的 OR 分叉了。最可能的原因：\n` +
@@ -421,12 +430,12 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
     //               repo-legacy（遗留直挂）}；repo-shadowed 被 task_repos 行遮蔽、
     // repo-orphan 无人引用、repo-ghost 根本不在 cached_repos 里。
     // attention = {repo-many, repo-scheduled}（has_submodules 且 sync_ok = false）。
-    expect(numbers(await db.all(reshapedRepoFacets(NO_SCHEDULE)))).toEqual({
+    expect(numbers(await rawRows(db, reshapedRepoFacets(db, NO_SCHEDULE)))).toEqual({
       all_count: REPO_SEEDS.length,
       referenced_count: 2,
       attention_count: 2,
     })
-    expect(numbers(await db.all(reshapedRepoFacets(ONE_SCHEDULE)))).toEqual({
+    expect(numbers(await rawRows(db, reshapedRepoFacets(db, ONE_SCHEDULE(db))))).toEqual({
       all_count: REPO_SEEDS.length,
       referenced_count: 3,
       attention_count: 2,
@@ -438,8 +447,8 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
     await seedBase(db)
     await seedRepos(db)
 
-    const legacy = numbers(await db.all(legacyRepoFacets(NO_SCHEDULE)))
-    const reshaped = numbers(await db.all(reshapedRepoFacets(NO_SCHEDULE)))
+    const legacy = numbers(await rawRows(db, legacyRepoFacets(db, NO_SCHEDULE)))
+    const reshaped = numbers(await rawRows(db, reshapedRepoFacets(db, NO_SCHEDULE)))
     expect(reshaped, 'all_count 那格若跟着谓词走，空引用集会把分母清零').toEqual(legacy)
     expect(reshaped).toEqual({
       all_count: REPO_SEEDS.length,

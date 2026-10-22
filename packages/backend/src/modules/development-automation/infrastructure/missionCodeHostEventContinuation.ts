@@ -1,6 +1,6 @@
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CodeHostEventContinuationPort } from '@/modules/integration/application/ports/codeHostEventResponse'
 import { shouldWakeForWebhook } from '../domain/webhookWake'
 import type { MissionPersistence } from '../application/ports/missionStore'
@@ -55,7 +55,7 @@ function continuationFrom(
 
 /** 两个 provider 同一份（RFC-359 W4-D10）。 */
 export function createMissionCodeHostEventContinuation(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): CodeHostEventContinuationPort {
   return continuationFrom(createMissionPersistence(db))
 }

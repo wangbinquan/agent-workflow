@@ -15,6 +15,9 @@
 //     bodies — the lifecycle-grep-guard count `KERNEL_DIRECT_WRITES = 3` and the
 //     s10 `RAW_TRANSACTION_SITES` ledger stay untouched by construction).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -23,7 +26,6 @@ import { allowedFromForMergeEvent, MERGE_STATES } from '@agent-workflow/shared'
 import type { MergeState, NodeRunTransitionEvent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
-import { nodeRuns, taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { transitionNodeRunStatus, transitionNodeRunStatusTx } from '../src/services/lifecycle'
 import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
@@ -49,8 +51,9 @@ const ABANDONABLE = allowedFromForMergeEvent({ kind: 'abandon', reason: 'derive-
 const NOT_ABANDONABLE = MERGE_STATES.filter((s) => !ABANDONABLE.includes(s))
 
 async function seed(db: DbClient, fence: 'closed' | 'merged' | null = null): Promise<void> {
-  await db.insert(workflows).values({ id: 'wf', name: 'wf', description: '', definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks, nodeRuns, users, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'wf', name: 'wf', description: '', definition: '{}' })
+  await insertOne(db, tasks, {
     id: TASK,
     name: 't',
     workflowId: 'wf',
@@ -133,8 +136,9 @@ async function pair(fence: 'closed' | 'merged' | null = null): Promise<[DbClient
   return [a, b]
 }
 
-function dump(db: DbClient): (typeof nodeRuns.$inferSelect)[] {
-  return db.select().from(nodeRuns).orderBy(asc(nodeRuns.id)).all()
+function dump(db: DbClient): PersistenceTables['nodeRuns']['$inferSelect'][] {
+  const { nodeRuns } = tablesOf(db)
+  return queryRows(db.select().from(nodeRuns).orderBy(asc(nodeRuns.id)))
 }
 
 interface Refusal {
@@ -250,7 +254,10 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     },
   }
 
-  function normalised(db: DbClient, mintedId: string): (typeof nodeRuns.$inferSelect)[] {
+  function normalised(
+    db: DbClient,
+    mintedId: string,
+  ): PersistenceTables['nodeRuns']['$inferSelect'][] {
     return dump(db).map((r) => ({ ...r, id: r.id === mintedId ? '<minted>' : r.id }))
   }
 
@@ -324,12 +331,11 @@ describe('RFC-326 AC-19 — 行动权谓词（合一后只剩异步一个面）'
     const users = ['u-owner', 'u-collab', 'u-observer', 'u-stranger']
     const viaAsync = await Promise.all(users.map((u) => hasActingMembership(a, TASK, u)))
     expect(viaAsync).toEqual([true, true, false, false])
+    const { taskCollaborators } = tablesOf(a)
     // Sanity: the observer row is really there (otherwise the false is vacuous).
-    const observer = a
-      .select()
-      .from(taskCollaborators)
-      .where(eq(taskCollaborators.userId, 'u-observer'))
-      .all()
+    const observer = queryRows(
+      a.select().from(taskCollaborators).where(eq(taskCollaborators.userId, 'u-observer')),
+    )
     expect(observer.map((r) => r.role)).toEqual(['observer'])
   })
 })
@@ -383,7 +389,7 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
     const src = readFileSync(resolve(SRC, 'nodeRunMint.ts'), 'utf8')
     const body = bodyOf(src, 'export async function mintNodeRun(')
     expect(body).toContain('createLegacySqliteNodeRunOperations(db).lifecycle.mint(args)')
-    expect(body).not.toContain('.insert(nodeRuns)')
+    expect(body).not.toMatch(/(?:\.insert\(\s*nodeRuns\s*\)|\binsertOne\([^,]+,\s*nodeRuns\s*,)/)
     // No raw `.transaction(` site here (s10 ledger): the write boundary lives in the port.
     expect(body).not.toContain('.transaction(')
     expect(src).not.toContain('export function mintNodeRunTx(')

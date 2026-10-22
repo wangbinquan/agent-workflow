@@ -23,14 +23,16 @@
 // user's "I refuse to be asked again" intent is being lost — investigate
 // before relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
@@ -95,11 +97,12 @@ function twoCrossDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = twoCrossDef()
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'reject-persistence',
     description: '',
@@ -112,7 +115,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -129,25 +132,23 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
-async function seedQRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  nodeId: string,
-): Promise<string> {
+async function seedQRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 6)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -158,9 +159,10 @@ async function seedQRun(
   return id
 }
 
-async function seedDesignerRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedDesignerRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_d_${Math.random().toString(36).slice(2, 6)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'designer',
@@ -282,7 +284,8 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     })
     // Simulate a parallel self-clarify session on the designer — unrelated.
     const designerSelfClarifyNrId = `nr_d_self_${Math.random().toString(36).slice(2, 6)}`
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: designerSelfClarifyNrId,
       taskId,
       nodeId: 'designer',
@@ -364,7 +367,8 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     // Mint a fresh pending cross-clarify node_run and dispatch it; service
     // must short-circuit it to done.
     const freshId = `nr_cross1_${Math.random().toString(36).slice(2, 6)}`
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: freshId,
       taskId,
       nodeId: 'cross1',

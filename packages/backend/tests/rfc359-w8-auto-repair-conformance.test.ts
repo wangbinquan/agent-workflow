@@ -3,6 +3,9 @@
 // reconciliation. The automatic binding retains null actor attribution and the
 // existing S4 audit snapshots and failure outcome.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,16 +13,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEventFamilyCutovers,
-  committedEvents,
-  lifecycleAlerts,
-  lifecycleRepairAudit,
-  nodeRuns,
-  tasks,
-  users,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { LifecycleAlertRow } from '@/services/lifecycleInvariants'
 import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/taskRoutes'
@@ -135,14 +129,15 @@ interface Seeded {
   readonly alertId: string
 }
 
-async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}): Promise<Seeded> {
+async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<Seeded> {
   const taskId = `task-${ulid()}`
   const alertId = `alert-${ulid()}`
   const worktreePath =
     overrides.worktreeMissing === true
       ? join(tmpdir(), `aw-rfc359-w8-missing-${taskId}`)
       : mkdtempSync(join(tmpdir(), 'aw-rfc359-w8-wt-'))
-  await db.insert(tasks).values({
+  const { tasks, lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w8-auto-repair',
@@ -163,7 +158,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
     ]),
   })
-  await db.insert(lifecycleAlerts).values({
+  await insertOne(db, lifecycleAlerts, {
     id: alertId,
     taskId,
     rule: overrides.rule ?? 'S4',
@@ -175,7 +170,8 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
   return { taskId, alertId }
 }
 
-async function statusOf(db: ProviderNeutralDatabase, taskId: string): Promise<string | undefined> {
+async function statusOf(db: PersistenceDb, taskId: string): Promise<string | undefined> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ status: tasks.status })
     .from(tasks)
@@ -184,10 +180,8 @@ async function statusOf(db: ProviderNeutralDatabase, taskId: string): Promise<st
   return rows[0]?.status
 }
 
-async function alertResolvedAt(
-  db: ProviderNeutralDatabase,
-  alertId: string,
-): Promise<number | null> {
+async function alertResolvedAt(db: PersistenceDb, alertId: string): Promise<number | null> {
+  const { lifecycleAlerts } = tablesOf(db)
   const rows = await db
     .select({ resolvedAt: lifecycleAlerts.resolvedAt })
     .from(lifecycleAlerts)
@@ -196,7 +190,8 @@ async function alertResolvedAt(
   return rows[0]?.resolvedAt ?? null
 }
 
-async function auditRows(db: ProviderNeutralDatabase, taskId: string) {
+async function auditRows(db: PersistenceDb, taskId: string) {
+  const { lifecycleRepairAudit } = tablesOf(db)
   return await db
     .select({
       optionId: lifecycleRepairAudit.optionId,
@@ -220,7 +215,7 @@ function forTask(result: TaskLifecycleAutoRepairResult, taskId: string) {
   }
 }
 
-async function manualActor(db: ProviderNeutralDatabase): Promise<Actor> {
+async function manualActor(db: PersistenceDb): Promise<Actor> {
   const user = {
     id: ulid(),
     username: `repair-${ulid()}`,
@@ -228,7 +223,8 @@ async function manualActor(db: ProviderNeutralDatabase): Promise<Actor> {
     role: 'admin' as const,
     status: 'active' as const,
   }
-  await db.insert(users).values({ ...user, createdAt: NOW, updatedAt: NOW })
+  const { users } = tablesOf(db)
+  await insertOne(db, users, { ...user, createdAt: NOW, updatedAt: NOW })
   return buildActor({ user, source: 'session' })
 }
 
@@ -392,7 +388,8 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     const db = harness.db
     const { taskId, alertId } = await seed(db)
     const nodeRunId = `run-${ulid()}`
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, committedEventFamilyCutovers, tasks, committedEvents } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: nodeRunId,
       taskId,
       nodeId: 'worker',
@@ -404,7 +401,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       .update(committedEventFamilyCutovers)
       .set({ mode: 'dispatchable', epoch: 1, changedAt: NOW, changeRef: 'rfc359-p04-s4' })
       .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
-    const before = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+    const before = await firstRow(db.select().from(tasks).where(eq(tasks.id, taskId)))
     if (before === undefined) throw new Error(`missing fixture task ${taskId}`)
     const { persistence, repairs } = repairEngineFor(harness)
     const previous = createProviderTaskExecutionModule({
@@ -466,8 +463,8 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       now: () => NOW,
     })
     const result = forTask(await command.run(OPEN_POLICY), taskId)
-    const after = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
-    const run = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const after = await firstRow(db.select().from(tasks).where(eq(tasks.id, taskId)))
+    const run = await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))
     const audit = await auditRows(db, taskId)
     const events = await db
       .select()
@@ -647,19 +644,21 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     for (const entry of [manual, automatic]) {
       expect(await statusOf(harness.db, entry.taskId)).toBe('interrupted')
       expect(await alertResolvedAt(harness.db, entry.alertId)).toBeNull()
+      const { tasks } = tablesOf(harness.db)
       // The committed kick survives a failed resume. Preserve its original
       // diagnostic fields, including the automatic caller's alert reference.
       expect(
-        await harness.db
-          .select({
-            finishedAt: tasks.finishedAt,
-            errorSummary: tasks.errorSummary,
-            errorMessage: tasks.errorMessage,
-            failedNodeId: tasks.failedNodeId,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, entry.taskId))
-          .get(),
+        await firstRow(
+          harness.db
+            .select({
+              finishedAt: tasks.finishedAt,
+              errorSummary: tasks.errorSummary,
+              errorMessage: tasks.errorMessage,
+              failedNodeId: tasks.failedNodeId,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, entry.taskId)),
+        ),
       ).toEqual({
         finishedAt: NOW,
         errorSummary: 'manual-repair-S4',
@@ -690,6 +689,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       ...binding,
       resolveOptions: async (alert) => {
         const options = await binding.resolveOptions(alert)
+        const { tasks } = tablesOf(harness.db)
         await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
         return options
       },
@@ -716,6 +716,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     const manual = await seed(harness.db)
     const automatic = await seed(harness.db)
     const resume = async (taskId: string) => {
+      const { tasks } = tablesOf(harness.db)
       await harness.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
     }
     const { persistence, repairs } = repairEngineFor(harness, { resume })
@@ -770,6 +771,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       const { persistence, repairs } = repairEngineFor(harness, {
         resume,
         beforeTransition: async (taskId) => {
+          const { tasks } = tablesOf(harness.db)
           // The real lifecycle CAS observes a row changed after the engine's preflight.
           await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
         },

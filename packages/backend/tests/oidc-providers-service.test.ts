@@ -1,8 +1,10 @@
 // RFC-036 — OIDC providers service CRUD: create / patch (clientSecret keep
 // vs overwrite) / delete with force / encrypted-at-rest invariant.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
@@ -11,7 +13,6 @@ import {
   createOidcProvidersService,
   type OidcProvidersService,
 } from '../src/services/oidcProviders'
-import { oidcProviders, userIdentities, users } from '../src/db/schema'
 import { createIdentity } from '../src/services/userIdentities'
 import { DomainError } from '../src/util/errors'
 
@@ -29,11 +30,11 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   svc: OidcProvidersService
 }
 
-function buildHarness(__db: ProviderNeutralDatabase): Harness {
+function buildHarness(__db: PersistenceDb): Harness {
   const db = __db
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   return { db, svc: createOidcProvidersService({ db, secretBox }) }
@@ -65,6 +66,7 @@ describeEachProvider('OidcProvidersService', (harness) => {
     expect(created.allowedEmailDomains).toEqual(SAMPLE.allowedEmailDomains)
     expect(created.enabled).toBe(true)
     expect((created as unknown as { clientSecret?: string }).clientSecret).toBeUndefined()
+    const { oidcProviders } = tablesOf(h.db)
     // confirm secret is encrypted at rest (raw column does not contain plaintext)
     const rows = await h.db.select().from(oidcProviders)
     expect(rows[0]?.clientSecretEnc).not.toContain(SAMPLE.clientSecret)
@@ -93,8 +95,9 @@ describeEachProvider('OidcProvidersService', (harness) => {
 
   test('delete rejects with 409 when identities still linked; force cascades', async () => {
     const created = await h.svc.create(SAMPLE)
+    const { users, userIdentities } = tablesOf(h.db)
     // Seed a user + identity binding so the FK is non-empty.
-    await h.db.insert(users).values({
+    await insertOne(h.db, users, {
       id: 'user-1',
       username: 'alice',
       email: 'alice@corp.test',

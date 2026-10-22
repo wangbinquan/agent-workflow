@@ -1,4 +1,6 @@
 // RFC-370: selected upload ACKs must precede the real journal receipt and Task admission in both providers.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,8 +9,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import ts from 'typescript'
 import { StartTaskSchema, WorkflowDefinitionSchema } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { workflows, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -40,7 +41,7 @@ function plan(workspaceRef = 'opaque:prepared'): UploadPlan {
     limits: { perFile: 100, perRequest: 200, perCount: 2 },
   }
 }
-async function preparedJournal(db: ProviderNeutralDatabase) {
+async function preparedJournal(db: PersistenceDb) {
   const taskId = ulid(),
     journal = createWorkspacePreparationJournal(db)
   const initial = await journal.prepare({
@@ -77,6 +78,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
             receipt = JSON.parse(row!.artifactJson!)
           expect(receipt.uploadPlan.placements).toEqual(['a.txt'])
           expect(receipt.uploads).toBeUndefined()
+          const { tasks } = tablesOf(harness.db)
           expect(await harness.db.select().from(tasks)).toEqual([])
           entered.resolve()
           await release.promise
@@ -199,9 +201,12 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         nodes: [],
         edges: [],
       })
-      await harness.db
-        .insert(workflows)
-        .values({ id: workflowId, name: workflowId, definition: JSON.stringify(definition) })
+      const { workflows, tasks } = tablesOf(harness.db)
+      await insertOne(harness.db, workflows, {
+        id: workflowId,
+        name: workflowId,
+        definition: JSON.stringify(definition),
+      })
       const workspace = createTaskRouteWorkspaceParticipant({
         db: harness.db,
         appHome: home,
@@ -328,9 +333,12 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
           nodes: [],
           edges: [],
         })
-      await harness.db
-        .insert(workflows)
-        .values({ id: workflowId, name: workflowId, definition: JSON.stringify(definition) })
+      const { workflows, tasks } = tablesOf(harness.db)
+      await insertOne(harness.db, workflows, {
+        id: workflowId,
+        name: workflowId,
+        definition: JSON.stringify(definition),
+      })
       const form = new FormData()
       form.set(
         'payload',

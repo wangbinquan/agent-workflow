@@ -22,6 +22,8 @@
 // clone / no stash push-pop — the non-flaky class per
 // scheduler-audit-s11-stash-gc-prune-rollback.test.ts; NOT RUN_GIT_NETWORK-gated.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -29,8 +31,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -45,7 +46,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // minted by reassigning the answered round's questioner card to the graph designer node +
 // dispatching that designer entry (dispatchTaskQuestions frontier mint) — the SAME live path.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -130,13 +131,14 @@ function triadDef(): WorkflowDefinition {
  *  `loadRollbackTarget(db, taskId)` → tasks.worktreePath) would actually fire
  *  and flip this test red. */
 async function seedTaskAndDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   worktreePath: string,
   preSnapshot: string,
 ): Promise<void> {
   const def = triadDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -144,7 +146,7 @@ async function seedTaskAndDesigner(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     executionLineageId: taskId,
@@ -161,7 +163,7 @@ async function seedTaskAndDesigner(
     inputs: JSON.stringify({}),
     startedAt: 1,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr_designer_done',
     taskId,
     nodeId: 'designer',
@@ -170,7 +172,7 @@ async function seedTaskAndDesigner(
     iteration: 0,
     preSnapshot,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr_questioner_done',
     taskId,
     nodeId: 'questioner',
@@ -230,6 +232,7 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
       // The answer ran to completion: a fresh pending designer row was minted.
       const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
       expect(designerRerun).toBeDefined()
+      const { nodeRuns } = tablesOf(db)
       const fresh = (
         await db.select().from(nodeRuns).where(eq(nodeRuns.id, designerRerun!.nodeRunId))
       )[0]

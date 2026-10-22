@@ -37,6 +37,8 @@
 // 资源会话在两侧都是**注入的接口**，所以这里用替身驱动真实管线：测的是 intent 的编排，
 // 不是 resource-catalog 的六条提交臂。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { createIntentApplyJournalConvergence } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -52,14 +54,6 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import {
-  intentApplyJournal,
-  intentDraftResolutions,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  users,
-} from '@/db/schema'
 import type {
   IntentApplyInput,
   IntentApplyReceipt,
@@ -154,20 +148,21 @@ async function seedSession(harness: ProviderHarness, name: string): Promise<Sess
   const now = Date.now()
   const sessionId = ulid()
   const draftId = ulid()
-  await harness.db.insert(intentSessions).values({
+  const { intentSessions, intentDrafts } = tablesOf(harness.db)
+  await insertOne(harness.db, intentSessions, {
     id: sessionId,
     ownerUserId: OWNER,
     title: 'RFC-359 W7 apply',
     status: 'active',
     createdAt: now,
     updatedAt: now,
-  } as typeof intentSessions.$inferInsert)
+  } as PersistenceTables['intentSessions']['$inferInsert'])
 
   const parsed = parseIntentChangeset(JSON.stringify(changeset(name)))
   if (!parsed.ok) throw new Error(parsed.errors.join('; '))
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
-  await harness.db.insert(intentDrafts).values({
+  await insertOne(harness.db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -176,7 +171,7 @@ async function seedSession(harness: ProviderHarness, name: string): Promise<Sess
     draftHash,
     contextRevision: 0,
     createdAt: now,
-  } as typeof intentDrafts.$inferInsert)
+  } as PersistenceTables['intentDrafts']['$inferInsert'])
   await harness.db
     .update(intentSessions)
     .set({ currentDraftId: draftId })
@@ -320,6 +315,7 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
 }
 
 async function journalRow(harness: ProviderHarness, journalId: string) {
+  const { intentApplyJournal } = tablesOf(harness.db)
   const [row] = await harness.db
     .select()
     .from(intentApplyJournal)
@@ -340,7 +336,8 @@ async function seedJournal(
 ): Promise<string> {
   const id = ulid()
   const at = input.fresh === true ? Date.now() : Date.now() - STALE_MS
-  await harness.db.insert(intentApplyJournal).values({
+  const { intentApplyJournal } = tablesOf(harness.db)
+  await insertOne(harness.db, intentApplyJournal, {
     id,
     sessionId: fixture.sessionId,
     clientMutationId: ulid(),
@@ -355,7 +352,7 @@ async function seedJournal(
     error: input.error ?? null,
     createdAt: at,
     updatedAt: at,
-  } as typeof intentApplyJournal.$inferInsert)
+  } as PersistenceTables['intentApplyJournal']['$inferInsert'])
   return id
 }
 
@@ -376,7 +373,8 @@ afterEach(() => {
 describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness) => {
   beforeEach(async () => {
     const now = Date.now()
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: 'w7-owner',
       displayName: 'W7 owner',
@@ -384,7 +382,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
       status: 'active',
       createdAt: now,
       updatedAt: now,
-    } as typeof users.$inferInsert)
+    } as PersistenceTables['users']['$inferInsert'])
   })
 
   test('happy path：收据、journal committed、provenance、会话代次关闭', async () => {
@@ -416,6 +414,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     expect(JSON.parse(row?.receiptJson ?? 'null')).toEqual(receipt)
     expect(row?.error).toBeNull()
 
+    const { intentProvenance, intentSessions } = tablesOf(harness.db)
     const provenance = await harness.db
       .select()
       .from(intentProvenance)
@@ -451,6 +450,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
       commit: before.commit,
       broadcast: before.broadcast,
     })
+    const { intentApplyJournal } = tablesOf(harness.db)
     const rows = await harness.db
       .select()
       .from(intentApplyJournal)
@@ -469,12 +469,13 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
       'confirmed draft hash does not match',
     )
 
-    await harness.db.insert(intentDraftResolutions).values({
+    const { intentDraftResolutions } = tablesOf(harness.db)
+    await insertOne(harness.db, intentDraftResolutions, {
       draftId: fixture.draftId,
       sessionId: fixture.sessionId,
       reason: 'discarded',
       createdAt: Date.now(),
-    } as typeof intentDraftResolutions.$inferInsert)
+    } as PersistenceTables['intentDraftResolutions']['$inferInsert'])
     await expect(port.apply(command(fixture))).rejects.toThrow('can no longer be committed')
     // 三条都在 claim 段拒掉：一次资源动作都不该发生。
     expect(port.calls).toMatchObject({ preflight: 0, prepare: 0, prestage: 0, commit: 0 })
@@ -498,6 +499,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     await expect(port.apply(command(fixture))).rejects.toThrow('boom before the big transaction')
     expect(compensated).toEqual([AGENT_ARTIFACT])
 
+    const { intentApplyJournal } = tablesOf(harness.db)
     const [row] = await harness.db
       .select()
       .from(intentApplyJournal)
@@ -522,6 +524,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     })
 
     await expect(port.apply(command(fixture))).rejects.toThrow('boom')
+    const { intentApplyJournal } = tablesOf(harness.db)
     const [row] = await harness.db
       .select()
       .from(intentApplyJournal)
@@ -684,7 +687,8 @@ describeEachProvider(
   (harness) => {
     beforeEach(async () => {
       const now = Date.now()
-      await harness.db.insert(users).values({
+      const { users } = tablesOf(harness.db)
+      await insertOne(harness.db, users, {
         id: OWNER,
         username: 'w7-owner',
         displayName: 'W7 owner',
@@ -692,7 +696,7 @@ describeEachProvider(
         status: 'active',
         createdAt: now,
         updatedAt: now,
-      } as typeof users.$inferInsert)
+      } as PersistenceTables['users']['$inferInsert'])
     })
 
     test('①（已合一）journal 的工件信封两侧同形：裸数组', async () => {

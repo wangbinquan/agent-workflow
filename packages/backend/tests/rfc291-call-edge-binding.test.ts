@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-291 面 E —— call 边在 dump 里可映射到 handle，且回写不丢绑定（AC-18 / AC-19）。
 //
@@ -21,9 +23,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { parseIntentChangeset } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { users, workflows, workgroups } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
@@ -31,7 +32,7 @@ import type { IntentContextManifest } from '@/modules/intent/application/manifes
 
 const OWNER = 'user_owner_rfc291e_000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 
 const actor: Actor = {
@@ -43,7 +44,8 @@ const actor: Actor = {
 async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): Promise<string> {
   const id = forcedId ?? ulid()
   const now = Date.now()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name,
     description: '',
@@ -53,7 +55,7 @@ async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): 
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as typeof workflows.$inferInsert)
+  } as PersistenceTables['workflows']['$inferInsert'])
   return id
 }
 
@@ -80,11 +82,12 @@ async function dumpParentDoc(
   return { doc: file?.content ?? '', manifest: dump.manifest }
 }
 
-function createProviderCallEdgeFixture(db: ProviderNeutralDatabase, appHome: string) {
+function createProviderCallEdgeFixture(db: PersistenceDb, appHome: string) {
   async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): Promise<string> {
     const id = forcedId ?? ulid()
     const now = Date.now()
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id,
       name,
       description: '',
@@ -94,14 +97,15 @@ function createProviderCallEdgeFixture(db: ProviderNeutralDatabase, appHome: str
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as typeof workflows.$inferInsert)
+    } as PersistenceTables['workflows']['$inferInsert'])
     return id
   }
 
   async function seedWorkgroup(name: string): Promise<string> {
     const id = ulid()
     const now = Date.now()
-    await db.insert(workgroups).values({
+    const { workgroups } = tablesOf(db)
+    await insertOne(db, workgroups, {
       id,
       name,
       description: '',
@@ -112,7 +116,7 @@ function createProviderCallEdgeFixture(db: ProviderNeutralDatabase, appHome: str
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as typeof workgroups.$inferInsert)
+    } as PersistenceTables['workgroups']['$inferInsert'])
     return id
   }
 
@@ -138,7 +142,8 @@ function describeNativeCallEdgeCases(name: string, cases: () => void) {
     beforeEach(async () => {
       appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
       db = harness.db
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id: OWNER,
         username: 'owner',
         displayName: 'Owner',
@@ -146,7 +151,7 @@ function describeNativeCallEdgeCases(name: string, cases: () => void) {
         status: 'active',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as typeof users.$inferInsert)
+      } as PersistenceTables['users']['$inferInsert'])
     })
     afterEach(() => {
       rmSync(appHome, { recursive: true, force: true })
@@ -156,7 +161,7 @@ function describeNativeCallEdgeCases(name: string, cases: () => void) {
 }
 
 describeEachProvider('dump 侧：call 边带 handle、不带 canonical id（AC-18）', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let seedWorkflow: ReturnType<typeof createProviderCallEdgeFixture>['seedWorkflow']
   let seedWorkgroup: ReturnType<typeof createProviderCallEdgeFixture>['seedWorkgroup']
@@ -165,7 +170,8 @@ describeEachProvider('dump 侧：call 边带 handle、不带 canonical id（AC-1
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
     db = harness.db
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: OWNER,
       username: 'owner',
       displayName: 'Owner',
@@ -173,7 +179,7 @@ describeEachProvider('dump 侧：call 边带 handle、不带 canonical id（AC-1
       status: 'active',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    } as typeof users.$inferInsert)
+    } as PersistenceTables['users']['$inferInsert'])
     ;({ seedWorkflow, seedWorkgroup, dumpParentDoc } = createProviderCallEdgeFixture(db, appHome))
   })
   afterEach(() => {
@@ -238,14 +244,15 @@ describeNativeCallEdgeCases('dump 侧：call 边带 handle、不带 canonical id
 })
 
 describeEachProvider('resolve 侧：回写不丢绑定（AC-19）', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let seedWorkflow: ReturnType<typeof createProviderCallEdgeFixture>['seedWorkflow']
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
     db = harness.db
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: OWNER,
       username: 'owner',
       displayName: 'Owner',
@@ -253,7 +260,7 @@ describeEachProvider('resolve 侧：回写不丢绑定（AC-19）', (harness) =>
       status: 'active',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    } as typeof users.$inferInsert)
+    } as PersistenceTables['users']['$inferInsert'])
     ;({ seedWorkflow } = createProviderCallEdgeFixture(db, appHome))
   })
   afterEach(() => {

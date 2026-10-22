@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { capabilityTemplates, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { createCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/application/demoSeed'
 import { createCodeCapabilityDemoSeedPersistence } from '@/modules/code-capability/infrastructure/demoSeedPersistence'
@@ -40,7 +40,10 @@ function postgresqlFixture() {
     if (normalized.startsWith('insert')) return rows({ count: 1 })
     throw new Error(`unexpected PostgreSQL demo-seed query: ${sql}`)
   }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: execute,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -66,10 +69,6 @@ function postgresqlFixture() {
   return { db: createPostgresqlDatabaseClient(runtime), statements }
 }
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
 describe('RFC-349 Code Capability demo-seed participant', () => {
   describeEachProvider('complete aggregate retry counts', (harness) => {
     test('SQLite creates the complete aggregate once and preserves stable retry counts', async () => {
@@ -82,10 +81,11 @@ describe('RFC-349 Code Capability demo-seed participant', () => {
       const second = await seed.ensure({ agentId: 'demo-agent' })
 
       expect(second).toEqual(first)
-      expect(await db.select().from(capabilityTemplates).all()).toHaveLength(1)
-      expect(await db.select().from(codeWorkItems).all()).toHaveLength(1)
-      expect(await db.select().from(codeWorkRounds).all()).toHaveLength(1)
-      expect(await db.select().from(codeRoundStages).all()).toHaveLength(first.stageIds.length)
+      const { capabilityTemplates, codeWorkItems, codeWorkRounds, codeRoundStages } = tablesOf(db)
+      expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
+      expect(await db.select().from(codeWorkItems)).toHaveLength(1)
+      expect(await db.select().from(codeWorkRounds)).toHaveLength(1)
+      expect(await db.select().from(codeRoundStages)).toHaveLength(first.stageIds.length)
       expect(first.stageIds.length).toBeGreaterThan(0)
     })
   })

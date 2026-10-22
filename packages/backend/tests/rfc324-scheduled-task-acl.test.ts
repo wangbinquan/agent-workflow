@@ -17,13 +17,14 @@
 // 红→绿对：把 routes/scheduledTasks.ts 里 launchKind/launchPayload 的
 // `requireScheduleGovern` 分支删掉，「write 档不得改绑目标」立刻红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { resourceGrants, scheduledTasks } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -40,7 +41,7 @@ interface Principal {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Principal
   reader: Principal
@@ -89,9 +90,10 @@ async function codeOf(res: Response): Promise<string> {
   return ((await res.json()) as { code?: string }).code ?? '<no code>'
 }
 
-async function seedSchedule(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedSchedule(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  await db.insert(scheduledTasks).values({
+  const { scheduledTasks } = tablesOf(db)
+  await insertOne(db, scheduledTasks, {
     id,
     name: `rfc324-schedule-${id.slice(-6)}`,
     ownerUserId,
@@ -109,9 +111,10 @@ async function seedSchedule(db: ProviderNeutralDatabase, ownerUserId: string): P
 }
 
 async function scheduleRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<{ name: string; enabled: boolean; launchPayload: string; aclRevision: number }> {
+  const { scheduledTasks } = tablesOf(db)
   const rows = await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id))
   const row = rows[0]
   expect(row, '种子定时任务必须存在，否则本文件零预言力').toBeDefined()
@@ -124,12 +127,13 @@ async function scheduleRow(
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   resourceId: string,
   userId: string,
   level: ResourceGrantLevel,
 ): Promise<void> {
-  await db.insert(resourceGrants).values({
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
     resourceType: 'scheduled_task',
     resourceId,
     userId,

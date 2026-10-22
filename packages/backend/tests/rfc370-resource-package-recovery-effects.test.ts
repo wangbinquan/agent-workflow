@@ -1,11 +1,13 @@
 // RFC-370: real AW recovery rules consume logical content references and await close.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { resourceBundleApplies, skills, skillVersions } from '@/db/schema'
 import type {
   ResourcePackageRecoveryEffects,
   ResourcePackageRecoveryEffectsFactory,
@@ -354,7 +356,8 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
         unmarkSkillBootVerified(id)
         try {
           if (currentVersion !== null) {
-            await harness.db.insert(skills).values({
+            const { skills, skillVersions } = tablesOf(harness.db)
+            await insertOne(harness.db, skills, {
               id,
               name: 'logical-recovery',
               description: '',
@@ -370,7 +373,7 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
               createdAt: NOW,
               updatedAt: NOW,
             })
-            await harness.db.insert(skillVersions).values({
+            await insertOne(harness.db, skillVersions, {
               id: randomUUID(),
               skillId: id,
               versionIndex: 2,
@@ -416,7 +419,8 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
             name: 'logical-recovery',
             ...(legacy ? { opId: publishId } : { operationId: publishId }),
           }
-          await harness.db.insert(resourceBundleApplies).values({
+          const { resourceBundleApplies, skills } = tablesOf(harness.db)
+          await insertOne(harness.db, resourceBundleApplies, {
             id: journalId,
             scope: 'package',
             key: journalId,
@@ -444,15 +448,16 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
           expect(state.calls.includes('acquire')).toBe(currentVersion !== 1)
           expect(state.calls.includes('closed')).toBe(currentVersion !== 1)
           expect(state.existing.has(live)).toBe(true)
-          const row = await harness.db.select().from(skills).where(eq(skills.id, id)).get()
+          const row = await first(harness.db.select().from(skills).where(eq(skills.id, id)))
           expect(row?.contentVersion ?? null).toBe(currentVersion)
           expect(
             (
-              await harness.db
-                .select()
-                .from(resourceBundleApplies)
-                .where(eq(resourceBundleApplies.id, journalId))
-                .get()
+              await first(
+                harness.db
+                  .select()
+                  .from(resourceBundleApplies)
+                  .where(eq(resourceBundleApplies.id, journalId)),
+              )
             )?.state,
           ).toBe('committed')
         } finally {
@@ -473,7 +478,8 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
         closeEntered: entered.release,
         ...(closeFailure ? { closeFailure: { error: new Error('logical-close-failed') } } : {}),
       })
-      await harness.db.insert(resourceBundleApplies).values({
+      const { resourceBundleApplies } = tablesOf(harness.db)
+      await insertOne(harness.db, resourceBundleApplies, {
         id,
         scope: 'package',
         key: id,
@@ -499,11 +505,12 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
         expect(state.calls).toContain('remove:logical:plugins/generation')
         expect(
           (
-            await harness.db
-              .select()
-              .from(resourceBundleApplies)
-              .where(eq(resourceBundleApplies.id, id))
-              .get()
+            await first(
+              harness.db
+                .select()
+                .from(resourceBundleApplies)
+                .where(eq(resourceBundleApplies.id, id)),
+            )
           )?.state,
         ).toBe('prepared')
       } finally {
@@ -512,11 +519,9 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
       expect(await pending).toEqual({ failed: closeFailure ? 0 : 1, rolledForward: 0 })
       expect(
         (
-          await harness.db
-            .select()
-            .from(resourceBundleApplies)
-            .where(eq(resourceBundleApplies.id, id))
-            .get()
+          await first(
+            harness.db.select().from(resourceBundleApplies).where(eq(resourceBundleApplies.id, id)),
+          )
         )?.state,
       ).toBe(closeFailure ? 'prepared' : 'failed')
     }, 20_000)

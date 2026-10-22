@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { externalIdentities } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthorityIdentity } from '../../public/participants'
 import { CREWSTATION_ISSUER } from './crewStationIdentityToken'
 import {
@@ -12,13 +12,14 @@ import {
  * The platform user is matched through its existing CrewStation identity
  * link; a request never provisions an account. */
 export function createCrewStationRecoveryRequester(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly identityAccess: DirectAuthorityAdmissionRuntime
 }): {
   resolve(requestedBy: string): Promise<DirectAuthorityIdentity | null>
 } {
   return {
     async resolve(requestedBy) {
+      const { externalIdentities } = tablesOf(input.db)
       const [link] = await input.db
         .select({ userId: externalIdentities.userId })
         .from(externalIdentities)

@@ -5,27 +5,21 @@
 // 此前只有 SQLite 有，PG 版漏了——现在两边同一份。
 // `legacy/mcpRuntimeTestTransitions.ts` 的同步版仍服务 runtime / user 写者（它们尚未迁到统一事务），随其各自合一退役。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import {
   normalizeStoredAdditionalPermissions,
   resolveEffectiveAccountPermissions,
 } from '@agent-workflow/shared'
 
-import {
-  mcpRuntimeTestCreateReceipts,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestSessionLeases,
-  userPermissionGrants,
-  users,
-} from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ConflictError } from '@/util/errors'
 import { isVisibleToAudienceSnapshot } from '../domain/resourceAccess'
 
-type SessionRow = typeof mcpRuntimeTestSessions.$inferSelect
+type SessionRow = PersistenceTables['mcpRuntimeTestSessions']['$inferSelect']
 
 async function endNow(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   session: SessionRow,
   reason:
     | 'mcp-disabled'
@@ -35,6 +29,7 @@ async function endNow(
     | 'runtime-deleted',
   now: number,
 ): Promise<void> {
+  const { mcpRuntimeTestSessions } = tablesOf(transaction)
   await transaction
     .update(mcpRuntimeTestSessions)
     .set({
@@ -48,11 +43,12 @@ async function endNow(
 }
 
 async function blockAfterTurn(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   session: SessionRow,
   reason: 'mcp-config-changed' | 'runtime-profile-changed',
   now: number,
 ): Promise<void> {
+  const { mcpRuntimeTestSessions } = tablesOf(transaction)
   await transaction
     .update(mcpRuntimeTestSessions)
     .set(
@@ -74,10 +70,8 @@ async function blockAfterTurn(
     .where(eq(mcpRuntimeTestSessions.id, session.id))
 }
 
-async function activeSessionsOf(
-  transaction: DatabaseTransaction,
-  mcpId: string,
-): Promise<SessionRow[]> {
+async function activeSessionsOf(transaction: PersistenceTx, mcpId: string): Promise<SessionRow[]> {
+  const { mcpRuntimeTestSessions } = tablesOf(transaction)
   return await transaction
     .select()
     .from(mcpRuntimeTestSessions)
@@ -87,7 +81,7 @@ async function activeSessionsOf(
 }
 
 export async function transitionMcpRuntimeTests(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   input: {
     readonly mcpId: string
     readonly reason: 'mcp-config-changed' | 'mcp-disabled' | 'mcp-deleted'
@@ -103,7 +97,7 @@ export async function transitionMcpRuntimeTests(
 
 /** ACL 变更：失去可见性的观众结束（access-revoked），保留的观众阻塞到本回合后重新协商。 */
 export async function transitionMcpAclRuntimeTests(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   input: {
     readonly mcpId: string
     readonly ownerUserId: string | null
@@ -113,6 +107,7 @@ export async function transitionMcpAclRuntimeTests(
   },
 ): Promise<void> {
   for (const session of await activeSessionsOf(transaction, input.mcpId)) {
+    const { users, userPermissionGrants } = tablesOf(transaction)
     const account = (
       await transaction
         .select({ role: users.role, status: users.status })
@@ -157,9 +152,11 @@ export async function transitionMcpAclRuntimeTests(
  * 任何未安全停止的会话让删除失败（mcp-test-cleanup-incomplete）。
  */
 export async function deletePreparedMcpRuntimeTests(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   mcpId: string,
 ): Promise<void> {
+  const { mcpRuntimeTestSessions, mcpRuntimeTestSessionLeases, mcpRuntimeTestCreateReceipts } =
+    tablesOf(transaction)
   const sessions = await transaction
     .select({
       id: mcpRuntimeTestSessions.id,
@@ -200,13 +197,14 @@ export async function deletePreparedMcpRuntimeTests(
  * 其余两个原因走「立即结束」，写入的列与取值完全一致——属纯重复，合一到这里。
  */
 export async function transitionRuntimeTests(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   input: {
     readonly runtimeName: string
     readonly reason: 'runtime-profile-changed' | 'runtime-disabled' | 'runtime-deleted'
     readonly now: number
   },
 ): Promise<void> {
+  const { mcpRuntimeTestSessions } = tablesOf(transaction)
   const sessions = await transaction
     .select()
     .from(mcpRuntimeTestSessions)

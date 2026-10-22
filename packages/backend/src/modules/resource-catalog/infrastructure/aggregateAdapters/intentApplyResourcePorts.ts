@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type {
   IntentArtifactStage as StagedArtifactCapability,
   IntentPluginPublication as PostgresqlIntentPluginInstallResult,
@@ -41,21 +44,8 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import {
-  agents,
-  mcps,
-  plugins,
-  resourceGrants,
-  runtimes,
-  skillVersions,
-  skills,
-  users,
-  workflows,
-  workgroupMembers,
-  workgroups,
-} from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   ConflictError,
   ForbiddenError,
@@ -115,7 +105,7 @@ export interface PostgresqlIntentResourceCommitEvent {
 }
 
 export interface IntentApplyResourcePortFactoryDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlIntentPluginArtifactLifecycle
   readonly skillArtifacts: PostgresqlIntentSkillArtifactLifecycle
@@ -261,17 +251,19 @@ async function grantExists(
   resourceId: string,
 ): Promise<boolean> {
   if (hasResourceAclBypass(actor)) return true
-  const grant = await transaction
-    .select({ resourceId: resourceGrants.resourceId })
-    .from(resourceGrants)
-    .where(
-      and(
-        eq(resourceGrants.resourceType, type),
-        eq(resourceGrants.resourceId, resourceId),
-        eq(resourceGrants.userId, actor.user.id),
+  const { resourceGrants } = tablesOf(transaction)
+  const grant = await first(
+    transaction
+      .select({ resourceId: resourceGrants.resourceId })
+      .from(resourceGrants)
+      .where(
+        and(
+          eq(resourceGrants.resourceType, type),
+          eq(resourceGrants.resourceId, resourceId),
+          eq(resourceGrants.userId, actor.user.id),
+        ),
       ),
-    )
-    .get()
+  )
   return grant !== undefined
 }
 
@@ -282,55 +274,70 @@ async function visibleIdentity(
   id: string,
 ): Promise<boolean> {
   const row = await (async () => {
+    const { agents, skills, mcps, plugins, workflows, workgroups } = tablesOf(transaction)
     switch (type) {
       case 'agent':
-        return transaction
-          .select({ id: agents.id, ownerUserId: agents.ownerUserId, visibility: agents.visibility })
-          .from(agents)
-          .where(eq(agents.id, id))
-          .get()
+        return first(
+          transaction
+            .select({
+              id: agents.id,
+              ownerUserId: agents.ownerUserId,
+              visibility: agents.visibility,
+            })
+            .from(agents)
+            .where(eq(agents.id, id)),
+        )
       case 'skill':
-        return transaction
-          .select({ id: skills.id, ownerUserId: skills.ownerUserId, visibility: skills.visibility })
-          .from(skills)
-          .where(eq(skills.id, id))
-          .get()
+        return first(
+          transaction
+            .select({
+              id: skills.id,
+              ownerUserId: skills.ownerUserId,
+              visibility: skills.visibility,
+            })
+            .from(skills)
+            .where(eq(skills.id, id)),
+        )
       case 'mcp':
-        return transaction
-          .select({ id: mcps.id, ownerUserId: mcps.ownerUserId, visibility: mcps.visibility })
-          .from(mcps)
-          .where(eq(mcps.id, id))
-          .get()
+        return first(
+          transaction
+            .select({ id: mcps.id, ownerUserId: mcps.ownerUserId, visibility: mcps.visibility })
+            .from(mcps)
+            .where(eq(mcps.id, id)),
+        )
       case 'plugin':
-        return transaction
-          .select({
-            id: plugins.id,
-            ownerUserId: plugins.ownerUserId,
-            visibility: plugins.visibility,
-          })
-          .from(plugins)
-          .where(eq(plugins.id, id))
-          .get()
+        return first(
+          transaction
+            .select({
+              id: plugins.id,
+              ownerUserId: plugins.ownerUserId,
+              visibility: plugins.visibility,
+            })
+            .from(plugins)
+            .where(eq(plugins.id, id)),
+        )
       case 'workflow':
-        return transaction
-          .select({
-            id: workflows.id,
-            ownerUserId: workflows.ownerUserId,
-            visibility: workflows.visibility,
-          })
-          .from(workflows)
-          .where(eq(workflows.id, id))
-          .get()
+        return first(
+          transaction
+            .select({
+              id: workflows.id,
+              ownerUserId: workflows.ownerUserId,
+              visibility: workflows.visibility,
+            })
+            .from(workflows)
+            .where(eq(workflows.id, id)),
+        )
       case 'workgroup':
-        return transaction
-          .select({
-            id: workgroups.id,
-            ownerUserId: workgroups.ownerUserId,
-            visibility: workgroups.visibility,
-          })
-          .from(workgroups)
-          .where(eq(workgroups.id, id))
-          .get()
+        return first(
+          transaction
+            .select({
+              id: workgroups.id,
+              ownerUserId: workgroups.ownerUserId,
+              visibility: workgroups.visibility,
+            })
+            .from(workgroups)
+            .where(eq(workgroups.id, id)),
+        )
     }
   })()
   if (row === undefined) return false
@@ -402,10 +409,8 @@ async function assertAgentGraphAcyclic(
   if (dependencies.includes(candidateId)) {
     throw new ValidationError('agent-dependency-cycle', 'agent dependency graph contains a cycle')
   }
-  const rows = await transaction
-    .select({ id: agents.id, dependsOn: agents.dependsOn })
-    .from(agents)
-    .all()
+  const { agents } = tablesOf(transaction)
+  const rows = await transaction.select({ id: agents.id, dependsOn: agents.dependsOn }).from(agents)
   const graph = new Map(rows.map((row) => [row.id, parseStringArray(row.dependsOn)] as const))
   graph.set(candidateId, dependencies)
   const visiting = new Set<string>()
@@ -431,11 +436,10 @@ async function assertRuntimeExists(
   runtime: string | undefined,
 ): Promise<void> {
   if (runtime === undefined) return
-  const row = await transaction
-    .select({ name: runtimes.name })
-    .from(runtimes)
-    .where(eq(runtimes.name, runtime))
-    .get()
+  const { runtimes } = tablesOf(transaction)
+  const row = await first(
+    transaction.select({ name: runtimes.name }).from(runtimes).where(eq(runtimes.name, runtime)),
+  )
   if (row === undefined) {
     throw new ValidationError('agent-runtime-not-found', `runtime '${runtime}' not found`)
   }
@@ -481,11 +485,10 @@ function createAgentPort(
         let input = prepared.input
         const copiedFrom = plan.action === 'create' ? plan.copiedFromResourceId : undefined
         if (copiedFrom !== undefined) {
-          const sourceRow = await transaction
-            .select()
-            .from(agents)
-            .where(eq(agents.id, copiedFrom))
-            .get()
+          const { agents } = tablesOf(transaction)
+          const sourceRow = await first(
+            transaction.select().from(agents).where(eq(agents.id, copiedFrom)),
+          )
           if (sourceRow !== undefined) {
             input = CreateAgentSchema.parse(
               withAgentSidecarsFrom(plan.payload, agentFromPersistenceRow(sourceRow)),
@@ -499,26 +502,29 @@ function createAgentPort(
         )
         await assertAgentGraphAcyclic(transaction, plan.resourceId, input.dependsOn)
         await assertRuntimeExists(transaction, input.runtime)
-        const collision = await transaction
-          .select({ id: agents.id })
-          .from(agents)
-          .where(and(eq(agents.ownerUserId, actor.user.id), eq(agents.name, input.name)))
-          .get()
+        const { agents } = tablesOf(transaction)
+        const collision = await first(
+          transaction
+            .select({ id: agents.id })
+            .from(agents)
+            .where(and(eq(agents.ownerUserId, actor.user.id), eq(agents.name, input.name))),
+        )
         if (collision !== undefined) {
           throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
         }
-        const inserted = await transaction
-          .insert(agents)
-          .values(
-            createAgentPersistenceValues({
-              id: plan.resourceId,
-              agent: input,
-              ownerUserId: actor.user.id,
-              now: committedAt,
-            }),
-          )
-          .returning()
-          .get()
+        const inserted = await first(
+          transaction
+            .insert(agents)
+            .values(
+              createAgentPersistenceValues({
+                id: plan.resourceId,
+                agent: input,
+                ownerUserId: actor.user.id,
+                now: committedAt,
+              }),
+            )
+            .returning(),
+        )
         if (inserted === undefined) throw new Error('agent insert returned no row')
         return agentReceipt(plan, {
           kind: 'agent',
@@ -530,11 +536,10 @@ function createAgentPort(
         throw new Error('agent prepared action does not match changeset plan')
       }
 
-      const row = await transaction
-        .select()
-        .from(agents)
-        .where(eq(agents.id, plan.resourceId))
-        .get()
+      const { agents } = tablesOf(transaction)
+      const row = await first(
+        transaction.select().from(agents).where(eq(agents.id, plan.resourceId)),
+      )
       if (row === undefined) throw notFound('agent', plan.resourceId)
       const current = agentFromPersistenceRow(row)
       requireOwner(actor, 'agent', current)
@@ -560,18 +565,19 @@ function createAgentPort(
       await assertAgentGraphAcyclic(transaction, current.id, candidate.dependsOn)
       await assertRuntimeExists(transaction, candidate.runtime)
       const updatedAt = monotonicNow(current.updatedAt)
-      const changed = await transaction
-        .update(agents)
-        .set(updateAgentPersistenceValues(current, patch, updatedAt))
-        .where(
-          and(
-            eq(agents.id, current.id),
-            eq(agents.updatedAt, plan.expectedRevision.updatedAt),
-            eq(agents.aclRevision, plan.expectedRevision.aclRevision),
-          ),
-        )
-        .returning()
-        .get()
+      const changed = await first(
+        transaction
+          .update(agents)
+          .set(updateAgentPersistenceValues(current, patch, updatedAt))
+          .where(
+            and(
+              eq(agents.id, current.id),
+              eq(agents.updatedAt, plan.expectedRevision.updatedAt),
+              eq(agents.aclRevision, plan.expectedRevision.aclRevision),
+            ),
+          )
+          .returning(),
+      )
       if (changed === undefined) {
         throw staleConflictError('agent', `agent '${plan.resourceId}' changed; reload and retry`)
       }
@@ -607,29 +613,32 @@ function createMcpPort(
     },
     async commitInTransaction({ transaction, plan, prepared }) {
       if (plan.action === 'create') {
-        const collision = await transaction
-          .select({ id: mcps.id })
-          .from(mcps)
-          .where(and(eq(mcps.ownerUserId, actor.user.id), eq(mcps.name, prepared.input.name)))
-          .get()
+        const { mcps } = tablesOf(transaction)
+        const collision = await first(
+          transaction
+            .select({ id: mcps.id })
+            .from(mcps)
+            .where(and(eq(mcps.ownerUserId, actor.user.id), eq(mcps.name, prepared.input.name))),
+        )
         if (collision !== undefined) {
           throw new ConflictError('mcp-name-in-use', `mcp '${prepared.input.name}' already exists`)
         }
         const at = now()
-        const inserted = await transaction
-          .insert(mcps)
-          .values(
-            createMcpInsertValues({
-              id: plan.resourceId,
-              input: prepared.input,
-              ownerUserId: actor.user.id,
-              visibility: 'private',
-              aclRevision: 0,
-              now: at,
-            }),
-          )
-          .returning()
-          .get()
+        const inserted = await first(
+          transaction
+            .insert(mcps)
+            .values(
+              createMcpInsertValues({
+                id: plan.resourceId,
+                input: prepared.input,
+                ownerUserId: actor.user.id,
+                visibility: 'private',
+                aclRevision: 0,
+                now: at,
+              }),
+            )
+            .returning(),
+        )
         if (inserted === undefined) throw new Error('mcp insert returned no row')
         return mcpReceipt(plan, {
           kind: 'mcp',
@@ -637,7 +646,8 @@ function createMcpPort(
         })
       }
 
-      const row = await transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)).get()
+      const { mcps } = tablesOf(transaction)
+      const row = await first(transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)))
       if (row === undefined) throw notFound('mcp', plan.resourceId)
       const current = mcpFromPersistenceRow(row)
       requireOwner(actor, 'mcp', current)
@@ -648,17 +658,18 @@ function createMcpPort(
         throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
       }
       const updatedAt = monotonicNow(current.updatedAt)
-      const changed = await transaction
-        .update(mcps)
-        .set({
-          description: prepared.input.description,
-          enabled: prepared.input.enabled,
-          config: JSON.stringify(mcpConfigWithPreservedOauth(prepared.input, current)),
-          updatedAt,
-        })
-        .where(and(eq(mcps.id, current.id), eq(mcps.updatedAt, current.updatedAt)))
-        .returning()
-        .get()
+      const changed = await first(
+        transaction
+          .update(mcps)
+          .set({
+            description: prepared.input.description,
+            enabled: prepared.input.enabled,
+            config: JSON.stringify(mcpConfigWithPreservedOauth(prepared.input, current)),
+            updatedAt,
+          })
+          .where(and(eq(mcps.id, current.id), eq(mcps.updatedAt, current.updatedAt)))
+          .returning(),
+      )
       if (changed === undefined) throw staleConflictError('mcp', 'the MCP changed while saving')
       await lifecycle.transitionMutation(transaction, {
         mcpId: current.id,
@@ -675,7 +686,7 @@ function createMcpPort(
 
 function createPluginPort(
   options: IntentApplyResourceSessionOptions,
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   artifacts: PostgresqlIntentPluginArtifactLifecycle,
   now: () => number,
 ): IntentApplyMutationPort<'plugin', PreparedPlugin> {
@@ -699,11 +710,15 @@ function createPluginPort(
     },
     async commitInTransaction({ transaction, plan, prepared }) {
       if (plan.action === 'create') {
-        const collision = await transaction
-          .select({ id: plugins.id })
-          .from(plugins)
-          .where(and(eq(plugins.ownerUserId, actor.user.id), eq(plugins.name, plan.payload.name)))
-          .get()
+        const { plugins } = tablesOf(transaction)
+        const collision = await first(
+          transaction
+            .select({ id: plugins.id })
+            .from(plugins)
+            .where(
+              and(eq(plugins.ownerUserId, actor.user.id), eq(plugins.name, plan.payload.name)),
+            ),
+        )
         if (collision !== undefined) {
           throw new ConflictError(
             'plugin-name-in-use',
@@ -717,27 +732,28 @@ function createPluginPort(
           prepared.staged.cachedPath,
         )
         const at = now()
-        const inserted = await transaction
-          .insert(plugins)
-          .values(
-            createPluginInsertValues({
-              id: plan.resourceId,
-              name: plan.payload.name,
-              spec: plan.payload.spec,
-              options: plan.payload.optionsJson ?? {},
-              description: plan.payload.description,
-              enabled: plan.payload.enabled ?? true,
-              sourceKind: prepared.staged.sourceKind,
-              cachedPath: prepared.staged.cachedPath,
-              resolvedVersion: prepared.staged.resolvedVersion,
-              ownerUserId: actor.user.id,
-              visibility: 'private',
-              aclRevision: 0,
-              now: at,
-            }),
-          )
-          .returning()
-          .get()
+        const inserted = await first(
+          transaction
+            .insert(plugins)
+            .values(
+              createPluginInsertValues({
+                id: plan.resourceId,
+                name: plan.payload.name,
+                spec: plan.payload.spec,
+                options: plan.payload.optionsJson ?? {},
+                description: plan.payload.description,
+                enabled: plan.payload.enabled ?? true,
+                sourceKind: prepared.staged.sourceKind,
+                cachedPath: prepared.staged.cachedPath,
+                resolvedVersion: prepared.staged.resolvedVersion,
+                ownerUserId: actor.user.id,
+                visibility: 'private',
+                aclRevision: 0,
+                now: at,
+              }),
+            )
+            .returning(),
+        )
         if (inserted === undefined) throw new Error('plugin insert returned no row')
         return pluginReceipt(plan, {
           kind: 'plugin',
@@ -745,11 +761,10 @@ function createPluginPort(
         })
       }
 
-      const row = await transaction
-        .select()
-        .from(plugins)
-        .where(eq(plugins.id, plan.resourceId))
-        .get()
+      const { plugins } = tablesOf(transaction)
+      const row = await first(
+        transaction.select().from(plugins).where(eq(plugins.id, plan.resourceId)),
+      )
       if (row === undefined) throw notFound('plugin', plan.resourceId)
       const current = pluginFromPersistenceRow(row)
       requireOwner(actor, 'plugin', current)
@@ -769,22 +784,23 @@ function createPluginPort(
         install?.cachedPath ?? current.cachedPath,
       )
       const updatedAt = monotonicNow(current.updatedAt)
-      const changed = await transaction
-        .update(plugins)
-        .set({
-          spec: plan.payload.spec,
-          optionsJson: JSON.stringify(plan.payload.optionsJson ?? {}),
-          description: plan.payload.description ?? current.description,
-          enabled: plan.payload.enabled ?? current.enabled,
-          sourceKind: install?.sourceKind ?? current.sourceKind,
-          cachedPath: install?.cachedPath ?? current.cachedPath,
-          resolvedVersion: install?.resolvedVersion ?? current.resolvedVersion,
-          installedAt: install === null ? current.installedAt : monotonicNow(current.installedAt),
-          updatedAt,
-        })
-        .where(and(eq(plugins.id, current.id), eq(plugins.updatedAt, current.updatedAt)))
-        .returning()
-        .get()
+      const changed = await first(
+        transaction
+          .update(plugins)
+          .set({
+            spec: plan.payload.spec,
+            optionsJson: JSON.stringify(plan.payload.optionsJson ?? {}),
+            description: plan.payload.description ?? current.description,
+            enabled: plan.payload.enabled ?? current.enabled,
+            sourceKind: install?.sourceKind ?? current.sourceKind,
+            cachedPath: install?.cachedPath ?? current.cachedPath,
+            resolvedVersion: install?.resolvedVersion ?? current.resolvedVersion,
+            installedAt: install === null ? current.installedAt : monotonicNow(current.installedAt),
+            updatedAt,
+          })
+          .where(and(eq(plugins.id, current.id), eq(plugins.updatedAt, current.updatedAt)))
+          .returning(),
+      )
       if (changed === undefined)
         throw staleConflictError('plugin', 'the plugin changed while saving')
       return pluginReceipt(plan, {
@@ -807,15 +823,14 @@ function createPluginPort(
 }
 
 async function artifactsForPluginUpdate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   artifacts: PostgresqlIntentPluginArtifactLifecycle,
   plan: UpdatePlanOf<'plugin'>,
 ): Promise<StagedArtifactCapability<PostgresqlIntentPluginInstallResult> | null> {
-  const row = await db
-    .select({ spec: plugins.spec })
-    .from(plugins)
-    .where(eq(plugins.id, plan.resourceId))
-    .get()
+  const { plugins } = tablesOf(db)
+  const row = await first(
+    db.select({ spec: plugins.spec }).from(plugins).where(eq(plugins.id, plan.resourceId)),
+  )
   if (row === undefined) throw notFound('plugin', plan.resourceId)
   if (row.spec === plan.payload.spec) return null
   return artifacts.planInstall({
@@ -827,7 +842,7 @@ async function artifactsForPluginUpdate(
 
 function createSkillPort(
   options: IntentApplyResourceSessionOptions,
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   artifacts: PostgresqlIntentSkillArtifactLifecycle,
   nextId: () => string,
   now: () => number,
@@ -846,7 +861,8 @@ function createSkillPort(
           staged: null,
         }
       }
-      const row = await db.select().from(skills).where(eq(skills.id, plan.resourceId)).get()
+      const { skills } = tablesOf(db)
+      const row = await first(db.select().from(skills).where(eq(skills.id, plan.resourceId)))
       if (row === undefined) throw notFound('skill', plan.resourceId)
       const current = skillFromRow(row)
       requireOwner(actor, 'skill', current)
@@ -875,11 +891,13 @@ function createSkillPort(
       if (prepared.staged === null) throw new Error('skill stage result missing')
       const at = now()
       if (plan.action === 'create') {
-        const collision = await transaction
-          .select({ id: skills.id })
-          .from(skills)
-          .where(and(eq(skills.ownerUserId, actor.user.id), eq(skills.name, plan.payload.name)))
-          .get()
+        const { skills, skillVersions } = tablesOf(transaction)
+        const collision = await first(
+          transaction
+            .select({ id: skills.id })
+            .from(skills)
+            .where(and(eq(skills.ownerUserId, actor.user.id), eq(skills.name, plan.payload.name))),
+        )
         if (collision !== undefined) {
           throw new ConflictError(
             'skill-name-in-use',
@@ -887,7 +905,7 @@ function createSkillPort(
           )
         }
         await prepared.staged.commitInTransaction(transaction, 1)
-        await transaction.insert(skills).values({
+        await insertOne(transaction, skills, {
           id: plan.resourceId,
           name: plan.payload.name,
           description: plan.payload.description,
@@ -902,7 +920,7 @@ function createSkillPort(
           createdAt: at,
           updatedAt: at,
         })
-        await transaction.insert(skillVersions).values({
+        await insertOne(transaction, skillVersions, {
           id: nextId(),
           skillId: plan.resourceId,
           versionIndex: 1,
@@ -918,11 +936,10 @@ function createSkillPort(
         return skillReceipt(plan, { kind: 'skill', token: skillToken(plan.resourceId, 1, 0) })
       }
 
-      const row = await transaction
-        .select()
-        .from(skills)
-        .where(eq(skills.id, plan.resourceId))
-        .get()
+      const { skills, skillVersions } = tablesOf(transaction)
+      const row = await first(
+        transaction.select().from(skills).where(eq(skills.id, plan.resourceId)),
+      )
       if (row === undefined) throw notFound('skill', plan.resourceId)
       const current = skillFromRow(row)
       requireOwner(actor, 'skill', current)
@@ -934,27 +951,28 @@ function createSkillPort(
           : current.metaRevision + 1
       const updatedAt = monotonicNow(current.updatedAt)
       await prepared.staged.commitInTransaction(transaction, versionIndex)
-      const changed = await transaction
-        .update(skills)
-        .set({
-          description: plan.payload.description,
-          contentVersion: versionIndex,
-          metaRevision,
-          versionState: 'snapshot-authoritative',
-          updatedAt,
-        })
-        .where(
-          and(
-            eq(skills.id, current.id),
-            eq(skills.contentVersion, current.contentVersion),
-            eq(skills.metaRevision, current.metaRevision),
-            eq(skills.aclRevision, current.aclRevision ?? 0),
-          ),
-        )
-        .returning({ id: skills.id })
-        .get()
+      const changed = await first(
+        transaction
+          .update(skills)
+          .set({
+            description: plan.payload.description,
+            contentVersion: versionIndex,
+            metaRevision,
+            versionState: 'snapshot-authoritative',
+            updatedAt,
+          })
+          .where(
+            and(
+              eq(skills.id, current.id),
+              eq(skills.contentVersion, current.contentVersion),
+              eq(skills.metaRevision, current.metaRevision),
+              eq(skills.aclRevision, current.aclRevision ?? 0),
+            ),
+          )
+          .returning({ id: skills.id }),
+      )
       if (changed === undefined) throw staleConflictError('skill', `skill '${current.id}' changed`)
-      await transaction.insert(skillVersions).values({
+      await insertOne(transaction, skillVersions, {
         id: nextId(),
         skillId: current.id,
         versionIndex,
@@ -985,7 +1003,7 @@ function createSkillPort(
   } satisfies IntentApplyMutationPort<'skill', PreparedSkill>)
 }
 
-function skillFromRow(row: typeof skills.$inferSelect): Skill {
+function skillFromRow(row: PersistenceTables['skills']['$inferSelect']): Skill {
   return {
     id: row.id,
     name: row.name,
@@ -1059,6 +1077,7 @@ async function assertNamedReferencesVisible(
 ): Promise<void> {
   for (const name of new Set(names)) {
     if (createdNames.has(name)) continue
+    const { workflows, workgroups } = tablesOf(transaction)
     const rows =
       type === 'workflow'
         ? await transaction
@@ -1069,7 +1088,6 @@ async function assertNamedReferencesVisible(
             })
             .from(workflows)
             .where(eq(workflows.name, name))
-            .all()
         : await transaction
             .select({
               id: workgroups.id,
@@ -1078,7 +1096,6 @@ async function assertNamedReferencesVisible(
             })
             .from(workgroups)
             .where(eq(workgroups.name, name))
-            .all()
     // RFC-243 §5.3 —— **名字域是 dangle-tolerant 的**：解析不到任何行不是 ACL 违规，
     // 是启动期的问题（`infrastructure/legacy/resourceRefs.ts` 的
     // `matched === undefined ⇒ continue // dangling until launch` 才是这条规则的正身）。
@@ -1150,13 +1167,12 @@ function createWorkflowPort(
       return Object.freeze({ definition })
     },
     async commitInTransaction({ transaction, plan, prepared, context }) {
+      const { workflows } = tablesOf(transaction)
       const currentRow =
         plan.action === 'update'
-          ? await transaction
-              .select()
-              .from(workflows)
-              .where(eq(workflows.id, plan.resourceId))
-              .get()
+          ? await first(
+              transaction.select().from(workflows).where(eq(workflows.id, plan.resourceId)),
+            )
           : undefined
       const current = currentRow === undefined ? undefined : workflowFromPersistenceRow(currentRow)
       if (plan.action === 'update') {
@@ -1209,36 +1225,38 @@ function createWorkflowPort(
 
       if (plan.action === 'create') {
         const at = now()
-        const collision = await transaction
-          .select({ id: workflows.id })
-          .from(workflows)
-          .where(
-            and(eq(workflows.ownerUserId, actor.user.id), eq(workflows.name, plan.payload.name)),
-          )
-          .get()
+        const collision = await first(
+          transaction
+            .select({ id: workflows.id })
+            .from(workflows)
+            .where(
+              and(eq(workflows.ownerUserId, actor.user.id), eq(workflows.name, plan.payload.name)),
+            ),
+        )
         if (collision !== undefined) {
           throw new ConflictError(
             'workflow-name-in-use',
             `workflow '${plan.payload.name}' already exists`,
           )
         }
-        const inserted = await transaction
-          .insert(workflows)
-          .values({
-            id: plan.resourceId,
-            name: plan.payload.name,
-            description: plan.payload.description,
-            definition: serializeWorkflowDefinitionStorageV1(prepared.definition),
-            version: 1,
-            ownerUserId: actor.user.id,
-            visibility: 'private',
-            aclRevision: 0,
-            builtin: false,
-            createdAt: at,
-            updatedAt: at,
-          })
-          .returning({ version: workflows.version })
-          .get()
+        const inserted = await first(
+          transaction
+            .insert(workflows)
+            .values({
+              id: plan.resourceId,
+              name: plan.payload.name,
+              description: plan.payload.description,
+              definition: serializeWorkflowDefinitionStorageV1(prepared.definition),
+              version: 1,
+              ownerUserId: actor.user.id,
+              visibility: 'private',
+              aclRevision: 0,
+              builtin: false,
+              createdAt: at,
+              updatedAt: at,
+            })
+            .returning({ version: workflows.version }),
+        )
         if (inserted === undefined) throw new Error('workflow insert returned no row')
         return workflowReceipt(plan, { kind: 'workflow', version: inserted.version })
       }
@@ -1261,19 +1279,20 @@ function createWorkflowPort(
       if (currentBytes === candidateBytes) {
         return workflowReceipt(plan, { kind: 'workflow', version: current.version })
       }
-      const changed = await transaction
-        .update(workflows)
-        .set({
-          description: plan.payload.description,
-          // 回填后的那份。写 `prepared.definition` 等于把 `INTENT_REDACTED` 占位符当正文存进去
-          // ——脚本正文当场丢失，而且是静默的。
-          definition: serializeWorkflowDefinitionStorageV1(definition),
-          version: current.version + 1,
-          updatedAt: now(),
-        })
-        .where(and(eq(workflows.id, current.id), eq(workflows.version, current.version)))
-        .returning({ version: workflows.version })
-        .get()
+      const changed = await first(
+        transaction
+          .update(workflows)
+          .set({
+            description: plan.payload.description,
+            // 回填后的那份。写 `prepared.definition` 等于把 `INTENT_REDACTED` 占位符当正文存进去
+            // ——脚本正文当场丢失，而且是静默的。
+            definition: serializeWorkflowDefinitionStorageV1(definition),
+            version: current.version + 1,
+            updatedAt: now(),
+          })
+          .where(and(eq(workflows.id, current.id), eq(workflows.version, current.version)))
+          .returning({ version: workflows.version }),
+      )
       if (changed === undefined)
         throw staleConflictError('workflow', `workflow '${current.id}' changed`)
       return workflowReceipt(plan, { kind: 'workflow', version: changed.version })
@@ -1290,8 +1309,8 @@ function createWorkflowPort(
 }
 
 function workgroupSnapshotFromRows(
-  row: typeof workgroups.$inferSelect,
-  members: readonly (typeof workgroupMembers.$inferSelect)[],
+  row: PersistenceTables['workgroups']['$inferSelect'],
+  members: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
 ): WorkgroupDraftSnapshot {
   const group = workgroupFromRows(row, members)
   const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
@@ -1314,11 +1333,12 @@ async function workgroupMemberValues(
   members: readonly WorkgroupDraftMember[],
   nextId: () => string,
   now: number,
-): Promise<readonly (typeof workgroupMembers.$inferInsert)[]> {
+): Promise<readonly PersistenceTables['workgroupMembers']['$inferInsert'][]> {
   const agentIds = members.flatMap((member) =>
     member.memberType === 'agent' && member.agentId !== undefined ? [member.agentId] : [],
   )
   await assertVisibleReferences(transaction, actor, [{ type: 'agent', ids: agentIds }])
+  const { agents, users } = tablesOf(transaction)
   const agentRows =
     agentIds.length === 0
       ? []
@@ -1326,7 +1346,6 @@ async function workgroupMemberValues(
           .select({ id: agents.id, name: agents.name })
           .from(agents)
           .where(inArray(agents.id, agentIds))
-          .all()
   const names = new Map(agentRows.map((row) => [row.id, row.name] as const))
   const userIds = members.flatMap((member) =>
     member.memberType === 'human' && member.userId !== undefined ? [member.userId] : [],
@@ -1338,7 +1357,6 @@ async function workgroupMemberValues(
           .select({ id: users.id })
           .from(users)
           .where(and(inArray(users.id, userIds), eq(users.status, 'active')))
-          .all()
   const active = new Set(activeUsers.map((row) => row.id))
   const inactive = userIds.filter((id) => !active.has(id))
   if (inactive.length > 0) {
@@ -1349,7 +1367,7 @@ async function workgroupMemberValues(
 
 function leaderMemberId(
   snapshot: WorkgroupDraftSnapshot,
-  members: readonly (typeof workgroupMembers.$inferInsert)[],
+  members: readonly PersistenceTables['workgroupMembers']['$inferInsert'][],
 ): string | null {
   if (snapshot.mode !== 'leader_worker' || snapshot.leaderDisplayName === undefined) return null
   return members.find((member) => member.displayName === snapshot.leaderDisplayName)?.id ?? null
@@ -1381,16 +1399,18 @@ function createWorkgroupPort(
     async commitInTransaction({ transaction, plan, prepared }) {
       const at = now()
       if (plan.action === 'create') {
-        const collision = await transaction
-          .select({ id: workgroups.id })
-          .from(workgroups)
-          .where(
-            and(
-              eq(workgroups.ownerUserId, actor.user.id),
-              eq(workgroups.name, prepared.snapshot.name),
+        const { workgroups, workgroupMembers } = tablesOf(transaction)
+        const collision = await first(
+          transaction
+            .select({ id: workgroups.id })
+            .from(workgroups)
+            .where(
+              and(
+                eq(workgroups.ownerUserId, actor.user.id),
+                eq(workgroups.name, prepared.snapshot.name),
+              ),
             ),
-          )
-          .get()
+        )
         if (collision !== undefined) {
           throw new ConflictError(
             'workgroup-name-in-use',
@@ -1405,42 +1425,42 @@ function createWorkgroupPort(
           nextId,
           at,
         )
-        const row = await transaction
-          .insert(workgroups)
-          .values({
-            id: plan.resourceId,
-            name: prepared.snapshot.name,
-            description: prepared.snapshot.description,
-            instructions: prepared.snapshot.instructions,
-            mode: prepared.snapshot.mode,
-            outputContract: resolveWorkgroupOutputContract(prepared.snapshot.outputContract),
-            leaderMemberId: leaderMemberId(prepared.snapshot, members),
-            shareOutputs: prepared.snapshot.switches.shareOutputs,
-            directMessages: prepared.snapshot.switches.directMessages,
-            blackboard: prepared.snapshot.switches.blackboard,
-            maxRounds: prepared.snapshot.maxRounds,
-            completionGate: prepared.snapshot.completionGate,
-            clarifyBudget: prepared.snapshot.clarifyBudget,
-            fanOut: prepared.snapshot.fanOut,
-            version: 1,
-            ownerUserId: actor.user.id,
-            visibility: 'private',
-            aclRevision: 0,
-            createdAt: at,
-            updatedAt: at,
-          })
-          .returning({ version: workgroups.version })
-          .get()
+        const row = await first(
+          transaction
+            .insert(workgroups)
+            .values({
+              id: plan.resourceId,
+              name: prepared.snapshot.name,
+              description: prepared.snapshot.description,
+              instructions: prepared.snapshot.instructions,
+              mode: prepared.snapshot.mode,
+              outputContract: resolveWorkgroupOutputContract(prepared.snapshot.outputContract),
+              leaderMemberId: leaderMemberId(prepared.snapshot, members),
+              shareOutputs: prepared.snapshot.switches.shareOutputs,
+              directMessages: prepared.snapshot.switches.directMessages,
+              blackboard: prepared.snapshot.switches.blackboard,
+              maxRounds: prepared.snapshot.maxRounds,
+              completionGate: prepared.snapshot.completionGate,
+              clarifyBudget: prepared.snapshot.clarifyBudget,
+              fanOut: prepared.snapshot.fanOut,
+              version: 1,
+              ownerUserId: actor.user.id,
+              visibility: 'private',
+              aclRevision: 0,
+              createdAt: at,
+              updatedAt: at,
+            })
+            .returning({ version: workgroups.version }),
+        )
         if (row === undefined) throw new Error('workgroup insert returned no row')
-        for (const member of members) await transaction.insert(workgroupMembers).values(member)
+        for (const member of members) await insertOne(transaction, workgroupMembers, member)
         return workgroupReceipt(plan, { kind: 'workgroup', version: row.version })
       }
 
-      const row = await transaction
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.id, plan.resourceId))
-        .get()
+      const { workgroups, workgroupMembers } = tablesOf(transaction)
+      const row = await first(
+        transaction.select().from(workgroups).where(eq(workgroups.id, plan.resourceId)),
+      )
       if (row === undefined) throw notFound('workgroup', plan.resourceId)
       requireOwner(actor, 'workgroup', row)
       if (prepared.snapshot.name !== row.name) {
@@ -1453,7 +1473,6 @@ function createWorkgroupPort(
         .select()
         .from(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, plan.resourceId))
-        .all()
       const currentSnapshot = workgroupSnapshotFromRows(row, currentMembers)
       const currentBytes = serializeWorkgroupEditableSnapshotV1(currentSnapshot)
       const submittedBytes = serializeWorkgroupEditableSnapshotV1(prepared.snapshot)
@@ -1474,31 +1493,32 @@ function createWorkgroupPort(
         nextId,
         at,
       )
-      const changed = await transaction
-        .update(workgroups)
-        .set({
-          description: prepared.snapshot.description,
-          instructions: prepared.snapshot.instructions,
-          mode: prepared.snapshot.mode,
-          outputContract: resolveWorkgroupOutputContract(prepared.snapshot.outputContract),
-          leaderMemberId: leaderMemberId(prepared.snapshot, replacement),
-          shareOutputs: prepared.snapshot.switches.shareOutputs,
-          directMessages: prepared.snapshot.switches.directMessages,
-          blackboard: prepared.snapshot.switches.blackboard,
-          maxRounds: prepared.snapshot.maxRounds,
-          completionGate: prepared.snapshot.completionGate,
-          clarifyBudget: prepared.snapshot.clarifyBudget,
-          fanOut: prepared.snapshot.fanOut,
-          version: row.version + 1,
-          updatedAt: at,
-        })
-        .where(and(eq(workgroups.id, row.id), eq(workgroups.version, row.version)))
-        .returning({ version: workgroups.version })
-        .get()
+      const changed = await first(
+        transaction
+          .update(workgroups)
+          .set({
+            description: prepared.snapshot.description,
+            instructions: prepared.snapshot.instructions,
+            mode: prepared.snapshot.mode,
+            outputContract: resolveWorkgroupOutputContract(prepared.snapshot.outputContract),
+            leaderMemberId: leaderMemberId(prepared.snapshot, replacement),
+            shareOutputs: prepared.snapshot.switches.shareOutputs,
+            directMessages: prepared.snapshot.switches.directMessages,
+            blackboard: prepared.snapshot.switches.blackboard,
+            maxRounds: prepared.snapshot.maxRounds,
+            completionGate: prepared.snapshot.completionGate,
+            clarifyBudget: prepared.snapshot.clarifyBudget,
+            fanOut: prepared.snapshot.fanOut,
+            version: row.version + 1,
+            updatedAt: at,
+          })
+          .where(and(eq(workgroups.id, row.id), eq(workgroups.version, row.version)))
+          .returning({ version: workgroups.version }),
+      )
       if (changed === undefined)
         throw staleConflictError('workgroup', `workgroup '${row.id}' changed`)
       await transaction.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, row.id))
-      for (const member of replacement) await transaction.insert(workgroupMembers).values(member)
+      for (const member of replacement) await insertOne(transaction, workgroupMembers, member)
       return workgroupReceipt(plan, { kind: 'workgroup', version: changed.version })
     },
     afterCommitted: async ({ plan, receipt: result }) => {

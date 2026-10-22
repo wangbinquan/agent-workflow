@@ -6,6 +6,8 @@
 // 多用户不可见→404 同形行为（RFC-285 B1，旧 403）由 worktree-files-acl.test.ts
 // 对同一原语覆盖，含 byte-oracle）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Hono } from 'hono'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -13,9 +15,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { type DbClient } from '../src/db/client'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -24,7 +25,7 @@ import {
 
 const HEADERS = { Authorization: 'Bearer tok' }
 
-interface Harness<Database extends ProviderNeutralDatabase = DbClient> {
+interface Harness<Database extends PersistenceDb = DbClient> {
   db: Database
   appHome: string
   worktree: string
@@ -36,9 +37,7 @@ interface Harness<Database extends ProviderNeutralDatabase = DbClient> {
 
 // RFC-359 AC-6 —— 无参重载（自建 SQLite 内存库）的三个调用方都接到了共用注册器上，
 // 那条路随之退役：库总是由 harness 传进来。
-async function buildHarness(
-  provider: ProviderHarnessContext,
-): Promise<Harness<ProviderNeutralDatabase>> {
+async function buildHarness(provider: ProviderHarnessContext): Promise<Harness<PersistenceDb>> {
   const db = provider.db
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc193-api-'))
   const cleanup = () => rmSync(appHome, { recursive: true, force: true })
@@ -47,13 +46,14 @@ async function buildHarness(
   mkdirSync(worktree, { recursive: true })
 
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -68,7 +68,7 @@ async function buildHarness(
     ...(provider === undefined ? {} : providerTaskLineage(taskId)),
   })
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'w',
@@ -93,7 +93,7 @@ async function buildHarness(
 }
 
 async function seedArchivedPort(
-  h: Harness<ProviderNeutralDatabase>,
+  h: Harness<PersistenceDb>,
   portName: string,
   files: Record<string, string | Buffer>,
 ) {
@@ -113,7 +113,8 @@ async function seedArchivedPort(
     worktreeDirName: '',
     worktreeRootAbs: h.worktree,
   })
-  await h.db.insert(nodeRunOutputs).values({
+  const { nodeRunOutputs } = tablesOf(h.db)
+  await insertOne(h.db, nodeRunOutputs, {
     nodeRunId: h.runId,
     portName,
     content: Object.keys(files).join('\n'),
@@ -125,11 +126,11 @@ async function seedArchivedPort(
 // RFC-359 AC-6 —— 这段夹具生命周期（建应用 / 存还 `AGENT_WORKFLOW_HOME` / 先 dispose 再清理）
 // 原样抄了**三份**。提成一个注册器，三份 provider 块与三份 native 块一起接到同一条路上。
 function describeProviderPortArtifacts(
-  register: (getHarness: () => Harness<ProviderNeutralDatabase>) => void,
+  register: (getHarness: () => Harness<PersistenceDb>) => void,
 ): void {
   describeEachProvider('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', (harness) => {
     describe('fixture lifetime', () => {
-      let h: Harness<ProviderNeutralDatabase>
+      let h: Harness<PersistenceDb>
       let application: ProviderHttpApplication | undefined
       let cleanup: (() => void) | undefined
       let previousHome: string | undefined
@@ -231,7 +232,8 @@ describeProviderPortArtifacts((getHarness) => {
 describeProviderPortArtifacts((getHarness) => {
   test('legacy row (no archive) falls back to worktree; both-missing → 404', async () => {
     writeFileSync(join(getHarness().worktree, 'legacy.md'), 'FROM WORKTREE')
-    await getHarness().db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs } = tablesOf(getHarness().db)
+    await insertOne(getHarness().db, nodeRunOutputs, {
       nodeRunId: getHarness().runId,
       portName: 'legacy',
       content: 'legacy.md',
@@ -300,28 +302,26 @@ describeProviderPortArtifacts((getHarness) => {
     await seedArchivedPort(getHarness(), 'doc', { 'a.md': 'x' })
     const otherTask = ulid()
     const workflowId = ulid()
-    await getHarness()
-      .db.insert(workflows)
-      .values({
-        id: workflowId,
-        name: 'wf2',
-        definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-      })
-    await getHarness()
-      .db.insert(tasks)
-      .values({
-        name: 'other',
-        id: otherTask,
-        workflowId,
-        workflowSnapshot: '{}',
-        repoPath: '/repo',
-        worktreePath: getHarness().worktree,
-        baseBranch: 'main',
-        branch: 'agent-workflow/' + otherTask,
-        status: 'done',
-        inputs: '{}',
-        startedAt: Date.now(),
-      })
+    const { workflows } = tablesOf(getHarness().db)
+    await insertOne(getHarness().db, workflows, {
+      id: workflowId,
+      name: 'wf2',
+      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+    })
+    const { tasks } = tablesOf(getHarness().db)
+    await insertOne(getHarness().db, tasks, {
+      name: 'other',
+      id: otherTask,
+      workflowId,
+      workflowSnapshot: '{}',
+      repoPath: '/repo',
+      worktreePath: getHarness().worktree,
+      baseBranch: 'main',
+      branch: 'agent-workflow/' + otherTask,
+      status: 'done',
+      inputs: '{}',
+      startedAt: Date.now(),
+    })
     const res = await getHarness().app.fetch(
       new Request(
         `http://localhost/api/tasks/${otherTask}/port-artifacts/${getHarness().runId}/doc?item=0`,
@@ -353,7 +353,7 @@ describe('RFC-193 route source lock', () => {
 
 // RFC-359 W49: borrow the selected database while retaining the native seed core.
 interface ProviderHarnessContext {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   createApp(appHome: string): Promise<Hono>
   retainCleanup(cleanup: () => void): void
 }

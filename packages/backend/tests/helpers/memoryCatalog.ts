@@ -4,7 +4,7 @@
 // 旧的 `services/memory` 函数式面（`createManualCandidate(db, …)` 一类）随 SQLite 专属目录一起退役，
 // 用例改经 `MemoryCatalogOperations` 合同——与路由 / MCP 面走的是同一条路。
 
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import {
   composeMemoryCatalogOperations,
@@ -14,9 +14,9 @@ import type { MemoryCatalogOperations } from '../../src/modules/memory/public/ca
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 
 export function memoryCatalogOf(
-  // RFC-359：入参就是中立库。下面两个 composer 收的都是 `ProviderNeutralDatabase`，
+  // RFC-359：入参就是中立库。下面两个 composer 收的都是 `PersistenceDb`，
   // 这里此前写 `DbClient` 纯属类型债——它把这个夹具挡在双引擎用例之外。
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   testHooks?: MemoryCatalogTestHooks,
 ): MemoryCatalogOperations {
   return composeMemoryCatalogOperations({

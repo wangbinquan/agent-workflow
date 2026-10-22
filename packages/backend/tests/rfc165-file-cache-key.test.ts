@@ -11,8 +11,9 @@
 //   K3 lossy collision is NOT adopted: a row whose legacy key matches but
 //      whose url is a DIFFERENT repo under the new canonicalization stays
 //      untouched; the request cold-clones its own mirror.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readdirSync } from 'node:fs'
@@ -28,7 +29,6 @@ import {
 } from '@agent-workflow/shared'
 
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { cachedRepos } from '../src/db/schema'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { runGit } from '../src/util/git'
@@ -88,7 +88,7 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
 })
 
 describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -115,6 +115,7 @@ describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', 
     const newHash = gitUrlCacheKeyWith(parsed, sha1).hash
     const legacyHash = gitUrlLegacyFileCacheKeyWith(parsed, sha1)!.hash
     expect(newHash).not.toBe(legacyHash) // realpath contains no case fold, but .git-less path still differs? ensure distinct fixture
+    const { cachedRepos } = tablesOf(db)
     await db
       .update(cachedRepos)
       .set({ urlHash: legacyHash })
@@ -152,6 +153,7 @@ describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', 
       { url: urlSuffixed },
     )
     const newSuffixedHash = gitUrlCacheKeyWith(parsedSuffixed, sha1).hash
+    const { cachedRepos } = tablesOf(db)
     await db
       .update(cachedRepos)
       .set({ urlHash: legacyPlain })

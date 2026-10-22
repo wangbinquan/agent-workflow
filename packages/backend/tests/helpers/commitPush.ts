@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleNodeExecutionPersistence } from '../../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { DrizzleTaskExecutionEffectPersistence } from '../../src/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
@@ -13,12 +13,12 @@ type CommitPushTestOverrides = Partial<
  * Test topology for the same provider-selected ports daemon bootstrap injects.
  *
  * RFC-359 AC-6: the three Drizzle persistence adapters already take
- * `ProviderNeutralDatabase` (one implementation, both engines), so this composer
+ * `PersistenceDb` (one implementation, both engines), so this composer
  * accepts the neutral handle too — a `DbClient` still satisfies it, and a
  * `describeEachProvider` harness can now hand it the PostgreSQL client.
  */
 export function composeSqliteCommitPushDeps(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   overrides: CommitPushTestOverrides = {},
 ): CommitPushDeps {
   return {

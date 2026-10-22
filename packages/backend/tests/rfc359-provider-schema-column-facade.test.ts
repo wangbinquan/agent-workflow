@@ -1,31 +1,28 @@
-// RFC-359 —— 列 facade 的双引擎锁。表 facade 在访问时解析到当前 provider 的具体表，但业务模块常在模块加载期就把
-// 列对象捕获进常量（`const COLUMNS = { createdAt: table.createdAt }`），那时进程还没选 provider（默认 sqlite）。
-// 修复前，捕获到的 SQLite 列在 PostgreSQL 上解码绕开了 pg 投影的 `bigint → number` 映射：mission 列表页的游标
-// `createdAt` 在 PG 上回成字符串（2026-09-05 W4-D10 实撞）。这里故意在模块加载期捕获列，再在两个引擎上各跑一遍
-// 解码 / 编码 / 行值比较 / 原型与身份，锁住「列的 provider 只在客户端」这一条。
-
+// RFC-395 I-b: session-bound native columns retain their identity and codecs while another provider is open.
+// This replaces the former process-projection lock with simultaneous-client isolation.
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { expect, test } from 'bun:test'
-import { desc, eq, getTableName, is, sql } from 'drizzle-orm'
-import { PgColumn } from 'drizzle-orm/pg-core'
-import { SQLiteColumn } from 'drizzle-orm/sqlite-core'
+import { desc, eq, getTableName, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-
-import { missionInputUploads } from '@/db/schema'
+import { createInMemoryDb } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
+import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_700_000_000_000
 
-// 故意在模块加载期捕获：此刻进程级 provider 还是默认的 sqlite。
-const CAPTURED = {
-  id: missionInputUploads.id,
-  bytes: missionInputUploads.bytes,
-  createdAt: missionInputUploads.createdAt,
-} as const
-
-describeEachProvider('RFC-359 —— 模块加载期捕获的列按当前 provider 解析', (harness) => {
-  test('解码走当前 provider 的映射：整数列回 number，不因捕获时机退化成字符串', async () => {
+describeEachProvider('RFC-395 I-b session-native column identity', (harness) => {
+  test('captured columns keep encoding, decoding, tuple comparison and ordering semantics', async () => {
+    const { missionInputUploads } = tablesOf(harness.db)
+    const captured = {
+      id: missionInputUploads.id,
+      bytes: missionInputUploads.bytes,
+      createdAt: missionInputUploads.createdAt,
+    }
     const id = ulid()
-    await harness.db.insert(missionInputUploads).values({
+    await insertOne(harness.db, missionInputUploads, {
       id,
       actorUserId: 'actor-1',
       originalName: 'spec.md',
@@ -35,43 +32,100 @@ describeEachProvider('RFC-359 —— 模块加载期捕获的列按当前 provid
       expiresAt: NOW + 60_000,
       createdAt: NOW,
     })
-    const row = (
-      await harness.db
-        .select({ bytes: CAPTURED.bytes, createdAt: CAPTURED.createdAt })
+    const row = await first(
+      harness.db
+        .select({ bytes: captured.bytes, createdAt: captured.createdAt })
         .from(missionInputUploads)
-        .where(eq(CAPTURED.id, id))
-    )[0]
+        .where(eq(captured.id, id)),
+    )
     expect(row).toEqual({ bytes: 3, createdAt: NOW })
     expect(typeof row?.createdAt).toBe('number')
-
-    // 编码 / 行值比较 / 排序也走捕获列。
     const page = await harness.db
-      .select({ id: CAPTURED.id })
+      .select({ id: captured.id })
       .from(missionInputUploads)
-      .where(sql`(${CAPTURED.createdAt}, ${CAPTURED.id}) <= (${NOW}, ${id})`)
-      .orderBy(desc(CAPTURED.createdAt), desc(CAPTURED.id))
+      .where(sql`(${captured.createdAt}, ${captured.id}) <= (${NOW}, ${id})`)
+      .orderBy(desc(captured.createdAt), desc(captured.id))
       .limit(1)
     expect(page).toEqual([{ id }])
     await harness.db
       .update(missionInputUploads)
       .set({ bytes: 4 })
-      .where(eq(CAPTURED.createdAt, NOW))
+      .where(eq(captured.createdAt, NOW))
     expect(
-      (
-        await harness.db
-          .select({ bytes: CAPTURED.bytes })
+      await first(
+        harness.db
+          .select({ bytes: captured.bytes })
           .from(missionInputUploads)
-          .where(eq(CAPTURED.id, id))
-      )[0],
+          .where(eq(captured.id, id)),
+      ),
     ).toEqual({ bytes: 4 })
+    expect(missionInputUploads.createdAt).toBe(captured.createdAt)
+    expect(getTableName(captured.createdAt.table)).toBe('mission_input_uploads')
+    expect(captured.createdAt.name).toBe('created_at')
   })
 
-  test('身份稳定，原型与所属表随当前 provider', () => {
-    expect(missionInputUploads.createdAt).toBe(CAPTURED.createdAt)
-    const engine = harness.capabilities.provider
-    expect(is(CAPTURED.createdAt, engine === 'postgresql' ? PgColumn : SQLiteColumn)).toBe(true)
-    expect(is(CAPTURED.createdAt, engine === 'postgresql' ? SQLiteColumn : PgColumn)).toBe(false)
-    expect(getTableName(CAPTURED.createdAt.table)).toBe('mission_input_uploads')
-    expect(CAPTURED.createdAt.name).toBe('created_at')
+  test('SQLite and the harness provider coexist and each transaction inherits its own table set', async () => {
+    const originalTables = tablesOf(harness.db)
+    const originalColumn = originalTables.users.createdAt
+    const sqlite = createInMemoryDb(MIGRATIONS)
+    try {
+      const sqliteTables = tablesOf(sqlite)
+      const fixture = (id: string) => ({
+        id,
+        username: id,
+        displayName: id,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      await insertOne(harness.db, originalTables.users, fixture('session-native-primary'))
+      await insertOne(sqlite, sqliteTables.users, fixture('session-native-sqlite'))
+      const both = await Promise.all([
+        first(
+          harness.db
+            .select({ id: originalTables.users.id, at: originalColumn })
+            .from(originalTables.users)
+            .where(eq(originalTables.users.id, 'session-native-primary')),
+        ),
+        first(
+          sqlite
+            .select({ id: sqliteTables.users.id, at: sqliteTables.users.createdAt })
+            .from(sqliteTables.users)
+            .where(eq(sqliteTables.users.id, 'session-native-sqlite')),
+        ),
+      ])
+      expect(both).toEqual([
+        { id: 'session-native-primary', at: NOW },
+        { id: 'session-native-sqlite', at: NOW },
+      ])
+      expect(tablesOf(harness.db)).toBe(originalTables)
+      expect(harness.session.tables).toBe(originalTables)
+      expect(originalTables.users.createdAt).toBe(originalColumn)
+      if (harness.capabilities.isolation !== 'exclusive')
+        expect(originalColumn).not.toBe(sqliteTables.users.createdAt)
+      await harness.session.transaction(async (tx) => {
+        expect(tablesOf(tx)).toBe(originalTables)
+      })
+      dbTxSync(sqlite, (tx) => {
+        expect(tablesOf(tx)).toBe(sqliteTables)
+      })
+      expect(
+        await first(
+          harness.db
+            .select()
+            .from(originalTables.users)
+            .where(eq(originalTables.users.id, 'session-native-sqlite')),
+        ),
+      ).toBeUndefined()
+      expect(
+        await first(
+          sqlite
+            .select()
+            .from(sqliteTables.users)
+            .where(eq(sqliteTables.users.id, 'session-native-primary')),
+        ),
+      ).toBeUndefined()
+    } finally {
+      sqlite.$client.close()
+    }
   })
 })

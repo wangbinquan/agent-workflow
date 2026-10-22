@@ -33,7 +33,7 @@ import { SQL } from 'bun'
 
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-import * as schema from '../src/db/schema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { migrateSqlite } from '../src/platform/persistence/sqliteMigrator'
 import { migratePostgresqlSchema } from '../src/platform/persistence/postgresqlMigrator'
 import {
@@ -54,8 +54,8 @@ function expectedTables(provider: string): readonly (typeof CONTRACT.tables)[num
   )
 }
 
-function tableObject(schemaSymbol: string): object | undefined {
-  const found = (schema as Record<string, unknown>)[schemaSymbol]
+function tableObject(db: object, schemaSymbol: string): object | undefined {
+  const found = (tablesOf(db) as Record<string, unknown>)[schemaSymbol]
   return typeof found === 'object' && found !== null ? found : undefined
 }
 
@@ -74,7 +74,7 @@ describeEachProvider('RFC-359 W8 —— 迁移器对拍：活库实现了声明�
     // 悄悄跳过大半张花名册，测试照样绿——那正是这条对拍最怕的失效方式。
     const recording = harness.recordStatements()
     for (const table of tables) {
-      const handle = tableObject(table.schemaSymbol)
+      const handle = tableObject(harness.db, table.schemaSymbol)
       if (handle === undefined) {
         missingSymbols.push(`${table.sourceTable} (${table.schemaSymbol})`)
         continue

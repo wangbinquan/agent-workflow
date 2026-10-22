@@ -1,6 +1,6 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, ne } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedExecutionBindings, hostedExecutionEvents } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { freezeHostedAgentContext, type HostedAgentContext } from './agentContext'
@@ -61,7 +61,9 @@ export interface HostedExecutionStore {
   abandon(executionId: string, reason: string): Promise<void>
 }
 
-function decode(row: typeof hostedExecutionBindings.$inferSelect): HostedExecutionBinding {
+function decode(
+  row: PersistenceTables['hostedExecutionBindings']['$inferSelect'],
+): HostedExecutionBinding {
   const frozen = JSON.parse(row.requestJson) as Pick<
     HostedExecutionIntent,
     'request' | 'timeoutMs' | 'agentContext'
@@ -93,13 +95,14 @@ function decode(row: typeof hostedExecutionBindings.$inferSelect): HostedExecuti
 /** Mutations run under the execution fence, so a late response observed by an
  * old service slot cannot overwrite its successor's progress. */
 export function createHostedExecutionStore(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly now?: () => number
 }): HostedExecutionStore {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
-  const getIn = async (db: ProviderNeutralDatabase, executionId: string) => {
+  const getIn = async (db: PersistenceDb, executionId: string) => {
+    const { hostedExecutionBindings } = tablesOf(db)
     const row = (
       await db
         .select()
@@ -109,16 +112,14 @@ export function createHostedExecutionStore(input: {
     )[0]
     return row === undefined ? null : decode(row)
   }
-  const write = async <T>(
-    operation: (tx: ProviderNeutralDatabase, epoch: number) => Promise<T>,
-  ) => {
+  const write = async <T>(operation: (tx: PersistenceDb, epoch: number) => Promise<T>) => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
       return operation(tx, lease.epoch)
     })
   }
-  const existing = async (tx: ProviderNeutralDatabase, executionId: string) => {
+  const existing = async (tx: PersistenceDb, executionId: string) => {
     const binding = await getIn(tx, executionId)
     if (binding === null) throw new Error('hosted-execution-binding-missing')
     return binding
@@ -126,6 +127,7 @@ export function createHostedExecutionStore(input: {
   return {
     get: (executionId) => getIn(input.db, executionId),
     async replay(executionId) {
+      const { hostedExecutionEvents } = tablesOf(input.db)
       const rows = await input.db
         .select({ eventJson: hostedExecutionEvents.eventJson })
         .from(hostedExecutionEvents)
@@ -134,6 +136,7 @@ export function createHostedExecutionStore(input: {
       return rows.map((row) => JSON.parse(row.eventJson) as BusinessEvent)
     },
     async unsettled() {
+      const { hostedExecutionBindings } = tablesOf(input.db)
       const rows = await input.db
         .select()
         .from(hostedExecutionBindings)
@@ -155,6 +158,7 @@ export function createHostedExecutionStore(input: {
           timeoutMs: intent.timeoutMs,
           agentContext,
         })
+        const { hostedExecutionBindings } = tablesOf(tx)
         await tx
           .insert(hostedExecutionBindings)
           .values({
@@ -199,6 +203,7 @@ export function createHostedExecutionStore(input: {
         ) {
           throw new Error('hosted-execution-receipt-mismatch')
         }
+        const { hostedExecutionBindings } = tablesOf(tx)
         await tx
           .update(hostedExecutionBindings)
           .set({
@@ -215,6 +220,7 @@ export function createHostedExecutionStore(input: {
     },
     async record(executionId, event) {
       await write(async (tx, epoch) => {
+        const { hostedExecutionEvents, hostedExecutionBindings } = tablesOf(tx)
         await tx
           .insert(hostedExecutionEvents)
           .values({ executionId, cursor: event.cursor, eventJson: JSON.stringify(event) })
@@ -233,6 +239,7 @@ export function createHostedExecutionStore(input: {
     async requestCancel(executionId, reason = 'user') {
       await write(async (tx, epoch) => {
         const binding = await existing(tx, executionId)
+        const { hostedExecutionBindings } = tablesOf(tx)
         await tx
           .update(hostedExecutionBindings)
           .set({
@@ -249,6 +256,7 @@ export function createHostedExecutionStore(input: {
         const binding = await getIn(tx, executionId)
         if (binding === null || binding.result === null)
           throw new Error('hosted-execution-result-missing')
+        const { hostedExecutionBindings } = tablesOf(tx)
         await tx
           .update(hostedExecutionBindings)
           .set({ state: 'settled', epoch, updatedAt: now() })
@@ -272,6 +280,7 @@ export function createHostedExecutionStore(input: {
           truncated: true,
           finalCursor: binding.lastCursor ?? '',
         }
+        const { hostedExecutionBindings } = tablesOf(tx)
         await tx
           .update(hostedExecutionBindings)
           .set({ resultJson: JSON.stringify(result), state: 'settled', epoch, updatedAt: now() })

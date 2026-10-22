@@ -3,6 +3,7 @@
 // a crash pre-db-committed restores the root from trash (delete never committed);
 // post-db-committed drops the trash (row already gone).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { expect, test, beforeEach, afterEach } from 'bun:test'
@@ -10,8 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skills } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
   deleteSkill,
@@ -27,7 +27,7 @@ import {
 import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 
-async function getSkill(db: ProviderNeutralDatabase, name: string) {
+async function getSkill(db: PersistenceDb, name: string) {
   return (await listSkills(db)).find((skill) => skill.name === name) ?? null
 }
 
@@ -39,7 +39,7 @@ const T6_ACTOR = buildActor({
 })
 
 describeEachProvider('RFC-170 delete op', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -130,7 +130,8 @@ describeEachProvider('RFC-170 delete op', (harness) => {
     )
     // Simulate db-committed reached (row deleted) but crash before trash cleanup.
     await databaseSessionFor(db).transaction(async (tx) => {
-      await tx.delete(skills).where(eq(skills.id, currentSkillId)).run()
+      const { skills } = tablesOf(tx)
+      await tx.delete(skills).where(eq(skills.id, currentSkillId))
       await advancePhase(tx, opId, 'db-committed')
     })
     expect(existsSync(trash)).toBe(true)

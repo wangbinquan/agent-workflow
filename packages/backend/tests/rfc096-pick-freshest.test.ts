@@ -24,9 +24,9 @@
 // If any case here goes red, a freshness-ordering fork is being reintroduced —
 // see design/RFC-096-freshest-picker-convergence/design.md before relaxing.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
-import type { nodeRuns } from '../src/db/schema'
 import {
   buildFreshestSettledPerNode,
   isFresherNodeRun,
@@ -34,7 +34,7 @@ import {
 } from '../src/services/freshness'
 import { isFresherNodeRun as isFresherNodeRunFromScheduler } from '../src/services/scheduler'
 
-type FullRow = typeof nodeRuns.$inferSelect
+type FullRow = PersistenceTables['nodeRuns']['$inferSelect']
 
 // Minimal projection pickFreshestRun's generic bound requires — using it as
 // the test row type IS part of the lock (see header point 3).

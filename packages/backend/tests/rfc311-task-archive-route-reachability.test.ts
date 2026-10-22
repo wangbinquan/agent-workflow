@@ -26,14 +26,14 @@
 import { expect, test } from 'bun:test'
 
 import { createUser } from './helpers/userFixture'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const ARCHIVE_BODY = { retentionDays: 90, dryRun: false } as const
 
 async function tokenFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   username: string,
   additionalPermissions: readonly string[],
 ): Promise<string> {

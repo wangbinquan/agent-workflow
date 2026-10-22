@@ -1,5 +1,8 @@
 // RFC-370: selected storage owners must drive the real package apply and recovery,
 // while AW retains durable journal, database publication and replay semantics.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -9,7 +12,6 @@ import { eq } from 'drizzle-orm'
 import { PackagePreviewSchema } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { plugins, resourceBundleApplies, skills, skillVersions, users } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type {
@@ -126,7 +128,8 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       },
       source: 'daemon',
     })
-    await harness.db.insert(users).values({ ...actor.user, createdAt: 1, updatedAt: 1 })
+    const { users, resourceBundleApplies } = tablesOf(harness.db)
+    await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const authority = new AuthorityClaimRegistry().mintLocalAuthority({
       userId: ownerId,
       source: 'system',
@@ -291,6 +294,7 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
             throw new Error('stage not reached')
           }),
         ])
+        const { skills, plugins, skillVersions } = tablesOf(harness.db)
         expect(await harness.db.select().from(kind === 'skill' ? skills : plugins)).toHaveLength(0)
         expect(settled).toBe(false)
         stage.release()
@@ -387,6 +391,7 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       ])
       expect(settled).toBe(false)
       expect((await f.journal()).state).toBe('prepared')
+      const { skills } = tablesOf(harness.db)
       expect(await harness.db.select().from(skills)).toHaveLength(0)
       release.release()
       expect(await observed).toBe(error)
@@ -420,6 +425,7 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
     expect(row.state).toBe('committed')
     expect(row.receiptJson).not.toBeNull()
     expect(compensation).toEqual([true])
+    const { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toHaveLength(1)
     let recovered = 0
     const maintenance = composePostgresqlResourcePackageApplyMaintenance({
@@ -460,7 +466,8 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
         ['stale', 'applying'],
         ['active', 'applying'],
       ] as const) {
-        await harness.db.insert(resourceBundleApplies).values({
+        const { resourceBundleApplies } = tablesOf(harness.db)
+        await insertOne(harness.db, resourceBundleApplies, {
           id,
           scope: 'storage-test',
           key: id,
@@ -522,24 +529,27 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
           }),
         ])
         expect(settled).toBe(false)
+        const { resourceBundleApplies } = tablesOf(harness.db)
         expect(
           (
-            await harness.db
-              .select()
-              .from(resourceBundleApplies)
-              .where(eq(resourceBundleApplies.id, 'stale'))
-              .get()
+            await first(
+              harness.db
+                .select()
+                .from(resourceBundleApplies)
+                .where(eq(resourceBundleApplies.id, 'stale')),
+            )
           )?.state,
         ).toBe('applying')
         release.release()
         expect(await pending).toEqual({ failed: 1, rolledForward: 1 })
         expect(
           (
-            await harness.db
-              .select()
-              .from(resourceBundleApplies)
-              .where(eq(resourceBundleApplies.id, 'active'))
-              .get()
+            await first(
+              harness.db
+                .select()
+                .from(resourceBundleApplies)
+                .where(eq(resourceBundleApplies.id, 'active')),
+            )
           )?.state,
         ).toBe('applying')
         expect([...calls].sort()).toEqual([

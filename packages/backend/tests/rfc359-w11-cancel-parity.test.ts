@@ -24,6 +24,8 @@
 // 变异实证两次（一侧一条，落在不同的格上，证明它确实有预言力而不是「都没跑到所以都绿」）：
 //   · 短路 SQLite `cancelTask` 的可取消状态门 ⇒ **只有 sqlite lane 的 B / C 红**；
 //   · 短路 PostgreSQL `cancelCascade` 对子任务的递归 ⇒ **只有 postgresql lane 的 F 红**。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -32,8 +34,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -71,7 +72,7 @@ interface SeedOptions {
 }
 
 async function seedFixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: SeedOptions = {},
 ): Promise<
   Fixture & {
@@ -92,13 +93,14 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
+  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
   const existing = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.id, USER_ID))
     .limit(1)
   if (existing.length === 0) {
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id: USER_ID,
       username: USER_ID,
       displayName: USER_ID,
@@ -109,12 +111,14 @@ async function seedFixture(
     })
   }
   const workflowId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: `w11-${workflowId}`, definition: JSON.stringify(DEFINITION) })
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: `w11-${workflowId}`,
+    definition: JSON.stringify(DEFINITION),
+  })
 
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'w11',
     workflowId,
@@ -130,7 +134,7 @@ async function seedFixture(
     executionLineageId: taskId,
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'doc',
@@ -143,7 +147,7 @@ async function seedFixture(
   let childTaskId: string | null = null
   if (options.childStatus !== undefined) {
     childTaskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: childTaskId,
       name: 'w11-child',
       workflowId,
@@ -168,7 +172,7 @@ async function seedFixture(
   if (options.grandchildStatus !== undefined) {
     if (childTaskId === null) throw new Error('grandchildStatus 需要先有 childStatus')
     const childRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: childRunId,
       taskId: childTaskId,
       nodeId: 'doc',
@@ -178,7 +182,7 @@ async function seedFixture(
       startedAt: Date.now() - 700,
     })
     grandchildTaskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: grandchildTaskId,
       name: 'w11-grandchild',
       workflowId,
@@ -206,7 +210,7 @@ async function seedFixture(
   for (const nodeId of options.extraOpenRuns ?? []) {
     const id = ulid()
     extraRunIds.push(id)
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId,
@@ -255,6 +259,7 @@ async function cancelOutcome(
   } catch (error) {
     code = codeOf(error)
   }
+  const { tasks, nodeRuns } = tablesOf(harness.db)
   const after = (await harness.db.select().from(tasks).where(eq(tasks.id, target)).limit(1))[0]
   const run = (
     await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.nodeRunId)).limit(1)
@@ -314,6 +319,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
     expect(outcome.status).toBe('canceled')
+    const { tasks } = tablesOf(harness.db)
     const child = (
       await harness.db.select().from(tasks).where(eq(tasks.id, seeded.childTaskId!)).limit(1)
     )[0]
@@ -351,6 +357,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
       .catch(() => undefined)
     // 给取消一个**真实**的机会跑完：它要是没取号，这段时间足够它整个落库。
     await Bun.sleep(250)
+    const { tasks } = tablesOf(harness.db)
     const midway = (
       await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
     )[0]
@@ -370,6 +377,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     fixture = seeded
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
+    const { tasks } = tablesOf(harness.db)
     const after = (
       await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
     )[0]
@@ -384,6 +392,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     fixture = seeded
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
+    const { nodeRuns } = tablesOf(harness.db)
     const rows = await harness.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, seeded.taskId))
     expect(rows).toHaveLength(3)
     expect(
@@ -401,6 +410,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
     expect(outcome.status).toBe('canceled')
+    const { tasks } = tablesOf(harness.db)
     const rows = await harness.db.select().from(tasks)
     const byId = new Map(rows.map((row) => [row.id, row]))
     expect(byId.get(seeded.childTaskId!)?.status, '子任务').toBe('canceled')
@@ -417,6 +427,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
     expect(outcome.status).toBe('canceled')
+    const { tasks } = tablesOf(harness.db)
     const child = (
       await harness.db.select().from(tasks).where(eq(tasks.id, seeded.childTaskId!)).limit(1)
     )[0]

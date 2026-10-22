@@ -6,6 +6,8 @@
 // scheduler-less `pending` zombie and wiped its completion metadata before the
 // 404 fired. A bad nodeRunId must now leave the task completely untouched.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
@@ -14,8 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 // RFC-359 AC-1（第 9 刀）：`retry` 两份实现合一之后，本文件验的是**共用**那一份的前置门，
@@ -24,7 +25,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 describeEachProvider(
   'retry validates nodeRunId before mutating task state (RFC-099 audit)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
 
     beforeEach(() => {
@@ -35,7 +36,8 @@ describeEachProvider(
 
     test('bogus nodeRunId → 404 and the done task is left intact', async () => {
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'wf',
         description: '',
@@ -46,7 +48,7 @@ describeEachProvider(
       })
       const taskId = ulid()
       const finishedAt = Date.now()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 't',
         workflowId,
@@ -76,7 +78,7 @@ describeEachProvider(
       let code: string | undefined
       try {
         await createRetryEngine(db, {}).retry({
-          taskId: taskId,
+          taskId,
           nodeRunId: 'no_such_node_run',
           cascade: true,
         })
@@ -105,7 +107,8 @@ describeEachProvider(
         ],
         edges: [],
       }
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'wf-trigger-retry',
         description: '',
@@ -117,7 +120,7 @@ describeEachProvider(
       const taskId = ulid()
       const runId = ulid()
       const finishedAt = Date.now()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'trigger-retry',
         workflowId,
@@ -134,7 +137,7 @@ describeEachProvider(
         errorMessage: 'original-detail',
         failedNodeId: 'agent',
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: 'agent',
@@ -147,7 +150,7 @@ describeEachProvider(
       })
 
       await expect(
-        createRetryEngine(db, {}).retry({ taskId: taskId, nodeRunId: runId, cascade: true }),
+        createRetryEngine(db, {}).retry({ taskId, nodeRunId: runId, cascade: true }),
       ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
       const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -164,7 +167,8 @@ describeEachProvider(
 
     test("cross-task call row → 404 without canceling that row's live child", async () => {
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'wf-cross-task',
         description: '',
@@ -205,7 +209,7 @@ describeEachProvider(
           finishedAt: Date.now(),
         },
       ])
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: foreignCallRunId,
         taskId: foreignTaskId,
         nodeId: 'call_foreign',
@@ -214,7 +218,7 @@ describeEachProvider(
         iteration: 0,
         startedAt: Date.now() - 50,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         ...common,
         id: foreignChildId,
         name: 'foreign-live-child',

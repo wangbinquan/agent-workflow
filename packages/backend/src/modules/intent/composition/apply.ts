@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createIntentApplyEngine,
   type ApplyIntentFaults,
@@ -50,11 +50,11 @@ export {
  * 事——claim → preflight → prepare → 图校验 → prestage → 大事务 → 前滚 → 收敛——而判据
  * 长期只喂其中一侧（`rfc294-apply-replay-recovery-parity` 的存在理由就是「两台 apply 引擎」）。
  *
- * 现在只剩一台：引擎与资源会话全部按 `ProviderNeutralDatabase` 取参，事务走
+ * 现在只剩一台：引擎与资源会话全部按 `PersistenceDb` 取参，事务走
  * `databaseSessionFor(db).transaction(...)` 这一个中立原语，两个 provider 共用同一份装配。
  */
 export interface IntentApplyCompositionDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   /** ACL 归属读面。两个 bootstrap 根各自已有一份，测试装配可省略（按 db 现取）。 */
   readonly aclIdentities?: ResourceCatalogAclIdentityReadPort
@@ -87,7 +87,7 @@ export interface IntentArtifactSelection {
  * 装配发生在 composition 层——engine / application / 兼容门面都不再自己拼 provider。
  */
 export function composeIntentApplyArtifactLifecycle(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir?: string
   readonly content?: IntentArtifactContentPort
@@ -166,7 +166,7 @@ export function narrowIntentApplyOperations(operations: IntentApplyEngine): Inte
  * 的活，不是 service 层的活。门面已删除，调用方直接来这里。
  */
 export interface ApplyIntentDeps {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly actor: Actor
   readonly authority: ResourceRequestContext

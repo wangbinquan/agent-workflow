@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 
@@ -6,7 +6,7 @@ const queues = new WeakMap<object, KeyedSerialQueue<string>>()
 
 /** Serialize only short host-ledger commits, including their transaction ACK. */
 export function runWorkgroupCommit<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   commit: () => Promise<T>,
 ): Promise<T> {

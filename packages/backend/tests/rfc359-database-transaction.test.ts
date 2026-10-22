@@ -8,6 +8,7 @@
 // PostgreSQL 侧的同一组断言由真库 lane 承担（W5-T21），本文件只跑 SQLite——
 // 因为需要被证明「从不可能变为可能」的正是 SQLite 这一侧。
 
+import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
@@ -21,15 +22,17 @@ import { MIGRATIONS } from './migration-freeze'
 
 function scratchDb(): DbClient {
   const db = createInMemoryDb(MIGRATIONS)
-  db.run(sql.raw('create table rfc359_scratch(id integer primary key, v text)'))
+  rawExec(db, sql.raw('create table rfc359_scratch(id integer primary key, v text)'))
   return db
 }
 
 const values = (db: DbClient): string[] =>
-  db.all<{ v: string }>(sql.raw('select v from rfc359_scratch order by id')).map((row) => row.v)
+  rawRows<{ v: string }>(db, sql.raw('select v from rfc359_scratch order by id')).map(
+    (row) => row.v,
+  )
 
 const insert = (db: DbClient, v: string): void => {
-  db.run(sql.raw(`insert into rfc359_scratch(v) values ('${v}')`))
+  rawExec(db, sql.raw(`insert into rfc359_scratch(v) values ('${v}')`))
 }
 
 describe('RFC-359 —— 统一事务原语（SQLite）', () => {
@@ -167,7 +170,7 @@ describe('RFC-359 —— 与 dbTxSync 的共存', () => {
         insert(db, 'G1')
         await new Promise((resolve) => setTimeout(resolve, 2))
         dbTxSync(db, (tx) => {
-          tx.run(sql.raw("insert into rfc359_scratch(v) values ('G2')"))
+          rawExec(tx, sql.raw("insert into rfc359_scratch(v) values ('G2')"))
           return 1
         })
         throw new Error('outer boom')
@@ -189,7 +192,7 @@ describe('RFC-359 —— 与 dbTxSync 的共存', () => {
     try {
       // 另一个 async 上下文：它不知道有事务开着，也不持有租约。
       dbTxSync(db, (tx) => {
-        tx.run(sql.raw("insert into rfc359_scratch(v) values ('H2')"))
+        rawExec(tx, sql.raw("insert into rfc359_scratch(v) values ('H2')"))
         return 1
       })
     } catch (error) {
@@ -210,7 +213,7 @@ describe('RFC-359 —— 与 dbTxSync 的共存', () => {
       insert(db, 'I1')
     })
     dbTxSync(db, (tx) => {
-      tx.run(sql.raw("insert into rfc359_scratch(v) values ('I2')"))
+      rawExec(tx, sql.raw("insert into rfc359_scratch(v) values ('I2')"))
       return 1
     })
     expect(values(db)).toEqual(['I1', 'I2'])
@@ -235,7 +238,7 @@ describe('RFC-359 W2-T11d —— 旁观者隔离：事务在新的事件循环�
     // 旁观者：等着被唤醒，然后立刻做一笔同步写事务——修复前它会在事务体第一个 await 处插进来。
     const bystander = woken.then(() =>
       dbTxSync(db, (tx) => {
-        tx.run(sql.raw("insert into rfc359_scratch(v) values ('bystander')"))
+        rawExec(tx, sql.raw("insert into rfc359_scratch(v) values ('bystander')"))
         return 1
       }),
     )
@@ -387,7 +390,7 @@ describe('RFC-359 W4-B1 —— 写事务的跨进程写锁重试（整笔重跑�
               const code = pending.shift()
               if (code !== undefined) throw sqliteError(code)
             }
-            return target.run(...args)
+            return rawExec(target, ...args)
           }
         }
         const value = Reflect.get(target, property, target) as unknown

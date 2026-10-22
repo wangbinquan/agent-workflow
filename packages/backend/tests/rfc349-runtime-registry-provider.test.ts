@@ -1,14 +1,14 @@
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-349 — runtime registry persistence is selected once at bootstrap. The
 // application and HTTP surfaces consume one Promise-only closed port; SQLite
 // and PostgreSQL keep provider mechanics inside infrastructure adapters.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -63,7 +63,10 @@ function postgresqlFixture() {
     }
     return rows([])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -91,10 +94,6 @@ function postgresqlFixture() {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 runtime registry provider operations', () => {
   test('business and HTTP surfaces contain no database mechanism', () => {
@@ -198,7 +197,7 @@ describe('RFC-349 runtime registry provider operations', () => {
         execution.sql.includes('"agent_workflow"."runtimes"'),
       ),
     ).toBe(true)
-    expect(fixture.executions[0]?.parameters).toEqual(['pg-claude'])
+    expect(fixture.executions[0]?.parameters).toEqual(['pg-claude', 1])
   })
 })
 

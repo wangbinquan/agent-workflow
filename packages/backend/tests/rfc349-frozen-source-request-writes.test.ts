@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-349 T10 回归防护 —— 源库被迁移冻结时，请求路径一个字节都不许写。
 //
@@ -23,8 +26,7 @@ import ts from 'typescript'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { userPats, users, userSessions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const backendRoot = resolve(import.meta.dir, '..')
@@ -32,11 +34,12 @@ const backendRoot = resolve(import.meta.dir, '..')
 const FROZEN = Object.freeze({ writable: () => false })
 const OPEN = Object.freeze({ writable: () => true })
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u-frozen',
     username: 'frozen',
     displayName: 'Frozen',
@@ -48,10 +51,14 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   })
 }
 
-const sessionRow = async (id: string) =>
-  await db.select().from(userSessions).where(eq(userSessions.id, id)).get()
-const patRow = async (id: string) =>
-  await db.select().from(userPats).where(eq(userPats.id, id)).get()
+const sessionRow = async (id: string) => {
+  const { userSessions } = tablesOf(db)
+  return await first(db.select().from(userSessions).where(eq(userSessions.id, id)))
+}
+const patRow = async (id: string) => {
+  const { userPats } = tablesOf(db)
+  return await first(db.select().from(userPats).where(eq(userPats.id, id)))
+}
 
 describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
   // RFC-359 AC-6：冻结窗这层判据在**两个引擎**上各钉一遍。窗口本身是 provider-中立的

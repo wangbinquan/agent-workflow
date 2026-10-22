@@ -13,9 +13,9 @@
 // - executions owned by no node that their owner cancelled in this epoch.
 // A detached observation (shutdown) or an unobservable outcome only affects
 // the binding at hand; the next pass retries what is still unsettled.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import {
@@ -37,7 +37,7 @@ export interface HostedExecutionSettler {
 }
 
 export function createHostedExecutionSettler(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly store: HostedExecutionStore
   readonly executions: HostedExecution
   readonly fence: CrewStationMutationFence
@@ -67,6 +67,7 @@ export function createHostedExecutionSettler(input: {
     const runIds = bindings.flatMap((binding) =>
       binding.nodeRunId === undefined ? [] : [binding.nodeRunId],
     )
+    const { nodeRuns } = tablesOf(input.db)
     const states = new Map(
       runIds.length === 0
         ? []

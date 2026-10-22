@@ -10,8 +10,9 @@
 //     update --init --recursive` and surface submoduleSyncOk/Error
 //   - never blanks when submoduleMode='never' (escape-hatch parity)
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeAll, describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,7 +20,6 @@ import { join, resolve } from 'node:path'
 
 import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
-import { cachedRepos } from '../src/db/schema'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 // RUN_GIT_NETWORK gate (P0 test-tier fortification): this suite cold-clones a
@@ -155,7 +155,7 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
 
 describeEachProvider('RFC-359 submodule repository store', (harness) => {
   describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let fix: { root: string; parentUrl: string; childBare: string }
     let savedGlobal: string | undefined
@@ -216,8 +216,9 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
       // --recurse-submodules ran during clone.
       expect(existsSync(join(result.cached.localPath, 'sub', 'CHILD.md'))).toBe(true)
 
+      const { cachedRepos } = tablesOf(db)
       // DB row reflects telemetry.
-      const row = (await db.select().from(cachedRepos).all())[0]
+      const row = (await db.select().from(cachedRepos))[0]
       expect(row?.hasSubmodules).toBe(true)
       expect(row?.lastSubmoduleSyncOk).toBe(true)
     })

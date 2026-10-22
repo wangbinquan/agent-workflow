@@ -15,6 +15,9 @@
 // 不能只是说法——路径、`tasks.*` 列、cwd 都要与今天字节级一致，否则每一个现存
 // 单仓任务的行为都被这个 RFC 改掉了。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { beforeAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { RepoGroupNodeInput } from '@agent-workflow/shared'
 import { execFileSync } from 'node:child_process'
@@ -32,7 +35,6 @@ import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { ulid } from 'ulid'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, taskSpaceNodes } from '../src/db/schema'
 import { rememberVolatileRepoUrl } from '../src/services/repoCredentials'
 import { createRepoGroup, updateRepoGroup } from '../src/services/repoGroup'
 import { createWorkflow } from '../src/services/workflow'
@@ -98,17 +100,16 @@ function seedRepo(name: string, files: Record<string, string>): { id: string; pa
   // `resolveRepoSourceSingle`，夹具经 cachedRepoId 反查同样会被拒。改走 T11 建的
   // 真实 git smart-HTTP 远端——这也更贴生产（生产里就没有 file:// 镜像）。
   const url = remoteUrlFor(dir)
-  db.insert(cachedRepos)
-    .values({
-      id,
-      urlHash: `${name}00000000`.slice(0, 8),
-      urlRedacted: url,
-      localPath: dir,
-      defaultBranch: 'main',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  const { cachedRepos } = tablesOf(db)
+  insertOne(db, cachedRepos, {
+    id,
+    urlHash: `${name}00000000`.slice(0, 8),
+    urlRedacted: url,
+    localPath: dir,
+    defaultBranch: 'main',
+    lastFetchedAt: now,
+    createdAt: now,
+  })
   rememberVolatileRepoUrl(db, id, url)
   return { id, path: dir }
 }
@@ -438,17 +439,14 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       { workflowId: workflow.id, name: 'first', inputs: {}, repoGroupId: gid },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome: join(tmp, 'home'),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
     )
+    const { taskSpaceNodes } = tablesOf(db)
     expect(
-      db
-        .select({ path: taskSpaceNodes.nodePath })
-        .from(taskSpaceNodes)
-        .all()
+      queryRows(db.select({ path: taskSpaceNodes.nodePath }).from(taskSpaceNodes))
         .map((row) => row.path)
         .sort(),
     ).toEqual(['', 'docs', 'docs/decisions'])
@@ -484,8 +482,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       { workflowId: workflow.id, name: 'replay', inputs: {}, sourceTaskId: first.id },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome: join(tmp, 'home'),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },

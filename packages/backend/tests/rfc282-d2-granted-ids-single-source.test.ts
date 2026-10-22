@@ -7,13 +7,14 @@
 //      with the type+userId pair again (grep lock, scoped to the two files
 //      D2 converged — the global lock arrives with A2).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, resourceGrants, users } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
 import { listGrantedResourceIdsInTx } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { listGrantedResourceIds } from '../src/services/resourceAcl'
@@ -36,7 +37,8 @@ describe('RFC-282 D2 — grant-set query single source', () => {
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     for (const id of [userA, userB]) {
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id,
         username: `u-${id.slice(-6)}`,
         displayName: 'U',
@@ -48,6 +50,7 @@ describe('RFC-282 D2 — grant-set query single source', () => {
     }
     const a1 = ulid()
     const a2 = ulid()
+    const { agents, resourceGrants } = tablesOf(db)
     await db.insert(agents).values([
       { id: a1, name: `a-${a1.toLowerCase()}`, ownerUserId: userB, visibility: 'private' },
       { id: a2, name: `a-${a2.toLowerCase()}`, ownerUserId: userB, visibility: 'private' },

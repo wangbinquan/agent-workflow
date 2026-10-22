@@ -9,21 +9,16 @@
 //     joined by the boundary), NOT list<path<md>>.
 //   - getReviewDetail still exposes documents[] (titles from the body heading).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   dispatchReviewNode,
   getReviewDetail,
@@ -37,7 +32,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 const DOCS = ['# Alpha\n\nalpha body\nsecond line', '# Beta\n\nbeta body', '# Gamma\n\ngamma body']
 
 describeEachProvider('RFC-081 — multi-document review over inline list<markdown>', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let worktree: string
 
@@ -57,10 +52,11 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
   async function seedAndDispatch(): Promise<{
     taskId: string
     reviewNodeRunId: string
-    docs: (typeof docVersions.$inferSelect)[]
+    docs: PersistenceTables['docVersions']['$inferSelect'][]
   }> {
     const caseGenId = ulid()
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+    await insertOne(db, agents, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -91,7 +87,7 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       edges: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -104,7 +100,7 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     const lineageSlotPathJson = JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ])
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'inline-multidoc',
       workflowId,
@@ -121,20 +117,21 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     })
     // Both providers must start from the original SQLite-materialized row.
     expect(
-      await db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get(),
+      await first(
+        db
+          .select({
+            executionLineageId: tasks.executionLineageId,
+            lineageSlotPathJson: tasks.lineageSlotPathJson,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, taskId)),
+      ),
     ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
 
     // Upstream done run: `cases` port carries the doc bodies inline.
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: '01SRC',
       taskId,
       nodeId: 'src',
@@ -145,9 +142,11 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: '01SRC', portName: 'cases', content: joinMarkdownDocs(DOCS) })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: '01SRC',
+      portName: 'cases',
+      content: joinMarkdownDocs(DOCS),
+    })
 
     const result = await dispatchReviewNode({
       db,
@@ -219,6 +218,7 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       expectedReviewIteration: 0,
     })
 
+    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
     const accepted = (
       await db
         .select()

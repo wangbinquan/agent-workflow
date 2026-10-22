@@ -52,18 +52,14 @@
 // 'unique-violation'`（与 `terminalMaintenancePersistence` / `runtimeSessionLeaseOperations` 同一条）。
 // 变异验证：把 `runCatalogTransactionRetryingUniqueViolations` 的重试体拆成一次直调，这两条**只在 PostgreSQL 上**红（3/3 次）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestTurns,
-  mcps,
-  users,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMcpRuntimeTestPersistence } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -84,10 +80,7 @@ interface Seeded {
   readonly turnId: string
 }
 
-async function seedSession(
-  db: ProviderNeutralDatabase,
-  options: SeedOptions = {},
-): Promise<Seeded> {
+async function seedSession(db: PersistenceDb, options: SeedOptions = {}): Promise<Seeded> {
   const suffix = ulid().toLowerCase()
   const userId = `u-t28-${suffix}`
   const mcpId = `mcp-t28-${suffix}`
@@ -96,10 +89,15 @@ async function seedSession(
   const inFlight = options.inFlight ?? true
   const status = options.status ?? 'active'
   const turnStatus = options.turnStatus ?? 'running'
-  await db
-    .insert(users)
-    .values({ id: userId, username: userId, displayName: 'T28', createdAt: 1, updatedAt: 1 })
-  await db.insert(mcps).values({
+  const { users, mcps, mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+  await insertOne(db, users, {
+    id: userId,
+    username: userId,
+    displayName: 'T28',
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  await insertOne(db, mcps, {
     id: mcpId,
     name: mcpId,
     type: 'local',
@@ -107,7 +105,7 @@ async function seedSession(
     ownerUserId: userId,
     visibility: 'private',
   })
-  await db.insert(mcpRuntimeTestSessions).values({
+  await insertOne(db, mcpRuntimeTestSessions, {
     id: sessionId,
     mcpId,
     ownerUserId: userId,
@@ -133,7 +131,7 @@ async function seedSession(
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(mcpRuntimeTestTurns).values({
+  await insertOne(db, mcpRuntimeTestTurns, {
     id: turnId,
     sessionId,
     seq: 1,
@@ -149,14 +147,19 @@ async function seedSession(
 }
 
 /** 只种 user + mcp，不种会话：`create` 用例要从空手起两笔并发。 */
-async function seedOwner(db: ProviderNeutralDatabase): Promise<{ userId: string; mcpId: string }> {
+async function seedOwner(db: PersistenceDb): Promise<{ userId: string; mcpId: string }> {
   const suffix = ulid().toLowerCase()
   const userId = `u-t28c-${suffix}`
   const mcpId = `mcp-t28c-${suffix}`
-  await db
-    .insert(users)
-    .values({ id: userId, username: userId, displayName: 'T28', createdAt: 1, updatedAt: 1 })
-  await db.insert(mcps).values({
+  const { users, mcps } = tablesOf(db)
+  await insertOne(db, users, {
+    id: userId,
+    username: userId,
+    displayName: 'T28',
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  await insertOne(db, mcps, {
     id: mcpId,
     name: mcpId,
     type: 'local',
@@ -167,12 +170,11 @@ async function seedOwner(db: ProviderNeutralDatabase): Promise<{ userId: string;
   return { userId, mcpId }
 }
 
-function loadSession(db: ProviderNeutralDatabase, sessionId: string) {
-  return db
-    .select()
-    .from(mcpRuntimeTestSessions)
-    .where(eq(mcpRuntimeTestSessions.id, sessionId))
-    .get()
+function loadSession(db: PersistenceDb, sessionId: string) {
+  const { mcpRuntimeTestSessions } = tablesOf(db)
+  return first(
+    db.select().from(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, sessionId)),
+  )
 }
 
 /** 拒因的可读形态：领域错误报 `code`，别的（含原始驱动错误）原样带出来，好在断言失败时看清。 */
@@ -220,11 +222,11 @@ describeEachProvider('RFC-359 W8-T28 —— MCP playground 并发下的用户可
       const session = await loadSession(db, seeded.sessionId)
       expect(session?.turnSeq).toBe(2)
       expect(session?.sessionVersion).toBe(2)
+      const { mcpRuntimeTestTurns } = tablesOf(db)
       const turns = await db
         .select({ seq: mcpRuntimeTestTurns.seq })
         .from(mcpRuntimeTestTurns)
         .where(eq(mcpRuntimeTestTurns.sessionId, seeded.sessionId))
-        .all()
       expect(turns.map((turn) => turn.seq).sort()).toEqual([1, 2])
     }
   }, 30_000)
@@ -272,11 +274,11 @@ describeEachProvider('RFC-359 W8-T28 —— MCP playground 并发下的用户可
       expect(rejected.map((entry) => rejectionShape(entry.reason))).toEqual([
         'ConflictError:mcp-test-session-exists',
       ])
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       const live = await db
         .select({ id: mcpRuntimeTestSessions.id })
         .from(mcpRuntimeTestSessions)
         .where(eq(mcpRuntimeTestSessions.mcpId, owner.mcpId))
-        .all()
       expect(live).toHaveLength(1)
     }
   }, 30_000)
@@ -310,18 +312,19 @@ describeEachProvider('RFC-359 W8-T28 —— MCP playground 并发下的用户可
       expect(
         settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : entry.reason)),
       ).toEqual(['appended', 'appended'])
+      const { mcpRuntimeTestEvents, mcpRuntimeTestTurns } = tablesOf(db)
       const events = await db
         .select({ seq: mcpRuntimeTestEvents.eventSeq })
         .from(mcpRuntimeTestEvents)
         .where(eq(mcpRuntimeTestEvents.testSessionId, seeded.sessionId))
-        .all()
       expect(events.map((event) => event.seq).sort()).toEqual([1, 2])
       // 字节累加器同样不能丢一次：两条各 100 字节。
-      const turn = await db
-        .select({ bytes: mcpRuntimeTestTurns.captureEventBytes })
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, seeded.turnId))
-        .get()
+      const turn = await first(
+        db
+          .select({ bytes: mcpRuntimeTestTurns.captureEventBytes })
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.id, seeded.turnId)),
+      )
       expect(turn?.bytes).toBe(200)
     }
   }, 30_000)

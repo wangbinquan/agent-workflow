@@ -5,7 +5,7 @@ import type {
 } from '../application/package/artifactOwners'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ResourceCurrentAuthorityResolver } from '../application/participants/resourceAuthorization'
 import {
   createPostgresqlResourcePackageMutationSessionFactory,
@@ -37,7 +37,7 @@ export interface PostgresqlResourcePackageProviderComposition extends ResourcePa
 }
 
 interface PostgresqlResourcePackageProviderBaseDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly skillPackageContent?: SkillPackageContentReader
   readonly skillArtifacts?: ResourcePackageSkillArtifactOwner

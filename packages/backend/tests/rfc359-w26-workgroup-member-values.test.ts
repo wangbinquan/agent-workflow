@@ -2,6 +2,9 @@
 // expression. The DB group separately drives complete selected Intent apply
 // compositions; the exposure alone is not an owner or PostgreSQL execution.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -19,16 +22,6 @@ import {
   type WorkgroupDraftMember,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import {
-  agents,
-  intentApplyJournal,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  users,
-  workgroupMembers,
-  workgroups,
-} from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentManifestEntry } from '@/modules/intent/application/manifest'
@@ -42,7 +35,7 @@ import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrast
 import { workgroupMemberPersistenceValues } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-type MemberRow = typeof workgroupMembers.$inferInsert
+type MemberRow = PersistenceTables['workgroupMembers']['$inferInsert']
 type MemberValues = (
   workgroupId: string,
   members: readonly WorkgroupDraftMember[],
@@ -314,7 +307,8 @@ async function draft(harness: ProviderHarness, op: IntentOp, extra: IntentManife
     { handle: 'res#agent#2', resourceType: 'agent', resourceId: B, root: false, detail: false },
     ...extra,
   ]
-  await harness.db.insert(intentSessions).values({
+  const { intentSessions, intentDrafts } = tablesOf(harness.db)
+  await insertOne(harness.db, intentSessions, {
     id: sessionId,
     ownerUserId: OWNER,
     title: 'Member rows',
@@ -322,7 +316,7 @@ async function draft(harness: ProviderHarness, op: IntentOp, extra: IntentManife
     createdAt: T0,
     updatedAt: T0,
   })
-  await harness.db.insert(intentDrafts).values({
+  await insertOne(harness.db, intentDrafts, {
     id,
     sessionId,
     revision: 1,
@@ -346,14 +340,14 @@ async function draft(harness: ProviderHarness, op: IntentOp, extra: IntentManife
 }
 
 async function physical(harness: ProviderHarness, id: string) {
+  const { workgroups, workgroupMembers } = tablesOf(harness.db)
   return {
-    row: await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).get(),
+    row: await first(harness.db.select().from(workgroups).where(eq(workgroups.id, id))),
     members: await harness.db
       .select()
       .from(workgroupMembers)
       .where(eq(workgroupMembers.workgroupId, id))
-      .orderBy(workgroupMembers.sortOrder)
-      .all(),
+      .orderBy(workgroupMembers.sortOrder),
   }
 }
 
@@ -396,7 +390,7 @@ function expectRows(saved: Awaited<ReturnType<typeof physical>>, replacement: bo
   })
   expect(saved.members).toHaveLength(2)
   expect(saved.members).toEqual(
-    p.members.map((member, index): typeof workgroupMembers.$inferSelect => ({
+    p.members.map((member, index): PersistenceTables['workgroupMembers']['$inferSelect'] => ({
       id: saved.members[index]!.id,
       workgroupId: saved.row!.id,
       memberType: 'agent',
@@ -416,7 +410,8 @@ describeEachProvider('RFC359 real Intent Workgroup member writes', (harness) => 
   let appHome: string
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-w26-member-values-'))
-    await harness.db.insert(users).values({ ...actor.user, createdAt: T0, updatedAt: T0 })
+    const { users, agents } = tablesOf(harness.db)
+    await insertOne(harness.db, users, { ...actor.user, createdAt: T0, updatedAt: T0 })
     await harness.db.insert(agents).values([
       createAgentPersistenceValues({
         id: A,
@@ -482,11 +477,13 @@ describeEachProvider('RFC359 real Intent Workgroup member writes', (harness) => 
     expect(await composition.apply(update)).toEqual(updated)
     expect(await physical(harness, id)).toEqual(after)
     for (const receipt of [created, updated]) {
-      const journal = await harness.db
-        .select()
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.id, receipt.journalId))
-        .get()
+      const { intentApplyJournal, intentProvenance } = tablesOf(harness.db)
+      const journal = await first(
+        harness.db
+          .select()
+          .from(intentApplyJournal)
+          .where(eq(intentApplyJournal.id, receipt.journalId)),
+      )
       expect(journal).toMatchObject({
         state: 'committed',
         error: null,
@@ -520,6 +517,9 @@ describeEachProvider('RFC359 real Intent Workgroup member writes', (harness) => 
     })
     await expect(composition.apply(failedCreate, faults)).rejects.toBe(failure)
     expect(reached).toBe(1)
+    const { workgroups, workgroupMembers, intentApplyJournal, intentProvenance } = tablesOf(
+      harness.db,
+    )
     expect(await harness.db.select().from(workgroups)).toEqual([])
     expect(await harness.db.select().from(workgroupMembers)).toEqual([])
     const create = await draft(harness, {
@@ -547,11 +547,12 @@ describeEachProvider('RFC359 real Intent Workgroup member writes', (harness) => 
     expect(reached).toBe(2)
     expect(await physical(harness, id)).toEqual(before)
     for (const command of [failedCreate, update]) {
-      const journal = await harness.db
-        .select()
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.sessionId, command.sessionId))
-        .get()
+      const journal = await first(
+        harness.db
+          .select()
+          .from(intentApplyJournal)
+          .where(eq(intentApplyJournal.sessionId, command.sessionId)),
+      )
       expect(journal).toMatchObject({ state: 'failed', receiptJson: null })
       expect(journal?.error).toContain(failure.message)
       expect(

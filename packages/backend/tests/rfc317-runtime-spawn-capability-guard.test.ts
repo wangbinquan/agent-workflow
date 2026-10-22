@@ -25,7 +25,7 @@ import { join, resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -44,7 +44,7 @@ const CONFORMING: SmokeResult = {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   /** 每次 smokeRuntime 调用的入参——空数组即「没有 spawn 发生」。 */
   spawns: SmokeOptions[]

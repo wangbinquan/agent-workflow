@@ -20,6 +20,8 @@
 // argv（参考 scheduler-audit-s05 的 MOCK_OPENCODE_CAPTURE_ARGV_TO 模式：
 // argv[1] 即渲染后的完整 user prompt）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -30,7 +32,6 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id freshness）
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 // RFC-132 (PR-C): answer via the real PR-B path (autoDispatchClarifyRound = seal + auto-dispatch +
 // mint the 承接 rerun) so the unified flat injector has a DISPATCHED entry to inject; the legacy
 // immediate mint created none.
@@ -159,7 +160,8 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -179,12 +181,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc092-s1',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc092-midrun-clarify',
     id: taskId,
     workflowId,
@@ -216,6 +219,7 @@ async function waitFor<T>(
 }
 
 async function topLevelRuns(db: DbClient, taskId: string, nodeId: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select()
     .from(nodeRuns)
@@ -330,6 +334,7 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
     try {
       // 等到「clarify 会话已停泊 ∧ slow 仍 running」——这是 S-1 的提交窗口。
       const session = await waitFor(async () => {
+        const { clarifyRounds } = tablesOf(h.db)
         const s = (
           await h.db
             .select()
@@ -344,6 +349,7 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
         return s
       }, 'open clarify session while slow sibling is still running')
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       // RFC-333 T7 将 gate 投影与任务停泊合并为一次 TaskParkTx；slow sibling
       // 仍在同一次活调度调用中运行，所以这里锁定新的 awaiting_human 状态，
       // 后续答案仍由这次调用在 slow settle 后自取，不是另起一次 resume。
@@ -375,6 +381,7 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
     }
     await runPromise
 
+    const { tasks, nodeRuns, clarifyRounds } = tablesOf(h.db)
     // 正确语义（RFC-092 §1.2）：活调度循环在 slow settle 后的 tick 经
     // pending-bypass 自取 rerun 行 → 任务 done，绝不是 'scheduler stalled' 假失败。
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!

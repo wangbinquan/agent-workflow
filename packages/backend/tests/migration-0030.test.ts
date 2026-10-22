@@ -8,6 +8,7 @@
 //   - NO foreign keys to tasks or lifecycle_alerts (audit outlives both)
 //   - INSERT + SELECT round-trip on a complete row
 
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -26,7 +27,8 @@ interface SqlMaster {
 describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
   test('table exists with the expected columns', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const rows = (await db.all(
+    const rows = (await rawRows(
+      db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='lifecycle_repair_audit'`,
     )) as SqlMaster[]
     expect(rows).toHaveLength(1)
@@ -51,7 +53,8 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
 
   test('no foreign keys (audit must outlive task + alert)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const rows = (await db.all(
+    const rows = (await rawRows(
+      db,
       sql`SELECT sql FROM sqlite_master WHERE name='lifecycle_repair_audit'`,
     )) as { sql: string }[]
     const ddl = (rows[0]!.sql ?? '').toLowerCase()
@@ -62,7 +65,8 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
 
   test('both indexes exist', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const rows = (await db.all(
+    const rows = (await rawRows(
+      db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='lifecycle_repair_audit'`,
     )) as { name: string }[]
     const names = new Set(rows.map((r) => r.name))
@@ -72,7 +76,9 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
 
   test('insert + select round-trip', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await db.run(sql`
+    await rawExec(
+      db,
+      sql`
       INSERT INTO lifecycle_repair_audit
         (id, task_id, alert_id, alert_rule, alert_detail_json, option_id,
          actor_user_id, before_snapshot_json, after_snapshot_json, outcome,
@@ -81,8 +87,9 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
         ('audit-1', 't-1', 'a-1', 'S3', '{"rule":"S3"}', 'S3.demote-task',
          'u-1', '{"task":"running"}', '{"task":"interrupted"}', 'success',
          NULL, 1234567)
-    `)
-    const rows = (await db.all(sql`SELECT * FROM lifecycle_repair_audit`)) as Array<{
+    `,
+    )
+    const rows = (await rawRows(db, sql`SELECT * FROM lifecycle_repair_audit`)) as Array<{
       id: string
       task_id: string
       alert_id: string | null
@@ -110,14 +117,18 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
 
   test('alert_id and actor_user_id may be null (audit survives even when caller is unknown)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await db.run(sql`
+    await rawExec(
+      db,
+      sql`
       INSERT INTO lifecycle_repair_audit
         (id, task_id, alert_rule, alert_detail_json, option_id,
          before_snapshot_json, after_snapshot_json, outcome, applied_at)
       VALUES
         ('audit-2', 't-2', 'R1', '{}', 'R1.approve-run', '{}', '{}', 'apply-failed', 0)
-    `)
-    const rows = (await db.all(
+    `,
+    )
+    const rows = (await rawRows(
+      db,
       sql`SELECT alert_id, actor_user_id FROM lifecycle_repair_audit WHERE id='audit-2'`,
     )) as { alert_id: string | null; actor_user_id: string | null }[]
     expect(rows[0]!.alert_id).toBeNull()

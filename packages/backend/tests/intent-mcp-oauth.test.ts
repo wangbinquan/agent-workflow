@@ -5,6 +5,8 @@
 // update REPLACES the stored one (Codex r12 P1#1 — the old carry-forward
 // overwrote every explicit edit).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createHash } from 'node:crypto'
@@ -15,8 +17,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { canonicalIntentJson, INTENT_REDACTED, parseIntentChangeset } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { intentDrafts, intentSessions, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
@@ -38,7 +39,7 @@ import { getMcpFixtureById } from './helpers/mcpServiceBinding'
 
 const OWNER = 'user_owner_oauth_0000000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 let persistence: IntentPersistence
 
@@ -56,7 +57,8 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-oauth-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER,
     username: 'owner',
     displayName: 'owner',
@@ -64,7 +66,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })
@@ -84,7 +86,8 @@ async function installDraft(
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  await db.insert(intentDrafts).values({
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  await insertOne(db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,

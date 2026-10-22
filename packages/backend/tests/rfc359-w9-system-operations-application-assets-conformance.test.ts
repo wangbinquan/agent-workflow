@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-359 W9 —— System Operations「应用侧资产」读面的双引擎对拍。
 //
@@ -62,8 +64,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   captureWorktrees,
   createPortableBackupApplicationAssets,
@@ -89,10 +90,11 @@ function cleanupRoots(): void {
 const EMPTY_DEFINITION = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly id: string; readonly name?: string; readonly definition?: string },
 ): Promise<void> {
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: input.id,
     name: input.name ?? `workflow-${input.id}`,
     description: 'seeded by the W9 conformance harness',
@@ -101,7 +103,7 @@ async function seedWorkflow(
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly id: string
     readonly status: string
@@ -110,7 +112,8 @@ async function seedTask(
     readonly baseCommit?: string | null
   },
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: input.id,
     name: input.id,
     workflowId: 'workflow-w9',
@@ -300,8 +303,9 @@ describeEachProvider('RFC-359 W9 System Operations application-asset reads', (ha
     const captured = await captureWorktrees(db, staging)
     expect(captured.captured.sort()).toEqual([liveId, terminalId, goneId].sort())
 
-    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, terminalId)).run()
-    await db.delete(tasks).where(eq(tasks.id, goneId)).run()
+    const { tasks } = tablesOf(db)
+    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, terminalId))
+    await db.delete(tasks).where(eq(tasks.id, goneId))
 
     const result = await reconstructWorktrees(db, staging)
     // 三个 worktree 目录都还在盘上,所以 live 那个是「已存在,不覆盖」;

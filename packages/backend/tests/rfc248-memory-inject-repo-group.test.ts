@@ -12,19 +12,21 @@
 // 第 3 条是最容易在重构中被"顺手打通"的——看起来「这个仓属于那个组，那就注入吧」
 // 很自然，但那会把无关知识灌进单仓任务的 prompt。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { cachedRepos, memories } from '../src/db/schema'
 import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
 import { DrizzleMemoryInjectionReadStore } from '../src/modules/memory/infrastructure/memoryInjectionReadStore'
 
-async function seedRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
+async function seedRepo(db: PersistenceDb, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id,
     urlHash: `${slug}00000000`.slice(0, 8),
     urlRedacted: `https://git.example/${slug}.git`,
@@ -37,12 +39,13 @@ async function seedRepo(db: ProviderNeutralDatabase, slug: string): Promise<stri
 }
 
 async function seedMemory(
-  db: ProviderNeutralDatabase,
-  scopeType: typeof memories.$inferInsert.scopeType,
+  db: PersistenceDb,
+  scopeType: PersistenceTables['memories']['$inferInsert']['scopeType'],
   scopeId: string | null,
   title: string,
 ): Promise<void> {
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id: ulid(),
     scopeType,
     scopeId,
@@ -57,7 +60,7 @@ async function seedMemory(
 }
 
 describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -116,7 +119,8 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
     const groupId = ulid()
     await seedMemory(db, 'repo_group', groupId, 'OK')
     for (const st of ['archived', 'candidate', 'rejected', 'superseded'] as const) {
-      await db.insert(memories).values({
+      const { memories } = tablesOf(db)
+      await insertOne(db, memories, {
         id: ulid(),
         scopeType: 'repo_group',
         scopeId: groupId,
@@ -149,6 +153,7 @@ describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
     })
     expect(before.byScope.repoGroup).toHaveLength(1)
 
+    const { memories } = tablesOf(db)
     await db
       .update(memories)
       .set({ status: 'archived' })

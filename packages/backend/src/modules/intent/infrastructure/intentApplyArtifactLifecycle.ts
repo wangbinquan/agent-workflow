@@ -1,14 +1,15 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
 import { createFileIntentArtifactContent } from './local/fileIntentArtifactContent'
 import { and, eq } from 'drizzle-orm'
 
-import { intentApplyJournal, plugins, skills, skillVersions } from '@/db/schema'
 import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import type {
   LegacyIntentSkillArtifactCompat,
   PostgresqlSkillArtifactCompensation,
 } from '../ports/skillArtifactCompensation'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   decodeIntentJournalArtifacts,
   type IntentJournalArtifact,
@@ -104,32 +105,36 @@ function versionOf(
 }
 
 async function assertPluginPublished(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly artifact: Extract<IntentApplyRecoveryArtifact, { kind: 'plugin-install' }>
   readonly content: IntentArtifactContentPort
 }): Promise<void> {
-  const row = await input.db
-    .select({ cachedPath: plugins.cachedPath })
-    .from(plugins)
-    .where(eq(plugins.id, input.artifact.pluginId))
-    .limit(1)
-    .get()
+  const { plugins } = tablesOf(input.db)
+  const row = await first(
+    input.db
+      .select({ cachedPath: plugins.cachedPath })
+      .from(plugins)
+      .where(eq(plugins.id, input.artifact.pluginId))
+      .limit(1),
+  )
   if (row === undefined || !(await input.content.pluginExists(row.cachedPath))) {
     throw new Error(`intent-apply-plugin-publication-missing:${input.artifact.pluginId}`)
   }
 }
 
 async function assertLegacyPluginPublished(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly pluginId: string
   readonly content: IntentArtifactContentPort
 }): Promise<void> {
-  const row = await input.db
-    .select({ cachedPath: plugins.cachedPath })
-    .from(plugins)
-    .where(eq(plugins.id, input.pluginId))
-    .limit(1)
-    .get()
+  const { plugins } = tablesOf(input.db)
+  const row = await first(
+    input.db
+      .select({ cachedPath: plugins.cachedPath })
+      .from(plugins)
+      .where(eq(plugins.id, input.pluginId))
+      .limit(1),
+  )
   if (row === undefined || !(await input.content.pluginExists(row.cachedPath))) {
     throw new Error(`intent-apply-plugin-publication-missing:${input.pluginId}`)
   }
@@ -145,7 +150,7 @@ async function assertLegacyPluginPublished(input: {
  */
 async function rollForwardLegacySkillArtifacts(input: {
   readonly recovery: LegacyIntentSkillArtifactCompat
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly artifacts: readonly IntentJournalArtifact[]
   readonly log: Logger
@@ -227,30 +232,33 @@ async function rollForwardLegacySkillArtifacts(input: {
 
 async function rollForwardPostgresqlSkill(input: {
   readonly content: IntentArtifactContentPort
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly artifact: Extract<IntentApplyArtifact, { kind: 'skill-stage' | 'skill-version-stage' }>
 }): Promise<void> {
   const version = versionOf(input.artifact)
-  const skill = await input.db
-    .select({ managedPath: skills.managedPath, contentVersion: skills.contentVersion })
-    .from(skills)
-    .where(eq(skills.id, input.artifact.skillId))
-    .limit(1)
-    .get()
+  const { skills, skillVersions } = tablesOf(input.db)
+  const skill = await first(
+    input.db
+      .select({ managedPath: skills.managedPath, contentVersion: skills.contentVersion })
+      .from(skills)
+      .where(eq(skills.id, input.artifact.skillId))
+      .limit(1),
+  )
   if (skill === undefined || skill.managedPath === null || skill.contentVersion < version) {
     throw new Error(`intent-apply-skill-publication-missing:${input.artifact.skillId}`)
   }
-  const snapshot = await input.db
-    .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
-    .from(skillVersions)
-    .where(
-      and(
-        eq(skillVersions.skillId, input.artifact.skillId),
-        eq(skillVersions.versionIndex, version),
-      ),
-    )
-    .limit(1)
-    .get()
+  const snapshot = await first(
+    input.db
+      .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
+      .from(skillVersions)
+      .where(
+        and(
+          eq(skillVersions.skillId, input.artifact.skillId),
+          eq(skillVersions.versionIndex, version),
+        ),
+      )
+      .limit(1),
+  )
   if (snapshot === undefined || snapshot.contentHash === null) {
     throw new Error(`intent-apply-skill-snapshot-missing:${input.artifact.skillId}:${version}`)
   }
@@ -267,7 +275,7 @@ async function rollForwardPostgresqlSkill(input: {
 
 /** Real PostgreSQL artifact recovery shared by apply-time and boot/hourly convergence. */
 interface IntentArtifactLifecycleBaseDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
   readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
@@ -393,7 +401,7 @@ export interface IntentApplyJournalConvergence {
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
 
 export function createIntentApplyJournalConvergence(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly artifacts: IntentApplyArtifactLifecycle
   readonly now?: () => number
   readonly log: Logger
@@ -405,6 +413,7 @@ export function createIntentApplyJournalConvergence(input: {
       const reapBefore = now() - CONVERGE_MIN_AGE_MS
       let failed = 0
       let rolledForward = 0
+      const { intentApplyJournal } = tablesOf(input.db)
       for (const row of await input.db.select().from(intentApplyJournal)) {
         if (row.state === 'failed') continue
         let artifacts: readonly IntentApplyRecoveryArtifact[]
@@ -451,12 +460,15 @@ export function createIntentApplyJournalConvergence(input: {
               )
             continue
           }
-          const settled = await input.db
-            .update(intentApplyJournal)
-            .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: now() })
-            .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-            .returning({ id: intentApplyJournal.id })
-            .get()
+          const settled = await first(
+            input.db
+              .update(intentApplyJournal)
+              .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: now() })
+              .where(
+                and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)),
+              )
+              .returning({ id: intentApplyJournal.id }),
+          )
           if (settled !== undefined) failed += 1
           continue
         }

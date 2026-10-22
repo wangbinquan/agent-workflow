@@ -8,6 +8,8 @@
 //   - each failure path (owner inactive / workflow gone) records failed + cf++
 //   - consecutive failures cross the threshold → auto-disable EXACTLY once
 //   - corrupt spec disables instead of hot-looping
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
@@ -15,9 +17,8 @@ import { resolve } from 'node:path'
 
 import type { StartTask } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { scheduledTasks, users, workflows } from '../src/db/schema'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { runDueSchedulesOnce } from './helpers/scheduledTaskScheduler'
 import { createUser } from './helpers/userFixture'
@@ -55,7 +56,7 @@ function fakeLaunch(
 }
 
 describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let wfId = ''
   let ownerId = ''
   let identityAccess: ReturnType<typeof withIntegrationTriggerResources>
@@ -87,10 +88,11 @@ describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
 
   async function seed(
     id: string,
-    over: Partial<typeof scheduledTasks.$inferInsert> = {},
+    over: Partial<PersistenceTables['scheduledTasks']['$inferInsert']> = {},
   ): Promise<void> {
     const now = Date.now()
-    await db.insert(scheduledTasks).values({
+    const { scheduledTasks } = tablesOf(db)
+    await insertOne(db, scheduledTasks, {
       id,
       name: id,
       ownerUserId: ownerId,
@@ -105,8 +107,10 @@ describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
     })
   }
 
-  const rowOf = async (id: string) =>
-    (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1))[0]!
+  const rowOf = async (id: string) => {
+    const { scheduledTasks } = tablesOf(db)
+    return (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1))[0]!
+  }
 
   test('fires a due schedule: success recorded, owner+scheduledTaskId+decorated name passed, next_run_at advanced', async () => {
     await seed('s1')
@@ -161,6 +165,7 @@ describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
 
   test('owner inactive → failure, no launch', async () => {
     await seed('s1')
+    const { users } = tablesOf(db)
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, ownerId))
     const calls: LaunchCall[] = []
     await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls), identityAccess })
@@ -173,6 +178,7 @@ describeEachProvider('RFC-159 scheduled-task scheduler', (harness) => {
 
   test('workflow deleted → failure recorded', async () => {
     await seed('s1')
+    const { workflows } = tablesOf(db)
     await db.delete(workflows).where(eq(workflows.id, wfId))
     const calls: LaunchCall[] = []
     await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls), identityAccess })

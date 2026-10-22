@@ -17,6 +17,8 @@
 //
 // 详见 design/RFC-131-task-question-queue-aging/{design.md §2, plan.md 验收}。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,7 +26,6 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
@@ -125,6 +126,7 @@ const run = (h: Harness, taskId: string) =>
   })
 
 async function selfEntryId(h: Harness, taskId: string, originNodeRunId: string): Promise<string> {
+  const { taskQuestions } = tablesOf(h.db)
   const rows = await h.db
     .select()
     .from(taskQuestions)
@@ -212,10 +214,9 @@ async function seedDeferredTask(h: Harness): Promise<string> {
   const def = buildDefinition()
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-  await h.db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'rfc131-reject-combo',
     workflowId,
@@ -241,6 +242,7 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
     { MOCK_OPENCODE_CLARIFY_BODY: clarifyBody('r1q', CLARIFY_Q, [CLARIFY_ANS, 'R1_ANS_VUE']) },
     () => run(h, taskId),
   )
+  const { tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
   expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
     'awaiting_human',
   )
@@ -349,6 +351,7 @@ describe('RFC-131 验收#4 组合 — deferred self-clarify → review REJECT �
     expect(prompt.toLowerCase()).toContain('complete')
     expect(prompt.toLowerCase()).not.toContain('do not regenerate')
 
+    const { nodeRuns } = tablesOf(h.db)
     // --- aging ANCHOR: P's first done+output run is now a review-reject supersede (canceled).
     //     THIS is why RFC-131 aging is lost on reject — the only output-bearing run is no
     //     longer `status='done'`, so isTargetNodeConsumed (needs status==='done') returns false.

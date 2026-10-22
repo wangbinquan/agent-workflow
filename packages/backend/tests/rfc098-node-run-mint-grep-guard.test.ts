@@ -21,7 +21,7 @@ import { join, resolve } from 'node:path'
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const MINT_ADAPTERS = ['modules/task-execution/infrastructure/nodeRunMintParticipant.ts'] as const
 
-const PATTERN_INSERT_NODE_RUNS = /\.insert\s*\(\s*nodeRuns\s*\)/
+const PATTERN_INSERT_NODE_RUNS = /insertOne\s*\([^,]+,\s*nodeRuns\s*,|\.insert\s*\(\s*nodeRuns\s*\)/
 const ALLOW_MARKER = /rfc098-allow-direct-node-run-insert/
 
 function isCommentLine(line: string): boolean {

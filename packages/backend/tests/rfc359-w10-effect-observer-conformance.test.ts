@@ -25,18 +25,13 @@
 // 只断言「都被拒绝 / 都为空」的用例，一个「永远什么都不写」的实现也能满足。所以每条拒绝类判据
 // 旁边都钉一条「正常路径确实落了行、且落成什么样」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffects,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
@@ -85,7 +80,7 @@ function continuation(taskId: string): CanonicalContinuationRequest {
 }
 
 interface Fixture {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly taskId: string
   readonly runId: string
   readonly intentId: string
@@ -96,9 +91,10 @@ interface Fixture {
   reset(): void
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<Fixture> {
+async function seed(db: PersistenceDb): Promise<Fixture> {
   const taskId = `w10_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-w10',
     description: '',
@@ -106,7 +102,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Fixture> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -126,7 +122,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Fixture> {
   // 给直写者装了补齐触发器，PostgreSQL 没有（schema 面的差异，不在本对之内）。
   const runId = ulid()
   const slotPathJson = encodeLineageSlotPath(rootPath(taskId))
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -175,6 +171,7 @@ async function ledger(fixture: Fixture): Promise<
     }[]
   }[]
 > {
+  const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(fixture.db)
   const effects = await fixture.db
     .select()
     .from(taskExecutionEffects)
@@ -188,7 +185,7 @@ async function ledger(fixture: Fixture): Promise<
       .where(eq(taskExecutionEffectAttempts.effectId, effect.id))
       .orderBy(asc(taskExecutionEffectAttempts.attemptNo))
     out.push({
-      // PostgreSQL 的数值列经 sqlite-proxy 回来可能是字符串，判据前显式归一。
+      // 裸查询的 PostgreSQL int8 可能是字符串，语义投影按 codec 归一。
       generation: Number(effect.operationGeneration),
       kind: String(effect.kind),
       state: String(effect.state),
@@ -441,6 +438,7 @@ describeEachProvider('RFC-359 W10 —— 效应观察者双引擎对拍', (harne
           failureCode: null,
         },
       ])
+      const { nodeRuns } = tablesOf(fixture.db)
       // spawn 回执投影到 node_run 上：用户在任务详情里看到的 pid 就是这一列。
       const runRows = await fixture.db
         .select({ pid: nodeRuns.pid })

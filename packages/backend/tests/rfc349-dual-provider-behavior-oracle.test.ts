@@ -3,11 +3,13 @@
 // runtime; the script verifies the adapter's actual transaction/fence path and
 // never substitutes a SQLite client or a second business implementation.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
+import { describe, expect, test } from 'bun:test'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
-import { committedEventDeliveries, committedEvents, resourceBundleApplies } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   createResourcePackageApplyMaintenanceCommand,
   type ResourcePackageApplyArtifactRecoveryPort,
@@ -86,10 +88,10 @@ function createScriptedPostgresqlFixture(
     }
     return sqlRows(step)
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -428,29 +430,26 @@ function eventValues(row: EventFixtureRow): readonly unknown[] {
 }
 
 function seedSqliteCommittedEvents(db: DbClient, events: readonly EventFixtureRow[]): void {
-  db.insert(committedEvents)
-    .values([...events])
-    .run()
-  db.insert(committedEventDeliveries)
-    .values({
-      eventId: events[1]!.id,
-      consumerId: 'consumer-oracle',
-      deliveryClass: 'critical',
-      state: 'dead-letter',
-      attemptCount: 2,
-      nextAttemptAt: 400,
-      claimedBy: null,
-      leaseEpoch: 4,
-      claimExpiresAt: null,
-      lastErrorCode: 'fixture-poison',
-      lastErrorSummary: 'fixture poison',
-      replayGeneration: 2,
-      createdAt: 200,
-      updatedAt: 400,
-      acceptedAt: null,
-      deadLetterAt: 400,
-    })
-    .run()
+  const { committedEvents, committedEventDeliveries } = tablesOf(db)
+  queryWrite(db.insert(committedEvents).values([...events]))
+  insertOne(db, committedEventDeliveries, {
+    eventId: events[1]!.id,
+    consumerId: 'consumer-oracle',
+    deliveryClass: 'critical',
+    state: 'dead-letter',
+    attemptCount: 2,
+    nextAttemptAt: 400,
+    claimedBy: null,
+    leaseEpoch: 4,
+    claimExpiresAt: null,
+    lastErrorCode: 'fixture-poison',
+    lastErrorSummary: 'fixture poison',
+    replayGeneration: 2,
+    createdAt: 200,
+    updatedAt: 400,
+    acceptedAt: null,
+    deadLetterAt: 400,
+  })
 }
 
 function postgresqlCommittedEventPersistence(events: readonly EventFixtureRow[]): Readonly<{
@@ -646,10 +645,6 @@ async function applyRecoveryTranscript(journal: ResourcePackageApplyJournalPort)
   return { receipt, effects }
 }
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
 describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
   test('SQLite and PostgreSQL deep-equal CAS, lease/fence, idempotency, outbox, ordering and apply recovery', async () => {
     const events = [eventFixture(0), eventFixture(1)] as const
@@ -659,10 +654,8 @@ describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
     const sqliteApplyDb = createInMemoryDb(MIGRATIONS)
     try {
       seedSqliteCommittedEvents(sqliteEventsDb, events)
-      sqliteApplyDb
-        .insert(resourceBundleApplies)
-        .values([...APPLY_ROWS])
-        .run()
+      const { resourceBundleApplies } = tablesOf(sqliteApplyDb)
+      queryWrite(sqliteApplyDb.insert(resourceBundleApplies).values([...APPLY_ROWS]))
       const sqlite = {
         maintenance: await maintenanceTranscript(createMaintenanceRunStore(sqliteMaintenanceDb)),
         committedEvents: await committedEventTranscript(

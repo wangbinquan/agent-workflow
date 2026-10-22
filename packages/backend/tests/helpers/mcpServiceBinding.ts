@@ -2,7 +2,7 @@
 
 import type { CreateMcp, Mcp, RenameMcp, UpdateMcp } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'
 import type {
   McpAccessPort,
@@ -41,7 +41,7 @@ export async function createMcpForTest(
 }
 
 export async function createMcpFixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateMcp,
   options: Readonly<{
     ownerUserId?: string
@@ -77,13 +77,13 @@ export async function getMcpByIdForTest(
 }
 
 export async function getMcpFixtureById(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<McpCatalogResource | null> {
   return getMcpByIdForTest(composeMcpServiceBindingForTest(db), id)
 }
 
-export function composeMcpClosureQueryForTest(db: ProviderNeutralDatabase): McpClosureQuery {
+export function composeMcpClosureQueryForTest(db: PersistenceDb): McpClosureQuery {
   const repository = createMcpRepository({
     db,
     lifecycle: Object.freeze({
@@ -135,7 +135,7 @@ export async function deleteMcpForTest(binding: McpCatalogTestBinding, id: strin
 }
 
 export function composeMcpServiceBindingForTest(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: Readonly<{
     actor?: Actor
     beforeDelete?: (captured: Mcp) => Promise<void>

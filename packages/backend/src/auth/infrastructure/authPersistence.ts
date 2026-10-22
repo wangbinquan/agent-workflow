@@ -12,25 +12,14 @@
 //   · bootstrap 的用户名 / 邮箱竞争交给库的唯一约束，经能力矩阵 `uniqueViolationTarget` 映射回
 //     `username-taken` / `email-taken`（两个引擎同一条正则）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNull, lt } from 'drizzle-orm'
 import type { AuthLoginPolicy, AuthMethodDiscovery, OidcDefaultRole } from '@agent-workflow/shared'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  authLoginPolicy,
-  oidcProviders,
-  userAccessAudit,
-  userIdentities,
-  userPats,
-  userSessions,
-  users,
-} from '@/db/schema'
-import {
-  affectedRows,
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '@/util/errors'
 import type {
@@ -46,19 +35,19 @@ import type {
 
 const GLOBAL_POLICY_ID = 'global'
 
-function mapUser(row: typeof users.$inferSelect): AuthUserRecord {
+function mapUser(row: PersistenceTables['users']['$inferSelect']): AuthUserRecord {
   return { ...row, role: row.role, status: row.status }
 }
 
-function mapSession(row: typeof userSessions.$inferSelect): AuthSessionRecord {
+function mapSession(row: PersistenceTables['userSessions']['$inferSelect']): AuthSessionRecord {
   return row
 }
 
-function mapPat(row: typeof userPats.$inferSelect): AuthPatRecord {
+function mapPat(row: PersistenceTables['userPats']['$inferSelect']): AuthPatRecord {
   return { ...row, purpose: row.purpose === 'general' ? 'general' : 'mcp_only' }
 }
 
-function mapPolicy(row: typeof authLoginPolicy.$inferSelect): AuthLoginPolicy {
+function mapPolicy(row: PersistenceTables['authLoginPolicy']['$inferSelect']): AuthLoginPolicy {
   return {
     passwordLoginEnabled: row.passwordLoginEnabled,
     oidcDefaultRole: row.oidcDefaultRole,
@@ -68,8 +57,9 @@ function mapPolicy(row: typeof authLoginPolicy.$inferSelect): AuthLoginPolicy {
 }
 
 async function currentPolicy(
-  handle: ProviderNeutralDatabase,
-): Promise<typeof authLoginPolicy.$inferSelect | undefined> {
+  handle: PersistenceDb,
+): Promise<PersistenceTables['authLoginPolicy']['$inferSelect'] | undefined> {
+  const { authLoginPolicy } = tablesOf(handle)
   return (
     await handle
       .select()
@@ -79,7 +69,8 @@ async function currentPolicy(
   )[0]
 }
 
-async function lockPolicy(engine: EngineCapabilities, tx: DatabaseTransaction): Promise<void> {
+async function lockPolicy(engine: EngineCapabilities, tx: PersistenceTx): Promise<void> {
+  const { authLoginPolicy } = tablesOf(tx)
   await engine.lockAggregateRoot(tx, authLoginPolicy, authLoginPolicy.id, GLOBAL_POLICY_ID)
 }
 
@@ -101,7 +92,7 @@ export function mapBootstrapConstraint(
   return error
 }
 
-export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersistence {
+export function createAuthPersistence(db: PersistenceDb): AuthPersistence {
   const session = databaseSessionFor(db)
   const engine = session.engine
   return {
@@ -122,6 +113,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
             daemonTokenEnabled: true,
           }
         }
+        const { oidcProviders } = tablesOf(tx)
         const providers = oidcRuntimeAvailable
           ? await tx
               .select({
@@ -158,6 +150,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
         }
         const passwordLoginEnabled = input.passwordLoginEnabled ?? current.passwordLoginEnabled
         if (!passwordLoginEnabled) {
+          const { oidcProviders } = tablesOf(tx)
           const provider = (
             await tx
               .select({ id: oidcProviders.id })
@@ -173,6 +166,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
           }
         }
         const oidcDefaultRole = input.oidcDefaultRole ?? current.oidcDefaultRole
+        const { authLoginPolicy } = tablesOf(tx)
         await tx
           .update(authLoginPolicy)
           .set({ passwordLoginEnabled, oidcDefaultRole, updatedAt: input.now })
@@ -201,6 +195,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
           if (input.username === SYSTEM_USER_ID) {
             throw new ConflictError('username-reserved', `username '${SYSTEM_USER_ID}' is reserved`)
           }
+          const { users, userAccessAudit, authLoginPolicy } = tablesOf(tx)
           const duplicateUsername = (
             await tx
               .select({ id: users.id })
@@ -223,7 +218,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
               throw new ConflictError('email-taken', `email '${input.email}' already exists`)
             }
           }
-          const user: typeof users.$inferInsert = {
+          const user: PersistenceTables['users']['$inferInsert'] = {
             id: input.id,
             username: input.username,
             email: input.email,
@@ -240,9 +235,9 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
             schemaVersion: 1,
             accessRevision: 0,
           }
-          await tx.insert(users).values(user)
+          await insertOne(tx, users, user)
           // admin 的 baseline 是动态全量，没有默认附加授权（RFC-312）；审计行由这里直落，identity-access 不参与。
-          await tx.insert(userAccessAudit).values({
+          await insertOne(tx, userAccessAudit, {
             id: input.auditId,
             targetUserId: input.id,
             actorUserId: SYSTEM_USER_ID,
@@ -292,6 +287,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
             'username and password login is disabled',
           )
         }
+        const { users, userSessions } = tablesOf(tx)
         await engine.lockAggregateRoot(tx, users, users.id, input.userId)
         const user = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0]
         if (
@@ -302,7 +298,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
         ) {
           throw new UnauthorizedError('invalid username or password')
         }
-        await tx.insert(userSessions).values(input.session)
+        await insertOne(tx, userSessions, input.session)
         await tx
           .update(users)
           .set({ lastLoginAt: input.session.createdAt })
@@ -312,27 +308,32 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async findUserByUsername(username) {
+      const { users } = tablesOf(db)
       const row = (await db.select().from(users).where(eq(users.username, username)).limit(1))[0]
       return row === undefined ? null : mapUser(row)
     },
 
     async findUserById(userId) {
+      const { users } = tablesOf(db)
       const row = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]
       return row === undefined ? null : mapUser(row)
     },
 
     async findInvitedUserByEmail(email) {
+      const { users } = tablesOf(db)
       const row = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0]
       return row?.status === 'invited' ? mapUser(row) : null
     },
 
     async insertSession(sessionRecord) {
-      await db.insert(userSessions).values(sessionRecord)
+      const { userSessions } = tablesOf(db)
+      await insertOne(db, userSessions, sessionRecord)
     },
 
     async insertLoginSession(sessionRecord) {
       await session.transaction(async (tx) => {
-        await tx.insert(userSessions).values(sessionRecord)
+        const { userSessions, users } = tablesOf(tx)
+        await insertOne(tx, userSessions, sessionRecord)
         await tx
           .update(users)
           .set({ lastLoginAt: sessionRecord.createdAt })
@@ -341,6 +342,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async resolveSessionByHash(input) {
+      const { userSessions, users } = tablesOf(db)
       const row = (
         await db
           .select({ session: userSessions, user: users })
@@ -370,6 +372,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async findSessionOwner(sessionId) {
+      const { userSessions } = tablesOf(db)
       const row = (
         await db
           .select({ userId: userSessions.userId })
@@ -381,10 +384,12 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async revokeSession(sessionId, now) {
+      const { userSessions } = tablesOf(db)
       await db.update(userSessions).set({ revokedAt: now }).where(eq(userSessions.id, sessionId))
     },
 
     async revokeSessionsForUser(userId, now) {
+      const { userSessions } = tablesOf(db)
       await db
         .update(userSessions)
         .set({ revokedAt: now })
@@ -392,19 +397,23 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async sweepExpiredSessions(now) {
+      const { userSessions } = tablesOf(db)
       return affectedRows(await db.delete(userSessions).where(lt(userSessions.expiresAt, now)))
     },
 
     async listActiveSessionsForUser(userId, now) {
+      const { userSessions } = tablesOf(db)
       const rows = await db.select().from(userSessions).where(eq(userSessions.userId, userId))
       return rows.filter((row) => row.revokedAt === null && row.expiresAt >= now).map(mapSession)
     },
 
     async insertPat(pat) {
-      await db.insert(userPats).values(pat)
+      const { userPats } = tablesOf(db)
+      await insertOne(db, userPats, pat)
     },
 
     async resolvePatByHash(input) {
+      const { userPats, users } = tablesOf(db)
       const row = (
         await db
           .select({ pat: userPats, user: users })
@@ -437,6 +446,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async findPatOwner(patId) {
+      const { userPats } = tablesOf(db)
       const row = (
         await db
           .select({ userId: userPats.userId })
@@ -448,18 +458,22 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     },
 
     async revokePat(patId, now) {
+      const { userPats } = tablesOf(db)
       await db.update(userPats).set({ revokedAt: now }).where(eq(userPats.id, patId))
     },
 
     async listAllPats() {
+      const { userPats } = tablesOf(db)
       return (await db.select().from(userPats)).map(mapPat)
     },
 
     async listPatsForUser(userId) {
+      const { userPats } = tablesOf(db)
       return (await db.select().from(userPats).where(eq(userPats.userId, userId))).map(mapPat)
     },
 
     async isOidcManagedUser(userId) {
+      const { userIdentities } = tablesOf(db)
       const row = (
         await db
           .select({ id: userIdentities.id })
@@ -473,6 +487,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
     async listOidcManagedUserIds(userIds) {
       const wanted = userIds === undefined ? undefined : [...new Set(userIds)]
       if (wanted?.length === 0) return new Set()
+      const { userIdentities } = tablesOf(db)
       const base = db.select({ userId: userIdentities.userId }).from(userIdentities)
       const rows =
         wanted === undefined ? await base : await base.where(inArray(userIdentities.userId, wanted))
@@ -481,6 +496,7 @@ export function createAuthPersistence(db: ProviderNeutralDatabase): AuthPersiste
 
     async writeLocalPasswordIfUnmanaged(input: LocalPasswordWrite) {
       await session.transaction(async (tx) => {
+        const { users, userIdentities } = tablesOf(tx)
         await engine.lockAggregateRoot(tx, users, users.id, input.userId)
         const user = (
           await tx.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1)

@@ -1,11 +1,11 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canonicalJson } from '@agent-workflow/shared'
 import { createDigitalEmployeeAuthoringPersistence } from '../infrastructure/authoringStore'
 import { employeeJobTemplateContentSchema } from '../domain/model'
 
 /** Code-owned default jobs use the same publish validation as authored jobs. */
 export function composeBuiltinEmployeeJobs(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   publish: (input: { id: string; actorUserId: null }) => Promise<{ id: string; revision: number }>,
 ) {
   const store = createDigitalEmployeeAuthoringPersistence(db)

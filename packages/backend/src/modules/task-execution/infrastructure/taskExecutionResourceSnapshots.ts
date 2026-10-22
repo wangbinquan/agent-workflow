@@ -8,12 +8,9 @@
 //   * `freezeTaskExecutionCallClosureAsync` —— 与同步版逐语句同构（同一个 builder、同一顺序、
 //     同一序列化），只在 loader 上多一个 await，所以异步版严格覆盖同步版。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { TaskExecutionResourceSnapshotInTx } from '@/modules/resource-catalog/public/participants'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { TaskExecutionResourceBinding } from '../application/ports/taskExecutionResourceSnapshots'
 import { freezeTaskExecutionCallClosureAsync } from '../application/taskExecutionCallClosure'
 
@@ -21,11 +18,11 @@ type AuthorityPair = Parameters<TaskExecutionResourceBinding['loadAuthorized']>[
 
 /** Resource Catalog 提供的事务内快照参与者；task-execution 只拿到这一个绑定面。 */
 export interface TaskExecutionResourceSnapshotFactory {
-  inTransaction(tx: DatabaseTransaction, pair: AuthorityPair): TaskExecutionResourceSnapshotInTx
+  inTransaction(tx: PersistenceTx, pair: AuthorityPair): TaskExecutionResourceSnapshotInTx
 }
 
 export function createTaskExecutionResourceBinding(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   factory: TaskExecutionResourceSnapshotFactory,
 ): TaskExecutionResourceBinding {
   const session = databaseSessionFor(db)

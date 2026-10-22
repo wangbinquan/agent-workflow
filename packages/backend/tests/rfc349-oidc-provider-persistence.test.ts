@@ -2,9 +2,9 @@
 // selected provider's own serializable transaction. PostgreSQL never consults
 // a SQLite shadow while protecting the subject namespace or login families.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { DrizzleOidcProviderRepository } from '@/modules/identity-access/infrastructure/oidcProviderRepository'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -56,12 +56,12 @@ function fixture(responses: Response[]) {
     executions.push({ client, sql: query, parameters })
     return rows(responses.shift() ?? {})
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: (query, parameters) => run('reserved', query, parameters),
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       reserves += 1
@@ -124,10 +124,6 @@ const PROVIDER_VALUES = [
   1,
   1,
 ] as const
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL OIDC provider persistence', () => {
   test('the serializable namespace guard rejects an identity that won the subjectClaim race', async () => {

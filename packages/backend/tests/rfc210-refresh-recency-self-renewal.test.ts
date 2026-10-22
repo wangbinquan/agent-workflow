@@ -30,15 +30,15 @@
 //     Mutation check: flip auto-refresh back to touchRecency:true (or drop the
 //     arg) and test #2 goes red — the mirror stays due forever.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, beforeEach, afterEach, beforeAll } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { cachedRepos } from '../src/db/schema'
 import { refreshCachedRepo, resolveCachedRepo } from '@/services/gitRepoCache'
 import { refreshDueRepos, selectDueRepos } from '@/services/submoduleRefresh'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
@@ -79,7 +79,7 @@ beforeAll(async () => {
 describeEachProvider(
   'RFC-210 G7 — auto-refresh does not renew its own recency window',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let remoteDir: string
     let remoteUrl: string
@@ -97,6 +97,7 @@ describeEachProvider(
         { url: remoteUrl },
       )
       repoId = resolved.cached.id
+      const { cachedRepos } = tablesOf(db)
       // Pin a known baseline: fetched at NOW, never auto-refreshed, and reset the
       // submodule telemetry to NULL so we can later prove the row WAS written.
       await db
@@ -126,6 +127,7 @@ describeEachProvider(
       )
       expect(res.fetchOk).toBe(true)
 
+      const { cachedRepos } = tablesOf(db)
       const [row] = await db
         .select({ f: cachedRepos.lastFetchedAt, s: cachedRepos.lastSubmoduleSyncOk })
         .from(cachedRepos)
@@ -143,6 +145,7 @@ describeEachProvider(
         repoId,
       )
       expect(res.fetchOk).toBe(true)
+      const { cachedRepos } = tablesOf(db)
       const [row] = await db
         .select({ f: cachedRepos.lastFetchedAt })
         .from(cachedRepos)
@@ -187,6 +190,7 @@ describeEachProvider(
       expect(outcomes[5]?.due).toBe(0)
       expect(outcomes[5]?.refreshed).toBe(0)
 
+      const { cachedRepos } = tablesOf(db)
       // And last_fetched_at is still exactly the user's baseline — proof the loop
       // never renewed it.
       const [row] = await db

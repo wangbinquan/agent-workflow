@@ -3,14 +3,15 @@
 // RFC-370 §10 V17: the pickers now name a registered repository by
 // `cachedRepoId`; `?path=` stays for existing API clients of a standalone daemon.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cachedRepos } from '../src/db/schema'
 import { runGit } from '../src/util/git'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -22,7 +23,7 @@ const TOKEN = 'a'.repeat(64)
 let baseTmp: string
 let repoPath: string
 let app: Hono
-let database: () => ProviderNeutralDatabase
+let database: () => PersistenceDb
 
 beforeAll(() => {
   baseTmp = mkdtempSync(join(tmpdir(), 'aw-repos-'))
@@ -32,7 +33,7 @@ afterAll(() => {
   rmSync(baseTmp, { recursive: true, force: true })
 })
 
-async function prepareFixture<TDatabase extends ProviderNeutralDatabase>(
+async function prepareFixture<TDatabase extends PersistenceDb>(
   databaseOf: () => TDatabase,
   compose: (db: TDatabase) => Hono | Promise<Hono>,
 ): Promise<void> {
@@ -49,11 +50,12 @@ async function prepareFixture<TDatabase extends ProviderNeutralDatabase>(
   const db = databaseOf()
   database = () => db
   app = await compose(db)
+  const { cachedRepos } = tablesOf(db)
   // RFC-099 (bda0d4fb): refs/files reject paths outside cached_repos mirrors.
   // Register the suite's temp root once so every per-test dir below (repo-*,
   // emptyrepo-*, notrepo-*) passes the allowlist gate and the assertions keep
   // exercising the endpoints' own behavior behind it.
-  await db.insert(cachedRepos).values({
+  await insertOne(db, cachedRepos, {
     id: 'cr-repos-suite',
     urlRedacted: 'file:///aw-repos-suite',
     urlHash: 'aw-repos-suite-hash',
@@ -147,7 +149,8 @@ describe('repo HTTP routes', () => {
     })
 
     test('GET /api/repos/refs|files?cachedRepoId= read the registered mirror', async () => {
-      await database().insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(database())
+      await insertOne(database(), cachedRepos, {
         id: 'cr-repos-mirror',
         urlRedacted: 'https://example.test/acme/repo.git',
         urlHash: 'aw-repos-mirror-hash',
@@ -178,7 +181,8 @@ describe('repo HTTP routes', () => {
       expect(unknown.status).toBe(404)
       expect(((await unknown.json()) as { code: string }).code).toBe('cached-repo-not-found')
       const missing = join(baseTmp, 'not-fetched-yet')
-      await database().insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(database())
+      await insertOne(database(), cachedRepos, {
         id: 'cr-repos-identity',
         urlRedacted: 'https://example.test/acme/later.git',
         urlHash: 'aw-repos-identity-hash',

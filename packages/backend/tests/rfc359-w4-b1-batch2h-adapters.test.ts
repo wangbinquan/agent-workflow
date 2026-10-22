@@ -1,6 +1,8 @@
 // RFC-359 W4-B1 批 2h —— 优雅停机幸存者处置（TaskExecutionShutdownOperations）两份合一，两个引擎各跑一遍：
 // running 幸存者的控制面 CAS（不过 owner 围栏）+ intent 终态化 + revision 推进；owner 行按精确元组 CAS 进 recovery-required。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -8,20 +10,20 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionIntents, taskExecutionOwners, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleTaskExecutionShutdownOperations } from '@/modules/task-execution/infrastructure/taskExecutionShutdownOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  db: PersistenceDb,
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -29,7 +31,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -47,11 +49,12 @@ async function seedTask(
 }
 
 async function seedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   state: 'claimed' | 'revoked' | 'released',
 ): Promise<void> {
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: `owner_${taskId}`,
     daemonGeneration: 'gen-a',
@@ -64,7 +67,8 @@ async function seedOwner(
   })
 }
 
-async function ownerRow(db: ProviderNeutralDatabase, taskId: string) {
+async function ownerRow(db: PersistenceDb, taskId: string) {
+  const { taskExecutionOwners } = tablesOf(db)
   const rows = await db
     .select({
       state: taskExecutionOwners.state,
@@ -83,7 +87,8 @@ describeEachProvider('RFC-359 W4-B1 批 2h —— 停机幸存者处置', (harne
     // 幸存者的 owner 仍是 claimed：控制面越权收场，不过围栏。
     await seedOwner(db, taskId, 'claimed')
     const intentId = `intent_${ulid()}`
-    await db.insert(taskExecutionIntents).values({
+    const { taskExecutionIntents, tasks } = tablesOf(db)
+    await insertOne(db, taskExecutionIntents, {
       id: intentId,
       taskId,
       kind: 'launch',

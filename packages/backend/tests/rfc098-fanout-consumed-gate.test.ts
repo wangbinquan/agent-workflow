@@ -25,6 +25,8 @@
 //   4. cross-generation gate: previous FAILED generation's consumed ≠ new →
 //      fresh wrapper generation re-runs every shard (no cross-gen replay).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -34,7 +36,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import {
   decodeWrapperProgress,
@@ -73,7 +74,8 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: WORKER_AGENT_ID,
     name,
     description: 'test',
@@ -94,14 +96,15 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -178,7 +181,8 @@ const DOCS = 'a.md\nb.md'
  * deterministic without running the input dispatch first). */
 async function seedInputRun(h: Harness, taskId: string): Promise<string> {
   const id = ulid()
-  await h.db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+  await insertOne(h.db, nodeRuns, {
     id,
     taskId,
     nodeId: 'inp',
@@ -188,7 +192,7 @@ async function seedInputRun(h: Harness, taskId: string): Promise<string> {
     startedAt: Date.now(),
     finishedAt: Date.now(),
   })
-  await h.db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'docs', content: DOCS })
+  await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'docs', content: DOCS })
   return id
 }
 
@@ -205,7 +209,8 @@ async function seedWrapperAndDoneChildren(
   },
 ): Promise<{ wrapperRunId: string; childIds: string[] }> {
   const wrapperRunId = ulid()
-  await h.db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+  await insertOne(h.db, nodeRuns, {
     id: wrapperRunId,
     taskId,
     nodeId: 'fan',
@@ -223,7 +228,7 @@ async function seedWrapperAndDoneChildren(
   for (const key of ['a.md', 'b.md']) {
     const id = ulid()
     childIds.push(id)
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id,
       taskId,
       nodeId: 'inner',
@@ -236,7 +241,7 @@ async function seedWrapperAndDoneChildren(
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await h.db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content: 'OLD' })
+    await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'OLD' })
   }
   return { wrapperRunId, childIds }
 }
@@ -288,6 +293,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -338,6 +344,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -375,6 +382,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -405,6 +413,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 

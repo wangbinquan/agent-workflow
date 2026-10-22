@@ -5,6 +5,8 @@
 // plan. The two Agents below run through TaskEngine as a real child process;
 // only their model output is deterministic system-mock data.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -22,7 +24,6 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { getAgentById } from '@/services/agent'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
@@ -346,14 +347,15 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       taskIds.push(taskId)
 
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
+      expect(first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
         status: 'awaiting_review',
         catalogVisibility: 'internal',
       })
       expect(
         (
           await taskListItemsProjection(
-            { db: db, owners: composeOwnerIdentityQueries(db) },
+            { db, owners: composeOwnerIdentityQueries(db) },
             { catalogVisibility: 'public' },
           )
         ).map((item) => item.id),
@@ -361,25 +363,27 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('1')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
+        queryRows(
+          db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
+            ),
+        ),
+      ).toHaveLength(0)
+
+      const reviewRun = first(
         db
           .select()
           .from(nodeRuns)
           .where(
-            and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
-          )
-          .all(),
-      ).toHaveLength(0)
-
-      const reviewRun = db
-        .select()
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, taskId),
-            eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID),
+            and(
+              eq(nodeRuns.taskId, taskId),
+              eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID),
+            ),
           ),
-        )
-        .get()
+      )
       if (reviewRun === undefined) throw new Error('review node did not enter durable waiting')
       await addReviewComment({
         db,
@@ -411,28 +415,30 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('2')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(
-            and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
-          )
-          .all(),
+        queryRows(
+          db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
+            ),
+        ),
       ).toHaveLength(0)
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(
-            and(
-              eq(nodeRuns.taskId, taskId),
-              eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID),
+        queryRows(
+          db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(
+                eq(nodeRuns.taskId, taskId),
+                eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID),
+              ),
             ),
-          )
-          .all(),
+        ),
       ).toHaveLength(2)
 
-      const waitingReview = db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRun.id)).get()
+      const waitingReview = first(db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRun.id)))
       expect(waitingReview).toMatchObject({ status: 'awaiting_review', reviewIteration: 1 })
       await addReviewComment({
         db,
@@ -463,27 +469,29 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('3')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(
-            and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
-          )
-          .all(),
+        queryRows(
+          db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
+            ),
+        ),
       ).toHaveLength(0)
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(
-            and(
-              eq(nodeRuns.taskId, taskId),
-              eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID),
+        queryRows(
+          db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(
+                eq(nodeRuns.taskId, taskId),
+                eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID),
+              ),
             ),
-          )
-          .all(),
+        ),
       ).toHaveLength(3)
-      expect(db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRun.id)).get()).toMatchObject({
+      expect(first(db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRun.id)))).toMatchObject({
         status: 'awaiting_review',
         reviewIteration: 2,
       })
@@ -496,53 +504,53 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       await wakeHumanGateContinuation(approved.taskId, approved.continuationRef, startDeps)
 
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+      expect(first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
         status: 'done',
         catalogVisibility: 'internal',
       })
       expect(
         (
           await taskListItemsProjection(
-            { db: db, owners: composeOwnerIdentityQueries(db) },
+            { db, owners: composeOwnerIdentityQueries(db) },
             { catalogVisibility: 'public' },
           )
         ).map((item) => item.id),
       ).not.toContain(taskId)
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('approved')
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(
-            and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
-          )
-          .all(),
+        queryRows(
+          db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
+            ),
+        ),
       ).toEqual([expect.objectContaining({ status: 'done' })])
       const implementationPrompt = readFileSync(processMock.implementationPromptPath, 'utf8')
       expect(implementationPrompt).toContain('Exact approved marker: REVIEWED-V3')
       expect(implementationPrompt).not.toContain('Exact approved marker: REVIEWED-V2')
       expect(implementationPrompt).not.toContain('Exact approved marker: REVIEWED-V1')
 
-      const versions = db
-        .select()
-        .from(docVersions)
-        .where(eq(docVersions.reviewNodeRunId, reviewRun.id))
-        .all()
+      const versions = queryRows(
+        db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, reviewRun.id)),
+      )
       expect(versions.map((version) => version.decision)).toEqual([
         'rejected',
         'iterated',
         'approved',
       ])
-      const approvedOutput = db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, reviewRun.id),
-            eq(nodeRunOutputs.portName, 'approved_doc'),
+      const approvedOutput = first(
+        db
+          .select()
+          .from(nodeRunOutputs)
+          .where(
+            and(
+              eq(nodeRunOutputs.nodeRunId, reviewRun.id),
+              eq(nodeRunOutputs.portName, 'approved_doc'),
+            ),
           ),
-        )
-        .get()
+      )
       expect(approvedOutput).toMatchObject({
         content: `${requirementDirectory}/review/implementation-plan.md`,
         kind: 'path<md>',
@@ -550,7 +558,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         existsSync(
           join(
-            db.select().from(tasks).where(eq(tasks.id, taskId)).get()!.worktreePath!,
+            first(db.select().from(tasks).where(eq(tasks.id, taskId)))!.worktreePath!,
             `${requirementDirectory}/review/implementation-plan.md`,
           ),
         ),

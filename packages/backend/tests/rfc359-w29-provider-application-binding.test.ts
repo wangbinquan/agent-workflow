@@ -1,7 +1,8 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider(
@@ -17,20 +18,23 @@ describeEachProvider(
         const database = harness.database(index)
         const binding = database.applicationBinding
         expect(Object.isFrozen(binding)).toBe(true)
-        expect<ProviderNeutralDatabase>(binding.db).toBe(database.db)
+        expect<PersistenceDb>(binding.db).toBe(database.db)
         expect(binding.provider).toBe(database.capabilities.provider)
-        const borrowed: ProviderNeutralDatabase = binding.db
+        const borrowed: PersistenceDb = binding.db
         const recording = database.recordStatements()
         try {
-          await borrowed.insert(workflows).values({
+          await insertOne(borrowed, tablesOf(borrowed).workflows, {
             id: 'w29-binding',
             name: `database-${index}`,
             definition: '{}',
           })
           const rows = await database.db
-            .select({ id: workflows.id, name: workflows.name })
-            .from(workflows)
-            .where(eq(workflows.id, 'w29-binding'))
+            .select({
+              id: tablesOf(database.db).workflows.id,
+              name: tablesOf(database.db).workflows.name,
+            })
+            .from(tablesOf(database.db).workflows)
+            .where(eq(tablesOf(database.db).workflows.id, 'w29-binding'))
           expect(rows).toEqual([{ id: 'w29-binding', name: `database-${index}` }])
           expect(
             recording.statements.filter((statement) =>

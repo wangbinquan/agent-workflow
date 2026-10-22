@@ -8,6 +8,8 @@
 //
 // 每条断言都落到真库上；纯闭包型组合根（技能工件补偿）驱动的是它交出来的真实原语，不是
 // `toBeDefined()`。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,8 +19,7 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { createAuthRuntimeFor } from '@/auth/composition'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
@@ -42,16 +43,14 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
 
-function asPostgresql(db: ProviderNeutralDatabase): PostgresqlDatabaseClient {
+function asPostgresql(db: PersistenceDb): PostgresqlDatabaseClient {
   return db as unknown as PostgresqlDatabaseClient
 }
 
-async function seedActor(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'user',
-): Promise<Actor> {
+async function seedActor(db: PersistenceDb, role: 'admin' | 'user' = 'user'): Promise<Actor> {
   const id = `u_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -136,7 +135,8 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     const catalog = composeResourceCatalogFor({ db: asPostgresql(harness.db) })
 
     const agentId = `a_${ulid()}`
-    await harness.db.insert(agents).values({
+    const { agents } = tablesOf(harness.db)
+    await insertOne(harness.db, agents, {
       id: agentId,
       name: `agent-${agentId.slice(-6).toLowerCase()}`,
       description: 'private agent',
@@ -179,6 +179,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     const participant = composeResourceScopeAccessParticipant()
     const publicWorkflowId = `wf_${ulid()}`
     const privateWorkflowId = `wf_${ulid()}`
+    const { workflows } = tablesOf(harness.db)
     await harness.db.insert(workflows).values([
       {
         id: publicWorkflowId,
@@ -215,7 +216,8 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     const owner = await seedActor(harness.db)
     const stranger = await seedActor(harness.db)
     const workflowId = `wf_${ulid()}`
-    await harness.db.insert(workflows).values({
+    const { workflows } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
       id: workflowId,
       name: `wf-${workflowId.slice(-6).toLowerCase()}`,
       description: '',
@@ -382,16 +384,15 @@ test('技能工件原语：现行机制交出真路径与真哈希，旧词汇�
 test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQLite 库上驱动', async () => {
   const { createInMemoryDb } = await import('@/db/client')
   const { MIGRATIONS } = await import('./migration-freeze')
-  const { selectDatabaseSchemaProvider } = await import('@/db/providerSchema')
-  const restore = selectDatabaseSchemaProvider('sqlite')
-  try {
+  {
     const db = createInMemoryDb(MIGRATIONS, {})
     const context = composeDynamicWorkflowValidationContext(db)
     expect((await context.load()).agents).toEqual([])
     // 装载的是当下的库存，不是快照：写一行 agent 之后再 load 必须看得见它。
     const agentId = `a_${ulid()}`
     const agentName = `agent-${agentId.slice(-6).toLowerCase()}`
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id: agentId,
       name: agentName,
       description: '',
@@ -416,7 +417,5 @@ test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQ
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }
-  } finally {
-    restore()
   }
 })

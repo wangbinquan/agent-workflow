@@ -4,7 +4,7 @@
 // **选定内容绑定**上的 participant——本地部署走文件存储，托管部署走 `skill_content_entries`。
 // 不传选择即本地文件存储，根目录取 `bind` 时给的 appHome。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { createFileSkillTreeContentStore } from '../infrastructure/local/fileSkillTreeContentStore'
 import {
@@ -16,17 +16,14 @@ import type { SkillContentBinding } from './skillContentBinding'
 export type { SkillTreeVersionParticipant } from '../infrastructure/skillTreeVersionParticipant'
 
 export interface SkillVersionCommitParticipantFactory {
-  bind(input: {
-    readonly db: ProviderNeutralDatabase
-    readonly appHome: string
-  }): SkillTreeVersionParticipant
+  bind(input: { readonly db: PersistenceDb; readonly appHome: string }): SkillTreeVersionParticipant
 }
 
 export function composeSkillVersionCommitParticipantFactory(
   selection: { readonly skillContent?: SkillContentBinding } = {},
 ): SkillVersionCommitParticipantFactory {
   return Object.freeze({
-    bind(input: { readonly db: ProviderNeutralDatabase; readonly appHome: string }) {
+    bind(input: { readonly db: PersistenceDb; readonly appHome: string }) {
       const binding = selection.skillContent
       if (binding === undefined)
         return createSkillTreeVersionParticipant({

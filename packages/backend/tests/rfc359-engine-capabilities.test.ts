@@ -7,14 +7,15 @@
 // SQLite 侧用内存库；PostgreSQL 侧按环境门控（无 URL 时 skip，与 rfc357-postgresql-page 同一约定；
 // RFC-359 W5-T21 落地后由全量 PG lane 保证「有库时必跑」）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec, rawRows, decodeRawValue } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { hostedExecutionControl, tasks } from '@/db/schema'
 import {
   createPostgresqlCapabilities,
   createSqliteCapabilities,
@@ -47,12 +48,10 @@ describe('RFC-359 能力矩阵 —— 引擎无关项在两侧逐字一致', () 
     }
   })
 
-  test('numericFromRawRow：数字与数字串归一，非数值抛错而不是静默 NaN', () => {
-    for (const cap of both) {
-      expect(cap.numericFromRawRow(42, 'x')).toBe(42)
-      expect(cap.numericFromRawRow('1788278410000', 'x')).toBe(1788278410000)
-      expect(() => cap.numericFromRawRow('abc', 'started_at')).toThrow('started_at')
-    }
+  test('raw codecs：数字与数字串归一，非数值抛错而不是静默 NaN', () => {
+    expect(decodeRawValue('int', 42, 'x')).toBe(42)
+    expect(decodeRawValue('epochMs', '1788278410000', 'x')).toBe(1788278410000)
+    expect(() => decodeRawValue('epochMs', 'abc', 'started_at')).toThrow('started_at')
   })
 })
 
@@ -62,7 +61,10 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
   const cap = createSqliteCapabilities()
   function scratch(): DbClient {
     const db = createInMemoryDb(MIGRATIONS)
-    db.run(sql.raw('create table cap_scratch(id integer primary key, name text unique, v integer)'))
+    rawExec(
+      db,
+      sql.raw('create table cap_scratch(id integer primary key, name text unique, v integer)'),
+    )
     return db
   }
 
@@ -86,6 +88,7 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     const db = scratch()
     const session = createSqliteDatabaseSession(db)
     await session.transaction(async (tx) => {
+      const { tasks } = tablesOf(tx)
       await cap.lockAggregateRoot(tx, tasks, tasks.id, 'nope')
       await cap.advisoryLock(tx, 'k')
       // RFC-370 v3：共享孪生在 SQLite 上同样是 no-op（BEGIN IMMEDIATE 已独占）。
@@ -97,13 +100,17 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
 
   test('NULL 排序：ASC 默认 NULL 最前、DESC 默认 NULL 最后（矩阵不加修饰即正确）', async () => {
     const db = scratch()
-    for (const v of [2, null, 1]) await db.run(sql`insert into cap_scratch(v) values (${v})`)
+    for (const v of [2, null, 1]) await rawExec(db, sql`insert into cap_scratch(v) values (${v})`)
     const col = sql.raw('v')
-    const asc = await db.all<{ v: number | null }>(
+    const asc = await rawRows<{ v: number | null }>(
+      db,
       sql`select v from cap_scratch order by ${cap.ascNullsFirst(col)}`,
+      { v: 'int' },
     )
-    const desc = await db.all<{ v: number | null }>(
+    const desc = await rawRows<{ v: number | null }>(
+      db,
       sql`select v from cap_scratch order by ${cap.descNullsLast(col)}`,
+      { v: 'int' },
     )
     expect(asc.map((r) => r.v)).toEqual([null, 1, 2])
     expect(desc.map((r) => r.v)).toEqual([2, 1, null])
@@ -112,14 +119,15 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
   test('likeCaseInsensitive：ASCII 不敏感，且显式 ESCAPE 让 % _ \\ 按字面匹配', async () => {
     const db = scratch()
     for (const n of ['Hello World', 'C:\\build\\out', 'C:build', '100%']) {
-      await db.run(sql`insert into cap_scratch(name) values (${n})`)
+      await rawExec(db, sql`insert into cap_scratch(name) values (${n})`)
     }
     const find = async (term: string): Promise<string[]> => {
       const { pattern, escape } = cap.likeEscape(term)
       return (
-        await db.all<{
+        await rawRows<{
           name: string
         }>(
+          db,
           sql`select name from cap_scratch where ${cap.likeCaseInsensitive(sql.raw('name'), pattern, escape)}`,
         )
       ).map((r) => r.name)
@@ -132,15 +140,21 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
   test('indexHint 渲染 INDEXED BY；reclaimScrubbedStorage 真跑 secure_delete + checkpoint + VACUUM', async () => {
     const db = scratch()
     expect(render(cap.indexHint('idx_cap_scratch'))).toBe('INDEXED BY "idx_cap_scratch"')
-    db.run(sql.raw('create index idx_cap_scratch on cap_scratch(v)'))
+    rawExec(db, sql.raw('create index idx_cap_scratch on cap_scratch(v)'))
     expect(
-      await db.all<{ v: number | null }>(
+      await rawRows<{ v: number | null }>(
+        db,
         sql`select v from cap_scratch ${cap.indexHint('idx_cap_scratch')} where v is null`,
+        { v: 'int' },
       ),
     ).toEqual([])
     await cap.reclaimScrubbedStorage(db)
     expect(
-      (await db.all<{ secure_delete: number }>(sql`PRAGMA secure_delete`))[0]?.secure_delete,
+      (
+        await rawRows<{ secure_delete: number }>(db, sql`PRAGMA secure_delete`, {
+          secure_delete: 'int',
+        })
+      )[0]?.secure_delete,
     ).toBe(1)
   })
 
@@ -159,10 +173,10 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
 
   test('classifyError：真实 UNIQUE 冲突被分类为 unique-violation', async () => {
     const db = scratch()
-    await db.run(sql`insert into cap_scratch(name) values ('dup')`)
+    await rawExec(db, sql`insert into cap_scratch(name) values ('dup')`)
     let caught: unknown
     try {
-      await db.run(sql`insert into cap_scratch(name) values ('dup')`)
+      await rawExec(db, sql`insert into cap_scratch(name) values ('dup')`)
     } catch (error) {
       caught = error
     }
@@ -172,14 +186,14 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
 
   test('readRowSync：驱动本身同步，直接给行 / 无行给 null；uniqueViolationTarget 给撞上的列', async () => {
     const db = scratch()
-    await db.run(sql`insert into cap_scratch(name, v) values ('row', 7)`)
+    await rawExec(db, sql`insert into cap_scratch(name, v) values ('row', 7)`)
     expect(cap.readRowSync(db, sql`select name, v from cap_scratch where name = ${'row'}`)).toEqual(
       { name: 'row', v: 7 },
     )
     expect(cap.readRowSync(db, sql`select name from cap_scratch where name = ${'none'}`)).toBeNull()
     let caught: unknown
     try {
-      await db.run(sql`insert into cap_scratch(name) values ('row')`)
+      await rawExec(db, sql`insert into cap_scratch(name) values ('row')`)
     } catch (error) {
       caught = error
     }
@@ -225,7 +239,6 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
       })
       const pool = runtime.providerPool()
       const raw = (q: string) => pool.unsafe(q)
-      let restoreProvider: (() => void) | undefined
       try {
         // 与 rfc357-postgresql-page 同一套姿势：清干净、按基线迁移，然后**自己登记一个活跃生成代**——
         // 客户端的业务写围栏按 runtime.generationId 核对 database_generations，迁移器不替测试登记它。
@@ -243,7 +256,6 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
             `VALUES ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_rfc359_source', 'digest', 'active', 1, 1)`,
         )
         // 进程级 provider 投影必须还原：一个 bun 进程跑多个文件，留着会渗进后面的文件（本仓有前科）。
-        restoreProvider = selectDatabaseSchemaProvider('postgresql')
         await raw('drop table if exists public.cap_scratch')
         await raw(
           'create table public.cap_scratch(id serial primary key, name text unique, v bigint)',
@@ -263,22 +275,23 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
 
         // ② 行锁与 advisory lock 真的执行
         await session.transaction(async (tx) => {
-          await tx.run(sql`insert into cap_scratch(name, v) values ('row', 1)`)
+          await rawExec(tx, sql`insert into cap_scratch(name, v) values ('row', 1)`)
           await cap.advisoryLock(tx, 'rfc359-cap')
-          await tx.run(sql`select 1 from cap_scratch where name = 'row' for update`)
+          await rawExec(tx, sql`select 1 from cap_scratch where name = 'row' for update`)
         })
 
         // ③ SKIP LOCKED 真的跳过被另一事务锁住的行
-        await db.run(sql`insert into cap_scratch(name, v) values ('a', 2), ('b', 3)`)
+        await rawExec(db, sql`insert into cap_scratch(name, v) values ('a', 2), ('b', 3)`)
         let release!: () => void
         const held = new Promise<void>((r) => (release = r))
         const holder = session.transaction(async (tx) => {
-          await tx.run(sql`select 1 from cap_scratch where name = 'a' for update`)
+          await rawExec(tx, sql`select 1 from cap_scratch where name = 'a' for update`)
           await held
         })
         await new Promise((r) => setTimeout(r, 30))
         const claimed = await session.transaction(async (tx) => {
-          const rows = await tx.all<{ name: string }>(
+          const rows = await rawRows<{ name: string }>(
+            tx,
             sql`select name from cap_scratch where name in ('a','b') order by v ${cap.claimLockClause()} limit 1`,
           )
           return rows.map((r) => r.name)
@@ -288,27 +301,31 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         expect(claimed).toEqual(['b'])
 
         // ④ NULL 排序：矩阵把 PG 默认（NULL 最大）改回 SQLite 语义
-        await db.run(sql`delete from cap_scratch`)
-        await db.run(sql`insert into cap_scratch(v) values (2), (null), (1)`)
+        await rawExec(db, sql`delete from cap_scratch`)
+        await rawExec(db, sql`insert into cap_scratch(v) values (2), (null), (1)`)
         const col = sql.raw('v')
-        const norm = (v: unknown) => (v === null ? null : cap.numericFromRawRow(v, 'v'))
-        const asc = await db.all<{ v: unknown }>(
+        const asc = await rawRows<{ v: number | null }>(
+          db,
           sql`select v from cap_scratch order by ${cap.ascNullsFirst(col)}`,
+          { v: 'int' },
         )
-        const desc = await db.all<{ v: unknown }>(
+        const desc = await rawRows<{ v: number | null }>(
+          db,
           sql`select v from cap_scratch order by ${cap.descNullsLast(col)}`,
+          { v: 'int' },
         )
-        expect(asc.map((r) => norm(r.v))).toEqual([null, 1, 2])
-        expect(desc.map((r) => norm(r.v))).toEqual([2, 1, null])
+        expect(asc.map((r) => r.v)).toEqual([null, 1, 2])
+        expect(desc.map((r) => r.v)).toEqual([2, 1, null])
 
         // ⑤ ilike + 显式 ESCAPE，与 SQLite 侧同一组输入同一组答案
-        await db.run(sql`delete from cap_scratch`)
+        await rawExec(db, sql`delete from cap_scratch`)
         for (const n of ['Hello World', 'C:\\build\\out', 'C:build', '100%']) {
-          await db.run(sql`insert into cap_scratch(name) values (${n})`)
+          await rawExec(db, sql`insert into cap_scratch(name) values (${n})`)
         }
         const find = async (term: string): Promise<string[]> => {
           const { pattern, escape } = cap.likeEscape(term)
-          const rows = await db.all<{ name: string }>(
+          const rows = await rawRows<{ name: string }>(
+            db,
             sql`select name from cap_scratch where ${cap.likeCaseInsensitive(sql.raw('name'), pattern, escape)}`,
           )
           return rows.map((r) => r.name)
@@ -318,10 +335,10 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         expect(await find('100%')).toEqual(['100%'])
 
         // ⑥ 真实 23505 被识别——SQLSTATE 在 errno 不在 code（F-I-13 的形态）
-        await db.run(sql`insert into cap_scratch(name) values ('dup')`)
+        await rawExec(db, sql`insert into cap_scratch(name) values ('dup')`)
         let caught: unknown
         try {
-          await db.run(sql`insert into cap_scratch(name) values ('dup')`)
+          await rawExec(db, sql`insert into cap_scratch(name) values ('dup')`)
         } catch (error) {
           caught = error
         }
@@ -333,38 +350,45 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
 
         // ⑧ serializable()：两个并发事务对同一行读—改—写，SERIALIZABLE 下必有一方 40001；
         //    重试后两次自增都落地。这条证明 opt-in 的重试路径真的在真库上工作。
-        await db.run(sql`delete from cap_scratch`)
-        await db.run(sql`insert into cap_scratch(name, v) values ('counter', 0)`)
+        await rawExec(db, sql`delete from cap_scratch`)
+        await rawExec(db, sql`insert into cap_scratch(name, v) values ('counter', 0)`)
         const bump = () =>
           session.serializable(async (tx) => {
-            const [row] = await tx.all<{ v: unknown }>(
+            const [row] = await rawRows<{ v: number | null }>(
+              tx,
               sql`select v from cap_scratch where name = 'counter'`,
+              { v: 'int' },
             )
-            const next = cap.numericFromRawRow(row!.v, 'v') + 1
+            const next = row!.v! + 1
             await new Promise((r) => setTimeout(r, 15)) // 让两笔交叠
-            await tx.run(sql`update cap_scratch set v = ${next} where name = 'counter'`)
+            await rawExec(tx, sql`update cap_scratch set v = ${next} where name = 'counter'`)
           })
         await Promise.all([bump(), bump()])
-        const [after] = await db.all<{ v: unknown }>(
+        const [after] = await rawRows<{ v: number | null }>(
+          db,
           sql`select v from cap_scratch where name = 'counter'`,
+          { v: 'int' },
         )
-        expect(cap.numericFromRawRow(after!.v, 'v')).toBe(2)
+        expect(after!.v).toBe(2)
 
         // ⑨ 索引提示在 PG 上为空（planner 自己选）；擦除后的存储回收是 no-op（autovacuum 负责）
         expect(render(cap.indexHint('idx_cap_scratch'))).toBe('')
         await cap.reclaimScrubbedStorage(db)
 
-        // ⑦ bigint 经驱动回来是字符串，矩阵归一成 number
-        await db.run(sql`delete from cap_scratch`)
-        await db.run(sql`insert into cap_scratch(v) values (1788278410000)`)
-        const [row] = await db.all<{ v: unknown }>(sql`select v from cap_scratch`)
-        expect(typeof row!.v).toBe('string')
-        expect(cap.numericFromRawRow(row!.v, 'v')).toBe(1788278410000)
+        // ⑦ bigint 经驱动回来是字符串，raw codec 归一成 number
+        await rawExec(db, sql`delete from cap_scratch`)
+        await rawExec(db, sql`insert into cap_scratch(v) values (1788278410000)`)
+        const [row] = await rawRows<{ v: number | null }>(db, sql`select v from cap_scratch`, {
+          v: 'int',
+        })
+        expect(typeof row!.v).toBe('number')
+        expect(row!.v!).toBe(1788278410000)
 
+        const { hostedExecutionControl } = tablesOf(db)
         // ⑪ RFC-370 v3 —— holdAggregateRoot（FOR KEY SHARE）与 advisoryLockShared：
         //    持有者之间互不等待；原地改非键列（续租）不等持有者；FOR UPDATE（转移）
         //    与排他 advisory lock 都要等全部持有者提交。
-        await db.insert(hostedExecutionControl).values({
+        await insertOne(db, hostedExecutionControl, {
           id: 'global',
           epoch: 1,
           owner: 'holder',
@@ -397,6 +421,7 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
           })
           expect(await waitingAfter(secondHolder)).toBe('done')
           const inPlace = session.transaction(async (tx) => {
+            const { hostedExecutionControl } = tablesOf(tx)
             await tx
               .update(hostedExecutionControl)
               .set({ expiresAt: 2 })
@@ -419,7 +444,6 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
           await keyHolder
         }
       } finally {
-        restoreProvider?.()
         try {
           await raw('drop table if exists public.cap_scratch')
         } catch {

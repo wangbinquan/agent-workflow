@@ -9,21 +9,23 @@
 // latestClosedForNodeRun（封存态取最新一条、createdAt 相同时按 id 降序、awaiting_human 不入选、
 // 没有封存轮次时为 null）、reopen（CAS 只吃 expectedStatus、清空作答字段、二次落空、不越界）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createClarifyRepairParticipant } from '@/modules/collaboration/infrastructure/clarifyRepairParticipant'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_w7c_${ulid()}`
   const workflowId = `wf_w7c_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -31,7 +33,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -47,11 +49,10 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   return id
 }
 
-async function seedRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_w7c_${ulid()}`
-  await db
-    .insert(nodeRuns)
-    .values({ id, taskId, nodeId: '__wg_clarify__', status: 'awaiting_human' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: '__wg_clarify__', status: 'awaiting_human' })
   return id
 }
 
@@ -65,13 +66,14 @@ interface RoundSeed {
 }
 
 async function seedRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeRunId: string,
   seed: RoundSeed = {},
 ): Promise<string> {
   const id = seed.id ?? `cr_w7c_${ulid()}`
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id,
     taskId,
     kind: seed.kind ?? 'self',
@@ -196,6 +198,7 @@ describeEachProvider('RFC-359 W7 —— 澄清修复参与者：重开', (harnes
     expect(
       await repair.reopen({ taskId, roundId, expectedStatus: 'answered', occurredAt: 3 }),
     ).toBe(true)
+    const { clarifyRounds } = tablesOf(db)
     expect(
       (
         await db
@@ -241,6 +244,7 @@ describeEachProvider('RFC-359 W7 —— 澄清修复参与者：重开', (harnes
         occurredAt: 3,
       }),
     ).toBe(false)
+    const { clarifyRounds } = tablesOf(db)
     expect(
       (
         await db

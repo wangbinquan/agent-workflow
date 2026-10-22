@@ -8,7 +8,7 @@
 // 可以合成一份的判据与 `taskIdleTimeoutPersistence.ts`（RFC-350 / W4-B1）同款：本 adapter
 // 只有纯读 + 两条单语句写，**没有事务**——SQLite 的 `dbTxSync` 与 PostgreSQL 的异步事务那道
 // 真正的分歧在这里不存在；`DbClient` 与 `PostgresqlDatabaseClient` 都是 drizzle 的
-// `BaseSQLiteDatabase`，同一套 query builder 在 `await` 下两个引擎行为一致（`await` 一个
+// `PersistenceDb`，同一套 query builder 在 `await` 下两个引擎行为一致（`await` 一个
 // 同步 builder 的结果就是它自己）。抄成两份只会制造漂移。
 //
 // 两条写点各自的门都在 SQL 里，不靠调用方：
@@ -21,11 +21,13 @@
 // 聚合列 `sum(tok_total)` 的跨 provider 解码交给端口里的 `decodeResourceLimitTokenTotal`
 // （PG 驱动把 bigint 聚合交回字符串，SQLite 交回 number）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, recoveryEvents, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { bumpRecoveryCounter } from '@/services/recovery'
 import { createLogger } from '@/util/log'
 import {
@@ -40,9 +42,10 @@ import {
 const log = createLogger('resource-limits')
 
 export class DrizzleResourceLimitPersistence implements ResourceLimitPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async listRunningTasks(): Promise<ReadonlyArray<ResourceLimitTask>> {
+    const { tasks } = tablesOf(this.db)
     return await this.db
       .select({
         id: tasks.id,
@@ -53,10 +56,10 @@ export class DrizzleResourceLimitPersistence implements ResourceLimitPersistence
       })
       .from(tasks)
       .where(eq(tasks.status, 'running'))
-      .all()
   }
 
   async listCallRows(taskId: string): Promise<ReadonlyArray<ResourceLimitCallRow>> {
+    const { nodeRuns } = tablesOf(this.db)
     return await this.db
       .select({
         childTaskId: nodeRuns.childTaskId,
@@ -64,36 +67,37 @@ export class DrizzleResourceLimitPersistence implements ResourceLimitPersistence
       })
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRuns.childTaskId)))
-      .all()
   }
 
   async listTaskStatuses(taskIds: readonly string[]): Promise<ReadonlyArray<string>> {
     if (taskIds.length === 0) return []
+    const { tasks } = tablesOf(this.db)
     return (
       await this.db
         .select({ status: tasks.status })
         .from(tasks)
         .where(inArray(tasks.id, [...taskIds]))
-        .all()
     ).map((row) => row.status)
   }
 
   async sumTaskTokens(taskId: string): Promise<number> {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
       .select({ total: sql<number | null>`sum(${nodeRuns.tokTotal})` })
       .from(nodeRuns)
       .where(eq(nodeRuns.taskId, taskId))
-      .all()
     return decodeResourceLimitTokenTotal(rows[0]?.total)
   }
 
   async readTaskClock(taskId: string): Promise<ResourceLimitTaskClock | null> {
+    const { tasks } = tablesOf(this.db)
     return (
-      (await this.db
-        .select({ runningMs: tasks.runningMs, runningSince: tasks.runningSince })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get()) ?? null
+      (await first(
+        this.db
+          .select({ runningMs: tasks.runningMs, runningSince: tasks.runningSince })
+          .from(tasks)
+          .where(eq(tasks.id, taskId)),
+      )) ?? null
     )
   }
 
@@ -102,30 +106,28 @@ export class DrizzleResourceLimitPersistence implements ResourceLimitPersistence
     readonly summary: string
     readonly message: string
   }): Promise<void> {
+    const { tasks } = tablesOf(this.db)
     await this.db
       .update(tasks)
       .set({ errorSummary: input.summary, errorMessage: input.message })
       .where(and(eq(tasks.id, input.taskId), eq(tasks.status, 'canceled')))
-      .run()
   }
 
   async recordLimitCancellation(input: ResourceLimitCancellationAudit): Promise<void> {
     bumpRecoveryCounter('limit-cancel')
     try {
-      await this.db
-        .insert(recoveryEvents)
-        .values({
-          id: ulid(),
-          taskId: input.taskId,
-          nodeRunId: null,
-          actor: 'system',
-          kind: 'limit-cancel',
-          reason: input.reason,
-          beforeJson: JSON.stringify({ status: 'running' }),
-          afterJson: JSON.stringify({ status: 'canceled' }),
-          createdAt: input.now,
-        })
-        .run()
+      const { recoveryEvents } = tablesOf(this.db)
+      await insertOne(this.db, recoveryEvents, {
+        id: ulid(),
+        taskId: input.taskId,
+        nodeRunId: null,
+        actor: 'system',
+        kind: 'limit-cancel',
+        reason: input.reason,
+        beforeJson: JSON.stringify({ status: 'running' }),
+        afterJson: JSON.stringify({ status: 'canceled' }),
+        createdAt: input.now,
+      })
     } catch (error) {
       log.warn('resource-limit recovery audit dropped', { error: String(error) })
     }

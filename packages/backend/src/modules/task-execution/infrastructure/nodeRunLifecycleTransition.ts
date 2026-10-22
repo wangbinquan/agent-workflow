@@ -6,6 +6,7 @@
 // 判定、同一个终态覆写闸——这里只写一次：PG participant 的 `set` 委托到这里，SQLite 的同步
 // 版本在其余 dbTxSync 调用方迁完前保留（W4 pair-deletion）。不广播：调用方提交后再发。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   isTerminalNodeRunStatus,
   nextNodeRunStatus,
@@ -14,8 +15,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
-import { nodeRuns, tasks } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 // RFC-359 W8 —— 判据 / 错误类型 / 字段白名单取自叶子 `platform/persistence/nodeRunLifecycleCore.ts`，
 // **不要**改回 `@/services/lifecycle`（它 re-export 自 `sqlite/taskLifecycle.ts`）：那条边本身无环，
 // 但它挡住反方向——`taskLifecycle.ts` 一旦 import 本文件就闭出
@@ -28,7 +28,7 @@ import {
 import { ConflictError, NotFoundError } from '@/util/errors'
 
 export interface SetNodeRunStatusTxInput {
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
   readonly nodeRunId: string
   readonly to: NodeRunStatus
   readonly allowedFrom: readonly NodeRunStatus[]
@@ -40,14 +40,14 @@ export interface SetNodeRunStatusTxInput {
 }
 
 export interface TransitionNodeRunStatusTxInput {
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
   readonly nodeRunId: string
   readonly event: NodeRunTransitionEvent
   readonly extra?: NodeRunStatusUpdateExtra
 }
 
 async function currentRow(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   nodeRunId: string,
 ): Promise<
   Readonly<{
@@ -56,6 +56,7 @@ async function currentRow(
     sourceTerminationFence: 'closed' | 'merged' | null
   }>
 > {
+  const { nodeRuns, tasks } = tablesOf(tx)
   const row = (
     await tx
       .select({
@@ -96,6 +97,7 @@ export async function setNodeRunStatusTx(
       `node_run ${args.nodeRunId} status='${from}' not in allowedFrom=[${args.allowedFrom.join(',')}]${args.reason ? ` (${args.reason})` : ''}`,
     )
   }
+  const { nodeRuns } = tablesOf(args.tx)
   // rfc053-allow-direct-status-write -- RFC-359：两引擎共用的事务内 CAS（setNodeRunStatusTx）
   const updated = await args.tx
     .update(nodeRuns)
@@ -120,6 +122,7 @@ export async function transitionNodeRunStatusTx(
   const from = row.status
   const to = nextNodeRunStatus(from, args.event)
   assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, to)
+  const { nodeRuns } = tablesOf(args.tx)
   // rfc053-allow-direct-status-write -- RFC-359：两引擎共用的事务内 CAS（transitionNodeRunStatusTx）
   const updated = await args.tx
     .update(nodeRuns)

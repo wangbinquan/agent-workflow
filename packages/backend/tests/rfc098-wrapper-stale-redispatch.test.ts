@@ -27,6 +27,8 @@
 // task 行翻回 pending（s18-s19 test 2 同款复刻，resumeTask 对 runTask 是
 // fire-and-forget 无法确定性等待）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -35,7 +37,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { allocateNodeRunSeq } from './helpers/rfc374Fixtures'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
@@ -78,7 +79,8 @@ async function buildHarness(slug: string): Promise<Harness> {
 
 async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -96,14 +98,15 @@ async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]):
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc098-stale-task',
     id: taskId,
     workflowId,
@@ -136,6 +139,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 
 /** 复刻 resumeTask 的 DB 侧动作后直接 await runTask（s18-s19 同款）。 */
 async function resetTaskToPending(h: Harness, taskId: string): Promise<void> {
+  const { tasks } = tablesOf(h.db)
   await h.db
     .update(tasks)
     .set({
@@ -158,7 +162,8 @@ async function mintFresherUpstreamDone(
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await h.db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+  await insertOne(h.db, nodeRuns, {
     id,
     taskId,
     seq: await allocateNodeRunSeq(h.db, taskId, id),
@@ -172,11 +177,12 @@ async function mintFresherUpstreamDone(
     startedAt: now,
     finishedAt: now,
   })
-  await h.db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: port, content })
+  await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: port, content })
   return id
 }
 
 async function rowsOf(h: Harness, taskId: string, nodeId: string) {
+  const { nodeRuns } = tablesOf(h.db)
   return h.db
     .select()
     .from(nodeRuns)
@@ -225,6 +231,7 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
 
     // ---- run 1：consumed 绑到 up 的第一代 done 行。----
     await withEnv(env, () => runTask(runOpts))
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
     const upRun1 = (await rowsOf(h, taskId, 'up')).find((r) => r.status === 'done')!
     const loopGen1 = await rowsOf(h, taskId, 'loop')
@@ -284,6 +291,7 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
 
     // ---- run 1。----
     await withEnv(env, () => runTask(runOpts))
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
     const head1 = (await runGit(h.worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
     const upRun1 = (await rowsOf(h, taskId, 'up')).find((r) => r.status === 'done')!
@@ -332,7 +340,8 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
   ): Promise<string> {
     const id = ulid()
     const now = Date.now()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id,
       taskId,
       nodeId,
@@ -380,6 +389,7 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
       }),
     )
 
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
     const loopRows = await rowsOf(h, taskId, 'loop')
     expect(loopRows.length).toBe(1) // 同行续跑，零新铸
@@ -420,6 +430,7 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
       }),
     )
 
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
     const wgRows = await rowsOf(h, taskId, 'wg')
     expect(wgRows.length).toBe(1)

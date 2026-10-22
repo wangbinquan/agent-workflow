@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D16 —— resource-catalog 的 Mcp 聚合：异步仓库与事务内运行时测试生命周期成为唯一实现，SQLite 装配也切到
 // 这一份。同一段断言在两个引擎上各跑一遍：创建 / 同 owner 同名冲突 / OCC（configHash）/ 改名冲突 / 被 agent 引用时
@@ -11,8 +13,7 @@ import { CreateAgentSchema, type CreateMcp } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, mcpRuntimeTestSessions, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { mcpConfigHash } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { createMcpRepository } from '@/modules/resource-catalog/infrastructure/mcpRepository'
@@ -26,12 +27,10 @@ const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: imp
 const T0 = 1_700_000_000_000
 const HASH = 'a'.repeat(64)
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'user',
-): Promise<string> {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'user'): Promise<string> {
   const id = ulid()
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id.slice(-8).toLowerCase()}`,
     displayName: id,
@@ -55,11 +54,12 @@ function remoteInput(name: string, overrides: Partial<CreateMcp> = {}): CreateMc
 }
 
 async function seedSession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { mcpId: string; ownerUserId: string; inFlightTurnId?: string | null },
 ): Promise<string> {
   const id = `session-${ulid()}`
-  await db.insert(mcpRuntimeTestSessions).values({
+  const { mcpRuntimeTestSessions } = tablesOf(db)
+  await insertOne(db, mcpRuntimeTestSessions, {
     id,
     mcpId: input.mcpId,
     ownerUserId: input.ownerUserId,
@@ -86,7 +86,8 @@ async function seedSession(
   return id
 }
 
-async function sessionState(db: ProviderNeutralDatabase, id: string) {
+async function sessionState(db: PersistenceDb, id: string) {
+  const { mcpRuntimeTestSessions } = tablesOf(db)
   return (
     await db
       .select({
@@ -190,7 +191,10 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
       now: T0,
     })
     const agentId = ulid()
-    await harness.db.insert(agents).values(
+    const { agents, mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await insertOne(
+      harness.db,
+      agents,
       createAgentPersistenceValues({
         id: agentId,
         agent: CreateAgentSchema.parse({

@@ -1,11 +1,12 @@
 // RFC-225 — workgroup WS producer and per-frame ACL regression locks.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkgroupsWsMessage } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { resourceGrants, users, workgroups } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   createWorkgroup,
@@ -126,6 +127,7 @@ describeEachProvider('RFC-225 workgroup WS frame gate', (harness) => {
     const db = harness.db
     const workgroupId = ulid()
     const now = Date.now()
+    const { users, workgroups, resourceGrants } = tablesOf(db)
     await db.insert(users).values(
       ['alice', 'bob', 'carol'].map((id) => ({
         id,
@@ -135,14 +137,14 @@ describeEachProvider('RFC-225 workgroup WS frame gate', (harness) => {
         updatedAt: now,
       })),
     )
-    await db.insert(workgroups).values({
+    await insertOne(db, workgroups, {
       id: workgroupId,
       name: 'private-team',
       ownerUserId: 'alice',
       visibility: 'private',
       version: 1,
     })
-    await db.insert(resourceGrants).values({
+    await insertOne(db, resourceGrants, {
       resourceType: 'workgroup',
       resourceId: workgroupId,
       userId: 'bob',
@@ -176,7 +178,7 @@ describeEachProvider('RFC-225 workgroup WS frame gate', (harness) => {
 
     const carol = ctx('carol')
     expect(await gate(carol, frame)).toBe(false)
-    await db.insert(resourceGrants).values({
+    await insertOne(db, resourceGrants, {
       resourceType: 'workgroup',
       resourceId: workgroupId,
       userId: 'carol',
@@ -190,7 +192,8 @@ describeEachProvider('RFC-225 workgroup WS frame gate', (harness) => {
   test('cold private delete uses captured audience and unknown variants fail closed', async () => {
     const db = harness.db
     const workgroupId = ulid()
-    await db.insert(workgroups).values({
+    const { workgroups } = tablesOf(db)
+    await insertOne(db, workgroups, {
       id: workgroupId,
       name: 'deleted-team',
       ownerUserId: 'alice',

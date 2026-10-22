@@ -1,9 +1,9 @@
 // RFC-374 AC-1/2: allocation order survives inverted IDs, clock skew, rollback and concurrent provider transactions.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { newestNodeRun } from '@agent-workflow/shared'
-import { nodeRuns, nodeRunSeqAllocations } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
@@ -32,6 +32,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
           }),
         )
     })
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const byId = new Map(rows.map((row) => [row.id, row]))
     for (let n = 1; n < ids.length; n++)
@@ -45,6 +46,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
         taskId = await seedSequenceTask(db)
       const old = await mintSequenceRun(db, taskId, { id: 'z-old' })
       const latest = await mintSequenceRun(db, taskId, { id: 'a-late', cause })
+      const { nodeRuns } = tablesOf(db)
       await db
         .update(nodeRuns)
         .set({ mergeState: 'pending-merge' })
@@ -69,6 +71,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
     const first = await mintSequenceRun(db, taskId, { id: ulid(at) })
     const second = await mintSequenceRun(db, taskId, { id: ulid(at - 60_000) })
     expect(second < first).toBe(true)
+    const { nodeRuns } = tablesOf(db)
     expect(
       newestNodeRun(await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))?.id,
     ).toBe(second)
@@ -77,6 +80,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
     await mintSequenceRun(db, taskId, { id: 'duplicate' })
+    const { nodeRunSeqAllocations, nodeRuns } = tablesOf(db)
     const before = await db.select().from(nodeRunSeqAllocations)
     await expect(mintSequenceRun(db, taskId, { id: 'duplicate' })).rejects.toBeDefined()
     expect(await db.select().from(nodeRunSeqAllocations)).toEqual(before)
@@ -89,6 +93,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
     const ids = await Promise.all(
       Array.from({ length: 4 }, (_, n) => mintSequenceRun(db, taskId, { id: `concurrent-${n}` })),
     )
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select()
       .from(nodeRuns)

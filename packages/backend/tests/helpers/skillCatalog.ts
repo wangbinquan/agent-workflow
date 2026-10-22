@@ -15,7 +15,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import type { SkillCatalogModule } from '@/modules/resource-catalog/public/operations'
 
@@ -36,7 +36,7 @@ process.on('exit', () => {
   for (const root of roots) rmSync(root, { recursive: true, force: true })
 })
 
-export function composeTestSkillCatalog(db: ProviderNeutralDatabase): SkillCatalogFixture {
+export function composeTestSkillCatalog(db: PersistenceDb): SkillCatalogFixture {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-conformance-'))
   roots.push(appHome)
   return {

@@ -2,18 +2,11 @@
 // digital-employee 一对（反应轮次查询）合一，两个引擎各跑一遍：NULL settled_at 两引擎都排最后、count() 回 number、
 // 分页游标、模板上游的锁定读 + 决策 + 落补丁在一个事务里。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  capabilityTemplates,
-  codeRoundStages,
-  codeTriggerDeliveries,
-  codeWorkItems,
-  codeWorkRounds,
-  employeeCases,
-  employeeReactionRounds,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TemplateUpstreamMergePatch } from '@/modules/code-capability/application/ports/templateUpstreamPersistence'
 import { createDeliveryChainRead } from '@/modules/code-capability/infrastructure/deliveryChainRead'
 import { createTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/templateUpstreamPersistence'
@@ -23,7 +16,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000
 
-function template(id: string, over: Partial<typeof capabilityTemplates.$inferInsert> = {}) {
+function template(
+  id: string,
+  over: Partial<PersistenceTables['capabilityTemplates']['$inferInsert']> = {},
+) {
   return {
     id,
     name: id,
@@ -36,12 +32,13 @@ function template(id: string, over: Partial<typeof capabilityTemplates.$inferIns
 }
 
 async function seedWorkItem(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   createdAt: number,
   rounds: number,
 ): Promise<void> {
-  await db.insert(codeWorkItems).values({
+  const { codeWorkItems, codeWorkRounds } = tablesOf(db)
+  await insertOne(db, codeWorkItems, {
     id,
     codeHostEndpointId: 'ep-b5b',
     stableProjectId: 'proj-b5b',
@@ -77,7 +74,8 @@ describeEachProvider(
       expect(
         await rounds.lastSettledRound({ caseId: 'case-b5b', workItemRef: 'analyze' }),
       ).toBeNull()
-      await db.insert(employeeCases).values({
+      const { employeeCases, employeeReactionRounds } = tablesOf(db)
+      await insertOne(db, employeeCases, {
         id: 'case-b5b',
         name: 'case',
         employeeId: 'employee-1',
@@ -148,7 +146,9 @@ describeEachProvider(
       const deliveries = createDeliveryChainRead(db)
       const delivery = (
         id: string,
-        over: Partial<typeof codeTriggerDeliveries.$inferInsert> & { readonly createdAt: number },
+        over: Partial<PersistenceTables['codeTriggerDeliveries']['$inferInsert']> & {
+          readonly createdAt: number
+        },
       ) => ({
         id,
         correlationId: `corr-${id}`,
@@ -159,6 +159,7 @@ describeEachProvider(
         updatedAt: over.createdAt,
         ...over,
       })
+      const { codeTriggerDeliveries, codeRoundStages } = tablesOf(db)
       await db
         .insert(codeTriggerDeliveries)
         .values([
@@ -256,6 +257,7 @@ describeEachProvider(
         })),
       ).toBeNull()
 
+      const { capabilityTemplates } = tablesOf(db)
       await db.insert(capabilityTemplates).values([
         template('tpl-upstream', { description: 'upstream v2', paramsJson: '{"x":2}' }),
         template('tpl-local', {

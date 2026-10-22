@@ -1,8 +1,8 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
-import { resourceGrants } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   IntentContextResourceAuthorizationReadPort,
   IntentContextResourceAuthorizationRow,
@@ -17,14 +17,14 @@ import { ACL_TABLES } from './aclRegistry'
  * 这里是整条链**唯一**的读实现。
  */
 export function createIntentContextResourceAuthorizationReadPort(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
 ): IntentContextResourceAuthorizationReadPort {
   const port: IntentContextResourceAuthorizationReadPort = {
     async loadIdentity(
       resourceType: CatalogSelectorKind,
       resourceId: string,
     ): Promise<IntentContextResourceAuthorizationRow | null> {
-      const table = ACL_TABLES[resourceType]
+      const table = ACL_TABLES(transaction)[resourceType]
       const row = (
         await transaction
           .select({
@@ -52,6 +52,7 @@ export function createIntentContextResourceAuthorizationReadPort(
       resourceId: string,
       userId: string,
     ): Promise<ResourceGrantLevel | null> {
+      const { resourceGrants } = tablesOf(transaction)
       const row = (
         await transaction
           .select({ level: resourceGrants.level })

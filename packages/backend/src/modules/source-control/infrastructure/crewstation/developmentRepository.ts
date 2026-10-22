@@ -1,5 +1,5 @@
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   WorkspaceCommandStoppedError,
   type WorkspaceHelper,
@@ -13,7 +13,7 @@ import { assertHostedRepositoryUrl } from './repositoryUrl'
 /** Canonical development baselines and employee scenes share an owner volume;
  * task runs still materialize their own task-scoped repository copies. */
 export function createHostedDevelopmentRepositoryPreparation(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly helper: WorkspaceHelper
   readonly secretBox: SecretBox
   readonly taskId: string

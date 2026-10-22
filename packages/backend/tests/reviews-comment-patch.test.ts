@@ -17,11 +17,12 @@
 // 每次 `seed` 用一组新 id：同一个用例里连着种两份夹具（作者矩阵那两条）在共库上会撞主键，
 // 而合一前每次 `createInMemoryDb` 都是一个新库，天然不会。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { eq } from 'drizzle-orm'
-import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import {
   deleteReviewComment,
   updateReviewCommentText,
@@ -29,7 +30,7 @@ import {
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -40,7 +41,7 @@ import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
 
 interface Seed {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   nodeRunId: string
   docVersionId: string
@@ -50,7 +51,7 @@ interface Seed {
 let fixtureOrdinal = 0
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { decision?: 'pending' | 'approved' } = {},
 ): Promise<Seed> {
   const decision = opts.decision ?? 'pending'
@@ -61,7 +62,8 @@ async function seed(
   const docVersionId = `dv_test_${ordinal}`
   const commentId = `cmt_test_${ordinal}`
 
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, docVersions, reviewComments } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -71,7 +73,7 @@ async function seed(
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -91,7 +93,7 @@ async function seed(
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ]),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'rev_1',
@@ -100,7 +102,7 @@ async function seed(
     reviewIteration: 0,
     status: 'awaiting_review',
   })
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: docVersionId,
     taskId,
     reviewNodeId: 'rev_1',
@@ -114,7 +116,7 @@ async function seed(
     decision,
     createdAt: 1,
   })
-  await db.insert(reviewComments).values({
+  await insertOne(db, reviewComments, {
     id: commentId,
     docVersionId,
     anchorSectionPath: '# Design',
@@ -162,6 +164,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
     expect(updated.id).toBe(s.commentId)
     expect(updated.anchor.selectedText).toBe('Hello')
 
+    const { reviewComments } = tablesOf(s.db)
     const stored = await s.db
       .select()
       .from(reviewComments)
@@ -195,6 +198,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
       updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
     ).rejects.toBeInstanceOf(ConflictError)
 
+    const { reviewComments } = tablesOf(s.db)
     // Original commentText untouched.
     const stored = await s.db
       .select()
@@ -207,7 +211,8 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
 describeEachProvider('review comment ownership and terminal guards', (harness) => {
   test('delete refuses a comment owned by a different review and preserves it', async () => {
     const s = await seed(harness.db)
-    await s.db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions, reviewComments } = tablesOf(s.db)
+    await insertOne(s.db, nodeRuns, {
       id: 'run_other',
       taskId: s.taskId,
       nodeId: 'rev_2',
@@ -216,7 +221,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
       reviewIteration: 0,
       status: 'awaiting_review',
     })
-    await s.db.insert(docVersions).values({
+    await insertOne(s.db, docVersions, {
       id: 'dv_other',
       taskId: s.taskId,
       reviewNodeId: 'rev_2',
@@ -230,7 +235,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
       decision: 'pending',
       createdAt: 1,
     })
-    await s.db.insert(reviewComments).values({
+    await insertOne(s.db, reviewComments, {
       id: 'cmt_other',
       docVersionId: 'dv_other',
       anchorSectionPath: '# Other',
@@ -260,6 +265,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
 
   test('terminal task rejects comment edits before touching the row', async () => {
     const s = await seed(harness.db)
+    const { tasks, reviewComments } = tablesOf(s.db)
     await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
 
     await expect(
@@ -279,9 +285,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
     let ownedHome: string | undefined
     let previousHome: string | undefined
     let homeAssigned = false
-    async function composeProviderApp(
-      input: ProviderHttpApplicationInput & { db: ProviderNeutralDatabase },
-    ) {
+    async function composeProviderApp(input: ProviderHttpApplicationInput & { db: PersistenceDb }) {
       ownedHome = createFixtureDirectory(
         joinFixturePath(fixtureTmpDirectory(), 'rfc359-w49-review-'),
       )
@@ -340,6 +344,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
       expect(body.commentText).toBe('edited via http')
       expect(body.id).toBe(s.commentId)
 
+      const { reviewComments } = tablesOf(s.db)
       const stored = await s.db
         .select()
         .from(reviewComments)
@@ -379,6 +384,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
 describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harness) => {
   async function seedAuthored(author: string): Promise<Seed> {
     const s = await seed(harness.db)
+    const { reviewComments } = tablesOf(s.db)
     await s.db.update(reviewComments).set({ author }).where(eq(reviewComments.id, s.commentId))
     return s
   }
@@ -391,6 +397,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
         role: 'user',
       }),
     ).rejects.toMatchObject({ code: 'review-comment-not-author', status: 403 })
+    const { reviewComments } = tablesOf(s.db)
     const row = (
       await s.db.select().from(reviewComments).where(eq(reviewComments.id, s.commentId))
     )[0]!
@@ -422,6 +429,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
         role: 'reviewer',
       }),
     ).rejects.toMatchObject({ code: 'review-comment-delete-not-allowed', status: 403 })
+    const { reviewComments } = tablesOf(own.db)
     expect(
       await own.db.select().from(reviewComments).where(eq(reviewComments.id, own.commentId)),
     ).toHaveLength(1)
@@ -489,6 +497,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
       actorUserId: 'u_author',
       role: 'user',
     })
+    const { reviewComments } = tablesOf(s.db)
     const rows = await s.db.select().from(reviewComments).where(eq(reviewComments.id, s.commentId))
     expect(rows.length).toBe(0)
   })

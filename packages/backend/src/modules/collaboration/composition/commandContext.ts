@@ -2,7 +2,7 @@
 // Public callers carry only an opaque object reference; the live DB and app
 // home never become part of a public command/query contract.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { CollaborationCommandContext, CollaborationRouteContext } from '../public/types'
 import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
@@ -80,7 +80,7 @@ export type CollaborationCommandContextInput = Omit<
   CollaborationCommandDependencies,
   'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
 > & {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome?: string
   readonly reviewArtifacts?: ReviewArtifactSelection
 }
@@ -96,7 +96,7 @@ export type PostgresqlCollaborationCommandContextInput = Omit<
  * RFC-359 AC-1（plan §5ga）—— 两个 provider 唯一的一份。旁边那个
  * `createPostgresqlCollaborationCommandContext` 的函数体与这里**逐字节相同**，
  * 只差它收的是 `PostgresqlCollaborationCommandContextInput`（= 本输入把 `db` 收窄成
- * `PostgresqlDatabaseClient`）。而 PG 客户端本来就可赋值给 `ProviderNeutralDatabase`，
+ * `PostgresqlDatabaseClient`）。而 PG 客户端本来就可赋值给 `PersistenceDb`，
  * 所以这一份直接收得下 PG 的输入，品牌那份已退役。
  */
 export function createCollaborationCommandContext<I extends CollaborationCommandContextInput>(

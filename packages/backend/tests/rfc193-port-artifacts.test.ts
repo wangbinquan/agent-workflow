@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-193 T3 — archive-at-emit 归档制（design.md §4.3/§4.4，case 1/2/3/3b/3c/3d/3f/8）。
 //
@@ -30,7 +32,6 @@ import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
 import {
   encodePortSegment,
@@ -457,7 +458,8 @@ async function seedAgent(
   outputs: string[],
   outputKinds: Record<string, string>,
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -491,12 +493,13 @@ async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<str
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc193',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc193-e2e',
     id: taskId,
     workflowId,
@@ -528,6 +531,7 @@ async function runToEnd(h: Harness, taskId: string): Promise<void> {
 }
 
 async function outputRow(db: DbClient, taskId: string, port: string) {
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
   const runs = await db
     .select()
     .from(nodeRuns)
@@ -621,6 +625,7 @@ describe('RFC-193 e2e — runner archive-at-emit', () => {
     )
     const taskId = await seedTask(h, singleAgentDef('writer'))
     await runToEnd(h, taskId)
+    const { nodeRuns } = tablesOf(h.db)
     const runs = await h.db
       .select()
       .from(nodeRuns)

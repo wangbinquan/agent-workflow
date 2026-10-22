@@ -1,14 +1,14 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-036 — /api/auth/login + /me + /change-password + sessions + PATs + identities.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, desc, eq } from 'drizzle-orm'
-import { userAccessAudit } from '@/db/schema'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createPat } from './helpers/auth/patStore'
-import { oidcProviders } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -19,7 +19,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
 }
 
@@ -258,6 +258,7 @@ describeEachProviderHttpApplication(
         },
       })
 
+      const { userAccessAudit } = tablesOf(h.db)
       // RFC-359 —— 原来这里走 `h.db.$client.query(...)`（bun:sqlite 的裸 SQL），
       // 中立面上没有 `$client`。换成 drizzle 的 select，两个引擎同一份判据。
       const audit = (
@@ -425,7 +426,8 @@ describeEachProviderHttpApplication(
       })
       const providerId = ulid()
       const now = Date.now()
-      await h.db.insert(oidcProviders).values({
+      const { oidcProviders } = tablesOf(h.db)
+      await insertOne(h.db, oidcProviders, {
         id: providerId,
         slug: 'managed-idp',
         displayName: 'Managed IdP',

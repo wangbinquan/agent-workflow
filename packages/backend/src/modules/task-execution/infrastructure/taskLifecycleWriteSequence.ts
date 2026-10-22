@@ -1,10 +1,11 @@
 // One physical task lifecycle CAS, companion and event sequence. The caller
 // owns the transaction and chooses synchronous or asynchronous interpretation.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import {
   transactionStep,
@@ -19,7 +20,7 @@ import type {
 
 export type TaskLifecycleWriteExtra = Partial<
   Pick<
-    typeof tasks.$inferInsert,
+    PersistenceTables['tasks']['$inferInsert'],
     | 'finishedAt'
     | 'errorSummary'
     | 'errorMessage'
@@ -33,7 +34,7 @@ export type TaskLifecycleWriteExtra = Partial<
   >
 >
 
-export interface TaskLifecycleWriteInput<Tx extends ProviderNeutralDatabase> {
+export interface TaskLifecycleWriteInput<Tx extends PersistenceDb> {
   readonly taskId: string
   readonly from: TaskStatus
   readonly to: TaskStatus
@@ -56,7 +57,7 @@ export interface TaskLifecycleWriteInput<Tx extends ProviderNeutralDatabase> {
 
 /** A miss stops before the companion. Strict/error adaptation and publication
  * remain at the existing entry points, outside this transaction-local program. */
-export function* taskLifecycleWriteSequence<Tx extends ProviderNeutralDatabase>(
+export function* taskLifecycleWriteSequence<Tx extends PersistenceDb>(
   tx: Tx,
   input: TaskLifecycleWriteInput<Tx>,
   append: (
@@ -70,53 +71,57 @@ export function* taskLifecycleWriteSequence<Tx extends ProviderNeutralDatabase>(
 > {
   const prune = input.workspacePruneDecision
   // rfc097-allow-direct-task-status-write -- single allowlisted writer
-  const updated = yield* transactionStep(() =>
-    tx
-      .update(tasks)
-      .set({
-        status: input.to,
-        ...(input.to === 'running'
-          ? { runningSince: input.now }
-          : input.from === 'running'
-            ? {
-                runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
-                runningSince: null,
-              }
-            : {}),
-        ...(input.extra ?? {}),
-        ...(prune.prune ? { workspacePruningAt: input.now, workspacePruneCause: prune.cause } : {}),
-        lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-      })
-      .where(
-        and(
-          eq(tasks.id, input.taskId),
-          eq(tasks.status, input.from),
-          ...(input.expectedLifecycleRevision === undefined
-            ? []
-            : [eq(tasks.lifecycleEventRevision, input.expectedLifecycleRevision)]),
-          ...(input.expectedWorktreePath === undefined
-            ? []
-            : [eq(tasks.worktreePath, input.expectedWorktreePath)]),
-          ...(input.isRevival
-            ? [
-                isNull(tasks.deletedAt),
-                isNull(tasks.sourceTerminationFence),
-                isNull(tasks.workspacePruningAt),
-                isNull(tasks.workspacePrunedAt),
-              ]
-            : []),
+  const updated = yield* transactionStep(() => {
+    const { tasks } = tablesOf(tx)
+    return queryRows(
+      tx
+        .update(tasks)
+        .set({
+          status: input.to,
+          ...(input.to === 'running'
+            ? { runningSince: input.now }
+            : input.from === 'running'
+              ? {
+                  runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
+                  runningSince: null,
+                }
+              : {}),
+          ...(input.extra ?? {}),
           ...(prune.prune
-            ? [
-                isNull(tasks.workspacePruningAt),
-                isNull(tasks.workspacePruneCause),
-                isNull(tasks.workspacePrunedAt),
-              ]
-            : []),
-        ),
-      )
-      .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision })
-      .all(),
-  )
+            ? { workspacePruningAt: input.now, workspacePruneCause: prune.cause }
+            : {}),
+          lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
+        })
+        .where(
+          and(
+            eq(tasks.id, input.taskId),
+            eq(tasks.status, input.from),
+            ...(input.expectedLifecycleRevision === undefined
+              ? []
+              : [eq(tasks.lifecycleEventRevision, input.expectedLifecycleRevision)]),
+            ...(input.expectedWorktreePath === undefined
+              ? []
+              : [eq(tasks.worktreePath, input.expectedWorktreePath)]),
+            ...(input.isRevival
+              ? [
+                  isNull(tasks.deletedAt),
+                  isNull(tasks.sourceTerminationFence),
+                  isNull(tasks.workspacePruningAt),
+                  isNull(tasks.workspacePrunedAt),
+                ]
+              : []),
+            ...(prune.prune
+              ? [
+                  isNull(tasks.workspacePruningAt),
+                  isNull(tasks.workspacePruneCause),
+                  isNull(tasks.workspacePrunedAt),
+                ]
+              : []),
+          ),
+        )
+        .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision }),
+    )
+  })
   const changed = updated[0]
   if (changed === undefined) return null
   const nodeChanges = [...(input.nodeChanges ?? [])]

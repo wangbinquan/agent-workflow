@@ -36,6 +36,7 @@
 //     (!effectiveHasClarifyChannel / !suppressPriorOutput must stay gone), and
 //     the hasClarifyChannel threading is locked by clarify-prompt-wire-up.test.ts.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -47,7 +48,6 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
@@ -193,13 +193,14 @@ async function buildHarness(): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
     },
   )
 
+  const { nodeRuns } = tablesOf(db)
   const auditorRows = await db
     .select()
     .from(nodeRuns)
@@ -278,6 +279,7 @@ describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prom
     })
     expect(result.resumeRequired).toBe(true)
 
+    const { nodeRuns } = tablesOf(h.db)
     // The original done row is now a canceled supersede marker — but its
     // node_run_outputs row (report=V1) is kept, which is what RFC-119 reads.
     const superseded = (

@@ -1,14 +1,15 @@
 // P-5-01: events archival background task + endpoint fallback.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import {
   nodeRunEventsProjection,
@@ -16,12 +17,12 @@ import {
 } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   logsDir: string
   cleanup: () => void
 }
 
-function buildHarness(db: ProviderNeutralDatabase): Harness {
+function buildHarness(db: PersistenceDb): Harness {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-events-archive-'))
   return {
     db,
@@ -37,14 +38,15 @@ async function seedTaskWithNodeRun(
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -58,7 +60,7 @@ async function seedTaskWithNodeRun(
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await h.db.insert(nodeRuns).values({
+  await insertOne(h.db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'n1',
@@ -99,6 +101,7 @@ describeEachProvider('archiveEvents', (provider) => {
     expect(r.perGroupArchived).toBe(0)
     expect(r.globalArchived).toBe(0)
     expect(r.files).toEqual([])
+    const { nodeRunEvents } = tablesOf(h.db)
     const remaining = await h.db
       .select()
       .from(nodeRunEvents)
@@ -121,6 +124,7 @@ describeEachProvider('archiveEvents', (provider) => {
     expect(lines.length).toBe(6)
     const first = JSON.parse(lines[0]!) as { id: number; payload: string }
     expect(first.payload).toContain('"chunk":0')
+    const { nodeRunEvents } = tablesOf(h.db)
     // DB now holds the latest 4.
     const remaining = await h.db
       .select()
@@ -134,6 +138,7 @@ describeEachProvider('archiveEvents', (provider) => {
     const config = { eventsArchiveThresholds: { perNodeRunRows: 4, globalRows: 1_000 } }
     const first = await archiveEvents(h.db, config, h.logsDir, { rowBudgetRows: 3 })
     expect(first.perGroupArchived).toBe(3)
+    const { nodeRunEvents } = tablesOf(h.db)
     expect(
       await h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
     ).toHaveLength(7)
@@ -168,6 +173,7 @@ describeEachProvider('archiveEvents', (provider) => {
       expect(injected).toBe(true)
 
       await archiveEvents(h.db, config, h.logsDir)
+      const { nodeRunEvents } = tablesOf(h.db)
       const remaining = await h.db
         .select()
         .from(nodeRunEvents)
@@ -210,6 +216,7 @@ describeEachProvider('archiveEvents', (provider) => {
         h.logsDir,
       ),
     ).rejects.toThrow()
+    const { nodeRunEvents } = tablesOf(h.db)
     expect(
       await h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
     ).toHaveLength(10)
@@ -228,6 +235,7 @@ describeEachProvider('archiveEvents', (provider) => {
     expect(r.perGroupArchived).toBe(0)
     expect(r.globalArchived).toBe(4)
     expect(r.remainingRows).toBe(6)
+    const { nodeRunEvents } = tablesOf(h.db)
     const remainingA = await h.db
       .select()
       .from(nodeRunEvents)

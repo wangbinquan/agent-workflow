@@ -32,6 +32,8 @@
 // Deterministic: local git init/commit only (no network, no stash), serial
 // dispatch, no sleeps or polling; temp dirs cleaned in afterEach.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -40,7 +42,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
@@ -85,7 +86,8 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -104,12 +106,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc354-depth3-task',
     id: taskId,
     workflowId,
@@ -245,14 +248,16 @@ describe('RFC-354 — depth 3: loop ⊃ git ⊃ loop ⊃ agent', () => {
       }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('done')
 
-    const rowsOf = (nodeId: string) =>
-      h.db
+    const rowsOf = (nodeId: string) => {
+      return h.db
         .select()
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+    }
 
     // Oracle #1 (process truth): outer 2 × inner 2 = 4 real spawns, and the
     // top-scope producer ran exactly once for the whole task.

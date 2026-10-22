@@ -2,14 +2,16 @@
 // Promise repository on SQLite and PostgreSQL; provider clients never escape
 // infrastructure and PostgreSQL writes retain the live-generation fence.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, first } from '@/platform/persistence/queryHelpers'
+import { describe, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 import { resolve } from 'node:path'
 
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
-import { codeHostConnections, repositoryTransportConnections, users } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { RepositoryTransportCredentials } from '@/modules/source-control/application/repositoryTransportCredentials'
 import { DrizzleRepositoryTransportCredentialRepository } from '@/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -47,10 +49,10 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
     const mutation = /^\s*(DELETE|INSERT|UPDATE)/i.test(query)
     return rows(response, mutation ? [{}] : [])
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -81,10 +83,6 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
 }
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
 describe('RFC-349 source-control provider adapters', () => {
   test('SQLite adapter preserves the sealed credential behavior behind Promise methods', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -92,17 +90,16 @@ describe('RFC-349 source-control provider adapters', () => {
     const repository = new DrizzleRepositoryTransportCredentialRepository(db)
     const credentials = new RepositoryTransportCredentials(repository, secretBox)
     const user = { id: 'rfc349-source-control-user' }
-    db.insert(users)
-      .values({
-        id: user.id,
-        username: 'rfc349-source-control-sqlite',
-        displayName: 'SQLite Source Control',
-        role: 'user',
-        status: 'active',
-        createdAt: 1,
-        updatedAt: 1,
-      })
-      .run()
+    const { users } = tablesOf(db)
+    insertOne(db, users, {
+      id: user.id,
+      username: 'rfc349-source-control-sqlite',
+      displayName: 'SQLite Source Control',
+      role: 'user',
+      status: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+    })
 
     await credentials.synchronize({
       provider: 'gitlab',
@@ -157,8 +154,9 @@ describe('RFC-349 source-control provider adapters', () => {
         token: 'atomic-source-control-token',
       }),
     ).rejects.toThrow('projection unavailable')
-    expect(db.select().from(codeHostConnections).all()).toEqual([])
-    expect(db.select().from(repositoryTransportConnections).all()).toEqual([])
+    const { codeHostConnections, repositoryTransportConnections } = tablesOf(db)
+    expect(queryRows(db.select().from(codeHostConnections))).toEqual([])
+    expect(queryRows(db.select().from(repositoryTransportConnections))).toEqual([])
 
     db.$client.exec('DROP TRIGGER rfc349_fail_repository_projection')
     await service.upsert('gitlab', {
@@ -170,8 +168,8 @@ describe('RFC-349 source-control provider adapters', () => {
       baseUrl: 'https://git.example.test/api/v4',
       token: 'atomic-source-control-token',
     })
-    expect(db.select().from(codeHostConnections).all()).toHaveLength(1)
-    expect(db.select().from(repositoryTransportConnections).all()).toHaveLength(1)
+    expect(queryRows(db.select().from(codeHostConnections))).toHaveLength(1)
+    expect(queryRows(db.select().from(repositoryTransportConnections))).toHaveLength(1)
 
     const current = await credentials.findAdminConnection('gitlab')
     expect(current).not.toBeNull()
@@ -185,7 +183,7 @@ describe('RFC-349 source-control provider adapters', () => {
         },
       ),
     ).resolves.toBe(false)
-    expect(db.select().from(codeHostConnections).get()?.baseUrl).toBe(
+    expect(first(db.select().from(codeHostConnections))?.baseUrl).toBe(
       'https://git.example.test/api/v4',
     )
   })

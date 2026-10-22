@@ -1,5 +1,6 @@
 // RFC-359 W4-B1 —— node run merge_state 迁移：一份实现，两个 provider 共用；读 + CAS 写在同一事务里。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull } from 'drizzle-orm'
 import {
   IllegalMergeStateTransition,
@@ -7,9 +8,8 @@ import {
   type MergeStateOrNull,
 } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { nodeRuns } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { MergeStateLifecyclePersistence } from '../application/ports/mergeStateLifecyclePersistence'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
@@ -22,7 +22,7 @@ import {
 } from './ownedTaskExecution'
 
 export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecyclePersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async transition(
     input: Parameters<MergeStateLifecyclePersistence['transition']>[0],
@@ -35,6 +35,7 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
       )
     }
     const outcome = await withTaskExecutionWrite(this.db, async (tx) => {
+      const { nodeRuns } = tablesOf(tx)
       const rows = await tx
         .select({ mergeState: nodeRuns.mergeState, taskId: nodeRuns.taskId })
         .from(nodeRuns)
@@ -109,6 +110,7 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
 
 /** 本行是否被同帧更新一代结构性取代（design §3），按主键点查 + 取代谓词。 */
 async function isRunSuperseded(tx: TaskExecutionTransaction, nodeRunId: string): Promise<boolean> {
+  const { nodeRuns } = tablesOf(tx)
   const rows = await tx
     .select({ id: nodeRuns.id })
     .from(nodeRuns)

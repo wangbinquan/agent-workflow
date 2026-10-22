@@ -5,13 +5,14 @@
 // newly launched direct mission stops after requirement materialization and no
 // wake source exists to ever start its Agent.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cachedRepos } from '../src/db/schema'
 import { composeDevelopmentAutomation } from '../src/modules/development-automation/composition'
 import type { AgentActionLauncherPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { bindChangeCandidateParticipant } from '../src/modules/source-control/composition'
@@ -45,7 +46,8 @@ describeEachProvider('rfc310 mission driver', (harness) => {
       '-m',
       'base',
     )
-    await fx.db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(fx.db)
+    await insertOne(fx.db, cachedRepos, {
       id: 'repo-1',
       urlHash: 'driver-test',
       localPath: repo,

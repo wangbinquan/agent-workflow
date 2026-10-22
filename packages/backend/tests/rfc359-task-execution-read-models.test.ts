@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
 //
@@ -22,7 +24,6 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { docVersions, nodeRuns, taskRepos, tasks, users, workflows } from '@/db/schema'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/runtimeAssembly'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -44,7 +45,8 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
   }): Promise<void> {
     const db = h.db
     if (input.ownerUserId !== null) {
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id: input.ownerUserId,
         username: input.ownerUserId,
         displayName: input.ownerUserId,
@@ -53,10 +55,13 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
         updatedAt: 1,
       })
     }
-    await db
-      .insert(workflows)
-      .values({ id: `wf-${input.taskId}`, name: `wf-${input.taskId}`, definition: '{}' })
-    await db.insert(tasks).values({
+    const { workflows, tasks, taskRepos } = tablesOf(db)
+    await insertOne(db, workflows, {
+      id: `wf-${input.taskId}`,
+      name: `wf-${input.taskId}`,
+      definition: '{}',
+    })
+    await insertOne(db, tasks, {
       id: input.taskId,
       name: input.taskId,
       workflowId: `wf-${input.taskId}`,
@@ -96,7 +101,8 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
         { dir: 'web', path: '/worktrees/task-1/web' },
       ],
     })
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: 'run-1',
       taskId: 'task-1',
       nodeId: 'review-1',
@@ -104,7 +110,7 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
       retryIndex: 0,
       startedAt: 1,
     })
-    await h.db.insert(docVersions).values({
+    await insertOne(h.db, docVersions, {
       id: 'doc-1',
       taskId: 'task-1',
       reviewNodeId: 'review-1',

@@ -13,12 +13,13 @@
 // 不到 recorded（新增子仓，父层 HEAD 里没有）按"必须推"处理，不是按"没动"。
 // A8 原修复的语义保持不变：真正没动过的子仓一个 ref 都不写。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
@@ -105,9 +106,10 @@ async function fixture(): Promise<{ parent: string; vendorSrc: string; innerSrc:
  * through the neutral query builder instead of `INSERT INTO …` text — the raw
  * statements only parsed against the bun:sqlite dialect.
  */
-async function seedTask(db: ProviderNeutralDatabase, repo: string): Promise<void> {
-  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
-  await db.insert(tasks).values({
+async function seedTask(db: PersistenceDb, repo: string): Promise<void> {
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
+  await insertOne(db, tasks, {
     id: 't1',
     name: 'cp',
     workflowId: 'wf',
@@ -128,7 +130,7 @@ async function seedTask(db: ProviderNeutralDatabase, repo: string): Promise<void
       { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
     ]),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'parent-run',
     taskId: 't1',
     nodeId: 'writer',

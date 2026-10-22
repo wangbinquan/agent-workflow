@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { createDevelopmentAdapterStore } from '@/modules/integration/infrastructure/developmentAdapterStore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -49,7 +49,10 @@ function fixture() {
     }
     throw new Error(`unexpected PostgreSQL development adapter query: ${sql}`)
   }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: execute,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -74,10 +77,6 @@ function fixture() {
   }
   return { db: createPostgresqlDatabaseClient(runtime), statements }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 Development and Integration provider composition', () => {
   test('PostgreSQL revision and connection catalogs execute through the async provider', async () => {
@@ -131,7 +130,7 @@ describe('RFC-349 Development and Integration provider composition', () => {
       branded,
       'integration 装配面又出现了 provider 命名的导出。先按 plan §5fq 的三条判据问自己：' +
         '这个差异源于引擎本身吗（独有原语 / 独有资源形态 / 驱动强加的线上差异）？' +
-        '指不出来就别分叉——一份中立装配吃 `ProviderNeutralDatabase` 即可。',
+        '指不出来就别分叉——一份中立装配吃 `PersistenceDb` 即可。',
     ).toEqual([])
   })
 })

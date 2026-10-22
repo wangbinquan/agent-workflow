@@ -12,19 +12,21 @@
 //   1. 根仍是**父**会话（朴素保尾会在这里变成子代理，是本测试存在的全部理由）；
 //   2. 最近的内容还在（尾巴没被前缀挤掉）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 
-import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
 
 const PARENT = 'ses_parent'
 const CHILD = 'ses_child'
 
-async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, childEventCount: number): Promise<void> {
+  const { users, workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -36,8 +38,8 @@ async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promi
     nodes: [{ id: 'n1', kind: 'agent-single', data: { agentName: 'worker' } }],
     edges: [],
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: snapshot })
-  await db.insert(tasks).values({
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: snapshot })
+  await insertOne(db, tasks, {
     id: 't1',
     name: 't1',
     workflowId: 'wf1',
@@ -56,7 +58,7 @@ async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promi
     branchStartedAt: 1,
     rootTaskId: 't1',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr1',
     taskId: 't1',
     nodeId: 'n1',
@@ -70,7 +72,7 @@ async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promi
   let id = 1
   // 最早的几条属于**父**会话——定根靠它们。
   for (let i = 0; i < 3; i += 1) {
-    await db.insert(nodeRunEvents).values({
+    await insertOne(db, nodeRunEvents, {
       id: id++,
       nodeRunId: 'nr1',
       ts: id,
@@ -82,7 +84,7 @@ async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promi
   }
   // 中间一大段全是**子代理**会话：朴素保尾只会看到它们，于是把子代理当成根。
   for (let i = 0; i < childEventCount; i += 1) {
-    await db.insert(nodeRunEvents).values({
+    await insertOne(db, nodeRunEvents, {
       id: id++,
       nodeRunId: 'nr1',
       ts: id,
@@ -92,7 +94,7 @@ async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promi
       payload: `child-${i}`,
     })
   }
-  await db.insert(nodeRunEvents).values({
+  await insertOne(db, nodeRunEvents, {
     id: id++,
     nodeRunId: 'nr1',
     ts: id,

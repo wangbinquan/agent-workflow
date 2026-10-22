@@ -1,17 +1,12 @@
 // RFC-359 W4-D2 —— webhook 投递持久化：一份实现，两个 provider 共用。多语句写走统一事务原语；
 // GC 的「先选 id 再改 / 删」两步在同一个事务里，两个引擎同形（SQLite 此前用 rowid 子查询的方言写法）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, lt, notExists, notInArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  webhookDeliveries,
-  csEventTargets,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookMrLaunchGuards,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   WebhookDeliveryGcCursorV1,
@@ -45,14 +40,15 @@ function gcCursor(
 }
 
 export function createWebhookDeliveryPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): WebhookDeliveryPersistencePort {
   const session = databaseSessionFor(db)
   return {
     async insert(input) {
       const id = ulid()
       try {
-        await db.insert(webhookDeliveries).values({
+        const { webhookDeliveries } = tablesOf(db)
+        await insertOne(db, webhookDeliveries, {
           id,
           endpointId: input.endpointId,
           eventUuid: input.eventUuid,
@@ -72,6 +68,7 @@ export function createWebhookDeliveryPersistence(
         return { kind: 'inserted', deliveryId: id }
       } catch (error) {
         if (!isUniqueConstraintViolation(error) || input.eventUuid === null) throw error
+        const { webhookDeliveries } = tablesOf(db)
         // 撞 uuid 唯一键 = 同一事件重投：原子地把原行的 attempt_count +1 并回读，两个引擎都支持 RETURNING。
         const existing = (
           await db
@@ -99,6 +96,7 @@ export function createWebhookDeliveryPersistence(
     },
 
     async mark(input) {
+      const { webhookDeliveries } = tablesOf(db)
       await db
         .update(webhookDeliveries)
         .set({ status: input.status, statusReason: input.reason ?? null })
@@ -107,6 +105,7 @@ export function createWebhookDeliveryPersistence(
 
     async recoverInterrupted() {
       return await session.transaction(async (tx) => {
+        const { webhookMrControlEffects, webhookDeliveries } = tablesOf(tx)
         const controlledIds = (
           await tx.select({ id: webhookMrControlEffects.deliveryId }).from(webhookMrControlEffects)
         ).map((row) => row.id)
@@ -144,6 +143,7 @@ export function createWebhookDeliveryPersistence(
       const cursor = gcCursor(input.cursor, input.now, input.retention)
       if (cursor.phase === 'bodies') {
         const count = await session.transaction(async (tx) => {
+          const { webhookDeliveries, csEventTargets } = tablesOf(tx)
           const ids = (
             await tx
               .select({ id: webhookDeliveries.id })
@@ -185,6 +185,12 @@ export function createWebhookDeliveryPersistence(
       }
 
       const count = await session.transaction(async (tx) => {
+        const {
+          webhookDeliveries,
+          csEventTargets,
+          webhookMrControlEffects,
+          webhookMrLaunchGuards,
+        } = tablesOf(tx)
         const ids = (
           await tx
             .select({ id: webhookDeliveries.id })
@@ -251,6 +257,7 @@ export function createWebhookDeliveryPersistence(
     },
 
     async touchEndpointLastDelivery(endpointId, now) {
+      const { webhookEndpoints } = tablesOf(db)
       await db
         .update(webhookEndpoints)
         .set({ lastDeliveryAt: now })

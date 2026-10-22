@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { BundleSkillPayloadSchema, IntentSkillPayloadSchema } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills, skillVersions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
@@ -49,11 +49,11 @@ function assertStage(stage: SkillStage) {
 /** Resource Catalog owns staged/version/live trees for both Intent and package
  * mutations. All recovery state is durable; a new receiver needs no plan map. */
 export function createDatabaseSkillArtifactOwners(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fence?: CrewStationMutationFence,
 ) {
   const transaction = databaseSessionFor(db)
-  const write = <T>(run: (tx: ProviderNeutralDatabase) => Promise<T>) => {
+  const write = <T>(run: (tx: PersistenceDb) => Promise<T>) => {
     const lease = fence?.current()
     return transaction.transaction(async (tx) => {
       if (fence && lease) await fence.assertHeld(tx, lease)
@@ -96,6 +96,7 @@ export function createDatabaseSkillArtifactOwners(
   const publish = async (identity: SkillStage) => {
     assertStage(identity)
     const current = await write(async (tx) => {
+      const { skills, skillVersions } = tablesOf(tx)
       const skill = (
         await tx.select().from(skills).where(eq(skills.id, identity.skillId)).limit(1)
       )[0]
@@ -310,6 +311,7 @@ export function createDatabaseSkillArtifactOwners(
   }
   async function publishPackage(artifact: ResourcePackageSkillArtifact) {
     const identity = identityOf(artifact)
+    const { skills } = tablesOf(db)
     const current = (
       await db
         .select({ version: skills.contentVersion })

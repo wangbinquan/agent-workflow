@@ -11,7 +11,7 @@ import { describe, expect, test, beforeEach, afterEach, spyOn } from 'bun:test'
 import type { Hono } from 'hono'
 
 import { verifyPasswordDummy } from '../src/auth/passwords'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -22,7 +22,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 
 async function buildApp(
   scope: ProviderHttpApplicationScope,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   const db = scope.harness.db
   const app = (await scope.open()).app
   return { db, app }
@@ -58,7 +58,7 @@ describeEachProviderHttpApplication(
   },
   (scope) => {
     let app: Hono
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let spy: ReturnType<typeof spyOn>
 
     beforeEach(async () => {

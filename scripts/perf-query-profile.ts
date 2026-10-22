@@ -5,6 +5,7 @@ import { profile as sampleCpu } from 'bun:jsc'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
+  PostgresqlTransactionConnection,
   SqlRows,
 } from '../packages/backend/src/platform/persistence/postgresqlRuntime'
 import { PERF_HTTP_SCENARIOS, type PerfHttpReport } from './perf-compare'
@@ -221,6 +222,18 @@ export function profilePostgresqlQueries(runtime: PostgresqlDatabaseRuntime) {
       }
       return rows
     }
+  const wrapTransaction = (
+    connection: PostgresqlTransactionConnection,
+  ): PostgresqlTransactionConnection => ({
+    unsafe: wrap(connection.unsafe.bind(connection)),
+    async savepoint(body) {
+      const finish = capture.start('SAVEPOINT', [])
+      return await connection.savepoint(async (nested) => {
+        finish(0)
+        return await body(wrapTransaction(nested))
+      })
+    },
+  })
   const pool = runtime.providerPool()
   const tracedPool: PostgresqlPool = {
     unsafe: wrap(pool.unsafe.bind(pool)),
@@ -229,6 +242,30 @@ export function profilePostgresqlQueries(runtime: PostgresqlDatabaseRuntime) {
       return {
         unsafe: wrap(connection.unsafe.bind(connection)),
         release: () => connection.release(),
+        close: connection.close?.bind(connection),
+        async begin(body) {
+          const finish = capture.start('BEGIN', [])
+          let finishBoundary: ReturnType<typeof capture.start> | undefined
+          try {
+            const result = await connection.begin(async (transaction) => {
+              finish(0)
+              try {
+                const value = await body(wrapTransaction(transaction))
+                finishBoundary = capture.start('COMMIT', [])
+                return value
+              } catch (error) {
+                finishBoundary = capture.start('ROLLBACK', [])
+                throw error
+              }
+            })
+            finishBoundary?.(0)
+            return result
+          } catch (error) {
+            if (finishBoundary) finishBoundary(0, { error })
+            else finish(0, { error })
+            throw error
+          }
+        },
       }
     },
     close: (options) => pool.close(options),

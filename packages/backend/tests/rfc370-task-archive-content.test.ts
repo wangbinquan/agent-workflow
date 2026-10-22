@@ -1,16 +1,9 @@
 // RFC-370 A2: content ACKs must precede archive finalization; recovery uses the same claim.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunEvents,
-  nodeRuns,
-  taskArchiveAudit,
-  taskExecutionMaintenanceClaims,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskArchiveContentPort } from '@/modules/task-execution/application/ports/taskArchiveContent'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/providerRuntime'
@@ -145,8 +138,9 @@ function memoryContent(
   return { content, files, directories, calls, releases, putFile, makeDirectory }
 }
 
-async function seedTask(db: ProviderNeutralDatabase) {
-  await db.insert(users).values({
+async function seedTask(db: PersistenceDb) {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'archive-user',
     username: 'archive-user',
     displayName: 'archive-user',
@@ -155,10 +149,8 @@ async function seedTask(db: ProviderNeutralDatabase) {
     updatedAt: NOW,
   })
   const definition = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db
-    .insert(workflows)
-    .values({ id: 'archive-workflow', name: 'archive-workflow', definition })
-  await db.insert(tasks).values({
+  await insertOne(db, workflows, { id: 'archive-workflow', name: 'archive-workflow', definition })
+  await insertOne(db, tasks, {
     id: ROOT,
     name: ROOT,
     workflowId: 'archive-workflow',
@@ -179,18 +171,20 @@ async function seedTask(db: ProviderNeutralDatabase) {
   })
 }
 
-async function claims(db: ProviderNeutralDatabase) {
+async function claims(db: PersistenceDb) {
+  const { taskExecutionMaintenanceClaims } = tablesOf(db)
   return await db
     .select()
     .from(taskExecutionMaintenanceClaims)
     .where(eq(taskExecutionMaintenanceClaims.rootTaskId, ROOT))
 }
 
-async function taskExists(db: ProviderNeutralDatabase) {
+async function taskExists(db: PersistenceDb) {
+  const { tasks } = tablesOf(db)
   return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, ROOT))).length > 0
 }
 
-function runSweep(db: ProviderNeutralDatabase, content: TaskArchiveContentPort) {
+function runSweep(db: PersistenceDb, content: TaskArchiveContentPort) {
   return createDrizzleTaskArchiveMaintenanceCommand(db, { content }).runSweep(
     { enabled: true, retentionDays: 1, maxTreesPerSweep: 10 },
     OPTIONS,
@@ -230,6 +224,7 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
         const snapshot = await claims(db)
         expect(snapshot).toHaveLength(1)
         expect(snapshot[0]!.state).toBe('claimed')
+        const { taskArchiveAudit } = tablesOf(db)
         expect(await db.select().from(taskArchiveAudit)).toEqual([])
         expect(store.directories.has(FINAL)).toBe(false)
         release.release()
@@ -376,7 +371,8 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
   test('JSONL keeps the original 2000-row batches and complete event order', async () => {
     const db = harness.db
     await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, nodeRunEvents } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'archive-run',
       taskId: ROOT,
       nodeId: 'n1',
@@ -495,6 +491,7 @@ describeEachProvider('RFC-370 bound archive command roots', (harness) => {
         logsRoot: OPTIONS.logsDir,
       }),
     )
+    const { taskArchiveAudit } = tablesOf(harness.db)
     expect((await harness.db.select().from(taskArchiveAudit))[0]).toMatchObject({
       source: 'sweep',
       createdAt: NOW,
@@ -513,6 +510,7 @@ describeEachProvider('RFC-370 bound archive command roots', (harness) => {
       { archiveDir: 'other:archive', runsDir: 'other:runs', logsDir: 'other:logs', now: 0 },
     )
     expect(result.archived.map((tree) => tree.dir)).toEqual([FINAL])
+    const { taskArchiveAudit } = tablesOf(harness.db)
     expect((await harness.db.select().from(taskArchiveAudit))[0]).toMatchObject({
       source: 'manual',
       actorUserId: 'archive-user',
@@ -595,6 +593,7 @@ describeEachProviderHttpApplication(
     test('manual HTTP waits for selected manifest ACK, preserves the claim and uses selected roots', async () => {
       const db = scope.harness.db
       await seedTask(db)
+      const { tasks } = tablesOf(db)
       await db
         .update(tasks)
         .set({ finishedAt: Date.now() - 10 * DAY })

@@ -2,12 +2,12 @@
 // RFC-370: an asynchronous configuration adapter must settle before an Intent
 // route writes a session or reserves a turn. Real persistence checks that a
 // failed read leaves no operation behind and each request sees the current budget.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { intentSessions, intentTurns } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {
   mountIntentSessionRoutes,
@@ -107,6 +107,7 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
           throw new Error('request completed before configuration was read')
         }),
       ])
+      const { intentSessions, intentTurns } = tablesOf(harness.db)
       expect(await harness.db.select().from(intentSessions)).toEqual([])
       expect(await harness.db.select().from(intentTurns)).toEqual([])
     } finally {
@@ -114,6 +115,7 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
     }
     expect((await pending).status).toBe(500)
     expect(reads).toBe(1)
+    const { intentSessions, intentTurns } = tablesOf(harness.db)
     expect(await harness.db.select().from(intentSessions)).toEqual([])
     expect(await harness.db.select().from(intentTurns)).toEqual([])
     // Payload validation retains its original precedence over configuration IO.
@@ -133,6 +135,7 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
       },
     })
     const { session } = await createIntentSessionForTest(harness.db, actor, { message: 'Existing' })
+    const { intentSessions, intentTurns } = tablesOf(harness.db)
     await harness.db
       .update(intentSessions)
       .set({ budgetJson: JSON.stringify({ generateRounds: 2, questionRounds: 0 }) })

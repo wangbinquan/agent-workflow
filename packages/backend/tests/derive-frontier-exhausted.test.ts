@@ -17,12 +17,12 @@
 // def()/row() are replicated minimally from derive-frontier.test.ts (those are
 // file-local there) — this file does NOT edit the shared test.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

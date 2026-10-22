@@ -51,7 +51,9 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     const source = readFileSync(portsPath, 'utf8')
 
     for (const table of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
-      expect(source).toContain(`.insert(${table})`)
+      expect(source).toMatch(
+        new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
+      )
       expect(source).toContain(`.update(${table})`)
     }
     expect(source).toContain('ownerUserId: actor.user.id')

@@ -7,7 +7,7 @@
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { createAgent, updateAgent } from '../src/services/agent'
 import {
@@ -31,7 +31,7 @@ const base: Omit<CreateAgent, 'name' | 'runtime'> = {
 }
 
 describeEachProvider('RFC-111/F6: agent runtime reference validation', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(async () => {
     db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db)) // built-in opencode + claude-code rows

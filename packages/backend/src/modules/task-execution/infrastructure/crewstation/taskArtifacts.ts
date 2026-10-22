@@ -1,21 +1,22 @@
 // RFC-370 v3 V6 — `hosted_task_artifacts` is Task Execution's owner reference
 // for `task-artifact` publications (key = artifact reference, scope = task id).
 // A row is written only in the ready transaction of its publication.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskArtifacts } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectReceipt } from '@/modules/system-operations/public/participants'
 
 export const HOSTED_TASK_ARTIFACT_OWNER = 'task-artifact'
 
 export async function retainHostedTaskArtifactInTx(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
   input: {
     readonly reference: string
     readonly taskId: string
     readonly object: HostedObjectReceipt
   },
 ): Promise<void> {
+  const { hostedTaskArtifacts } = tablesOf(tx)
   await tx
     .insert(hostedTaskArtifacts)
     .values({

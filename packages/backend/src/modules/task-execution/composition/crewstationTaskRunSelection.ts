@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
@@ -22,7 +22,7 @@ import { createHostedTaskScriptRunFamily } from '../infrastructure/crewstation/t
 import type { HostedExecution } from '../infrastructure/crewstation/execution'
 
 export function composeCrewStationTaskRunSelection(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly api: CrewStationBusinessExecution
   readonly executions: HostedExecution

@@ -1009,7 +1009,9 @@ export function gateViolationSets(
 }
 
 // RFC-376 G3: retain the existing public-contract scanners without ledger IO.
-const SENSITIVE_TYPE = /(?:Actor|Authority|Capability|Claim|Token|WorkerIdentity|Tx)(?:V\d+)?$/
+// RFC-395 I-b: PersistenceTx is the unbranded query interface.
+const SENSITIVE_TYPE =
+  /^(?!PersistenceTx$).*(?:Actor|Authority|Capability|Claim|Token|WorkerIdentity|Tx)(?:V\d+)?$/
 const FORBIDDEN_TYPE_NAME = new Set([
   'AbortController',
   'AppDeps',

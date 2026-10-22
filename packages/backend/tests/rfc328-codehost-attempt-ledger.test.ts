@@ -2,19 +2,14 @@
 // attempt, existing transport retries remain live, and earlier ambiguity is
 // retained unless a later applied response resolves the logical operation.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import {
-  taskExecutionEffectAttempts,
-  taskExecutionEffects,
-  taskExecutionLineageOperationRecords,
-  nodeRuns,
-  tasks,
-} from '@/db/schema'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
@@ -41,7 +36,7 @@ import { submitTaskContinuationInTransaction } from '@/modules/task-execution/pu
 import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 
 async function fixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   action: CodeHostAction = 'custom',
   provider: CodeHostProvider = 'gitlab',
@@ -50,7 +45,8 @@ async function fixture(
   const slotPath: readonly LineageSlot[] = [
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ]
-  await db.insert(tasks).values({
+  const { tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-rfc328-codehost',
@@ -66,9 +62,7 @@ async function fixture(
     executionLineageId: taskId,
     lineageSlotPathJson: canonicalJson(slotPath),
   })
-  await db
-    .insert(nodeRuns)
-    .values({ id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
+  await insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
   const intent = await submitIntent(db, {
     intentId: `intent-${taskId}`,
@@ -188,7 +182,7 @@ interface ApproveRemoteState {
 }
 
 async function approveResponseLossDriftFixture(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   provider: CodeHostProvider
   drift: (state: ApproveRemoteState) => void
@@ -238,6 +232,7 @@ async function approveResponseLossDriftFixture(input: {
   expect(h.observer.outcomeUnknown()).toBe(true)
   expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
+  const { taskExecutionEffects, taskExecutionLineageOperationRecords } = tablesOf(h.db)
   const unresolved = (
     await h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).limit(1)
   )[0]!
@@ -279,7 +274,7 @@ async function approveResponseLossDriftFixture(input: {
  * 语义也相同（准入的跨行不变量走 SERIALIZABLE），所以直接换过来，同步那层随之删除。
  */
 function submitIntent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
 ): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
@@ -440,6 +435,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     expect(h.observer.outcomeUnknown()).toBe(true)
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
+    const { taskExecutionEffects, taskExecutionLineageOperationRecords, nodeRuns } = tablesOf(h.db)
     const unresolved = (
       await h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).limit(1)
     )[0]!
@@ -487,9 +483,12 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     const claim = await h.module.claim({ db: h.db, intentId: manualIntentId })
     h.module.claimGate.leave(claim.permit)
     const nextNodeRunId = `${h.taskId}-code-host-node-generation-1`
-    await h.db
-      .insert(nodeRuns)
-      .values({ id: nextNodeRunId, taskId: h.taskId, nodeId: 'code-host', status: 'running' })
+    await insertOne(h.db, nodeRuns, {
+      id: nextNodeRunId,
+      taskId: h.taskId,
+      nodeId: 'code-host',
+      status: 'running',
+    })
     const nextObserver = createCodeHostEffectAttemptObserver({
       persistence: createTaskExecutionPersistence(h.db).effects,
       context: createTaskExecutionContext({
@@ -655,6 +654,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
       }),
     ).toBe(true)
     expect(probeReads).toBe(1)
+    const { taskExecutionEffects, nodeRuns, taskExecutionEffectAttempts } = tablesOf(h.db)
     expect((await h.db.select().from(taskExecutionEffects).limit(1))[0]?.state).toBe('succeeded')
     expect(
       (await h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).limit(1))[0]
@@ -729,6 +729,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
     expect(mutationSends).toBe(4)
     expect(draftExists).toBe(false)
+    const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(h.db)
     expect(
       await h.db
         .select({
@@ -816,6 +817,12 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     expect(sends).toBe(2)
     expect(h.observer.outcomeUnknown()).toBe(false)
     expect(await settleTerminal(h.observer, h.nodeRunId, { errorMessage: 'projected' })).toBe(true)
+    const {
+      nodeRuns,
+      taskExecutionEffectAttempts,
+      taskExecutionEffects,
+      taskExecutionLineageOperationRecords,
+    } = tablesOf(h.db)
     expect(
       (await h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).limit(1))[0]
         ?.errorMessage,
@@ -859,6 +866,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     expect(sends).toBe(2)
     expect(h.observer.outcomeUnknown()).toBe(true)
     expect(await settleTerminal(h.observer, h.nodeRunId, { status: 'failed' })).toBe(true)
+    const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(h.db)
     expect(
       await h.db
         .select({ state: taskExecutionEffectAttempts.state })
@@ -890,6 +898,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     expect(outcome.ok).toBe(true)
     expect(sends).toBe(2)
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
+    const { taskExecutionEffectAttempts } = tablesOf(h.db)
     expect(await h.db.select().from(taskExecutionEffectAttempts)).toHaveLength(2)
 
     const network = await fixture(harness.db, 'task-codehost-post-network')

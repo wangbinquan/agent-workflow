@@ -6,7 +6,7 @@
 // owner rows. The hosted object maintenance job (one job, registered once)
 // resolves abandoned uploads, unpins owner-released objects behind the backup
 // release horizon and purges settled rows.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 export interface HostedObjectReceipt {
   readonly id: string
@@ -60,10 +60,7 @@ export type HostedObjectPublicationRequest = HostedObjectPublicationIdentity &
 export interface HostedObjectPublishOptions {
   /** Runs in the fenced transaction that marks every publication ready, so the
    * owner's reference rows and the ready publications become visible together. */
-  readonly commit?: (
-    tx: ProviderNeutralDatabase,
-    receipts: readonly HostedObjectReceipt[],
-  ) => Promise<void>
+  readonly commit?: (tx: PersistenceDb, receipts: readonly HostedObjectReceipt[]) => Promise<void>
   /** Bounded parallel transfers (default 1). */
   readonly concurrency?: number
 }
@@ -85,7 +82,7 @@ export interface HostedObjectPublications {
   find(owner: string, key: string): Promise<HostedObjectReceipt | null>
   /** Owner release. Runs inside `tx` (the owner's own transaction) when given.
    * Physical unpin is deferred to maintenance behind the release horizon. */
-  release(selection: HostedObjectReleaseSelection, tx?: ProviderNeutralDatabase): Promise<number>
+  release(selection: HostedObjectReleaseSelection, tx?: PersistenceDb): Promise<number>
   /** Live (pending/ready) scopes of one owner whose oldest live row was created
    * at or before `before`, ordered and paged by scope. */
   scopes(

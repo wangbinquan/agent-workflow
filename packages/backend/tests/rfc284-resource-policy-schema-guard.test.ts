@@ -11,10 +11,11 @@
 //   2. agents/skills 表确实没有 enabled 列——哪天有人真加了列，这条断言红，
 //      提醒把「加列、加消费语义、加政策条目」放进同一个 RFC 一起评审。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { describe, expect, test } from 'bun:test'
 import { getTableColumns } from 'drizzle-orm'
 import type { Table } from 'drizzle-orm'
-import { agents, mcps, plugins, skills } from '../src/db/schema'
 import {
   DISABLED_RESOURCE_POLICY,
   type DisableableResourceKind,
@@ -22,20 +23,25 @@ import {
 
 // 编译期穷尽：新增 DisableableResourceKind 必须同时在这里给出它的表映射，
 // 否则 satisfies 直接编译失败——「新增类型必须表态」的 D 批目标在本表延续。
-const KIND_TABLE: Record<DisableableResourceKind, Table> = {
-  mcp: mcps,
-  plugin: plugins,
-} satisfies Record<DisableableResourceKind, Table>
+const KIND_TABLE = (db: object) => {
+  const { mcps, plugins } = tablesOf(db)
+  return {
+    mcp: mcps,
+    plugin: plugins,
+  } satisfies Record<DisableableResourceKind, Table>
+}
 
 describe('RFC-284 T3 — DISABLED_RESOURCE_POLICY schema guard', () => {
   test('every policy kind maps to a table that really has an `enabled` column', () => {
     for (const kind of Object.keys(DISABLED_RESOURCE_POLICY) as DisableableResourceKind[]) {
-      const columns = getTableColumns(KIND_TABLE[kind])
+      const columns = getTableColumns(KIND_TABLE(schemaFixtureDb())[kind])
       expect(`${kind}:${'enabled' in columns}`).toBe(`${kind}:true`)
     }
   })
 
   test('agents and skills have NO enabled column (why they are not in the table)', () => {
+    const db = schemaFixtureDb()
+    const { agents, skills } = tablesOf(db)
     expect('enabled' in getTableColumns(agents)).toBe(false)
     expect('enabled' in getTableColumns(skills)).toBe(false)
   })

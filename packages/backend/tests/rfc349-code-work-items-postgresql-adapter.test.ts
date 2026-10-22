@@ -1,9 +1,9 @@
 // RFC-349 — PostgreSQL work-item reads preserve the bounded work-item,
 // round, and stage projection used by the SQLite behavior oracle.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeWorkItemProjectionQuery } from '@/modules/code-capability/application/codeMatrixQuery'
 import { createWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/workItemProjectionRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -28,7 +28,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql: query, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -57,10 +60,6 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL code work-item adapter', () => {
   test('projects a bounded page with round and stage history', async () => {

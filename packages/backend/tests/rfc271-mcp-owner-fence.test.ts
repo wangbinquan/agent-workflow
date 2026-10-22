@@ -13,14 +13,14 @@
 // 要害是概念区分：**hash 不是授权**。它只证明「我读到的是这一版」，不证明「我有
 // 权改它」。两件事必须各有各的判据。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { buildActor } from '../src/auth/actor'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { mcps } from '../src/db/schema'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
@@ -46,7 +46,7 @@ function authorityFor(userId: string): McpOperationContext {
   ).actor
 }
 
-function composeTestMcpCatalog(db: ProviderNeutralDatabase): McpCatalogModule {
+function composeTestMcpCatalog(db: PersistenceDb): McpCatalogModule {
   return composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -67,10 +67,7 @@ function bindingFor(catalog: McpCatalogModule, userId: string): McpServiceBindin
   return Object.freeze({ catalog, authority: authorityFor(userId) })
 }
 
-async function seedVictimPublicMcp(
-  db: ProviderNeutralDatabase,
-  victim: McpServiceBinding,
-): Promise<string> {
+async function seedVictimPublicMcp(db: PersistenceDb, victim: McpServiceBinding): Promise<string> {
   const created = await createMcp(victim, {
     name: 'shared-tools',
     description: 'victim owns this',
@@ -78,8 +75,9 @@ async function seedVictimPublicMcp(
     config: { url: 'https://example.test/mcp' },
     enabled: true,
   })
+  const { mcps } = tablesOf(db)
   // public ⇒ 攻击者看得见它、读得到 config、算得出 hash。
-  await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, created.id)).run()
+  await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, created.id))
   return created.id
 }
 
@@ -136,8 +134,9 @@ describeEachProvider('围栏的另一面：读取之后、提交之前的 owner 
     const victim = bindingFor(catalog, VICTIM)
     const id = await seedVictimPublicMcp(db, victim)
     const before = await catalog.queries.get(victim.authority, { id })
+    const { mcps } = tablesOf(db)
     // 竞态窗口里发生了 owner 转移。
-    await db.update(mcps).set({ ownerUserId: 'u-new-owner' }).where(eq(mcps.id, id)).run()
+    await db.update(mcps).set({ ownerUserId: 'u-new-owner' }).where(eq(mcps.id, id))
 
     await expect(
       catalog.operations.update.invoke(victim.authority, {
@@ -200,7 +199,7 @@ describe('intent apply 的 MCP update 分支已经带上围栏（源码层）', 
       'utf8',
     )
     const reread = src.indexOf(
-      'const row = await transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)).get()',
+      'const row = await first(transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)))',
     )
     expect(reread, '语料失效：提交期那次重读一处都没扫到').toBeGreaterThanOrEqual(0)
     const fence = src.indexOf("requireOwner(actor, 'mcp', current)", reread)

@@ -19,22 +19,13 @@
 // 装配形状本身曾是分叉的一部分，所以取 provider 中立的组合根 `createTaskExecutionPersistence(db)`
 // ——测试体拿不到 provider 名，只能按能力矩阵分叉（这里一条都不需要）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionOwners,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
@@ -88,11 +79,12 @@ interface CrashedTask {
 
 /** 上一代 daemon 认领了任务、挂上 node_run，然后整个进程被 SIGKILL。 */
 async function crashPreviousDaemon(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   persistence: TaskExecutionPersistence,
   taskId: string,
 ): Promise<CrashedTask> {
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: `rfc359-w8-${taskId}`,
     description: '',
@@ -100,7 +92,7 @@ async function crashPreviousDaemon(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -117,7 +109,7 @@ async function crashPreviousDaemon(
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const nodeRunId = `${taskId}-run`
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'code-host-node',
@@ -138,7 +130,8 @@ async function crashPreviousDaemon(
 }
 
 /** 孤儿收割屏障已跑完的形状：任务 / node_run 都翻成 interrupted。 */
-async function reapOrphans(db: ProviderNeutralDatabase, crashed: CrashedTask): Promise<void> {
+async function reapOrphans(db: PersistenceDb, crashed: CrashedTask): Promise<void> {
+  const { tasks, nodeRuns } = tablesOf(db)
   await db.update(tasks).set({ status: 'interrupted' }).where(eq(tasks.id, crashed.taskId))
   await db
     .update(nodeRuns)
@@ -154,7 +147,7 @@ interface SeededCodeHostEffect {
 
 /** 一个开着的 code-host-mutation effect：attempt 停在 acting，正是崩溃瞬间的形状。 */
 async function seedCodeHostEffect(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   persistence: TaskExecutionPersistence,
   crashed: CrashedTask,
   spec: {
@@ -286,6 +279,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
 
     const owner = await persistence.ownership.read(crashed.taskId)
     expect(owner?.state).toBe('released')
+    const { taskExecutionIntents } = tablesOf(harness.db)
     const intent = (
       await harness.db
         .select({
@@ -303,7 +297,8 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
     const crashed = await crashPreviousDaemon(harness.db, persistence, `w8d_${ulid()}`)
     const decisionId = `decision_${ulid()}`
     const pathJson = canonicalJson(rootPath(crashed.taskId))
-    await harness.db.insert(taskExecutionLineageOperationRecords).values({
+    const { taskExecutionLineageOperationRecords } = tablesOf(harness.db)
+    await insertOne(harness.db, taskExecutionLineageOperationRecords, {
       id: decisionId,
       recordKind: 'replay-decision',
       executionLineageId: crashed.taskId,
@@ -378,6 +373,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
     expect(finalized.outcomeUnknownTaskIds).toEqual([crashed.taskId])
     expect(finalized.recoveredCodeHostEffectIds).toEqual([])
 
+    const { taskExecutionEffects } = tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -438,6 +434,8 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
     expect(finalized.recoveredCodeHostEffectIds).toEqual([appliedEffect.effectId])
     expect(finalized.retryAuthorizedCodeHostEffectIds).toEqual([retriedEffect.effectId])
 
+    const { taskExecutionEffects, nodeRuns, nodeRunOutputs, taskExecutionEffectAttempts } =
+      tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -567,6 +565,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
       }),
     )
 
+    const { taskExecutionOwners } = tablesOf(harness.db)
     const row = (
       await harness.db
         .select({ digest: taskExecutionOwners.recoveryProofDigest })

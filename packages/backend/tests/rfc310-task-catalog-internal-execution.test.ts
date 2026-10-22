@@ -2,6 +2,8 @@
 // executions remain durable and directly addressable without entering public
 // pagination, hierarchy or facets.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import {
   taskListItemsProjection,
@@ -14,7 +16,6 @@ import type { TaskCatalogVisibility } from '@agent-workflow/shared'
 
 import { buildActor } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, users, workflows } from '../src/db/schema'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/taskCatalogSources'
 
 function task(
@@ -72,7 +73,8 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
   test('public workflow pages, cursors and facets exclude generic internal trees', async () => {
     const db = harness.db
     const now = 1_788_278_400_000
-    await db.insert(users).values({
+    const { users, workflows, tasks } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'catalog-owner',
       username: 'catalog-owner',
       displayName: 'Catalog Owner',
@@ -80,7 +82,7 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
       createdAt: now,
       updatedAt: now,
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: 'wf-rfc310-catalog',
       name: 'Public workflow',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -135,7 +137,7 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
     const [legacyRows, legacyItems] = await Promise.all([
       taskListSummariesProjection(db, { catalogVisibility: 'public' }),
       taskListItemsProjection(
-        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { db, owners: composeOwnerIdentityQueries(db) },
         { catalogVisibility: 'public' },
       ),
     ])

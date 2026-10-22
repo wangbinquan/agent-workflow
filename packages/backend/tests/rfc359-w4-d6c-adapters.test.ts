@@ -2,14 +2,15 @@
 // 与 employee_* 的 foreign-owner ACL 收尾：identity 行由 digital-employee 在目录写事务里交出，读 / 写经目录的中立
 // foreign 路径，PG 专属 foreign ACL 适配器与目录的同步 identity 形态退役。同一段断言在两个引擎上各跑一遍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import type {
   DigitalEmployeeAuthoringAdapter,
@@ -229,9 +230,10 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_d6c_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -256,7 +258,7 @@ const typeRef = descriptor.typeRef
 const frozenRef = { typeId: typeRef.typeId, revision: typeRef.revision - 1 }
 
 /** 每个用例各自从 harness 拿 db（SQLite 每用例一份内存库、PG 每文件一份库）；类型包注册幂等，重复 ensure 无害。 */
-async function setup(db: ProviderNeutralDatabase): Promise<DigitalEmployeeAuthoringAdapter> {
+async function setup(db: PersistenceDb): Promise<DigitalEmployeeAuthoringAdapter> {
   const store = createDigitalEmployeeAuthoringPersistence(db)
   await store.ensureTypePackage(packageRecord(descriptor))
   await store.ensureTypePackage(packageRecord(descriptorAt(frozenRef.revision)))

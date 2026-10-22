@@ -8,23 +8,15 @@
 //   首次心跳后所有 effect 写入被拒；同仓公共 assertPostgresqlTaskOwnerTx 注释逐字写着「故意不做等值谓词」。
 // 这里在两个引擎上各验：环境上下文内不传 executionContext 的写入成功；心跳之后旧 token 仍能开 effect。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionLineageOperationRecords,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
@@ -60,10 +52,11 @@ function continuation(taskId: string): CanonicalContinuationRequest {
   }
 }
 
-async function seedClaimedTask(db: ProviderNeutralDatabase) {
+async function seedClaimedTask(db: PersistenceDb) {
   const taskId = `t7_${ulid()}`
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-t7',
     description: '',
@@ -71,7 +64,7 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -88,7 +81,7 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -110,11 +103,17 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
 }
 
 async function expectSettledEffect(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   seeded: Awaited<ReturnType<typeof seedClaimedTask>>,
   prepared: { effectId: string; attemptId: string },
   failureCode: string,
 ): Promise<void> {
+  const {
+    taskExecutionEffects,
+    taskExecutionEffectAttempts,
+    taskExecutionEffectFences,
+    taskExecutionLineageOperationRecords,
+  } = tablesOf(db)
   const effects = await db
     .select()
     .from(taskExecutionEffects)
@@ -199,6 +198,7 @@ describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2�
         values: { envelopeNonce: 'nonce-under-ambient-context' },
       })
     })
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, seeded.runId)))[0]!
     expect(run.status).toBe('running')
     expect(run.envelopeNonce).toBe('nonce-under-ambient-context')
@@ -218,6 +218,7 @@ describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2�
       outputs: [{ portName: 'explicit', content: 'x' }],
       executionContext: seeded.context,
     })
+    const { nodeRunOutputs } = tablesOf(db)
     const outputs = await db
       .select({ portName: nodeRunOutputs.portName })
       .from(nodeRunOutputs)

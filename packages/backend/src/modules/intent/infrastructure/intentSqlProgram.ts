@@ -1,4 +1,6 @@
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SQLWrapper } from 'drizzle-orm'
+import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
 import {
   driveAsyncProgram as driveAsyncTransactionProgram,
   driveSyncProgram as driveSyncTransactionProgram,
@@ -13,8 +15,16 @@ import type {
 } from '@/modules/resource-catalog/public/participants'
 
 export type IntentSqlStatement =
-  | { readonly kind: 'all'; readonly query: SQLWrapper }
-  | { readonly kind: 'get'; readonly query: SQLWrapper }
+  | {
+      readonly kind: 'all'
+      readonly query: SQLWrapper
+      readonly codecs?: RawRowCodecs<Record<string, unknown>>
+    }
+  | {
+      readonly kind: 'get'
+      readonly query: SQLWrapper
+      readonly codecs?: RawRowCodecs<Record<string, unknown>>
+    }
   | { readonly kind: 'run'; readonly query: SQLWrapper }
   | {
       readonly kind: 'authorize-resource'
@@ -24,12 +34,18 @@ export type IntentSqlStatement =
 
 export type IntentSqlProgram<T> = Generator<IntentSqlStatement, T, unknown>
 
-export function* allRows<T extends object>(query: SQLWrapper): IntentSqlProgram<readonly T[]> {
-  return (yield { kind: 'all', query }) as readonly T[]
+export function* allRows<T extends object>(
+  query: SQLWrapper,
+  codecs?: RawRowCodecs<T>,
+): IntentSqlProgram<readonly T[]> {
+  return (yield { kind: 'all', query, codecs }) as readonly T[]
 }
 
-export function* firstRow<T extends object>(query: SQLWrapper): IntentSqlProgram<T | null> {
-  return ((yield { kind: 'get', query }) as T | undefined) ?? null
+export function* firstRow<T extends object>(
+  query: SQLWrapper,
+  codecs?: RawRowCodecs<T>,
+): IntentSqlProgram<T | null> {
+  return ((yield { kind: 'get', query, codecs }) as T | undefined) ?? null
 }
 
 export function* mutation(query: SQLWrapper): IntentSqlProgram<number> {
@@ -53,6 +69,7 @@ export function* authorizeIntentContextResource(
 }
 
 export interface IntentSqlProgramRunner {
+  readonly db: PersistenceDb
   read<T>(program: () => IntentSqlProgram<T>): Promise<T>
   transaction<T>(program: () => IntentSqlProgram<T>): Promise<T>
 }

@@ -7,14 +7,15 @@
 // oracles (memoriesToUnfuseOnRestore, gitStyleDirDiff, hashDir) are unit-tested
 // directly so PR-B can build the fusion flow on a trusted base.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skills } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -39,17 +40,17 @@ import {
   type TreeEntry,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
-async function getSkill(db: ProviderNeutralDatabase, name: string) {
+async function getSkill(db: PersistenceDb, name: string) {
   return (await listSkills(db)).find((skill) => skill.name === name) ?? null
 }
 
 interface H {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   fsOpts: SkillFsOptions
   cleanup: () => void
 }
 
-function build(db: ProviderNeutralDatabase): H {
+function build(db: PersistenceDb): H {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-ver-'))
   return {
     db,
@@ -311,14 +312,12 @@ describeEachProvider('RFC-101 skill version persistence', (harness) => {
         `---\nname: ${name}\ndescription: d\n---\n${body}\n`,
         'utf-8',
       )
-      await h.db
-        .insert(skills)
-        .values({
-          id,
-          name,
-          managedPath: `skills/${id}/files`,
-        })
-        .run()
+      const { skills } = tablesOf(h.db)
+      await insertOne(h.db, skills, {
+        id,
+        name,
+        managedPath: `skills/${id}/files`,
+      })
       return id
     }
 

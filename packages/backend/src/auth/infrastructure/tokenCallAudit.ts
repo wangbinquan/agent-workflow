@@ -3,49 +3,57 @@
 // 有界清扫用「按 (created_at, id) 取一批 id 的子查询 + DELETE … RETURNING」一条语句完成——两个引擎语法同形，
 // 不需要事务（旧 SQLite 版按 rowid 手写 SQL，旧 PG 版先 select 再 delete 两句开一笔事务，现在都是这一句）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { desc, eq, inArray, lt } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tokenAudit, tokenDeleteSnapshot } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TokenCallAuditPersistence } from '../application/tokenCallAudit'
 
-const AUDIT_ORDER = [desc(tokenAudit.createdAt), tokenAudit.id] as const
+const AUDIT_ORDER = (db: object) => {
+  const { tokenAudit } = tablesOf(db)
+  return [desc(tokenAudit.createdAt), tokenAudit.id] as const
+}
 
-export function createTokenCallAuditPersistence(
-  db: ProviderNeutralDatabase,
-): TokenCallAuditPersistence {
+export function createTokenCallAuditPersistence(db: PersistenceDb): TokenCallAuditPersistence {
   return {
     async insertAudit(record) {
-      await db.insert(tokenAudit).values(record)
+      const { tokenAudit } = tablesOf(db)
+      await insertOne(db, tokenAudit, record)
     },
 
     async insertDeleteSnapshot(record) {
-      await db.insert(tokenDeleteSnapshot).values(record)
+      const { tokenDeleteSnapshot } = tablesOf(db)
+      await insertOne(db, tokenDeleteSnapshot, record)
     },
 
     async markSnapshotFailed(auditId) {
+      const { tokenAudit } = tablesOf(db)
       await db.update(tokenAudit).set({ snapshotFailed: true }).where(eq(tokenAudit.id, auditId))
     },
 
     async listForUser(userId, limit) {
+      const { tokenAudit } = tablesOf(db)
       return await db
         .select()
         .from(tokenAudit)
         .where(eq(tokenAudit.userId, userId))
-        .orderBy(...AUDIT_ORDER)
+        .orderBy(...AUDIT_ORDER(db))
         .limit(limit)
     },
 
     async list(limit) {
+      const { tokenAudit } = tablesOf(db)
       return await db
         .select()
         .from(tokenAudit)
-        .orderBy(...AUDIT_ORDER)
+        .orderBy(...AUDIT_ORDER(db))
         .limit(limit)
     },
 
     async pruneSlice(input) {
       if (input.phase === 'snapshots') {
+        const { tokenDeleteSnapshot } = tablesOf(db)
         const batch = db
           .select({ id: tokenDeleteSnapshot.id })
           .from(tokenDeleteSnapshot)
@@ -59,6 +67,7 @@ export function createTokenCallAuditPersistence(
             .returning({ id: tokenDeleteSnapshot.id })
         ).length
       }
+      const { tokenAudit } = tablesOf(db)
       const batch = db
         .select({ id: tokenAudit.id })
         .from(tokenAudit)

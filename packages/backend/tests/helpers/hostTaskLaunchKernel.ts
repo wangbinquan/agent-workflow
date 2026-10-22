@@ -5,7 +5,7 @@
 // 调用方指定的完成模式，仍驱动相同的根启动内核与工作区参与者。
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskDriveCompletionMode,
   TaskDriveCoordinator,
@@ -23,7 +23,7 @@ import { type TaskDriveCoordinatorDependencies } from '@/services/task'
 export function createTestHostTaskLaunchKernel(input: {
   readonly workspace?: RootTaskLaunchDependencies['workspace']
   readonly coordinator?: TaskDriveCoordinator
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly gitCommitIdentity: RootTaskLaunchDependencies['gitCommitIdentity']
   readonly coordinatorDeps: TaskDriveCoordinatorDependencies

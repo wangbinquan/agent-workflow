@@ -11,22 +11,16 @@
 // Codex design-gate P1 lock: the prior round lives on the SAME reused review
 // node_run (iterate/reject) — inheritance must still find it (not exclude it).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   dispatchReviewNode,
   setDocumentSelection,
@@ -38,7 +32,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
 
 describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let worktree: string
 
@@ -57,12 +51,13 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
 
   async function seed(upstreamKind: string): Promise<{
     taskId: string
-    task: typeof tasks.$inferSelect
+    task: PersistenceTables['tasks']['$inferSelect']
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
     const caseGenId = ulid()
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks } = tablesOf(db)
+    await insertOne(db, agents, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -95,7 +90,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       ],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -103,7 +98,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       version: 1,
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'multidoc',
       workflowId,
@@ -129,9 +124,10 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     body: (p: string) => string,
     iteration = 0,
   ): Promise<void> {
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     const existing = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
     if (existing === undefined) {
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: 'src',
@@ -164,6 +160,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
 
   /** The freshest pending src run minted by an iterate/reject decision. */
   async function freshPendingSrc(taskId: string): Promise<string> {
+    const { nodeRuns } = tablesOf(db)
     const runs = await db
       .select()
       .from(nodeRuns)
@@ -178,7 +175,10 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     return runs[0]!.id
   }
 
-  async function docsFor(taskId: string): Promise<(typeof docVersions.$inferSelect)[]> {
+  async function docsFor(
+    taskId: string,
+  ): Promise<PersistenceTables['docVersions']['$inferSelect'][]> {
+    const { docVersions } = tablesOf(db)
     return db
       .select()
       .from(docVersions)
@@ -189,12 +189,13 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
   async function dispatch(
     ctx: {
       taskId: string
-      task: typeof tasks.$inferSelect
+      task: PersistenceTables['tasks']['$inferSelect']
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     },
     iteration = 0,
   ): Promise<void> {
+    const { tasks } = tablesOf(db)
     const current = await db
       .select({ status: tasks.status })
       .from(tasks)
@@ -344,6 +345,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       docVersionId: aDoc.id,
       selection: 'accepted',
     })
+    const { docVersions } = tablesOf(db)
     const after = (await db.select().from(docVersions).where(eq(docVersions.id, aDoc.id)))[0]!
     expect(after.selectionStale).toBe(false)
   })
@@ -403,7 +405,8 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     // [a,b] (newer, 2000, dropped c). A newest-per-item_index merge would keep
     // gen1's orphan c and let a re-added c inherit it — the P2 bug.
     const revRun = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: revRun,
       taskId: ctx.taskId,
       nodeId: 'rev_1',
@@ -423,7 +426,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       const bodyPath = `runs/g${gen}-i${itemIndex}.md`
       mkdirSync(dirname(join(appHome, bodyPath)), { recursive: true })
       writeFileSync(join(appHome, bodyPath), `body g${gen} ${itemPath}`, 'utf8')
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId: ctx.taskId,
         reviewNodeId: 'rev_1',

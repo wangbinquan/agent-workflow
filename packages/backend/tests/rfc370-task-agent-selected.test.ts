@@ -1,8 +1,9 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
-import { workflows, tasks, nodeRuns, nodeRunOutputs } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
@@ -58,14 +59,15 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         taskId = ulid(),
         nodeRunId = ulid(),
         workflowId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'selected-rejection',
         definition: '{}',
         createdAt: 1,
         updatedAt: 1,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'selected-rejection',
         workflowId,
@@ -78,7 +80,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         inputs: '{}',
         startedAt: 1,
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -175,10 +177,15 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         taskId = ulid(),
         nodeRunId = ulid(),
         workflowId = ulid()
-      await db
-        .insert(workflows)
-        .values({ id: workflowId, name: 'selected', definition: '{}', createdAt: 1, updatedAt: 1 })
-      await db.insert(tasks).values({
+      const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, workflows, {
+        id: workflowId,
+        name: 'selected',
+        definition: '{}',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'selected',
         workflowId,
@@ -191,7 +198,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         inputs: '{}',
         startedAt: 1,
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',

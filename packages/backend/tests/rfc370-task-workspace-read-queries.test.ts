@@ -1,4 +1,6 @@
 // RFC-370 A4: actual Task diff and S1 repair must await the selected workspace readers.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,17 +8,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  docVersions,
-  lifecycleAlerts,
-  lifecycleRepairAudit,
-  nodeRunOutputs,
-  nodeRuns,
-  taskRepos,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import {
@@ -110,16 +102,13 @@ async function repository() {
   return { root, base }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  workspaceRef: string,
-  baseCommit: string | null,
-) {
+async function seedTask(db: PersistenceDb, workspaceRef: string, baseCommit: string | null) {
   const id = ulid(),
     workflowId = ulid()
   const snapshot = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
-  await db.insert(workflows).values({ id: workflowId, name: workflowId, definition: snapshot })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: workflowId, definition: snapshot })
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -209,6 +198,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
       taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id),
     ).rejects.toMatchObject({ code: 'task-no-base-commit', status: 409 })
     expect(f.store.calls).toEqual([])
+    const { tasks } = tablesOf(provider.db)
     await provider.db.update(tasks).set({ baseCommit: 'base' }).where(eq(tasks.id, id))
     const missing = await taskDiffProjection(
       { db: provider.db, workspaceReads: f.reads },
@@ -279,6 +269,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     f.store.paths.set(a, repoA.root)
     f.store.paths.set(b, repoB.root)
     const id = await seedTask(provider.db, parent, null)
+    const { tasks, taskRepos } = tablesOf(provider.db)
     await provider.db.update(tasks).set({ repoCount: 5 }).where(eq(tasks.id, id))
     await provider.db.insert(taskRepos).values([
       {
@@ -374,8 +365,9 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     const f = mapped(parent, temp())
     f.store.paths.set(ref, repo.root)
     const id = await seedTask(provider.db, parent, null)
+    const { tasks, taskRepos } = tablesOf(provider.db)
     await provider.db.update(tasks).set({ repoCount: 2 }).where(eq(tasks.id, id))
-    await provider.db.insert(taskRepos).values({
+    await insertOne(provider.db, taskRepos, {
       taskId: id,
       repoIndex: 0,
       repoPath: ref,
@@ -489,6 +481,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
       ],
       edges: [],
     }
+    const { tasks, nodeRuns, nodeRunOutputs, lifecycleAlerts } = tablesOf(provider.db)
     await provider.db
       .update(tasks)
       .set({ status: 'awaiting_review', workflowSnapshot: JSON.stringify(snapshot) })
@@ -510,10 +503,12 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
       { id: source, taskId, nodeId: 'src', status: 'done', finishedAt: 2 },
       { id: review, taskId, nodeId: 'review', status: 'awaiting_review' },
     ])
-    await provider.db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: source, portName: 'docpath', content: '# actual repaired document' })
-    await provider.db.insert(lifecycleAlerts).values({
+    await insertOne(provider.db, nodeRunOutputs, {
+      nodeRunId: source,
+      portName: 'docpath',
+      content: '# actual repaired document',
+    })
+    await insertOne(provider.db, lifecycleAlerts, {
       id: alert,
       taskId,
       rule: 'S1',
@@ -568,6 +563,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
         await entered.promise
         expect(finished).toBe(false)
         expect(f.dispatched).toEqual([])
+        const { lifecycleRepairAudit } = tablesOf(provider.db)
         expect(
           await provider.db
             .select()
@@ -594,6 +590,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
         'exists',
         'isGitWorkTree',
       ])
+      const { docVersions, lifecycleRepairAudit } = tablesOf(provider.db)
       const documents = await provider.db
         .select()
         .from(docVersions)
@@ -645,6 +642,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
         }),
       ).rejects.toBe(failure)
       expect(f.dispatched).toEqual([])
+      const { lifecycleRepairAudit, docVersions } = tablesOf(provider.db)
       expect(
         await provider.db
           .select()

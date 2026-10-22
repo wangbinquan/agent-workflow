@@ -14,7 +14,7 @@
 //   ③**无 driver 时的工作区收尾**。两个 provider 的生产装配都通过注入端口调用 source-control
 //     的 `finalizeClaimedWorkspace`；「要不要收尾」由本参与者决定。两条 boot 都装了同一条 durable 消费者
 //     （`nudgeWorkspacePrune`）作为兜底，同步收尾让回执（`no-active-owner`）在返回时就是真的。
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
@@ -31,7 +31,7 @@ import { applySourceTerminationTarget } from './sourceTerminationTarget'
 import { listSourceTerminationTargets } from './sourceTerminationTargets'
 
 export interface TaskSourceTerminationParticipantInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** 停机票据注册表。缺省是进程级单例（单进程部署形态）。 */
   readonly runtimeRegistry?: InMemoryTaskRuntimeRegistry
   /**

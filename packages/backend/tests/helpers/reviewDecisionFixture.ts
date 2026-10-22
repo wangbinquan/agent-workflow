@@ -1,13 +1,14 @@
 // RFC-359 —— 评审决定场景的双引擎夹具（移植自 review-decision-full-asserts.test.ts 的种子）。
 // 只用 provider-中立的 drizzle 写入，SQLite 与 PostgreSQL 共用；正文文件落在临时 appHome 下。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, docVersions, nodeRunOutputs, nodeRuns, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -48,7 +49,7 @@ export interface ReviewRound {
 
 /** 一个 awaiting_review 的评审轮：上游 agent run done（含输出），评审 run awaiting_review，pending doc_version。 */
 export async function seedReviewRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { readonly bodies?: readonly string[] } = {},
 ): Promise<ReviewRound> {
   const bodies = opts.bodies ?? ['# body inline']
@@ -58,6 +59,7 @@ export async function seedReviewRound(
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
   const taskId = `t_${ulid()}`
   const agentName = `doc-${taskId}`
+  const { users, agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
   // tasks.owner_user_id 在 SQLite 迁移里带 FK → users（schema.ts 无 references，PG 投影没有这条
   // FK——RFC-359 W3-T16b 的又一条实证）；两引擎都插一行决定者，行为才是同一个起点。
   await db
@@ -71,7 +73,7 @@ export async function seedReviewRound(
     })
     .onConflictDoNothing()
   const definition = reviewDefinition(agentName)
-  await db.insert(agents).values({
+  await insertOne(db, agents, {
     id: ulid(),
     name: agentName,
     description: '',
@@ -82,7 +84,7 @@ export async function seedReviewRound(
     bodyMd: '',
   })
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc359-review',
     description: '',
@@ -90,7 +92,7 @@ export async function seedReviewRound(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359-review',
     workflowId,
@@ -110,7 +112,7 @@ export async function seedReviewRound(
     ]),
   })
   const agentRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: agentRunId,
     taskId,
     nodeId: DOC,
@@ -120,13 +122,13 @@ export async function seedReviewRound(
     startedAt: Date.now() - 1000,
     finishedAt: Date.now() - 900,
   })
-  await db.insert(nodeRunOutputs).values({
+  await insertOne(db, nodeRunOutputs, {
     nodeRunId: agentRunId,
     portName: 'docpath',
     content: bodies[0]!,
   })
   const reviewRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: REVIEW,
@@ -141,7 +143,7 @@ export async function seedReviewRound(
     const id = ulid()
     const bodyPath = `doc_versions/${id}.md`
     writeFileSync(join(appHome, bodyPath), bodies[index]!)
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id,
       taskId,
       reviewNodeId: REVIEW,

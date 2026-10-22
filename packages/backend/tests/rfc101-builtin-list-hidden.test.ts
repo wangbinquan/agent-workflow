@@ -29,7 +29,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/services/agent'
@@ -52,7 +52,7 @@ const TOKEN = 'a'.repeat(64) // 64-char hex → resolves to the __system__ admin
 
 async function buildApp(
   scope: ProviderHttpApplicationScope,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   const db = scope.harness.db
   await seedTestDefaultOpencodeRuntime(db)
   const app = (await scope.open()).app
@@ -66,7 +66,7 @@ async function api(app: Hono, path: string, init?: RequestInit): Promise<Respons
   })
 }
 
-function fusionPersistence(db: ProviderNeutralDatabase) {
+function fusionPersistence(db: PersistenceDb) {
   return composeSqliteFusionPersistence({ db, appHome: '/tmp', ...TEST_SQLITE_FUSION_PARTICIPANTS })
 }
 

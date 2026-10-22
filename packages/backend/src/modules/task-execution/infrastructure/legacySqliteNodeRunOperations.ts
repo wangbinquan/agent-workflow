@@ -1,11 +1,11 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleNodeExecutionPersistence } from './nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from './nodeRunLifecyclePersistence'
 
-export type LegacySqliteNodeRunDatabase = ProviderNeutralDatabase
+export type LegacySqliteNodeRunDatabase = PersistenceDb
 
 /** SQLite compatibility aggregate; new bootstrap code composes the same ports by provider. */
-export function createLegacySqliteNodeRunOperations(db: ProviderNeutralDatabase) {
+export function createLegacySqliteNodeRunOperations(db: PersistenceDb) {
   return Object.freeze({
     lifecycle: new DrizzleNodeRunLifecyclePersistence(db),
     projections: new DrizzleNodeExecutionPersistence(db),

@@ -7,8 +7,8 @@
 // operations is identical in both deployments. Each step is one transaction:
 // publishing swaps the live tree atomically, so recovery never meets a
 // half-swapped tree, and a legacy name-keyed layout never exists here.
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skillContentEntries } from '@/db/schema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -105,14 +105,13 @@ export interface DatabaseSkillContent extends SkillContentBinding {
 }
 
 export function createDatabaseSkillContent(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly now?: () => number
 }): DatabaseSkillContent {
   const db = input.db
   const session = databaseSessionFor(db)
   const now = input.now ?? Date.now
-  const tx = <T>(run: (handle: ProviderNeutralDatabase) => Promise<T>): Promise<T> =>
-    session.transaction(run)
+  const tx = <T>(run: (handle: PersistenceDb) => Promise<T>): Promise<T> => session.transaction(run)
 
   /** RFC-170 snapshot preference: the selected version when stored, else live. */
   const readRoot = async (reference: SkillContentReference): Promise<string> =>
@@ -191,7 +190,7 @@ export function createDatabaseSkillContent(input: {
   } satisfies SkillCreationContentStore)
 
   const applyChange = async (
-    handle: ProviderNeutralDatabase,
+    handle: PersistenceDb,
     publication: SkillVersionPublication,
     change: SkillVersionContentChange,
     staged: readonly SkillTreeFile[],
@@ -484,6 +483,7 @@ export function createDatabaseSkillContent(input: {
       }
     },
     async assertNoResidue() {
+      const { skillContentEntries } = tablesOf(db)
       const residue = await db
         .selectDistinct({ skillId: skillContentEntries.skillId, tree: skillContentEntries.tree })
         .from(skillContentEntries)

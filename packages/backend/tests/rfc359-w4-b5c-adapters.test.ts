@@ -2,22 +2,11 @@
 // 两个引擎各跑一遍：fence 与 prepared-effect 扫描、executionRef 反查、wake hint 去重、mission epoch 对拍；
 // assignment 三级解析与已发布修订内容；上传计划在调用方事务里落 plan + 有序 entries、读回带 disposition 投影。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  automationPolicies,
-  automationPolicyRevisions,
-  developmentActionRuns,
-  developmentAgentAttempts,
-  developmentEffects,
-  developmentFactSnapshots,
-  developmentMissions,
-  developmentWakeHints,
-  digitalEmployeeRevisions,
-  digitalEmployees,
-  repositoryEmployeeAssignments,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAdmissionLookup } from '@/modules/development-automation/infrastructure/admissionLookup'
 import {
   createFactSnapshotReader,
@@ -37,11 +26,12 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_700_000_000_000
 
 async function seedMission(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
-  over: Partial<typeof developmentMissions.$inferInsert> = {},
+  over: Partial<PersistenceTables['developmentMissions']['$inferInsert']> = {},
 ): Promise<void> {
-  await db.insert(developmentMissions).values({
+  const { developmentMissions } = tablesOf(db)
+  await insertOne(db, developmentMissions, {
     id,
     status: 'working',
     repositoryId: 'repo-1',
@@ -65,7 +55,14 @@ describeEachProvider(
 
       const snapshots = createFactSnapshotReader(db)
       expect(await snapshots.getCells('missing')).toBeNull()
-      await db.insert(developmentFactSnapshots).values({
+      const {
+        developmentFactSnapshots,
+        developmentEffects,
+        developmentActionRuns,
+        developmentAgentAttempts,
+        developmentWakeHints,
+      } = tablesOf(db)
+      await insertOne(db, developmentFactSnapshots, {
         id: 'snap-1',
         missionId: 'm-a',
         missionRevision: 0,
@@ -113,7 +110,7 @@ describeEachProvider(
         ]),
       )
 
-      await db.insert(developmentActionRuns).values({
+      await insertOne(db, developmentActionRuns, {
         id: 'run-1',
         missionId: 'm-a',
         missionRevision: 0,
@@ -124,7 +121,7 @@ describeEachProvider(
         status: 'running',
         createdAt: NOW,
       })
-      await db.insert(developmentAgentAttempts).values({
+      await insertOne(db, developmentAgentAttempts, {
         id: 'att-1',
         actionRunId: 'run-1',
         rerunSeq: 0,
@@ -171,18 +168,25 @@ describeEachProvider(
         createdAt: NOW,
         updatedAt: NOW,
       })
+      const {
+        digitalEmployees,
+        automationPolicies,
+        digitalEmployeeRevisions,
+        automationPolicyRevisions,
+        repositoryEmployeeAssignments,
+      } = tablesOf(db)
       await db
         .insert(digitalEmployees)
         .values([resource('emp-1'), resource('emp-2'), resource('emp-3')])
-      await db.insert(automationPolicies).values(resource('pol-1'))
-      await db.insert(digitalEmployeeRevisions).values({
+      await insertOne(db, automationPolicies, resource('pol-1'))
+      await insertOne(db, digitalEmployeeRevisions, {
         employeeId: 'emp-1',
         revision: 1,
         contentJson: JSON.stringify({ name: 'emp-1', revision: 1 }),
         contentDigest: 'e1',
         publishedAt: NOW,
       })
-      await db.insert(automationPolicyRevisions).values({
+      await insertOne(db, automationPolicyRevisions, {
         policyId: 'pol-1',
         revision: 1,
         contentJson: JSON.stringify({ name: 'pol-1', maxAttempts: 3 }),

@@ -14,7 +14,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { __setProbeOptionsForTesting } from '../../src/routes/mcps'
 import type { OpenClientFn, ProbedMcpClient } from '../../src/services/mcpProbe'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from '../helpers/providerHttpApplicationScope'
 
 const TOKEN = 'rfc030-token-fixture'
@@ -246,7 +246,7 @@ registerProviderApplication('auth', (buildHarness) => {
 // 同步闭包交出去——形态与合并前逐字相同。
 function registerProviderApplication(
   name: string,
-  register: (buildHarness: () => { db: ProviderNeutralDatabase; app: Hono }) => void,
+  register: (buildHarness: () => { db: PersistenceDb; app: Hono }) => void,
 ): void {
   describeEachProviderHttpApplication(
     name,

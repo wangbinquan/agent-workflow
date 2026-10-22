@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthorityIdentity } from '@/modules/identity-access/public/participants'
 import { readHostedWorkspaceOwnerForBusinessTask } from '@/modules/source-control/public/participants'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
@@ -15,7 +15,7 @@ import type { TaskRecoveryDeploymentSelection } from './taskRecoverySelection'
 /** RFC-370 §9.2 V4 — hosted platform recovery for AW tasks. The requester
  * resolver comes from Identity & Access through bootstrap. */
 export function composeCrewStationRecovery(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly platform: CrewStationPlatformApi
   readonly api: Pick<CrewStationBusinessExecution, 'getTask'>
@@ -42,6 +42,7 @@ export function composeCrewStationRecovery(input: {
         },
         assertManualExecutionAllowed: context.assertManualExecutionAllowed,
         async taskStatus(taskId) {
+          const { tasks } = tablesOf(input.db)
           const [row] = await input.db
             .select({ status: tasks.status })
             .from(tasks)

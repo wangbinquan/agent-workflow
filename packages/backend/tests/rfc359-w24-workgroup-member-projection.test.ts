@@ -1,6 +1,9 @@
 // Pure exposure executes the actual private Intent snapshot function body with
 // its real codec dependencies. This is not a PostgreSQL factory/DB execution.
 // Database cases below use the real dual-provider repository fixture.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +21,6 @@ import {
   type WorkgroupMember,
 } from '@agent-workflow/shared'
 import { ZodError } from 'zod'
-import { workgroupMembers, workgroups } from '@/db/schema'
 import { workgroupRepositoryDependencies } from '@/modules/resource-catalog/composition/workgroupOperations'
 import * as persistence from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { normalizeWorkgroupSnapshot } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
@@ -29,8 +31,8 @@ import {
 import { rowToWorkgroup } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { describeEachProvider } from './helpers/eachProvider'
 
-type Row = typeof workgroups.$inferSelect
-type MemberRow = typeof workgroupMembers.$inferSelect
+type Row = PersistenceTables['workgroups']['$inferSelect']
+type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 type MemberProjection = (member: WorkgroupMember) => WorkgroupDraftMember
 type IntentSnapshot = (row: Row, members: readonly MemberRow[]) => WorkgroupDraftSnapshot
 const T0 = 1_700_000_000_000
@@ -75,8 +77,8 @@ function originalSnapshot(group: Workgroup): WorkgroupDraftSnapshot {
 }
 
 function originalIntentSnapshot(
-  row: typeof workgroups.$inferSelect,
-  members: readonly (typeof workgroupMembers.$inferSelect)[],
+  row: PersistenceTables['workgroups']['$inferSelect'],
+  members: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
 ): WorkgroupDraftSnapshot {
   const group = workgroupFromRows(row, members)
   const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
@@ -369,20 +371,19 @@ describe('RFC359 original Workgroup member projection contracts', () => {
 
 describeEachProvider('RFC359 Workgroup member projection on stored rows', (harness) => {
   test('real repository and both codecs retain full row projections and rollback snapshots', async () => {
-    await harness.db.insert(workgroups).values(row()).run()
-    await harness.db.insert(workgroupMembers).values(members()).run()
+    const { workgroups, workgroupMembers } = tablesOf(harness.db)
+    await insertOne(harness.db, workgroups, row())
+    await harness.db.insert(workgroupMembers).values(members())
     const { repository, projection } = createWorkgroupRepository(
       harness.db,
       workgroupRepositoryDependencies({ db: harness.db, now: () => T0 + 50 }),
     )
     const before = await repository.get('w24-group')
     if (before === null) throw new Error('missing actual repository document')
-    const stored = await harness.db
-      .select()
-      .from(workgroups)
-      .where(eq(workgroups.id, 'w24-group'))
-      .get()
-    const storedMembers = await harness.db.select().from(workgroupMembers).all()
+    const stored = await first(
+      harness.db.select().from(workgroups).where(eq(workgroups.id, 'w24-group')),
+    )
+    const storedMembers = await harness.db.select().from(workgroupMembers)
     if (stored === undefined) throw new Error('missing actual workgroup row')
     expect(stored).toEqual(row())
     expect(
@@ -404,22 +405,19 @@ describeEachProvider('RFC359 Workgroup member projection on stored rows', (harne
     const rollback = new Error('rollback original member projection')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { workgroupMembers, workgroups } = tablesOf(tx)
         await tx
           .update(workgroupMembers)
           .set({ roleDesc: 'changed role' })
           .where(eq(workgroupMembers.id, 'm-zulu'))
-          .run()
         await tx
           .update(workgroups)
           .set({ version: 8, updatedAt: T0 + 60 })
           .where(eq(workgroups.id, 'w24-group'))
-          .run()
-        const nextRow = await tx
-          .select()
-          .from(workgroups)
-          .where(eq(workgroups.id, 'w24-group'))
-          .get()
-        const nextMembers = await tx.select().from(workgroupMembers).all()
+        const nextRow = await first(
+          tx.select().from(workgroups).where(eq(workgroups.id, 'w24-group')),
+        )
+        const nextMembers = await tx.select().from(workgroupMembers)
         if (nextRow === undefined) throw new Error('missing transaction row')
         const next = workgroupFromRows(nextRow, nextMembers)
         expect(next.version).toBe(8)
@@ -436,8 +434,8 @@ describeEachProvider('RFC359 Workgroup member projection on stored rows', (harne
     ).rejects.toBe(rollback)
     expect(await repository.get('w24-group')).toEqual(before)
     expect(
-      await harness.db.select().from(workgroups).where(eq(workgroups.id, 'w24-group')).get(),
+      await first(harness.db.select().from(workgroups).where(eq(workgroups.id, 'w24-group'))),
     ).toEqual(stored)
-    expect(await harness.db.select().from(workgroupMembers).all()).toEqual(storedMembers)
+    expect(await harness.db.select().from(workgroupMembers)).toEqual(storedMembers)
   })
 })

@@ -2,12 +2,13 @@
 // matches before selecting 51 roots. This suite compares the old materialized
 // SQL with the actual emitter, on real rows, without measuring latency. The
 // original W19 63-filter/full-row/cursor/cycle suite remains the wider oracle.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { eq, sql, SQL, StringChunk } from 'drizzle-orm'
 
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   createDatabaseTaskListPage,
@@ -49,8 +50,9 @@ function materializedOracle(query: SQL): SQL {
   return result
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const { users, workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
     displayName: 'W21 fixture',
@@ -59,7 +61,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'w21-workflow',
     name: 'MiXeD workflow',
     definition: '{ "fixture": true }',
@@ -109,7 +111,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
         ? []
         : [{ stableNodeKey: 'child-task', frozenOccurrenceKey: row.id, workflowRevision: null }]),
     ]
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: row.name,
       workflowId: 'w21-workflow',
@@ -139,7 +141,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     ['open-a-again', 'root-a', null],
     ['resolved-c', 'root-c', 123],
   ] as const) {
-    await db.insert(lifecycleAlerts).values({
+    await insertOne(db, lifecycleAlerts, {
       id,
       taskId,
       rule: `fixture-${id}`,
@@ -153,7 +155,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
 
 async function compareSql(
   harness: ProviderHarness,
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   raw: TaskOperationsRawQuery,
 ): Promise<readonly Record<string, unknown>[]> {
   const query = fastFilteredRootQuery(
@@ -164,8 +166,8 @@ async function compareSql(
   )
   const recording = harness.recordStatements()
   try {
-    const expected = await db.all<Record<string, unknown>>(materializedOracle(query))
-    const actual = await db.all<Record<string, unknown>>(query)
+    const expected = await rawRows<Record<string, unknown>>(db, materializedOracle(query))
+    const actual = await rawRows<Record<string, unknown>>(db, query)
     expect(actual).toEqual(expected)
     expect(JSON.stringify(actual)).toBe(JSON.stringify(expected))
     expect(recording.statements).toHaveLength(2)
@@ -187,6 +189,7 @@ async function compareSql(
 describeEachProvider('RFC-359 W21 non-view CTE inlining', (harness) => {
   test('the old SQL and actual emitter keep complete rows, facets and every page on a tied tree', async () => {
     await seed(harness.db)
+    const { tasks } = tablesOf(harness.db)
     const storedBefore = await harness.db.select().from(tasks).orderBy(tasks.id)
     const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
     const cases: readonly TaskOperationsRawQuery[] = [
@@ -226,6 +229,7 @@ describeEachProvider('RFC-359 W21 non-view CTE inlining', (harness) => {
 
   test('both SQL forms read the transaction row and rollback leaves every stored byte unchanged', async () => {
     await seed(harness.db)
+    const { tasks } = tablesOf(harness.db)
     const before = await harness.db.select().from(tasks).orderBy(tasks.id)
     const expected = await compareSql(harness, harness.db, { q: 'transaction only', limit: '3' })
     expect(expected).toHaveLength(1)
@@ -233,6 +237,7 @@ describeEachProvider('RFC-359 W21 non-view CTE inlining', (harness) => {
     const stop = new Error('rollback task-page fixture')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx.update(tasks).set({ name: 'transaction only' }).where(eq(tasks.id, 'child-a'))
         const changed = await compareSql(harness, tx, { q: 'transaction only', limit: '3' })
         expect(changed.map((row) => row.id)).toEqual(['root-a'])
@@ -275,10 +280,7 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
     env: { RFC359_TASK_PAGE_PROBE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const provider = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(provider)
-  const restore = selectDatabaseSchemaProvider('postgresql')
   try {
     const parsed = parseTaskOperationsQuery(VIEWER, { q: 'MiXeD%_', limit: '2' }, OPTIONS)
     for (const cursor of [
@@ -305,7 +307,12 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
         for (const statement of pair) {
           // This exercises the production compiler; the pool cannot return a
           // fabricated row, access a network, or execute a PostgreSQL plan.
-          await expect(db.all(statement)).rejects.toBe(stop)
+          await expect(
+            Promise.resolve(rawRows(db, statement)).catch((error: unknown) => {
+              while (error instanceof Error && error.cause !== undefined) error = error.cause
+              throw error
+            }),
+          ).rejects.toBe(stop)
         }
         expect(statements).toHaveLength(start + 2)
         const before = statements[start]
@@ -319,7 +326,6 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
       }
     }
   } finally {
-    restore()
     await runtime.close()
   }
 })

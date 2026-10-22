@@ -1,6 +1,6 @@
 // RFC-370 v3 V6 — assemble the hosted task archive content binding. Assembly
 // only: archive sources and the index live in task-execution infrastructure.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
@@ -12,7 +12,7 @@ import { createHostedTaskArchiveContent } from '../infrastructure/crewstation/ta
 import { createHostedTaskArchiveSources } from '../infrastructure/crewstation/taskArchiveSources'
 
 export function composeCrewStationTaskArchive(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications

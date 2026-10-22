@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import type { Hono } from 'hono'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -168,7 +168,7 @@ describe('renderPlantuml', () => {
 // ---- route ----
 
 interface AppCtx {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   configPath: string
   cleanup: () => void

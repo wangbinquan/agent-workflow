@@ -12,6 +12,8 @@
 //   - POST when preflight stale → 409 repair-preflight-stale + audit row
 //   - body.actorUserId is IGNORED — actor is from session
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync } from 'node:fs'
@@ -21,13 +23,12 @@ import { ulid } from 'ulid'
 
 import type { TasksListWsMessage, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { lifecycleAlerts, lifecycleRepairAudit, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   resetBroadcastersForTests,
   TASKS_LIST_CHANNEL,
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -37,7 +38,7 @@ afterEach(() => {
 })
 
 async function seedRunningTaskWithS3(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   lineage?: typeof providerTaskLineage,
 ): Promise<{ taskId: string; alertId: string; reviewRunId: string }> {
   const def: WorkflowDefinition = {
@@ -48,11 +49,12 @@ async function seedRunningTaskWithS3(
   }
   const taskId = ulid()
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks, nodeRuns, lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   // RFC-108 T6 (AR-15): repair's resumeAfterApply → resumeTask now 410s on a
   // MISSING worktree dir. Give the fixture a present dir (no git ops needed).
   const wt = mkdtempSync(join(tmpdir(), 'aw-repair-wt-'))
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -67,7 +69,7 @@ async function seedRunningTaskWithS3(
     ...(lineage?.(taskId) ?? {}),
   })
   const reviewRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -79,7 +81,7 @@ async function seedRunningTaskWithS3(
     finishedAt: Date.now(),
   })
   const alertId = ulid()
-  await db.insert(lifecycleAlerts).values({
+  await insertOne(db, lifecycleAlerts, {
     id: alertId,
     taskId,
     rule: 'S3',
@@ -169,6 +171,7 @@ describe('RFC-057 — GET repair-options', () => {
       const { db, app } = await buildApp()
       const seed = await seedRunningTaskWithS3(db)
       const { eq } = await import('drizzle-orm')
+      const { lifecycleAlerts } = tablesOf(db)
       await db
         .update(lifecycleAlerts)
         .set({ resolvedAt: Date.now() })
@@ -222,6 +225,7 @@ describe('RFC-057 — POST repair happy path', () => {
       expect(body.resolvedAlertIds).toContain(seed.alertId)
 
       const { eq } = await import('drizzle-orm')
+      const { lifecycleRepairAudit } = tablesOf(db)
       const audit = await db
         .select()
         .from(lifecycleRepairAudit)
@@ -293,6 +297,7 @@ describe('RFC-057 — POST repair validation', () => {
       const { db, app } = await buildApp()
       const seed = await seedRunningTaskWithS3(db)
       const { eq } = await import('drizzle-orm')
+      const { lifecycleAlerts } = tablesOf(db)
       await db
         .update(lifecycleAlerts)
         .set({ resolvedAt: Date.now() })
@@ -322,6 +327,7 @@ describe('RFC-057 — POST repair validation', () => {
       expect(res.status).toBe(200)
       const body = (await res.json()) as { auditId: string }
       const { eq } = await import('drizzle-orm')
+      const { lifecycleRepairAudit } = tablesOf(db)
       const audit = await db
         .select()
         .from(lifecycleRepairAudit)
@@ -342,6 +348,7 @@ describe('RFC-057 — preflight stale', () => {
       const seed = await seedRunningTaskWithS3(db)
       // Simulate drift: flip task to a terminal state before the POST lands.
       const { eq } = await import('drizzle-orm')
+      const { tasks, lifecycleRepairAudit } = tablesOf(db)
       await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, seed.taskId))
 
       const res = await app.request(
@@ -366,7 +373,7 @@ describe('RFC-057 — preflight stale', () => {
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedTaskFixture: typeof seedRunningTaskWithS3,
   ) => void,
 ): void {

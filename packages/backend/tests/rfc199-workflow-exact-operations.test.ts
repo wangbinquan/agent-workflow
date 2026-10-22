@@ -16,7 +16,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -59,7 +59,7 @@ const SYSTEM = { kind: 'system', reason: 'rfc199-exact-operation-test' } as cons
 async function buildHarness(
   harness: ProviderDatabaseHarness,
   hook?: ProviderHttpApplicationInput['workflowExactOperationHook'],
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   const db = harness.db
   const appHome = mkdtempSync(join(tmpdir(), 'rfc199-workflow-'))
   applicationHomes.add(appHome)
@@ -75,7 +75,7 @@ async function buildHarness(
   return { db, app: application.app }
 }
 
-async function seed(db: ProviderNeutralDatabase, name: string): Promise<WorkflowDetail> {
+async function seed(db: PersistenceDb, name: string): Promise<WorkflowDetail> {
   return createWorkflow(db, {
     name,
     description: 'captured-description',

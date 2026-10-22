@@ -2,6 +2,9 @@
 // definition-boundary algorithms; closure traversal and save CAS stay intact.
 // These real-database cases first passed against the original implementations.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import {
   WorkflowDefinitionSchema,
@@ -9,8 +12,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import {
@@ -108,8 +110,9 @@ function calling(two = false): WorkflowDefinition {
   })
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, id: string, raw: string) {
-  await db.insert(workflows).values({
+async function seedWorkflow(db: PersistenceDb, id: string, raw: string) {
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: 'shared-child',
     description: 'original description',
@@ -120,13 +123,14 @@ async function seedWorkflow(db: ProviderNeutralDatabase, id: string, raw: string
   })
 }
 
-async function readRow(db: ProviderNeutralDatabase, id: string) {
-  const row = await db.select().from(workflows).where(eq(workflows.id, id)).get()
+async function readRow(db: PersistenceDb, id: string) {
+  const { workflows } = tablesOf(db)
+  const row = await first(db.select().from(workflows).where(eq(workflows.id, id)))
   if (row === undefined) throw new Error(`workflow boundary fixture row missing: ${id}`)
   return row
 }
 
-function validator(db: ProviderNeutralDatabase) {
+function validator(db: PersistenceDb) {
   return createWorkflowValidationPort({ db, skillContent: { isAvailable: async () => true } })
 }
 
@@ -142,8 +146,9 @@ async function wireError(run: () => unknown) {
   throw new Error('expected a workflow boundary DomainError')
 }
 
-async function owner(db: ProviderNeutralDatabase) {
-  await db.insert(users).values({
+async function owner(db: PersistenceDb) {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER,
     username: 'workflow-boundary-owner',
     displayName: 'Workflow boundary owner',
@@ -158,7 +163,7 @@ async function owner(db: ProviderNeutralDatabase) {
   return identity.actor
 }
 
-function repository(db: ProviderNeutralDatabase, events: string[], clock: () => number) {
+function repository(db: PersistenceDb, events: string[], clock: () => number) {
   return createWorkflowRepository({
     db,
     id: () => W1,
@@ -195,6 +200,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
           ? { ...latest, $schema_version: version }
           : { ...rawChild, $schema_version: version },
       )
+      const { workflows } = tablesOf(harness.db)
       await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
       const before = await readRow(harness.db, W1)
       expect(await port.validate(candidate)).toEqual(expected)
@@ -208,6 +214,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
     const port = validator(harness.db)
     const candidate = { definition: calling(), currentWorkflow: ROOT }
     for (const raw of ['{', 'null', '{}', '{"$schema_version":6,"nodes":"wrong","edges":[]}']) {
+      const { workflows } = tablesOf(harness.db)
       await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
       const before = await readRow(harness.db, W1)
       const result = await port.validate(candidate)
@@ -218,6 +225,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
       expect(await readRow(harness.db, W1)).toEqual(before)
     }
     const raw = JSON.stringify(child())
+    const { workflows } = tablesOf(harness.db)
     await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
     expect((await port.validate(candidate)).result).toEqual({ ok: true, issues: [] })
     expect((await readRow(harness.db, W1)).definition).toBe(raw)
@@ -229,6 +237,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
     const port = validator(harness.db)
     const candidate = { definition: calling(true), currentWorkflow: ROOT }
     expect((await port.validate(candidate)).result).toEqual({ ok: true, issues: [] })
+    const { workflows } = tablesOf(harness.db)
     await harness.db.update(workflows).set({ name: 'renamed-child' }).where(eq(workflows.id, W2))
     const renamed = await port.validate(candidate)
     expect(renamed.result.ok).toBe(false)
@@ -268,6 +277,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
         repo.create(actor, { name: '_invalid', description: '', definition: invalid }),
       ),
     ).toEqual(legacy)
+    const { workflows } = tablesOf(harness.db)
     expect(await harness.db.select().from(workflows).where(eq(workflows.id, W1))).toEqual([])
     expect(clockCalls).toBe(0)
     expect(events).toEqual([])
@@ -302,6 +312,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
       definition: definition({ $schema_version: 1 }),
     })
     expect(JSON.parse((await readRow(harness.db, created.id)).definition).$schema_version).toBe(7)
+    const { workflows } = tablesOf(harness.db)
     await harness.db
       .update(workflows)
       .set({ name: 'Legacy Name With Spaces' })

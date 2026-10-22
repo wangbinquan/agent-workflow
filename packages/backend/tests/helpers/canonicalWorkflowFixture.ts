@@ -1,7 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
-import { agents } from '../../src/db/schema'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 /**
  * Test-fixture equivalent of the normal save/import boundary: freeze every
  * resolvable agent-single display name to its canonical DB id before a task
@@ -9,9 +8,10 @@ import { agents } from '../../src/db/schema'
  * fail-closed fixtures keep exercising the production guard.
  */
 export async function canonicalizeWorkflowAgentIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinition> {
+  const { agents } = tablesOf(db)
   const rows = await db.select({ id: agents.id, name: agents.name }).from(agents)
   const idByName = new Map(rows.map((row) => [row.name, row.id]))
   return {

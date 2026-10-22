@@ -19,6 +19,8 @@
 // 对抗检视修订 #4: every spawned pid is recorded and afterEach best-effort
 // SIGKILLs the whole group so a red assertion can't leak process trees.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -29,7 +31,6 @@ import { ulid } from 'ulid'
 import type { Agent } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { runNode } from './helpers/runner'
 import { createResumeEngine } from './helpers/resumeEngine'
@@ -141,14 +142,15 @@ async function buildHarness(taskStatus: 'running' | 'failed' = 'running'): Promi
   const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -179,7 +181,8 @@ async function insertRun(
   opts: { status?: 'pending' | 'running' | 'failed'; pid?: number; startedAt?: number } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'node1',
@@ -278,6 +281,7 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     expect(result.status).toBe('failed')
     expect(result.errorMessage).toContain('node-timeout')
 
+    const { nodeRuns } = tablesOf(h.db)
     // Child pid was persisted by the runner; group kill reaped it.
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     expect(typeof row.pid).toBe('number')
@@ -326,6 +330,7 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     expect(result.status).toBe('canceled')
     expect(result.errorMessage).toContain('aborted')
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     track(row.pid)
     expect(await waitDead(row.pid as number)).toBe(true)
@@ -361,6 +366,7 @@ describe('RFC-098 WP-8 — reapOrphanRuns kills live orphans before flipping', (
     expect(await waitDead(child.pid)).toBe(true)
     expect(await waitDead(grandchildPid)).toBe(true)
 
+    const { nodeRuns, tasks } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     expect(row.status).toBe('interrupted')
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
@@ -382,6 +388,7 @@ describe('RFC-098 WP-8 — reapOrphanRuns kills live orphans before flipping', (
 
     // Window gate refused the kill — the process is presumed PID-reuse.
     expect(pidAlive(child.pid)).toBe(true)
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     expect(row.status).toBe('interrupted')
   }, 30_000)

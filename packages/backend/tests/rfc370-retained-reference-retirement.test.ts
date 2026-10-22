@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rowToDistillJob, runDistill } from '@/modules/memory/application/distill/memoryDistiller'
 import { composeSystemAgentRunFamily } from '@/modules/task-execution/composition/systemAgentRunFamily'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
@@ -17,7 +19,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
-import { intentSessions, intentTurns, users, memoryDistillJobs } from '@/db/schema'
 import { runIntentTurn } from '@/modules/intent/application/turnEngine'
 import type { IntentSystemAgentRunFamily } from '@/modules/intent/application/ports/intentSystemAgent'
 import { createFileIntentScratchStore } from '@/modules/intent/infrastructure/local/fileIntentScratchStore'
@@ -123,7 +124,8 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
       const root = home(),
         id = ulid(),
         now = Date.now()
-      await harness.db.insert(users).values({
+      const { users, intentTurns, intentSessions } = tablesOf(harness.db)
+      await insertOne(harness.db, users, {
         id,
         username: 'retirement-' + id.toLowerCase(),
         displayName: 'Retirement',
@@ -340,7 +342,8 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
     const root = home(),
       id = ulid(),
       now = Date.now()
-    await harness.db.insert(users).values({
+    const { users, intentTurns, intentSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id,
       username: 'retirement-slots-' + id.toLowerCase(),
       displayName: 'Retirement slots',
@@ -470,7 +473,8 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
       const root = home(),
         id = ulid(),
         now = Date.now()
-      await harness.db.insert(memoryDistillJobs).values({
+      const { memoryDistillJobs } = tablesOf(harness.db)
+      await insertOne(harness.db, memoryDistillJobs, {
         id,
         debounceKey: 'retirement-' + id,
         sourceKind: 'feedback',

@@ -1,9 +1,9 @@
 // RFC-359 W4-B5 —— 代码工作区读取：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskRepos, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   CodeNodeRunSnapshot,
@@ -13,7 +13,8 @@ import type {
 } from '../application/ports/codeWorkspaceRead'
 
 /** 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。 */
-function nodeProjection() {
+function nodeProjection(db: object) {
+  const { nodeRuns } = tablesOf(db)
   return {
     id: nodeRuns.id,
     seq: nodeRuns.seq,
@@ -36,9 +37,10 @@ function fallbackRepository(task: {
   }
 }
 
-export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorkspaceRead {
+export function createCodeWorkspaceRead(db: PersistenceDb): CodeWorkspaceRead {
   return {
     async findTask(taskId): Promise<CodeWorkspaceTask | null> {
+      const { tasks, taskRepos } = tablesOf(db)
       const rows = await db
         .select({
           id: tasks.id,
@@ -69,9 +71,10 @@ export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorksp
       }
     },
     async listNodeRuns(taskId): Promise<readonly CodeNodeRunSnapshot[]> {
+      const { nodeRuns } = tablesOf(db)
       // 未启动的 run（started_at NULL）两个引擎都排最前：SQLite 的缺省，PG 须显式 nulls first。
       return await db
-        .select(nodeProjection())
+        .select(nodeProjection(db))
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .orderBy(
@@ -81,8 +84,9 @@ export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorksp
         )
     },
     async findNodeRun(nodeRunId): Promise<CodeNodeRunSnapshot | null> {
+      const { nodeRuns } = tablesOf(db)
       const rows = await db
-        .select(nodeProjection())
+        .select(nodeProjection(db))
         .from(nodeRuns)
         .where(eq(nodeRuns.id, nodeRunId))
         .limit(1)

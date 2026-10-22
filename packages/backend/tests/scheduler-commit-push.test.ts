@@ -13,6 +13,7 @@
 //     here we lock the live wiring path (diff-driven trigger + runNode-driven
 //     commit-agent message + git push).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,7 +21,6 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { nodeRuns, tasks } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -172,6 +172,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
       },
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
     // The commit CONTAINER row carries commit_push_json; session children share
     // the nodeId but have null commit_push_json.
@@ -226,12 +227,15 @@ describe('RFC-075 scheduler auto commit&push', () => {
       },
     )
     const branchRef = `refs/heads/agent-workflow/${task.id}`
-    const commitRuns = async () =>
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).filter(
+    const commitRuns = async () => {
+      const { nodeRuns } = tablesOf(h.db)
+      return (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).filter(
         (r) => r.rerunCause === 'commit-push',
       )
+    }
     const [interrupted] = await commitRuns()
     expect(interrupted?.status).toBe('done')
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // The interruption: the commit never happened, nothing reached the remote,
     // the container row was reaped `interrupted` and the task stopped.
     const worktree = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!.worktreePath
@@ -307,6 +311,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
         awaitScheduler: true,
       },
     )
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
     expect(rows.some((r) => isCommitPushNodeId(r.nodeId))).toBe(false)
     // Remote did NOT get an isolation branch.

@@ -1,15 +1,16 @@
 // SQL AST reuse must keep every original prepare/all, decoder and statement
 // boundary. Proxy probes stop at the actual client boundary, without PG I/O.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, spyOn, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { Name, Param, Placeholder, SQL, StringChunk, eq } from 'drizzle-orm'
+import { PgDialect } from 'drizzle-orm/pg-core'
 import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
 import { SQLiteSession } from 'drizzle-orm/sqlite-core/session'
 import { PreparedQuery as BunPreparedQuery } from 'drizzle-orm/bun-sqlite/session'
-import { RemotePreparedQuery } from 'drizzle-orm/sqlite-proxy/session'
+import { BunSQLPreparedQuery, BunSQLSession } from 'drizzle-orm/bun-sql/session'
 import { buildActor } from '@/auth/actor'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { tasks, workflows } from '@/db/schema'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -27,7 +28,8 @@ const actor = buildActor({
 const initial = { running: 1, awaiting: 2, done7d: 1, failed7d: 1 }
 
 async function seed(harness: ProviderHarness) {
-  await harness.db.insert(workflows).values({ id: 'w25-wf', name: 'w25', definition: '{}' })
+  const { workflows, tasks } = tablesOf(harness.db)
+  await insertOne(harness.db, workflows, { id: 'w25-wf', name: 'w25', definition: '{}' })
   const rows = [
     { id: 'w25-run', status: 'running' },
     { id: 'w25-child', status: 'running', parentTaskId: 'w25-run' },
@@ -39,7 +41,7 @@ async function seed(harness: ProviderHarness) {
     { id: 'w25-unfinished', status: 'failed', finishedAt: null },
   ] as const
   for (const row of rows) {
-    await harness.db.insert(tasks).values({
+    await insertOne(harness.db, tasks, {
       workflowId: 'w25-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -142,10 +144,9 @@ function observeCountCompilation() {
   const compile = spyOn(SQLiteDialect.prototype, 'sqlToQuery').mockImplementation(function (
     this: SQLiteDialect,
     query: SQL,
-    source: Parameters<typeof originalCompile>[1],
   ) {
     const before = roots.has(query) ? snapshot(query) : undefined
-    const result = originalCompile.call(this, query, source)
+    const result = originalCompile.call(this, query)
     if (before !== undefined) {
       expect(snapshot(query)).toBe(before)
       retained.push({ root: query, before })
@@ -154,7 +155,34 @@ function observeCountCompilation() {
   })
   const prepare = spyOn(SQLiteSession.prototype, 'prepareOneTimeQuery')
   const nativeAll = spyOn(BunPreparedQuery.prototype, 'all')
-  const remoteAll = spyOn(RemotePreparedQuery.prototype, 'all')
+  const remoteExecute = spyOn(BunSQLPreparedQuery.prototype, 'execute')
+  const pgPrepare = spyOn(BunSQLSession.prototype, 'prepareQuery')
+  const originalPgBuild = PgDialect.prototype.buildSelectQuery
+  const pgBuild = spyOn(PgDialect.prototype, 'buildSelectQuery').mockImplementation(function (
+    this: PgDialect,
+    input: Parameters<typeof originalPgBuild>[0],
+  ) {
+    const result = originalPgBuild.call(this, input)
+    if (Object.keys(input.fields).join(',') === 'value') {
+      generations += 1
+      roots.add(result)
+    }
+    return result
+  })
+  const originalPgCompile = PgDialect.prototype.sqlToQuery
+  const pgCompile = spyOn(PgDialect.prototype, 'sqlToQuery').mockImplementation(function (
+    this: PgDialect,
+    ...args: Parameters<typeof originalPgCompile>
+  ) {
+    const query = args[0]
+    const before = roots.has(query) ? snapshot(query) : undefined
+    const result = originalPgCompile.apply(this, args)
+    if (before !== undefined) {
+      expect(snapshot(query)).toBe(before)
+      retained.push({ root: query, before })
+    }
+    return result
+  })
   return {
     finish() {
       try {
@@ -162,17 +190,20 @@ function observeCountCompilation() {
         return {
           generations,
           compilations: retained.length,
-          prepares: prepare.mock.calls.filter(([query]) =>
+          prepares: [...prepare.mock.calls, ...pgPrepare.mock.calls].filter(([query]) =>
             /^select count\(\*\) from /.test(query.sql),
           ).length,
-          allCalls: nativeAll.mock.calls.length + remoteAll.mock.calls.length,
+          allCalls: nativeAll.mock.calls.length + remoteExecute.mock.calls.length,
         }
       } finally {
         build.mockRestore()
         compile.mockRestore()
         prepare.mockRestore()
         nativeAll.mockRestore()
-        remoteAll.mockRestore()
+        remoteExecute.mockRestore()
+        pgPrepare.mockRestore()
+        pgBuild.mockRestore()
+        pgCompile.mockRestore()
       }
     },
   }
@@ -181,7 +212,8 @@ function observeCountCompilation() {
 describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => {
   test('retained owner preserves complete rows, late recording and fresh count bindings', async () => {
     await seed(harness)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id).all()
+    const { tasks } = tablesOf(harness.db)
+    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
     console.log(
       'RFC359_W25_OVERVIEW_ROWS ' +
         JSON.stringify({
@@ -233,22 +265,23 @@ describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => 
     } finally {
       reference.stop()
     }
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id).all()).toEqual(before)
+    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
   })
 
   test('the original transaction-bound owner sees writes and rollback restores every row', async () => {
     await seed(harness)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id).all()
+    const { tasks } = tablesOf(harness.db)
+    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
     const rollback = new Error('w25-count-rollback')
     await expect(
       harness.session.transaction(async (tx) => {
         const owner = createTaskOverviewQuery(tx)
         expect(await owner.load({ actor, since: T0 })).toEqual(initial)
+        const { tasks } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ status: 'done', finishedAt: T0 })
           .where(eq(tasks.id, 'w25-run'))
-          .run()
         expect(await owner.load({ actor, since: T0 })).toEqual({
           ...initial,
           running: 0,
@@ -263,7 +296,7 @@ describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => 
         throw rollback
       }),
     ).rejects.toBe(rollback)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id).all()).toEqual(before)
+    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
     expect(await createTaskOverviewQuery(harness.db).load({ actor, since: T0 })).toEqual(initial)
   })
 })
@@ -304,9 +337,7 @@ function createClientProbe(id: string) {
     env: { RFC359_OVERVIEW_PROBE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const previous = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(previous)
   return { db, runtime, statements, stop, closed, closes: () => closes, reserves: () => reserves }
 }
 async function expectCause(operation: PromiseLike<unknown>, expected: Error) {
@@ -324,12 +355,11 @@ test('real client keeps every failed dispatch, fresh arrays and independent sche
   const first = createClientProbe('first')
   const other = createClientProbe('other')
   const owner = createTaskOverviewQuery(first.db)
-  const previous = currentDatabaseSchemaProvider()
   const roots: SQL[] = []
   let previousRoots = new Set<SQL>()
-  const originalCompile = SQLiteDialect.prototype.sqlToQuery
-  const compile = spyOn(SQLiteDialect.prototype, 'sqlToQuery').mockImplementation(function (
-    this: SQLiteDialect,
+  const originalCompile = PgDialect.prototype.sqlToQuery
+  const compile = spyOn(PgDialect.prototype, 'sqlToQuery').mockImplementation(function (
+    this: PgDialect,
     query: SQL,
     source: Parameters<typeof originalCompile>[1],
   ) {
@@ -338,9 +368,7 @@ test('real client keeps every failed dispatch, fresh arrays and independent sche
     return result
   })
   try {
-    for (const [index, provider] of ['postgresql', 'sqlite', 'postgresql'].entries()) {
-      if (provider !== 'sqlite' && provider !== 'postgresql') throw new Error('invalid context')
-      selectDatabaseSchemaProvider(provider)
+    for (const index of [0, 1, 2]) {
       const start = first.statements.length
       const rootStart = roots.length
       await expectCause(owner.load({ actor, since: T0 + index }), first.stop)
@@ -348,7 +376,7 @@ test('real client keeps every failed dispatch, fresh arrays and independent sche
       const currentRoots = roots.slice(rootStart)
       expect(retained).toHaveLength(4)
       expect(currentRoots).toHaveLength(4)
-      for (const root of currentRoots) expect(previousRoots.has(root)).toBe(false)
+      for (const root of currentRoots) expect(previousRoots.has(root)).toBe(index > 0)
       previousRoots = new Set(currentRoots)
       const referenceStart = first.statements.length
       await expectCause(
@@ -380,7 +408,6 @@ test('real client keeps every failed dispatch, fresh arrays and independent sche
     expect(other.reserves()).toBe(0)
   } finally {
     compile.mockRestore()
-    selectDatabaseSchemaProvider(previous)
     await first.runtime.close()
     await other.runtime.close()
   }
@@ -388,12 +415,11 @@ test('real client keeps every failed dispatch, fresh arrays and independent sche
 
 test('a failed first SQL AST generation is not retained and retries preserve the original failure', async () => {
   const probe = createClientProbe('generation-failure')
-  const restore = selectDatabaseSchemaProvider('postgresql')
-  const original = SQLiteDialect.prototype.buildSelectQuery
+  const original = PgDialect.prototype.buildSelectQuery
   const firstFailure = new Error('w25-first-real-count-generation')
   let fail = true
-  const generate = spyOn(SQLiteDialect.prototype, 'buildSelectQuery').mockImplementation(function (
-    this: SQLiteDialect,
+  const generate = spyOn(PgDialect.prototype, 'buildSelectQuery').mockImplementation(function (
+    this: PgDialect,
     input: Parameters<typeof original>[0],
   ) {
     if (fail && Object.keys(input.fields).join(',') === 'value') {
@@ -416,7 +442,6 @@ test('a failed first SQL AST generation is not retained and retries preserve the
     ])
   } finally {
     generate.mockRestore()
-    restore()
     await probe.runtime.close()
   }
 })

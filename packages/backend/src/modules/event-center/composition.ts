@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { EventCenterService } from './application/eventCenterService'
 import {
   createEventResponseDeliveryConsumer,
@@ -256,8 +256,8 @@ export type EventCenterAutomationCapability =
     }>
 
 export interface ComposeEventCenterOptions {
-  readonly beforeObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
-  readonly db: ProviderNeutralDatabase
+  readonly beforeObservationWrite?: (tx: PersistenceDb) => Promise<void>
+  readonly db: PersistenceDb
   readonly typePackageDescriptorJsons: readonly string[]
   /**
    * RFC-317 T30（DE-04）—— 每类响应目标的启动权限门。省略时用
@@ -523,7 +523,7 @@ export async function composeEventCenterWithPorts(
  *
  * 合一前旁边还有一个 `composePostgresqlEventCenter`，两份函数体**逐字节相同**，
  * 唯一的差别是形参上那个更窄的 `db: PostgresqlDatabaseClient` 标注——而
- * `ComposeEventCenterOptions.db` 本来就是 `ProviderNeutralDatabase`，
+ * `ComposeEventCenterOptions.db` 本来就是 `PersistenceDb`，
  * 四个 store 也早就都是中立的。**纯编译期的品牌标注，零运行期含义**（同 §5fl 的形状）。
  *
  * 为什么 `rfc359-w5-identical-provider-twins` 没咬住它：那条判据只配**两个都带品牌名**的函数，

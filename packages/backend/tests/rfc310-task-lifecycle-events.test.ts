@@ -1,17 +1,13 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  committedEventDeliveries,
-  committedEvents,
-  eventRecords,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import { composeEventCenter } from './helpers/eventCenter'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
@@ -28,7 +24,7 @@ async function setTaskStatus({
   db,
   ...input
 }: Parameters<DrizzleTaskRuntimeLifecyclePersistence['trySet']>[0] & {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }): Promise<void> {
   if (
     !(await new DrizzleTaskRuntimeLifecyclePersistence(
@@ -52,36 +48,32 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
       now: () => now,
       id: () => `task-event-resource-${++ordinal}`,
     })
-    await db
-      .insert(workflows)
-      .values({
-        id: 'workflow-1',
-        name: 'Lifecycle fixture',
-        definition: '{}',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
-    await db
-      .insert(tasks)
-      .values({
-        id: 'task-1',
-        name: 'Lifecycle fixture',
-        workflowId: 'workflow-1',
-        workflowSnapshot: '{}',
-        repoPath: '/tmp/repo',
-        worktreePath: '/tmp/worktree',
-        baseBranch: 'main',
-        branch: 'agent-workflow/task-1',
-        status: 'running',
-        inputs: '{}',
-        startedAt: now,
-        executionLineageId: 'task-1',
-        lineageSlotPathJson: JSON.stringify([
-          { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task-1', workflowRevision: null },
-        ]),
-      })
-      .run()
+    const { workflows, tasks, committedEvents, committedEventDeliveries, eventRecords } =
+      tablesOf(db)
+    await insertOne(db, workflows, {
+      id: 'workflow-1',
+      name: 'Lifecycle fixture',
+      definition: '{}',
+      createdAt: now,
+      updatedAt: now,
+    })
+    await insertOne(db, tasks, {
+      id: 'task-1',
+      name: 'Lifecycle fixture',
+      workflowId: 'workflow-1',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/repo',
+      worktreePath: '/tmp/worktree',
+      baseBranch: 'main',
+      branch: 'agent-workflow/task-1',
+      status: 'running',
+      inputs: '{}',
+      startedAt: now,
+      executionLineageId: 'task-1',
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task-1', workflowRevision: null },
+      ]),
+    })
 
     const subscribers = ['parent-work', 'audit-projection'].map((subscriberRef) => ({
       kind: 'system' as const,
@@ -104,15 +96,13 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
       now,
       reason: 'lifecycle event fixture',
     })
-    expect(await db.select().from(tasks).where(eq(tasks.id, 'task-1')).get()).toMatchObject({
+    expect(await first(db.select().from(tasks).where(eq(tasks.id, 'task-1')))).toMatchObject({
       status: 'failed',
       lifecycleEventRevision: 2,
     })
-    const committed = await db
-      .select()
-      .from(committedEvents)
-      .where(eq(committedEvents.id, 'task-lifecycle:task-1:2'))
-      .get()
+    const committed = await first(
+      db.select().from(committedEvents).where(eq(committedEvents.id, 'task-lifecycle:task-1:2')),
+    )
     expect(committed).toMatchObject({
       id: 'task-lifecycle:task-1:2',
       eventType: 'task.lifecycle-transitioned.v1',
@@ -123,8 +113,7 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
       await db
         .select()
         .from(committedEventDeliveries)
-        .where(eq(committedEventDeliveries.eventId, committed!.id))
-        .all(),
+        .where(eq(committedEventDeliveries.eventId, committed!.id)),
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -161,11 +150,12 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
       subject: { typeId: 'platform.task', subjectRef: 'task-1' },
     })
     const eventDocument = JSON.parse(
-      (await db
-        .select({ summaryJson: eventRecords.summaryJson })
-        .from(eventRecords)
-        .where(eq(eventRecords.id, parentDelivery[0]!.eventId))
-        .get())!.summaryJson,
+      (await first(
+        db
+          .select({ summaryJson: eventRecords.summaryJson })
+          .from(eventRecords)
+          .where(eq(eventRecords.id, parentDelivery[0]!.eventId)),
+      ))!.summaryJson,
     ) as { triggerContext: unknown }
     expect(eventDocument.triggerContext).toMatchObject({
       contract: { namespace: 'task' },

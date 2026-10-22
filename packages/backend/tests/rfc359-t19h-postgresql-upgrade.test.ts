@@ -1,6 +1,7 @@
 // RFC-359 T19h: exercise the reserved-connection protocol around a published
 // baseline. Real PostgreSQL DDL and nonempty-row preservation have a separate
 // hosted suite; these controlled faults pin rollback and pointer repair order.
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
@@ -86,7 +87,7 @@ function fixture(
   const upgrades = history.steps.flatMap((step) =>
     step.executableStatements.map((statement) => ({ statement, step })),
   )
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql, parameters = []) {
       calls.push({ sql, parameters })
       if (sql === input.failSql) throw new Error('injected index build interruption')
@@ -211,7 +212,7 @@ function fixture(
     release() {
       releases += 1
     },
-  }
+  })
   const runtime: PostgresqlDatabaseRuntime = {
     provider: 'postgresql',
     generationId: generation.generationId,

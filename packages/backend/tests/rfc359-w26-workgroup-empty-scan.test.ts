@@ -1,6 +1,8 @@
 // RFC359 W26: preserve the original ordered listActive result and its single
 // transaction snapshot while an empty workgroup index can avoid the task scan.
 // The earlier W23 predicate/index probes changed nonempty order and were rejected.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
@@ -8,9 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { CANCELABLE_TASK_STATUSES, type TaskStatus } from '@agent-workflow/shared'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import type { TaskExecutionTransaction } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
@@ -24,7 +24,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import type { RecordedStatement } from './helpers/statementRecorder'
 
 // RFC-374: the participant's two node-run projections also carry `seq` (outside the probe).
-const ORIGINAL_SOURCE_HASH = 'ed7d245f305e06073fe7210cd93085a977d2c2a551294f5fca496f684f35c74e'
+const ORIGINAL_SOURCE_HASH = 'e722533c0e2e4d189a4e6590f7dc399186ff5720a3a4f6545c7d67fd19478898'
 const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
@@ -69,23 +69,27 @@ function taskSnapshot(
   return Object.freeze({ ...row, status: row.status as TaskStatus })
 }
 
-const taskProjection = {
-  id: tasks.id,
-  name: tasks.name,
-  ownerUserId: tasks.ownerUserId,
-  status: tasks.status,
-  workgroupId: tasks.workgroupId,
-  workgroupConfigJson: tasks.workgroupConfigJson,
-  workflowSnapshot: tasks.workflowSnapshot,
-  triggerContextJson: tasks.triggerContextJson,
+const taskProjection = (db: object) => {
+  const { tasks } = tablesOf(db)
+  return {
+    id: tasks.id,
+    name: tasks.name,
+    ownerUserId: tasks.ownerUserId,
+    status: tasks.status,
+    workgroupId: tasks.workgroupId,
+    workgroupConfigJson: tasks.workgroupConfigJson,
+    workflowSnapshot: tasks.workflowSnapshot,
+    triggerContextJson: tasks.triggerContextJson,
+  }
 }
 
 // Exact original listActive body, including its projection, predicate and mapper.
 async function originalListActive(
   tx: TaskExecutionTransaction,
 ): Promise<readonly WorkgroupTaskRoomTaskSnapshot[]> {
+  const { tasks } = tablesOf(tx)
   const rows = await tx
-    .select(taskProjection)
+    .select(taskProjection(tx))
     .from(tasks)
     .where(and(isNotNull(tasks.workgroupId), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])))
   return Object.freeze(rows.map(taskSnapshot))
@@ -121,8 +125,9 @@ function ordinaryRows(): readonly FixtureRow[] {
   }))
 }
 
-async function seed(db: ProviderNeutralDatabase, values: readonly FixtureRow[]): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, values: readonly FixtureRow[]): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'wg-index-user',
     username: 'wg-index-user',
     displayName: 'fixture',
@@ -132,7 +137,7 @@ async function seed(db: ProviderNeutralDatabase, values: readonly FixtureRow[]):
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wg-index-workflow',
     name: 'fixture',
     definition: '{}',
@@ -140,7 +145,7 @@ async function seed(db: ProviderNeutralDatabase, values: readonly FixtureRow[]):
     updatedAt: 1,
   })
   if (values.length === 0) return
-  const rows: (typeof tasks.$inferInsert)[] = values.map((row, i) => ({
+  const rows: PersistenceTables['tasks']['$inferInsert'][] = values.map((row, i) => ({
     id: row.id,
     name: `name:${row.id}`,
     ownerUserId: 'wg-index-user',
@@ -191,6 +196,7 @@ async function recorded(
 }
 
 async function compareInTransaction(harness: ProviderHarness, tx: TaskExecutionTransaction) {
+  const { tasks } = tablesOf(tx)
   const before = await tx.select().from(tasks)
   const original = await recorded(harness, () => originalListActive(tx))
   const actual = await recorded(harness, () => factory.inTransaction(tx).listActive())
@@ -236,6 +242,7 @@ function poisonTaskScan(statement: RecordedStatement): string {
 
 describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
   test('an empty physical task table keeps the complete empty result', async () => {
+    const { tasks } = tablesOf(harness.db)
     expect(await harness.db.select().from(tasks)).toEqual([])
     await harness.session.transaction(async (tx) => {
       const { actual } = await compareInTransaction(harness, tx)
@@ -284,6 +291,7 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
   test('the original 140 rows retain unsorted duplicate empty and Unicode workgroups', async () => {
     await seed(harness.db, [...ordinaryRows(), ...observedValues])
     await harness.executeFixtureDdl('ANALYZE')
+    const { tasks } = tablesOf(harness.db)
     expect(tasks.workgroupId.getSQLType()).toBe('text')
     expect(tasks.workgroupId.notNull).toBe(false)
     await harness.session.transaction(async (tx) => {
@@ -329,10 +337,12 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
 
   test('adding the first workgroup in a transaction is visible and rollback restores all rows', async () => {
     await seed(harness.db, ordinaryRows())
+    const { tasks } = tablesOf(harness.db)
     const before = await harness.db.select().from(tasks)
     const rollback = new Error('rollback first workgroup')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx.update(tasks).set({ workgroupId: '' }).where(eq(tasks.id, 'ordinary-37'))
         const { actual } = await compareInTransaction(harness, tx)
         expect(actual.rows).toHaveLength(1)
@@ -348,11 +358,13 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
 
   test('deleting the last workgroup in a transaction is visible and rollback restores its JSON', async () => {
     await seed(harness.db, [...ordinaryRows(), observedValues[0]])
+    const { tasks } = tablesOf(harness.db)
     const before = await harness.db.select().from(tasks)
     const rollback = new Error('rollback last workgroup deletion')
     await expect(
       harness.session.transaction(async (tx) => {
         expect((await compareInTransaction(harness, tx)).actual.rows).toHaveLength(1)
+        const { tasks } = tablesOf(tx)
         await tx.delete(tasks).where(eq(tasks.id, observedValues[0].id))
         expect((await compareInTransaction(harness, tx)).actual.rows).toEqual([])
         throw rollback
@@ -365,6 +377,7 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
   })
 })
 
+// RFC-395 I-b: the whole-source inverse now includes session table access; query/result comparisons remain.
 test('the original complete participant is retained outside its listActive FROM expression', () => {
   const source = readFileSync(SOURCE_PATH, 'utf8')
   const docStart = source.indexOf(PROBE_DOC_START)
@@ -408,10 +421,7 @@ test('the actual PostgreSQL client preserves original SQL and every original bin
     env: { RFC359_W26_PG_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const previous = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(previous)
-  const restore = selectDatabaseSchemaProvider('postgresql')
   async function rejectsAtClient(run: () => Promise<unknown>): Promise<void> {
     try {
       await run()
@@ -435,7 +445,6 @@ test('the actual PostgreSQL client preserves original SQL and every original bin
     // 探针不再绑定任何值，所以 actual 与 original 的绑定逐字相同。
     expect(actual.values).toEqual([...CANCELABLE_TASK_STATUSES])
   } finally {
-    restore()
     await runtime.close()
   }
 })

@@ -4,12 +4,13 @@
 // id addressing; type immutability; still-referenced delete guard; name
 // conflict; rename leaves id-based references untouched.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { CreateAgent } from '@agent-workflow/shared'
-import { agents } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
@@ -34,8 +35,9 @@ import { ConflictError, NotFoundError, ValidationError } from '../src/util/error
 
 // These rows are reference fixtures for catalog operations. Keep the original
 // canonical ID arrays and default null owner; the catalog itself remains real.
-async function seedAgent(db: ProviderNeutralDatabase, input: CreateAgent): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgent(db: PersistenceDb, input: CreateAgent): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     ...input,
     id: ulid(),
     ownerUserId: null,
@@ -51,7 +53,8 @@ async function seedAgent(db: ProviderNeutralDatabase, input: CreateAgent): Promi
   })
 }
 
-async function getAgent(db: ProviderNeutralDatabase, name: string) {
+async function getAgent(db: PersistenceDb, name: string) {
+  const { agents } = tablesOf(db)
   const [row] = await db.select().from(agents).where(eq(agents.name, name)).limit(1)
   return row === undefined
     ? null
@@ -72,7 +75,7 @@ function authorityFor(userId: string, role: 'admin' | 'user' = 'admin'): McpOper
   ).actor
 }
 
-function composeTestMcpCatalog(db: ProviderNeutralDatabase): McpCatalogModule {
+function composeTestMcpCatalog(db: PersistenceDb): McpCatalogModule {
   return composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -97,7 +100,7 @@ function serviceBinding(
   return Object.freeze({ catalog, authority: authorityFor(userId, role) })
 }
 
-function findAgentReferences(db: ProviderNeutralDatabase, mcpId: string) {
+function findAgentReferences(db: PersistenceDb, mcpId: string) {
   return createMcpRepository({
     db,
     lifecycle: Object.freeze({
@@ -107,7 +110,7 @@ function findAgentReferences(db: ProviderNeutralDatabase, mcpId: string) {
   }).repository.findAgentReferences(mcpId)
 }
 
-async function getMcp(db: ProviderNeutralDatabase, name: string) {
+async function getMcp(db: PersistenceDb, name: string) {
   return (
     (await listMcps(serviceBinding(composeTestMcpCatalog(db)))).find((mcp) => mcp.name === name) ??
     null
@@ -125,7 +128,7 @@ function localMcp(name: string): Parameters<typeof createMcp>[1] {
 }
 
 describeEachProvider('services/mcp.ts CRUD', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let catalog: McpCatalogModule
   let binding: McpServiceBinding
   beforeEach(() => {
@@ -331,7 +334,7 @@ describeEachProvider('services/mcp.ts CRUD', (harness) => {
 })
 
 describeEachProvider('services/mcp.ts reference cascade', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let catalog: McpCatalogModule
   let binding: McpServiceBinding
   beforeEach(() => {

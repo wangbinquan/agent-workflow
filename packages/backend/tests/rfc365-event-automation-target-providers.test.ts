@@ -1,16 +1,10 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { createTriggerContext } from '@agent-workflow/shared'
 
-import {
-  employeeCaseEventOrigins,
-  employeeCases,
-  eventAutomationWorkIntents,
-  eventDeliveries,
-  eventResponseRules,
-  tasks,
-} from '@/db/schema'
 import { createEmployeeAutomationWorkStartProvider } from '@/modules/digital-employee/composition'
 import type { EventAutomationWorkIntentStorePort } from '@/modules/event-center/application/ports/eventAutomationWorkIntentStore'
 import {
@@ -250,6 +244,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
     })
 
     expect(await first.eventCenter.worker.runOneNotification(first.deliveryId)).toBe('retried')
+    const { eventAutomationWorkIntents, eventDeliveries } = tablesOf(harness.db)
     expect(await harness.db.select().from(eventAutomationWorkIntents)).toMatchObject([
       { deliveryId: first.deliveryId, receiptRef: null, status: 'failed' },
     ])
@@ -331,6 +326,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
     releaseFirst()
     await expect(staleRun).rejects.toThrow('event delivery lease was lost')
     expect(providerCalls).toBe(2)
+    const { eventDeliveries, eventResponseRules, eventAutomationWorkIntents } = tablesOf(harness.db)
     expect(
       await harness.db
         .select({ state: eventDeliveries.state })
@@ -352,9 +348,10 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
   })
 
   test('Task and Case providers adopt legacy receipts and linearize concurrent starts', async () => {
-    await harness.db.insert(tasks).values(taskRow('legacy-event-task', 'legacy-task-delivery'))
-    await harness.db.insert(employeeCases).values(employeeCaseRow('legacy-event-case'))
-    await harness.db.insert(employeeCaseEventOrigins).values({
+    const { tasks, employeeCases, employeeCaseEventOrigins } = tablesOf(harness.db)
+    await insertOne(harness.db, tasks, taskRow('legacy-event-task', 'legacy-task-delivery'))
+    await insertOne(harness.db, employeeCases, employeeCaseRow('legacy-event-case'))
+    await insertOne(harness.db, employeeCaseEventOrigins, {
       caseId: 'legacy-event-case',
       eventSubscriptionId: 'subscription-rfc365',
       eventDeliveryId: 'legacy-case-delivery',
@@ -443,7 +440,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
       resources: Object.freeze({}) as never,
       async launch() {
         const taskId = `racing-event-task-${++taskOrdinal}`
-        await harness.db.insert(tasks).values(taskRow(taskId, 'racing-task-delivery'))
+        await insertOne(harness.db, tasks, taskRow(taskId, 'racing-task-delivery'))
         return { taskId }
       },
     })
@@ -454,8 +451,9 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
       async launchWork() {
         const caseId = `racing-event-case-${++caseOrdinal}`
         await harness.session.transaction(async (tx) => {
-          await tx.insert(employeeCases).values(employeeCaseRow(caseId))
-          await tx.insert(employeeCaseEventOrigins).values({
+          const { employeeCases, employeeCaseEventOrigins } = tablesOf(tx)
+          await insertOne(tx, employeeCases, employeeCaseRow(caseId))
+          await insertOne(tx, employeeCaseEventOrigins, {
             caseId,
             eventSubscriptionId: 'subscription-rfc365',
             eventDeliveryId: 'racing-case-delivery',

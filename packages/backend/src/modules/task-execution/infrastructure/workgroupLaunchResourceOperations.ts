@@ -1,8 +1,8 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
 import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { ensureWorkgroupHostWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
@@ -32,7 +32,7 @@ import type { WorkgroupRouteLaunchResources } from './taskRouteLaunchOperations'
  * 所以收成读库那半**不改变任何可见性判定**，只是不再拒绝非直连 actor。
  */
 export function createWorkgroupLaunchResourceOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly integrity: AgentLaunchResourceIntegrityParticipant
 }): WorkgroupRouteLaunchResources {
   const { db } = input
@@ -50,6 +50,7 @@ export function createWorkgroupLaunchResourceOperations(input: {
     async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
       const unique = [...new Set(agentIds)]
       if (unique.length === 0) return []
+      const { agents } = tablesOf(db)
       const rows = await db.select({ id: agents.id }).from(agents).where(inArray(agents.id, unique))
       return rows.map((row) => row.id)
     },

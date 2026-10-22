@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   privilegedNodeLensFor,
   TERMINAL_TASK_STATUSES,
@@ -17,7 +18,6 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray, notInArray } from 'drizzle-orm'
 
-import { agents, scheduledTasks, tasks, workflows, workgroups } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
@@ -106,6 +106,7 @@ async function loadReferenceRows(
 ): Promise<readonly ReferenceRow[]> {
   if (values.length === 0) return []
   const selected = [...new Set(values)]
+  const { agents, workflows, workgroups } = tablesOf(transaction)
   switch (type) {
     case 'agent':
       return transaction
@@ -204,6 +205,7 @@ async function assertNoNonTerminalTaskReferences(
   transaction: ResourceCatalogTransaction,
   workflowId: string,
 ): Promise<void> {
+  const { tasks } = tablesOf(transaction)
   const rows = await transaction
     .select({ id: tasks.id })
     .from(tasks)
@@ -226,6 +228,7 @@ async function assertNoScheduledReferences(
   authority: WorkflowOperationContext,
   workflowId: string,
 ): Promise<void> {
+  const { scheduledTasks } = tablesOf(transaction)
   const schedRows = await transaction
     .select({
       id: scheduledTasks.id,
@@ -258,6 +261,7 @@ async function assertNotCalledByWorkflow(
   transaction: ResourceCatalogTransaction,
   current: Pick<Workflow, 'id' | 'name'>,
 ): Promise<void> {
+  const { workflows } = tablesOf(transaction)
   const rows = await transaction
     .select({ id: workflows.id, definition: workflows.definition })
     .from(workflows)
@@ -310,6 +314,7 @@ export function createWorkflowPersistenceSemantics(input: {
     },
     async copyNameAndAssertInTransaction(transaction, authority, source) {
       await assertDefinitionReferences({ transaction, authority, definition: source.definition })
+      const { workflows } = tablesOf(transaction)
       const occupied = await transaction
         .select({ name: workflows.name })
         .from(workflows)

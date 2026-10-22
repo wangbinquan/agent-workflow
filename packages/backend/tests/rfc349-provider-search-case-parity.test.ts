@@ -26,13 +26,10 @@ import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { drizzle } from 'drizzle-orm/sqlite-proxy'
+import { nativeQueryFixture } from './helpers/nativeQueryFixture'
 import { ilike } from 'drizzle-orm'
 
-import * as schema from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
-import { compilePostgresqlSql } from '@/platform/persistence/postgresqlSql'
 
 const backendRoot = resolve(import.meta.dir, '..')
 const read = (path: string): string => readFileSync(resolve(backendRoot, path), 'utf8')
@@ -85,22 +82,16 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
     db.close()
   })
 
-  test('ilike survives the SQLite dialect and the PostgreSQL bind compiler', () => {
-    const restore = selectDatabaseSchemaProvider('postgresql')
-    try {
-      const db = drizzle(async () => ({ rows: [] }), { schema })
-      const { sql } = db
-        .select({ id: schema.memories.id })
-        .from(schema.memories)
-        .where(ilike(schema.memories.title, '%x%'))
-        .toSQL()
-      // 业务语句由 SQLite dialect 渲染、再由 compilePostgresqlSql 换绑定符；ilike 必须
-      // 原样穿过这两步，否则「改成 ilike」只是改了源码没改上线行为。
-      expect(sql).toContain(' ilike ?')
-      expect(compilePostgresqlSql(sql)).toContain(' ilike $1')
-    } finally {
-      restore()
-    }
+  test('ilike is rendered natively with PostgreSQL bindings', () => {
+    const { db, tables } = nativeQueryFixture('postgresql')
+    const { memories } = tables
+    const query = db
+      .select({ id: memories.id })
+      .from(memories)
+      .where(ilike(memories.title, '%x%'))
+      .toSQL()
+    expect(query.sql).toContain(' ilike $1')
+    expect(query.params).toEqual(['%x%'])
   })
 
   test('the memory search goes through the engine capability on both providers', () => {

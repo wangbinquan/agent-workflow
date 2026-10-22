@@ -3,7 +3,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 import {
@@ -17,7 +17,7 @@ import {
 } from './lifecycle-repair-harness'
 
 async function setupDuplicateActives(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     taskStatus?: 'awaiting_review' | 'awaiting_human'
     count?: number

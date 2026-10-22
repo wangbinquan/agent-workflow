@@ -15,6 +15,8 @@
 // children carrying hashes of the OLD content, run with NEW content, assert
 // exactly the changed shard re-spawns.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -24,7 +26,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
@@ -62,7 +63,8 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -84,14 +86,15 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -178,7 +181,8 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
     // it, consumed NULL = legacy → the consumed generation gate stays open;
     // the value hash is the deciding mechanism here).
     const wrapperRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: wrapperRunId,
       taskId,
       nodeId: 'fan',
@@ -195,7 +199,7 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
       [doneShard0, '0', 'alpha', 'OLD-A'],
       [doneShard1, '1', 'beta-OLD', 'OLD-B'],
     ] as const) {
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id,
         taskId,
         nodeId: 'inner',
@@ -208,7 +212,7 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await h.db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content })
+      await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content })
     }
 
     const argvCapture = join(h.appHome, 'argv-capture.jsonl')

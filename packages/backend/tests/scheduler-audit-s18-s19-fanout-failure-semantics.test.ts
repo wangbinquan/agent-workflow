@@ -40,6 +40,8 @@
 // （串行化同时消除了计数器文件的读写竞争）。不依赖信号量的 FIFO 顺序——
 // 所有断言只数 status / 行数 / 调用次数，不锁定具体哪个 shardKey 失败。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
@@ -47,9 +49,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -62,7 +63,7 @@ const ulid = monotonicFactory()
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -84,12 +85,13 @@ function buildHarness(provider: ProviderHarness): Harness {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -111,14 +113,15 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -271,6 +274,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     // 当前行为：任一 shard 失败 → 整 task failed，失败归因到 wrapper 'fan'，
     // errorSummary 直接写明 "1/3 shards failed"（fail-all 的表层证据：仅 1/3
     // 失败也整体失败）。修复（§7.5 部分容忍）后翻转：status 'done'、
@@ -394,6 +398,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     )
 
     expect(readFileSync(counterFile, 'utf-8').trim()).toBe('2')
+    const { tasks, nodeRuns } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
     const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
     const attempts = (
@@ -484,6 +489,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       .split('\n')
       .map((line) => JSON.parse(line) as { agent: string })
     expect(spawns.map((row) => row.agent)).toEqual(['worker', 'agg', 'agg'])
+    const { tasks, nodeRuns } = tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('failed')
     const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
     const attempts = (
@@ -561,6 +567,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // ---- run 1：1/3 shard 失败 → wrapper + task failed，2 个 shard done。----
     await withEnv(env, () => runTask(runOpts))
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t1 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t1?.status).toBe('failed')
     expect(readFileSync(counterFile, 'utf-8').trim()).toBe('3')

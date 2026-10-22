@@ -6,17 +6,10 @@
 // `DatabaseSession` 上，`createClarifyDecisionCommand` 对两个 provider 是同一段代码。
 // 场景对照 SQLite 黄金锁 `rfc128-p5-d-autodispatch.test.ts` / `rfc128-p1-per-question-seal.test.ts`。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  committedEvents,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-} from '@/db/schema'
 import { createClarifyDecisionCommand } from '@/modules/collaboration/infrastructure/clarifyDecisionCommand'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
@@ -36,7 +29,7 @@ import {
   seedRun,
   seedTask,
 } from './helpers/questionDispatchFixture'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 const actor = { user: { id: 'u1' } } as Parameters<ClarifyDecisionCommandPort['submit']>[0]['actor']
 
@@ -55,24 +48,33 @@ function recordingEnqueuer(): MemoryDistillEnqueuer & { calls: EnqueueMemoryDist
   }
 }
 
-async function seedOpenSelfRound(db: ProviderNeutralDatabase, taskId: string) {
+async function seedOpenSelfRound(db: PersistenceDb, taskId: string) {
   await seedTask(db, taskId)
   await seedRun(db, taskId, DESIGNER, { status: 'done', hasOutput: true })
   return await seedRound(db, taskId, 'self', [mkQ('q1'), mkQ('q2')], { status: 'awaiting_human' })
 }
 
-const roundById = async (db: ProviderNeutralDatabase, id: string) =>
-  (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, id)))[0]!
-const runById = async (db: ProviderNeutralDatabase, id: string) =>
-  (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
-const entriesOf = (db: ProviderNeutralDatabase, origin: string) =>
-  db.select().from(taskQuestions).where(eq(taskQuestions.originNodeRunId, origin))
-const mintedReruns = async (db: ProviderNeutralDatabase, taskId: string) =>
-  (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+const roundById = async (db: PersistenceDb, id: string) => {
+  const { clarifyRounds } = tablesOf(db)
+  return (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, id)))[0]!
+}
+const runById = async (db: PersistenceDb, id: string) => {
+  const { nodeRuns } = tablesOf(db)
+  return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+}
+const entriesOf = (db: PersistenceDb, origin: string) => {
+  const { taskQuestions } = tablesOf(db)
+  return db.select().from(taskQuestions).where(eq(taskQuestions.originNodeRunId, origin))
+}
+const mintedReruns = async (db: PersistenceDb, taskId: string) => {
+  const { nodeRuns } = tablesOf(db)
+  return (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
     (r) => r.rerunCause === 'clarify-answer',
   )
-const decisionOps = (db: ProviderNeutralDatabase, taskId: string) =>
-  db
+}
+const decisionOps = (db: PersistenceDb, taskId: string) => {
+  const { collaborationGateOperations } = tablesOf(db)
+  return db
     .select()
     .from(collaborationGateOperations)
     .where(
@@ -82,8 +84,10 @@ const decisionOps = (db: ProviderNeutralDatabase, taskId: string) =>
         eq(collaborationGateOperations.operationKind, 'decide'),
       ),
     )
-const decisionEvents = (db: ProviderNeutralDatabase, roundId: string) =>
-  db
+}
+const decisionEvents = (db: PersistenceDb, roundId: string) => {
+  const { committedEvents } = tablesOf(db)
+  return db
     .select()
     .from(committedEvents)
     .where(
@@ -93,6 +97,7 @@ const decisionEvents = (db: ProviderNeutralDatabase, roundId: string) =>
         eq(committedEvents.aggregateId, roundId),
       ),
     )
+}
 
 describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecisions）', (harness) => {
   beforeEach(() => resetBroadcastersForTests())
@@ -146,6 +151,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     expect(minted).toHaveLength(1)
     expect(minted[0]!.nodeId).toBe(DESIGNER)
     expect(minted[0]!.status).toBe('pending')
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status).not.toBe(
       'awaiting_human',
     )
@@ -289,6 +295,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const db = harness.db
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
+    const { nodeRuns } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ status: 'failed', finishedAt: Date.now() })

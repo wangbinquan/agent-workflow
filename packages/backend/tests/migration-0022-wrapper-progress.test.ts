@@ -8,44 +8,42 @@
 // either fail to persist (silent bug returning) or fail to resume (the
 // column read would crash before findResumableWrapperRun could decide).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: 'fixture-task',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  insertOne(db, tasks, {
+    id: taskId,
+    name: 'fixture-task',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return { taskId }
 }
 
@@ -67,33 +65,30 @@ describe('migration 0022 (RFC-040 node_runs.wrapper_progress_json)', () => {
       phase: 'awaiting',
     })
 
-    db.insert(nodeRuns)
-      .values({
-        id: idWithProgress,
-        taskId,
-        nodeId: 'wrapper-loop-1',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'awaiting_human',
-        wrapperProgressJson: payload,
-      })
-      .run()
+    const { nodeRuns } = tablesOf(db)
+    insertOne(db, nodeRuns, {
+      id: idWithProgress,
+      taskId,
+      nodeId: 'wrapper-loop-1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_human',
+      wrapperProgressJson: payload,
+    })
 
-    db.insert(nodeRuns)
-      .values({
-        id: idLegacy,
-        taskId,
-        nodeId: 'agent-1',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'done',
-        // wrapperProgressJson intentionally omitted — legacy / non-wrapper row
-      })
-      .run()
+    insertOne(db, nodeRuns, {
+      id: idLegacy,
+      taskId,
+      nodeId: 'agent-1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'done',
+      // wrapperProgressJson intentionally omitted — legacy / non-wrapper row
+    })
 
-    const rows = db.select().from(nodeRuns).all()
+    const rows = queryRows(db.select().from(nodeRuns))
     const byId = new Map(rows.map((r) => [r.id, r]))
     expect(byId.get(idWithProgress)?.wrapperProgressJson).toBe(payload)
     expect(byId.get(idLegacy)?.wrapperProgressJson).toBeNull()
@@ -109,20 +104,19 @@ describe('migration 0022 (RFC-040 node_runs.wrapper_progress_json)', () => {
       phase: 'awaiting',
     })
 
-    db.insert(nodeRuns)
-      .values({
-        id,
-        taskId,
-        nodeId: 'wrapper-git-1',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'awaiting_review',
-        wrapperProgressJson: payload,
-      })
-      .run()
+    const { nodeRuns } = tablesOf(db)
+    insertOne(db, nodeRuns, {
+      id,
+      taskId,
+      nodeId: 'wrapper-git-1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'awaiting_review',
+      wrapperProgressJson: payload,
+    })
 
-    const row = db.select().from(nodeRuns).where(eq(nodeRuns.id, id)).get()
+    const row = first(db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))
     expect(row?.wrapperProgressJson).toBe(payload)
   })
 })

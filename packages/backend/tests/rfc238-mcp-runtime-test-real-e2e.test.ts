@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { afterEach, expect, test } from 'bun:test'
@@ -6,14 +9,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
-import {
-  mcps,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestTurns,
-  nodeRuns,
-  runtimes,
-  tasks,
-} from '../src/db/schema'
 import { createLocalMcpDiagnosticsApplication as createMcpDiagnosticsApplication } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
 import { composeMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
@@ -176,7 +171,9 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
       process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-claude-config')
       try {
         const db = harness.db
-        await db.insert(runtimes).values({
+        const { runtimes, mcps, mcpRuntimeTestSessions, mcpRuntimeTestTurns, tasks, nodeRuns } =
+          tablesOf(db)
+        await insertOne(db, runtimes, {
           id: 'runtime-claude-fixture',
           name: 'claude-fixture',
           protocol: 'claude-code',
@@ -184,7 +181,7 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
           model: 'mock-model',
           enabled: true,
         })
-        await db.insert(mcps).values({
+        await insertOne(db, mcps, {
           id: 'mcp-fixture',
           name: 'stateful_fixture',
           description: '',
@@ -221,11 +218,12 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
           async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
         )
         const nativeSessionId = (
-          await db
-            .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-            .from(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-            .get()
+          await first(
+            db
+              .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+              .from(mcpRuntimeTestSessions)
+              .where(eq(mcpRuntimeTestSessions.id, created.sessionId)),
+          )
         )?.id
         expect(nativeSessionId).toMatch(
           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
@@ -246,11 +244,12 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
         expect(session.turns.map((turn) => turn.status)).toEqual(['succeeded', 'succeeded'])
         expect(
           (
-            await db
-              .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
-              .from(mcpRuntimeTestSessions)
-              .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-              .get()
+            await first(
+              db
+                .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
+                .from(mcpRuntimeTestSessions)
+                .where(eq(mcpRuntimeTestSessions.id, created.sessionId)),
+            )
           )?.id,
         ).toBe(nativeSessionId)
         expect(requests.map((request) => request.method)).toEqual([
@@ -287,13 +286,12 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
           })
           .from(mcpRuntimeTestTurns)
           .where(eq(mcpRuntimeTestTurns.sessionId, session.id))
-          .all()
         expect(turnReceipts).toHaveLength(2)
         for (const receipt of turnReceipts) {
           expect(receipt.binary).toBe(runtimeBinary)
         }
-        expect(await db.select().from(tasks).all()).toHaveLength(0)
-        expect(await db.select().from(nodeRuns).all()).toHaveLength(0)
+        expect(await db.select().from(tasks)).toHaveLength(0)
+        expect(await db.select().from(nodeRuns)).toHaveLength(0)
 
         const ended = await service.end(actor, mcp.id, session.id)
         expect(ended.session.status).toBe('ended')

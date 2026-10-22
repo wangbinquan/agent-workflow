@@ -3,11 +3,13 @@
 // write transactions' SSI dependency graph. Exercise the actual persistence
 // factory and DatabaseSession; keep the original RFC-185 fan-out tests intact.
 import { describe, expect, test } from 'bun:test'
-import type { SQL } from 'drizzle-orm'
-import { PgDialect } from 'drizzle-orm/pg-core'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  createPostgresqlDatabaseRuntime,
+  type PostgresqlPool,
+} from '@/platform/persistence/postgresqlRuntime'
+import { withNativeTransactions } from './helpers/nativeTransactions'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { workgroupMemberCursors } from '@/db/schema'
 import {
   createWorkgroupTurnsPersistence,
   type WorkgroupHostLedgerParticipantFactory,
@@ -28,56 +30,68 @@ function deferred() {
 function fixture(snapshot: HostSnapshot = null) {
   const queries: string[] = []
   const participants: unknown[] = []
-  const dialect = new PgDialect()
-  const tx = {
-    async run(query: SQL) {
-      queries.push(dialect.sqlToQuery(query).sql)
-    },
-    select() {
-      let table: unknown
-      const query = {
-        from(value: unknown) {
-          table = value
-          return query
-        },
-        where() {
-          return query
-        },
-        orderBy() {
-          return query
-        },
-        async get() {
-          return undefined
-        },
-        async all() {
-          return table === workgroupMemberCursors
-            ? [{ memberId: 'human', lastConsumedMessageId: 'message-last' }]
-            : []
-        },
-      }
-      return query
-    },
-  }
   let transactions = 0
   let transactionError: unknown
   let loadError: unknown
+  let transactionHandle: unknown
   let settled: ReturnType<typeof deferred> | undefined
   const entered = deferred()
-  const db = {
-    $provider: 'postgresql' as const,
-    async transaction<T>(body: (transaction: typeof tx) => Promise<T>): Promise<T> {
-      transactions += 1
-      if (transactionError !== undefined) throw transactionError
-      const value = await body(tx)
+  const connection = withNativeTransactions({
+    unsafe(statement: string) {
+      if (/^set transaction/i.test(statement)) queries.push(statement.toUpperCase())
+      const rows = statement.includes('"workgroup_member_cursors"')
+        ? [
+            {
+              taskId: 'task',
+              memberId: 'human',
+              lastConsumedMessageId: 'message-last',
+              updatedAt: 1,
+            },
+          ]
+        : []
+      return Object.assign(Promise.resolve(rows), {
+        async values() {
+          return rows.map((row) => Object.values(row))
+        },
+      })
+    },
+    release() {},
+  })
+  const begin = connection.begin.bind(connection)
+  connection.begin = async (body) => {
+    transactions += 1
+    if (transactionError !== undefined) throw transactionError
+    return await begin(async (client) => {
+      const value = await body(client)
       entered.resolve()
       if (settled !== undefined) await settled.promise
       return value
+    })
+  }
+  const pool: PostgresqlPool = {
+    unsafe: connection.unsafe,
+    reserve: async () => connection,
+    close: async () => {},
+  }
+  const runtime = createPostgresqlDatabaseRuntime({
+    generationId: 'snapshot_fixture',
+    config: {
+      provider: 'postgresql',
+      urlEnv: 'SNAPSHOT_FIXTURE_URL',
+      poolMax: 1,
+      connectTimeoutMs: 1000,
+      statementTimeoutMs: 1000,
+      idleTimeoutMs: 1000,
     },
-  } as unknown as ProviderNeutralDatabase
+    env: { SNAPSHOT_FIXTURE_URL: 'postgresql://fixture@localhost/snapshot' },
+    poolFactory: () => pool,
+  })
+  const db = createPostgresqlDatabaseClient(runtime)
   const persistence = createWorkgroupTurnsPersistence({
     db,
     hostLedgerFactory: {
       inTransaction(transaction) {
+        transactionHandle = transaction
         participants.push(transaction)
         return {
           async load() {
@@ -94,7 +108,9 @@ function fixture(snapshot: HostSnapshot = null) {
   })
   return {
     db,
-    tx,
+    get tx() {
+      return transactionHandle
+    },
     persistence,
     queries,
     participants,
@@ -183,8 +199,8 @@ describe('RFC-370 workgroup read snapshot CI repair', () => {
   test('nested reads reuse the existing serializable frame and preserve its isolation', async () => {
     const f = fixture()
     await databaseSessionFor(f.db).serializable(async (transaction) => {
-      expect<unknown>(transaction).toBe(f.tx)
       expect(await f.persistence.load('task')).toBeNull()
+      expect<unknown>(transaction).toBe(f.tx)
     })
     expect(f.transactions()).toBe(1)
     expect(f.queries).toEqual(['SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'])

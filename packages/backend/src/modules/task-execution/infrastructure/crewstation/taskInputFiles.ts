@@ -4,10 +4,10 @@
 // row in its ready transaction. A partially retained request (files without a
 // manifest) is completed by retrying the same request; the task object sweep
 // releases everything once the task is gone.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskArtifacts } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectPublications,
   HostedObjectReceipt,
@@ -55,18 +55,20 @@ const prefixOf = (taskId: string) => {
 }
 
 export function createHostedTaskInputFiles(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
 }): TaskInputFiles {
-  const find = async (reference: string) =>
-    (
+  const find = async (reference: string) => {
+    const { hostedTaskArtifacts } = tablesOf(input.db)
+    return (
       await input.db
         .select()
         .from(hostedTaskArtifacts)
         .where(eq(hostedTaskArtifacts.reference, reference))
         .limit(1)
     )[0]
+  }
   const readBytes = async (object: HostedObjectReceipt) => {
     const bytes = new Uint8Array(await new Response(await input.objects.open(object)).arrayBuffer())
     if (bytes.length !== object.size || sha256Hex(bytes) !== object.sha256)
@@ -89,6 +91,7 @@ export function createHostedTaskInputFiles(input: {
         {
           concurrency: 4,
           async commit(tx, receipts) {
+            const { hostedTaskArtifacts } = tablesOf(tx)
             const saved = await tx
               .select({ reference: hostedTaskArtifacts.reference })
               .from(hostedTaskArtifacts)

@@ -2,12 +2,13 @@
 // repeatedly reported 40001 on the post-insert nonce read. Keep the real dual
 // provider mint/receipt/rollback contract and prevent that unnecessary predicate
 // read from returning; RFC-185 retains its three-member execution assertions.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { nodeRuns, tasks, workflows } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -15,11 +16,12 @@ import type { WorkgroupHostLedgerOperation } from '@/modules/task-execution/publ
 import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@/modules/task-execution/public/commands'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid(),
     workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'mint-receipt', definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'mint-receipt', definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'same-member fan-out',
     workflowId,
@@ -82,6 +84,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
     expect(receipts.every((receipt) => receipt.committed)).toBe(true)
     const returned = receipts.flatMap((receipt) => (receipt.committed ? receipt.mintedRuns : []))
     expect(returned).toHaveLength(3)
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(rows).toHaveLength(3)
     expect(new Set(rows.map((row) => row.shardKey))).toEqual(new Set(['a', 'b', 'c']))
@@ -112,6 +115,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
         throw new Error('rollback after mint')
       }),
     ).rejects.toThrow('rollback after mint')
+    const { nodeRuns } = tablesOf(db)
     expect(await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).toHaveLength(0)
     const persistence = createWorkgroupTurnsPersistence({
       db,

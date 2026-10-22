@@ -1,5 +1,5 @@
 import { isKnownRuntimeKind } from '@/services/runtime'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeSelectionParticipantInTx } from '@/modules/runtime-management/public/participants'
 import type {
   FrozenRuntimeRef,
@@ -14,14 +14,14 @@ export interface RuntimeSelectionBinding {
   readSnapshot(reference: FrozenRuntimeRef): ResolvedRuntimeProfile
 }
 export type BindRuntimeSelection = (
-  transaction: ProviderNeutralDatabase,
+  transaction: PersistenceDb,
   assertTaskScope: () => void,
 ) => RuntimeSelectionBinding
 import { DrizzleNodeRunRuntimePersistence } from '../infrastructure/nodeRunRuntimePersistence'
 
 /** Task adapter consumes RM's offered participant on the exact live owner transaction. */
 export function composeNodeRunRuntimePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   bindSelection: BindRuntimeSelection,
 ) {
   return new DrizzleNodeRunRuntimePersistence(

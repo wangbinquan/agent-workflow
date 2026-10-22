@@ -14,6 +14,8 @@
 // Uses MOCK_OPENCODE_CAPTURE_ARGV_TO + MOCK_OPENCODE_EMIT_SESSION_ID added in
 // fixtures/mock-opencode.ts (RFC-026 additive helpers).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -22,9 +24,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { clarifyRounds, agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 // RFC-132 (PR-C): the unified flat injector reads DISPATCHED task_questions, so these tests answer
 // via the real PR-B path (autoDispatchClarifyRound = seal + auto-dispatch + mint the 承接 rerun +
 // write the node clarify state) instead of the legacy immediate mint, which created no dispatched
@@ -42,7 +43,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -82,9 +83,10 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -143,12 +145,13 @@ async function seedWorkflowAndTask(
 ): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -259,6 +262,7 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
+    const { nodeRuns } = tablesOf(h.db)
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const designerRun = runs
       .filter((r) => r.nodeId === 'd')
@@ -286,6 +290,7 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
+    const { clarifyRounds, nodeRuns, nodeRunEvents } = tablesOf(h.db)
     // User submits answers → mints rerun row (clarifyIteration=1).
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -387,6 +392,7 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
+    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
     const firstRound = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     ).find((round) => round.iteration === 0)
@@ -493,6 +499,7 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
+    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
@@ -562,6 +569,7 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
+    const { clarifyRounds, nodeRuns, nodeRunEvents } = tablesOf(h.db)
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]

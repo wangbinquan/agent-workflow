@@ -1,9 +1,10 @@
 // RFC-359 W4-B3 —— 任务反馈存储：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, desc, eq } from 'drizzle-orm'
 import type { TaskFeedback } from '@agent-workflow/shared'
-import { taskFeedback, tasks } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   NewTaskFeedbackRecord,
   TaskFeedbackStore,
@@ -32,9 +33,10 @@ function rowToFeedback(row: TaskFeedbackRow): TaskFeedback {
 }
 
 export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async loadTaskIdentity(taskId: string) {
+    const { tasks } = tablesOf(this.db)
     const row = (
       await this.db
         .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
@@ -46,10 +48,12 @@ export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
   }
 
   async insert(input: NewTaskFeedbackRecord): Promise<void> {
-    await this.db.insert(taskFeedback).values({ ...input, distilled: 0 })
+    const { taskFeedback } = tablesOf(this.db)
+    await insertOne(this.db, taskFeedback, { ...input, distilled: 0 })
   }
 
   async markDistilled(id: string, distillJobId: string): Promise<void> {
+    const { taskFeedback } = tablesOf(this.db)
     await this.db
       .update(taskFeedback)
       .set({ distilled: 1, distillJobId })
@@ -57,6 +61,7 @@ export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
   }
 
   async getById(id: string): Promise<TaskFeedback | null> {
+    const { taskFeedback } = tablesOf(this.db)
     const row = (
       await this.db.select().from(taskFeedback).where(eq(taskFeedback.id, id)).limit(1)
     )[0] as TaskFeedbackRow | undefined
@@ -64,6 +69,7 @@ export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
   }
 
   async listByTask(taskId: string): Promise<readonly TaskFeedback[]> {
+    const { taskFeedback } = tablesOf(this.db)
     const rows = (await this.db
       .select()
       .from(taskFeedback)
@@ -73,6 +79,7 @@ export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
   }
 
   async listRecent(limit: number): Promise<readonly TaskFeedback[]> {
+    const { taskFeedback } = tablesOf(this.db)
     const rows = (await this.db
       .select()
       .from(taskFeedback)

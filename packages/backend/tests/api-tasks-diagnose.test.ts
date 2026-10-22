@@ -11,19 +11,20 @@
 //     visibility middleware decides the 404 path)
 //   - WS broadcast fires on lifecycle.alert with the right shape
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode, TasksListWsMessage } from '@agent-workflow/shared'
 
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   resetBroadcastersForTests,
   TASKS_LIST_CHANNEL,
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -45,7 +46,7 @@ async function diagnose(
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskStatus: 'awaiting_review' | 'done' | 'running',
   nodes: WorkflowNode[],
   lineage?: typeof providerTaskLineage,
@@ -53,12 +54,13 @@ async function seedTask(
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [], outputs: [] }
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -111,7 +113,8 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         { id: 'rev_1', kind: 'review' } as WorkflowNode,
       ])
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: 'rev_1',
@@ -121,7 +124,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         status: 'awaiting_review',
         startedAt: Date.now(),
       })
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId,
         reviewNodeId: 'rev_1',
@@ -156,7 +159,8 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         { id: 'rev_1', kind: 'review' } as WorkflowNode,
       ])
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: 'rev_1',
@@ -166,7 +170,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         status: 'awaiting_review',
         startedAt: Date.now(),
       })
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId,
         reviewNodeId: 'rev_1',
@@ -226,13 +230,13 @@ describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
     test('openAlerts includes pre-existing stuck-rule (S3) row even though the live scan does not produce one', async () => {
       const { db, app } = await buildApp()
       const taskId = await seedTask(db, 'running', [])
+      const { lifecycleAlerts } = tablesOf(db)
       // Plant a fresh S3 row directly — mimicking what the periodic
       // stuck-task scan would have written once the 30-min threshold
       // elapsed. The /diagnose handler runs only the invariant scan so
       // it never inserts S3/S4 itself; merging from the table is the
       // only path that surfaces them.
-      const { lifecycleAlerts } = await import('../src/db/schema')
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: 'al_s3_test',
         taskId,
         rule: 'S3',
@@ -260,7 +264,8 @@ describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
         { id: 'rev_1', kind: 'review' } as WorkflowNode,
       ])
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: 'rev_1',
@@ -270,7 +275,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
         status: 'awaiting_review',
         startedAt: Date.now(),
       })
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId,
         reviewNodeId: 'rev_1',
@@ -300,7 +305,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedTaskFixture: typeof seedTask,
   ) => void,
 ): void {

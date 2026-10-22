@@ -4,9 +4,10 @@
 // user still has event-sources:update but cannot write automation rules, every
 // non-admin writer is owner-scoped, and the source-neutral channel rejects PATs.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import { eventResponseRules, eventSources, eventTypeCatalog } from '@/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -75,14 +76,15 @@ async function harness(scope: ProviderHttpApplicationScope) {
       ],
     },
   }
-  await db.insert(eventSources).values({
+  const { eventSources, eventTypeCatalog } = tablesOf(db)
+  await insertOne(db, eventSources, {
     sourceId: source.sourceRef.id,
     revision: source.sourceRef.revision,
     descriptorJson: JSON.stringify(source),
     descriptorDigest: 'source-digest',
     registeredAt: 1,
   })
-  await db.insert(eventTypeCatalog).values({
+  await insertOne(db, eventTypeCatalog, {
     eventTypeId: eventType.eventTypeRef.id,
     revision: eventType.eventTypeRef.revision,
     sourceId: source.sourceRef.id,
@@ -322,6 +324,7 @@ describeEachProviderHttpApplication(
       expect(deniedUpdate.status).toBe(403)
       expect(await responseCode(deniedUpdate)).toBe('forbidden')
 
+      const { eventResponseRules } = tablesOf(h.db)
       expect(await h.db.select({ id: eventResponseRules.id }).from(eventResponseRules)).toEqual([
         { id: workflowRuleId },
       ])

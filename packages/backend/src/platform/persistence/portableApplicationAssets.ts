@@ -19,7 +19,7 @@
 // 词汇**（选哪些行），不是谁的领域概念，而两个消费者一个在模块里、一个在
 // `platform/persistence/sqlite/` 这条 legacy 线上。定义在模块内会让后者记一条
 // 「legacy 指向模块内部」的越界边（`rfc317-module-boundary` 实测会红）——理由与
-// `db/query.ts` 顶端给 `ProviderNeutralDatabase` 选家的那条完全一样。
+// `db/query.ts` 顶端给 `PersistenceDb` 选家的那条完全一样。
 //
 // 合一时取的是 SQLite 侧的错误契约（对拍照出的真分叉）：损坏的 definition 抛
 // `ValidationError('workflow-definition-corrupt')`（422 带 workflowId），而不是裸的
@@ -27,6 +27,8 @@
 // `resource-catalog` 的 `rowToWorkflow` 逐字同形——那是「读一行 workflow」在全仓的既有
 // 契约，备份路径没有理由自己发明一个。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   LIVE_WORKTREE_TASK_STATUSES,
   migrateWorkflowDefinitionToLatest,
@@ -36,8 +38,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
 import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import {
@@ -82,10 +83,11 @@ function decodeWorkflowDefinition(workflowId: string, stored: string) {
  * 这里只负责选行。
  */
 export async function captureWorktrees(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   stagingDirectory: string,
   options?: { readonly maxBytes?: number },
 ): Promise<WorktreeCaptureResult> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({
       id: tasks.id,
@@ -96,7 +98,6 @@ export async function captureWorktrees(
     })
     .from(tasks)
     .where(inArray(tasks.status, [...LIVE_WORKTREE_TASK_STATUSES]))
-    .all()
   return await captureWorktreeRows(rows, stagingDirectory, options)
 }
 
@@ -105,23 +106,25 @@ export async function captureWorktrees(
  * 归档里的 JSON 只提供 task id（`services/worktreeBackup.ts` 的既有契约）。
  */
 export async function reconstructWorktrees(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   extractedDirectory: string,
 ): Promise<WorktreeReconstructResult> {
   return await reconstructWorktreeRows(
     {
       async findById(taskId: string) {
-        return await db
-          .select({
-            id: tasks.id,
-            status: tasks.status,
-            worktreePath: tasks.worktreePath,
-            branch: tasks.branch,
-            repoPath: tasks.repoPath,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .get()
+        const { tasks } = tablesOf(db)
+        return await first(
+          db
+            .select({
+              id: tasks.id,
+              status: tasks.status,
+              worktreePath: tasks.worktreePath,
+              branch: tasks.branch,
+              repoPath: tasks.repoPath,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, taskId)),
+        )
       },
     },
     extractedDirectory,
@@ -134,11 +137,12 @@ export async function reconstructWorktrees(
  * 拥有，两个 provider 本来就共用它；这份是它缺的最后一块中立实现。
  */
 export function createPortableBackupApplicationAssets(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly maxWorktreeBytes?: number
 }): PortableBackupApplicationAssets {
   return Object.freeze({
     async exportWorkflows(destination: string) {
+      const { workflows } = tablesOf(input.db)
       const rows = await input.db
         .select({
           id: workflows.id,
@@ -148,7 +152,6 @@ export function createPortableBackupApplicationAssets(input: {
         })
         .from(workflows)
         .orderBy(workflows.id)
-        .all()
       for (const row of rows) {
         writeFileSync(
           join(destination, `${row.id}.yaml`),

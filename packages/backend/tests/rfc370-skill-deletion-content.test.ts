@@ -1,11 +1,11 @@
 // RFC-370 H6: selected delete/reserve storage must finish before the existing
 // durable operation can advance or release its lock, including restart recovery.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { buildActor } from '@/auth/actor'
 import type {
@@ -88,6 +88,7 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
   })
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
   async function row() {
+    const { skills } = tablesOf(harness.db)
     return (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]
   }
 
@@ -336,6 +337,7 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
   })
 
   test('reserve restart waits for selected root discard before removing the reservation', async () => {
+    const { skills } = tablesOf(harness.db)
     await harness.db
       .update(skills)
       .set({ reservationState: 'reserving' })

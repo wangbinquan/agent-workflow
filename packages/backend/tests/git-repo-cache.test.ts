@@ -2,8 +2,10 @@
 // concurrent-same-URL behavior of services/gitRepoCache.ts. Uses a real
 // local bare repo as the "remote" so the suite exercises git itself.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   beforeAll,
   describe,
@@ -21,7 +23,6 @@ import { join, resolve } from 'node:path'
 import { gitUrlCacheKeyWith, parseGitUrl, type StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
 import {
   deleteCachedRepo,
   listCachedRepos,
@@ -159,6 +160,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
       createHash('sha1').update(value).digest('hex'),
     ).hash
     await runGit(a.cached.localPath, ['remote', 'set-url', 'origin', unreachableUrl])
+    const { cachedRepos } = tablesOf(db)
     await db
       .update(cachedRepos)
       .set({ urlRedacted: unreachableUrl, urlHash: hash })
@@ -176,8 +178,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
         } as StartTask,
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,
         },
       )
@@ -185,14 +186,14 @@ describe('gitRepoCache (RFC-024 T3)', () => {
       err = error
     }
     expect(err).toMatchObject({ code: 'repo-fetch-failed' })
-    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, a.cached.id)).get()
+    const row = firstRow(db.select().from(cachedRepos).where(eq(cachedRepos.id, a.cached.id)))
     expect(row?.lastFetchedAt).toBe(Date.parse(a.cached.lastFetchedAt))
   })
 })
 
 describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
   describe('repository fixture lifecycle', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let store: RepositoryWorkspaceStore
     let appHome: string
     let remoteDir: string
@@ -228,7 +229,8 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
       // The cache dir IS a git repo.
       const inside = await runGit(r.cached.localPath, ['rev-parse', '--git-dir'])
       expect(inside.exitCode).toBe(0)
-      const rows = await db.select().from(cachedRepos).all()
+      const { cachedRepos } = tablesOf(db)
+      const rows = await db.select().from(cachedRepos)
       expect(rows.length).toBe(1)
       expect(rows[0]?.localPath).toBe(r.cached.localPath)
     })
@@ -265,7 +267,8 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
       // observed a warm cache after the first finished.
       expect([a.cold, b.cold].filter(Boolean).length).toBe(1)
       expect(a.cached.id).toBe(b.cached.id)
-      expect((await db.select().from(cachedRepos).all()).length).toBe(1)
+      const { cachedRepos } = tablesOf(db)
+      expect((await db.select().from(cachedRepos)).length).toBe(1)
     })
 
     test('invalid URL throws repo-url-invalid', async () => {
@@ -291,7 +294,8 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
       }
       // @ts-expect-error inspect at runtime
       expect(err?.code).toBe('repo-clone-failed')
-      expect((await db.select().from(cachedRepos).all()).length).toBe(0)
+      const { cachedRepos } = tablesOf(db)
+      expect((await db.select().from(cachedRepos)).length).toBe(0)
     })
 
     test('cache row pointing at missing dir self-heals on next resolve', async () => {
@@ -300,7 +304,8 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
       const b = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
       expect(b.cold).toBe(true)
       expect(existsSync(b.cached.localPath)).toBe(true)
-      expect((await db.select().from(cachedRepos).all()).length).toBe(1)
+      const { cachedRepos } = tablesOf(db)
+      expect((await db.select().from(cachedRepos)).length).toBe(1)
     })
 
     test('refreshCachedRepo runs fetch and updates timestamp', async () => {
@@ -324,7 +329,10 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
         err = error
       }
       expect(err).toMatchObject({ code: 'repo-refresh-failed' })
-      const row = await db.select().from(cachedRepos).where(eq(cachedRepos.id, a.cached.id)).get()
+      const { cachedRepos } = tablesOf(db)
+      const row = await firstRow(
+        db.select().from(cachedRepos).where(eq(cachedRepos.id, a.cached.id)),
+      )
       expect(row?.lastFetchedAt).toBe(Date.parse(a.cached.lastFetchedAt))
     })
 
@@ -347,7 +355,8 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
       const r = await deleteCachedRepo({ store, appHome }, a.cached.id)
       expect(r.deletedLocalPath).toBe(a.cached.localPath)
       expect(existsSync(a.cached.localPath)).toBe(false)
-      expect((await db.select().from(cachedRepos).all()).length).toBe(0)
+      const { cachedRepos } = tablesOf(db)
+      expect((await db.select().from(cachedRepos)).length).toBe(0)
     })
   })
 })
@@ -383,7 +392,7 @@ async function advanceFixtureRemote(bareUrl: string): Promise<string> {
 
 describeEachProvider('gitRepoCache RFC-068 fast-forward', (harness) => {
   describe('repository fixture lifecycle', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let store: RepositoryWorkspaceStore
     let appHome: string
     let remoteDir: string

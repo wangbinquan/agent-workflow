@@ -1,5 +1,5 @@
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookEndpointServiceDeps } from '@/services/webhookEndpoints'
 import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
 import type { WebhookConfigurationQuery } from '../application/ports/webhookConfiguration'
@@ -16,7 +16,7 @@ export function composeWebhookEndpointAdministration(
  * 而 `createWebhookEndpointAdministration` 本来就收中立客户端。收成一份（plan §5ds）。
  */
 export function composeWebhookEndpointServiceDependencies(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly configuration: WebhookConfigurationQuery
   readonly secretBox: SecretBox
 }): WebhookEndpointServiceDeps {

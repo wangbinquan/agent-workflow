@@ -2,9 +2,9 @@
 // their review documents are removed by the task cascade; once no gate
 // operation of a task remains, every review publication of that task is
 // released. Archived tasks already linked their own pins of the same objects.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { collaborationGateOperations } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectOwnerSweep,
   HostedObjectPublications,
@@ -14,7 +14,7 @@ import { HOSTED_REVIEW_OWNER } from './reviewArtifacts'
 export const HOSTED_REVIEW_OBJECT_GRACE_MS = 60 * 60_000
 
 export function createHostedReviewObjectSweep(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly publications: HostedObjectPublications
   readonly graceMs?: number
   readonly pageSize?: number
@@ -32,6 +32,7 @@ export function createHostedReviewObjectSweep(input: {
           limit: pageSize,
         })
         if (scopes.length === 0) break
+        const { collaborationGateOperations } = tablesOf(input.db)
         const live = new Set(
           (
             await input.db

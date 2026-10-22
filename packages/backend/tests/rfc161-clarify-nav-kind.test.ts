@@ -12,6 +12,8 @@
 //   - a clarify run with no round → null (would 404)
 //   - the safety property: clarifyNavKind != null ⟹ getClarifyRoundDetail resolves.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -20,82 +22,71 @@ import {
   type ClarifyRoundStatus,
   type NodeRunStatus,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getClarifyRoundDetail } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 type TaskStatus = 'running' | 'awaiting_human' | 'canceled' | 'failed' | 'interrupted' | 'done'
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  status: TaskStatus = 'running',
-): Promise<string> {
+async function seedTask(db: PersistenceDb, status: TaskStatus = 'running'): Promise<string> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ $schema_version: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ $schema_version: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status,
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status,
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return taskId
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { id?: string; nodeId: string; status: NodeRunStatus; startedAt?: number },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId: opts.nodeId,
-      iteration: 0,
-      retryIndex: 0,
-      status: opts.status,
-      startedAt: opts.startedAt ?? Date.now(),
-      finishedAt: null,
-    })
-    .run()
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
+    id,
+    taskId,
+    nodeId: opts.nodeId,
+    iteration: 0,
+    retryIndex: 0,
+    status: opts.status,
+    startedAt: opts.startedAt ?? Date.now(),
+    finishedAt: null,
+  })
   return id
 }
 
 const Q = [{ id: 'q1', title: 'Q?', kind: 'single', recommended: false, options: [] }]
 
 async function seedRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     id?: string
@@ -107,33 +98,31 @@ async function seedRound(
   },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  await db
-    .insert(clarifyRounds)
-    .values({
-      id,
-      taskId,
-      kind: opts.kind ?? 'self',
-      askingNodeId: 'designer',
-      askingNodeRunId: opts.askingNodeRunId,
-      askingShardKey: null,
-      intermediaryNodeId: 'clr',
-      intermediaryNodeRunId: opts.intermediaryNodeRunId,
-      targetConsumerNodeId: null,
-      loopIter: 0,
-      iteration: 0,
-      questionsJson: JSON.stringify(Q),
-      answersJson: opts.status === 'awaiting_human' ? null : JSON.stringify([]),
-      directive: null,
-      status: opts.status,
-      createdAt: opts.createdAt,
-    })
-    .run()
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
+    id,
+    taskId,
+    kind: opts.kind ?? 'self',
+    askingNodeId: 'designer',
+    askingNodeRunId: opts.askingNodeRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'clr',
+    intermediaryNodeRunId: opts.intermediaryNodeRunId,
+    targetConsumerNodeId: null,
+    loopIter: 0,
+    iteration: 0,
+    questionsJson: JSON.stringify(Q),
+    answersJson: opts.status === 'awaiting_human' ? null : JSON.stringify([]),
+    directive: null,
+    status: opts.status,
+    createdAt: opts.createdAt,
+  })
   return id
 }
 
 /** stamp a single clarify node_run + its round, return the run's clarifyNavKind. */
 async function navKindOf(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   runOpts: { nodeId?: string; runStatus: NodeRunStatus },
   roundOpts?: { status: ClarifyRoundStatus; kind?: 'self' | 'cross' } | 'no-round',
@@ -152,12 +141,12 @@ async function navKindOf(
       createdAt: Date.now(),
     })
   }
-  const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
+  const { runs } = await taskNodeRunsProjection({ db }, taskId)
   return runs.find((r) => r.id === runId)?.clarifyNavKind
 }
 
 describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db
@@ -200,7 +189,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
   test('non-clarify run (agent, no round) → null', async () => {
     const taskId = await seedTask(db, 'running')
     await seedRun(db, taskId, { nodeId: 'agent', status: 'done' })
-    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
+    const { runs } = await taskNodeRunsProjection({ db }, taskId)
     expect(runs[0]?.clarifyNavKind).toBe(null)
   })
 
@@ -221,7 +210,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
       status: 'awaiting_human',
       createdAt: t0 + 5000,
     })
-    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
+    const { runs } = await taskNodeRunsProjection({ db }, taskId)
     expect(runs.find((r) => r.id === runId)?.clarifyNavKind).toBe('awaiting')
   })
 
@@ -256,7 +245,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
 // --- group 4: same-source pairing + the no-404 safety property -------------
 
 describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db
@@ -273,7 +262,7 @@ describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)'
       status: 'answered',
       createdAt: Date.now(),
     })
-    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
+    const { runs } = await taskNodeRunsProjection({ db }, taskId)
     const stamp = runs.find((r) => r.id === runId)?.clarifyNavKind
     expect(stamp).not.toBe(null)
     // The safety property: a non-null stamp implies the bare /clarify/{run} route resolves.

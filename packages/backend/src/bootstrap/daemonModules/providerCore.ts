@@ -5,7 +5,7 @@ import { type AuthRuntime } from '@/auth/application/authRuntime'
 import { type TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import { type SecretBox } from '@/auth/secretBox'
-import { type ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createIdentityAccessRuntime,
   type IdentityAccessRuntime,
@@ -142,7 +142,7 @@ export interface DaemonProviderCoreAdapters<P extends DatabaseProvider = Databas
 /** Passive, session-scoped composition shared by both database providers. */
 export function composeDaemonProviderCore<P extends DatabaseProvider>(
   input: DaemonProviderCoreCommonInput & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly adapters: DaemonProviderCoreAdapters<P>
   },
 ): SelectedDaemonProviderCore<P> {

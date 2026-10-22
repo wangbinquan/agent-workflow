@@ -11,6 +11,8 @@
 // ⑥真实 gitBaselineReader 链路：二进制 already-present 对拍、symlink/目录/
 // mode 漂移 blocked；⑦preview 只读——不 claim、不落 plan。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
@@ -26,10 +28,9 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { cachedRepos, developmentRepositoryUploadPlans } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -51,7 +52,7 @@ import { defaultAutomationPolicyContent } from '../src/modules/development-autom
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   /**
    * 应用**真正在用**的 app home（`scope.open()` 现建并写进 `AGENT_WORKFLOW_HOME`）。
@@ -336,7 +337,7 @@ async function mkRealRepo(binary: Uint8Array): Promise<string> {
   return repoPath
 }
 
-function previewDeps(db: ProviderNeutralDatabase): {
+function previewDeps(db: PersistenceDb): {
   deps: LaunchDeps
   sessions: UploadSessionPersistence
 } {
@@ -376,7 +377,8 @@ describeEachProviderHttpApplication(
       const appHome = (await scope.open()).appHome
       const binary = new Uint8Array([0x00, 0x0d, 0x0a, 0x80, 0xff])
       const repoPath = await mkRealRepo(binary)
-      await db.insert(cachedRepos).values({
+      const { cachedRepos, developmentRepositoryUploadPlans } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id: 'repo-real',
         urlHash: 'deadbeef',
         localPath: repoPath,

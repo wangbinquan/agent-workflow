@@ -11,6 +11,8 @@
 // 反向同样上锁：真正的数据不一致（例如已 done 又要写 failed）**仍然**大声抛出，
 // 不许被这套收敛掩盖 —— 见文末的源码层断言。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readFileSync } from 'node:fs'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,7 +23,6 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { transitionNodeRunStatus } from '../src/services/lifecycle'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
@@ -57,7 +58,8 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -111,14 +113,15 @@ function fanoutDef(): WorkflowDefinition {
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -159,6 +162,7 @@ async function supersedeWrapperWhenRunning(
   event: { kind: 'mark-interrupted' } | { kind: 'mark-canceled'; reason?: string },
 ): Promise<void> {
   for (let i = 0; i < 200; i++) {
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ id: nodeRuns.id, status: nodeRuns.status })
       .from(nodeRuns)
@@ -202,6 +206,7 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
     )
     await superseder
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     // 头号断言：这正是事故里那条任务级失败摘要，必须消失。
     expect(t?.errorSummary).not.toBe('scheduler error')
@@ -243,6 +248,7 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
     )
     await superseder
 
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')
     expect(t?.errorSummary).not.toBe('scheduler error')

@@ -5,24 +5,18 @@
 // executionRef 反查、wake hint 去重、mission epoch 对拍。全部只读、无业务分支——
 // 留在 infrastructure，经装配点注入。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq, inArray, isNull, ne } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentActionRuns,
-  developmentAgentAttempts,
-  developmentEffects,
-  developmentFactSnapshots,
-  developmentMissions,
-  developmentWakeHints,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
 
-export function createFactSnapshotReader(db: ProviderNeutralDatabase): FactSnapshotReader {
+export function createFactSnapshotReader(db: PersistenceDb): FactSnapshotReader {
   return {
     async getCells(snapshotId) {
+      const { developmentFactSnapshots } = tablesOf(db)
       const row = (
         await db
           .select({ cellsJson: developmentFactSnapshots.cellsJson })
@@ -37,7 +31,8 @@ export function createFactSnapshotReader(db: ProviderNeutralDatabase): FactSnaps
 }
 
 /** transition_fence ≠ none 的 mission id（启动恢复扫描）。 */
-export async function listFencedMissionIds(db: ProviderNeutralDatabase): Promise<string[]> {
+export async function listFencedMissionIds(db: PersistenceDb): Promise<string[]> {
+  const { developmentMissions } = tablesOf(db)
   return (
     await db
       .select({ id: developmentMissions.id })
@@ -48,8 +43,9 @@ export async function listFencedMissionIds(db: ProviderNeutralDatabase): Promise
 
 /** 仍有 prepared effect 的 mission id 及其行（epoch 过期失效扫描）。 */
 export async function listPreparedEffectRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ readonly id: string; readonly missionId: string; readonly epoch: number }[]> {
+  const { developmentEffects } = tablesOf(db)
   return await db
     .select({
       id: developmentEffects.id,
@@ -62,9 +58,10 @@ export async function listPreparedEffectRows(
 
 /** PR-4 —— agent execution 终态回调的反查：executionRef → missionId。 */
 export async function missionIdOfExecutionRef(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   executionRef: string,
 ): Promise<string | null> {
+  const { developmentActionRuns, developmentAgentAttempts } = tablesOf(db)
   const row = (
     await db
       .select({ missionId: developmentActionRuns.missionId })
@@ -80,9 +77,8 @@ export async function missionIdOfExecutionRef(
 }
 
 /** wake sweep 读侧：有未消费 wake hint 的 mission id（去重）。 */
-export async function listUnconsumedWakeHintMissionIds(
-  db: ProviderNeutralDatabase,
-): Promise<string[]> {
+export async function listUnconsumedWakeHintMissionIds(db: PersistenceDb): Promise<string[]> {
+  const { developmentWakeHints } = tablesOf(db)
   const rows = await db
     .select({ missionId: developmentWakeHints.missionId })
     .from(developmentWakeHints)
@@ -92,10 +88,11 @@ export async function listUnconsumedWakeHintMissionIds(
 
 /** 给定 mission 集合的当前 epoch（recovery 对拍 effect.epoch 用）。 */
 export async function missionEpochsOf(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   missionIds: readonly string[],
 ): Promise<Map<string, number>> {
   if (missionIds.length === 0) return new Map()
+  const { developmentMissions } = tablesOf(db)
   const rows = await db
     .select({ id: developmentMissions.id, epoch: developmentMissions.epoch })
     .from(developmentMissions)

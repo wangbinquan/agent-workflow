@@ -5,6 +5,8 @@
 // 绑定出现在 CallExpression 的 callee 位置」。这里补的这一批此前的形态是零引用或源码文本锁——
 // 装配点那行字在、工厂一次没跑。每条断言都落在真库上，跨两个引擎各跑一遍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,8 +17,7 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskRepos, tasks, users, workflows, workgroupTaskState } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { composeDevelopmentConfigOperationsFor } from '@/modules/development-automation/composition/configOperations'
@@ -32,11 +33,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
 
-function asSqlite(db: ProviderNeutralDatabase): DbClient {
+function asSqlite(db: PersistenceDb): DbClient {
   return db as unknown as DbClient
 }
 
-function asPostgresql(db: ProviderNeutralDatabase): PostgresqlDatabaseClient {
+function asPostgresql(db: PersistenceDb): PostgresqlDatabaseClient {
   return db as unknown as PostgresqlDatabaseClient
 }
 
@@ -44,12 +45,10 @@ function tmpRoot(): string {
   return mkdtempSync(join(tmpdir(), 'aw-rfc359-w7-mod-'))
 }
 
-async function seedActor(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'admin',
-): Promise<Actor> {
+async function seedActor(db: PersistenceDb, role: 'admin' | 'user' = 'admin'): Promise<Actor> {
   const id = `u_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -72,17 +71,18 @@ async function seedActor(
 
 /** 一条 running 任务 + 它的单仓工作区；code-capability 的工作区读与工作区维护都要它。 */
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  overrides: Partial<typeof tasks.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `wf-${workflowId.slice(-6).toLowerCase()}`,
     definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -104,7 +104,8 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
   test('legacy 代码读端口：两个别名各构造一次，任务 / 节点运行 / 能力参数都读真库', async () => {
     const taskId = `t_${ulid()}`
     await seedTask(harness.db, taskId, { spaceKind: 'local', baseCommit: 'abc123' })
-    await harness.db.insert(taskRepos).values({
+    const { taskRepos, nodeRuns } = tablesOf(harness.db)
+    await insertOne(harness.db, taskRepos, {
       taskId,
       repoIndex: 0,
       repoPath: '/srv/repos/x',
@@ -115,7 +116,7 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
       baseCommit: 'abc123',
     })
     const nodeRunId = `nr_${ulid()}`
-    await harness.db.insert(nodeRuns).values({
+    await insertOne(harness.db, nodeRuns, {
       id: nodeRunId,
       taskId,
       nodeId: 'n1',
@@ -322,6 +323,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
         await command.recover({ activeTaskIds: [], webhookClaims: 'all', now: T0 + 2_000 }),
       ).toMatchObject({ completed: 1, failed: 0 })
       expect(existsSync(workspace)).toBe(false)
+      const { tasks } = tablesOf(harness.db)
       expect(
         (
           await harness.db
@@ -352,10 +354,9 @@ describeEachProvider(
       expect(await persistence.loadAgent(`a_${ulid()}`)).toBeNull()
       expect(await persistence.countNodeRuns(taskId, 'n1')).toBe(0)
       expect(await persistence.hasAwaitingConfirmationRun(taskId, 'dw-plan')).toBe(false)
+      const { workgroupTaskState } = tablesOf(harness.db)
       // 写回状态后 loadTask 必须看得见——证明这不是只读的空壳装配。
-      await harness.db
-        .insert(workgroupTaskState)
-        .values({ taskId, dwStateJson: null, updatedAt: T0 })
+      await insertOne(harness.db, workgroupTaskState, { taskId, dwStateJson: null, updatedAt: T0 })
       await persistence.saveState(taskId, initialDwState(), T0 + 1)
       expect(JSON.parse((await persistence.loadTask(taskId))?.dwStateJson ?? 'null')).toMatchObject(
         {
@@ -375,7 +376,8 @@ describeEachProvider(
       const taskId = `t_${ulid()}`
       await seedTask(harness.db, taskId)
       const nodeRunId = `nr_${ulid()}`
-      await harness.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(harness.db)
+      await insertOne(harness.db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -388,6 +390,7 @@ describeEachProvider(
           transaction as unknown as Parameters<typeof createNodeRunLifecycleParticipantInTx>[0],
         )
         expect(typeof participant).toBe('object')
+        const { nodeRuns } = tablesOf(transaction)
         // 参与者绑的是这一个事务句柄：在事务里读回刚写的节点运行行。
         const rows = await transaction
           .select({ id: nodeRuns.id })

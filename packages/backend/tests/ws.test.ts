@@ -4,13 +4,14 @@
 // real WebSocket client. The broadcaster fan-out is exercised by invoking
 // services directly (createWorkflow / updateWorkflow / startTask).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Server } from 'bun'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { describeEachProviderWebSocketApplication } from './helpers/providerWebSocketScope'
@@ -18,7 +19,7 @@ import { describeEachProviderWebSocketApplication } from './helpers/providerWebS
 const TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   server: AnyServer
   url: string
 }
@@ -186,14 +187,15 @@ describeEachProviderWebSocketApplication(
     test('/ws/tasks/{id}: task.status broadcasts from the committed-event projector', async () => {
       // Seed a fake task row (avoids spawning the scheduler in this test).
       const taskId = ulid()
-      await h.db.insert(workflows).values({
+      const { workflows, tasks } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: 'wf-x',
         name: 'wf',
         definition: '{}',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id: taskId,
@@ -254,14 +256,15 @@ describeEachProviderWebSocketApplication(
     test('/ws/tasks/{id}?since=N replays node_run_events with id > N', async () => {
       // Seed a task + node_run + 3 events.
       const taskId = ulid()
-      await h.db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: 'wf-y',
         name: 'wf',
         definition: '{}',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id: taskId,
@@ -276,11 +279,15 @@ describeEachProviderWebSocketApplication(
         startedAt: Date.now(),
       })
       const nrId = ulid()
-      await h.db
-        .insert(nodeRuns)
-        .values({ id: nrId, taskId, nodeId: 'n1', status: 'done', startedAt: Date.now() })
+      await insertOne(h.db, nodeRuns, {
+        id: nrId,
+        taskId,
+        nodeId: 'n1',
+        status: 'done',
+        startedAt: Date.now(),
+      })
       for (let i = 0; i < 3; i++) {
-        await h.db.insert(nodeRunEvents).values({
+        await insertOne(h.db, nodeRunEvents, {
           nodeRunId: nrId,
           ts: Date.now(),
           kind: 'text',

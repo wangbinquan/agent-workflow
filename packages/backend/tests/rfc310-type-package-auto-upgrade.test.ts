@@ -5,27 +5,16 @@
  * "Upgrade to current version" button, so these tests intentionally start from
  * a real v1 tool -> job -> employee closure and then restart on v2.
  */
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  employeeCases,
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  employeeInvocations,
-  employeeJobTemplates,
-  employeeOsOutbox,
-  employeeReactionRounds,
-  employeeToolRegistrations,
-  employeeToolRegistrationRevisions,
-  resourceGrants,
-  users,
-} from '@/db/schema'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ToolConnectionCatalogPort } from '@/modules/digital-employee/composition/required-ports'
 import { contentDigest } from '@/modules/digital-employee/domain/model'
@@ -153,10 +142,11 @@ const adapterCatalog: ToolConnectionCatalogPort = {
 }
 
 async function writeLegacyToolConnection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ref: { id: string; revision: number },
   connectionRef: { id: string; revision: number },
 ): Promise<void> {
+  const { employeeToolRegistrationRevisions } = tablesOf(db)
   const row = (
     await db
       .select()
@@ -275,7 +265,7 @@ function versionedOrderedDispatchDesignPackage(revision: number): EmployeeTypePa
 }
 
 function createFixtureModule(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   typePackage: EmployeeTypePackageRegistration
   platformTools?: DigitalEmployeePlatformToolCatalogParticipant
@@ -515,7 +505,7 @@ function orderedDispatchPlatformToolCatalog(): DigitalEmployeePlatformToolCatalo
   }
 }
 
-async function seedPublishedEmployee(input: { db: ProviderNeutralDatabase; appHome: string }) {
+async function seedPublishedEmployee(input: { db: PersistenceDb; appHome: string }) {
   const module = createFixtureModule({
     ...input,
     typePackage: versionedDesignPackage(1),
@@ -649,20 +639,20 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         await writeLegacyToolConnection(db, toolRefs[index]!, connectionRef)
       }
       const sourceRows = await Promise.all(
-        toolRefs.map(
-          async (ref) =>
-            (
-              await db
-                .select()
-                .from(employeeToolRegistrationRevisions)
-                .where(
-                  and(
-                    eq(employeeToolRegistrationRevisions.toolId, ref.id),
-                    eq(employeeToolRegistrationRevisions.revision, ref.revision),
-                  ),
-                )
-            )[0]!,
-        ),
+        toolRefs.map(async (ref) => {
+          const { employeeToolRegistrationRevisions } = tablesOf(db)
+          return (
+            await db
+              .select()
+              .from(employeeToolRegistrationRevisions)
+              .where(
+                and(
+                  eq(employeeToolRegistrationRevisions.toolId, ref.id),
+                  eq(employeeToolRegistrationRevisions.revision, ref.revision),
+                ),
+              )
+          )[0]!
+        }),
       )
 
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
@@ -683,6 +673,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       // 顺序与原来逐字相同（`Promise.all` 保序），断言仍逐行落在各自那一行上。
       const sourceConnections = await Promise.all(
         sourceRows.map(async (source) => {
+          const { employeeToolRegistrationRevisions } = tablesOf(db)
           const after = (
             await db
               .select()
@@ -703,6 +694,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       )
       const targetToolConnections = await Promise.all(
         current.definition.exactToolBindings.map(async (binding) => {
+          const { employeeToolRegistrationRevisions } = tablesOf(db)
           const row = (
             await db
               .select()
@@ -1130,6 +1122,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           ],
         },
       })
+      const { employeeDefinitionRevisions, employeeDefinitions } = tablesOf(db)
       const parentRevisions = (await db.select().from(employeeDefinitionRevisions))
         .filter((revision) => revision.employeeId === parent.id)
         .map((revision) => ({
@@ -1176,7 +1169,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
             ),
           )
       )[0]!
-      await db.insert(employeeDefinitionRevisions).values({
+      await insertOne(db, employeeDefinitionRevisions, {
         ...targetV2Revision,
         revision: 3,
         createdAt: targetV2Revision.createdAt + 1,
@@ -1496,6 +1489,13 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         artifactRefs: [],
         workSubject: { typeId: 'work-request', subjectRef: 'UPGRADE-RECOVERY-1' },
       })
+      const {
+        employeeCases,
+        employeeReactionRounds,
+        employeeInvocations,
+        employeeOsOutbox,
+        employeeDefinitions,
+      } = tablesOf(db)
       const launchedRow = (
         await db.select().from(employeeCases).where(eq(employeeCases.id, launched.caseRef.id))
       )[0]!
@@ -1522,7 +1522,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         targetEmployeeRef: { id: string; revision: number }
       }>
       const legacyInvocationId = `invocation:${failedRoundId}:${frozenBinding!.memberRef}`
-      await db.insert(employeeInvocations).values({
+      await insertOne(db, employeeInvocations, {
         id: legacyInvocationId,
         idempotencyKey: `employee-invocation:${failedRoundId}:${frozenBinding!.memberRef}`,
         parentCaseId: launched.caseRef.id,
@@ -1695,6 +1695,12 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
         visibility: 'private',
         workScope: { kind: 'global' },
       })
+      const {
+        employeeDefinitions,
+        employeeToolRegistrations,
+        employeeJobTemplates,
+        employeeDefinitionRevisions,
+      } = tablesOf(db)
       expect(
         (await db.select().from(employeeDefinitions)).find((row) => row.id === original.id),
       ).toMatchObject({
@@ -1756,6 +1762,13 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
       try {
         const db = harness.db
         await seedPublishedEmployee({ db, appHome })
+        const {
+          employeeToolRegistrations,
+          employeeJobTemplates,
+          employeeDefinitions,
+          users,
+          resourceGrants,
+        } = tablesOf(db)
         // 把 source 行（工具 + 模版 + 员工定义）改成本用例的归属 / 可见性，并各挂一条 grant——
         // successor 必须复制 owner + visibility（D18'），**不**复制 grants（用户裁定 D22）。
         const sourceTool = (await db.select().from(employeeToolRegistrations))[0]!
@@ -1776,7 +1789,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           .set({ ownerUserId: source.ownerUserId })
           .where(eq(employeeDefinitions.id, sourceEmployee.id))
 
-        await db.insert(users).values({
+        await insertOne(db, users, {
           id: 'grantee-1',
           username: 'grantee-1',
           displayName: 'grantee-1',
@@ -1964,6 +1977,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           }),
         ]),
       )
+      const { employeeDefinitions, employeeDefinitionRevisions } = tablesOf(db)
       expect(await db.select().from(employeeDefinitions)).toEqual([
         expect.objectContaining({
           id: original.id,
@@ -2015,6 +2029,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           ],
         },
       })
+      const { employeeToolRegistrations } = tablesOf(db)
       const migratedTool = (
         await db
           .select()
@@ -2064,6 +2079,8 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           resourceId: original.id,
         }),
       ])
+      const { employeeJobTemplates, employeeToolRegistrations, employeeDefinitionRevisions } =
+        tablesOf(db)
       // The independently valid published job closure still migrates; only the
       // employee definition is pinned by its incompatible scope.
       expect(await db.select().from(employeeJobTemplates)).toHaveLength(2)
@@ -2132,6 +2149,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           typeRef: { typeId: 'design', revision: 2 },
         }),
       ])
+      const { employeeToolRegistrations } = tablesOf(db)
       expect(await db.select().from(employeeToolRegistrations)).toEqual([])
       expect(
         (await v2.queries.listJobTemplates({ typeId: 'design', revision: 2 }))[0]?.draft

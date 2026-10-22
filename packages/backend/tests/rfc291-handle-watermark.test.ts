@@ -9,22 +9,23 @@
 // 这里用 `inventoryCap` 测试缝确定性复现该路径，并锁住修法：会话行持久化
 // per-type 高水位，allocator 取「清单推导值」与它的 max。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { createHandleAllocator, parseHandleWatermark } from '@/modules/intent/application/manifest'
 
 const OWNER = 'user_owner_rfc291wm_000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 
 const actor: Actor = {
@@ -36,7 +37,8 @@ const actor: Actor = {
 async function seedAgent(name: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: name,
@@ -45,7 +47,7 @@ async function seedAgent(name: string): Promise<string> {
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as typeof agents.$inferInsert)
+  } as PersistenceTables['agents']['$inferInsert'])
   return id
 }
 
@@ -53,7 +55,8 @@ describeEachProvider('RFC-291 — handle watermark', (harness) => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-wm-'))
     db = harness.db
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: OWNER,
       username: 'owner',
       displayName: 'Owner',
@@ -61,7 +64,7 @@ describeEachProvider('RFC-291 — handle watermark', (harness) => {
       status: 'active',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    } as typeof users.$inferInsert)
+    } as PersistenceTables['users']['$inferInsert'])
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })
@@ -88,6 +91,7 @@ describeEachProvider('RFC-291 — handle watermark', (harness) => {
       expect(zzzHandle).toBe('res#agent#3')
       expect(first.handleWatermark.agent).toBe(3)
 
+      const { agents } = tablesOf(db)
       // ② zzz 被删除 —— 下一轮重建时它既不是 detail 也不在可见 inventory 里，
       //    条目连同它占用的最大 ordinal 一起从清单消失。
       await db.delete(agents).where(eq(agents.id, zzz))

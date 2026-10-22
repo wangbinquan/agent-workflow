@@ -1,11 +1,12 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { Agent, Mcp, Plugin, Skill } from '@agent-workflow/shared'
 import type {
   AgentResourceInventory,
   AgentResourceInventoryReadPort,
   AgentResourceInventorySkill,
 } from '../application/agents/ports'
-import { agents, mcps, plugins, skills } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { agentFromPersistenceRow } from './agentPersistence'
 import { mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginFromPersistenceRow } from './pluginPersistence'
@@ -66,17 +67,18 @@ export function createAgentResourceInventoryReadPort(input: {
 
 /** RFC-359 W4-B2：绑到任一数据库客户端上的库存读取（此前 sqlite / postgresql 两份薄壳只差客户端类型）。 */
 export function createDatabaseAgentResourceInventoryReadPort(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly skillAvailability: AgentResourceSkillAvailability
 }): AgentResourceInventoryReadPort {
   return createAgentResourceInventoryReadPort({
     skillAvailability: input.skillAvailability,
     async loadRows() {
+      const { agents, skills, mcps, plugins } = tablesOf(input.db)
       const [agentRows, skillRows, mcpRows, pluginRows] = await Promise.all([
-        input.db.select().from(agents).all(),
-        input.db.select().from(skills).all(),
-        input.db.select().from(mcps).all(),
-        input.db.select().from(plugins).all(),
+        queryRows(input.db.select().from(agents)),
+        queryRows(input.db.select().from(skills)),
+        queryRows(input.db.select().from(mcps)),
+        queryRows(input.db.select().from(plugins)),
       ])
       return {
         agents: agentRows.map(agentFromPersistenceRow),

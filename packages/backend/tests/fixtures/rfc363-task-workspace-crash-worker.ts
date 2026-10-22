@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { applyUploadsToWorktree } from '@/services/upload'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
@@ -11,8 +12,7 @@ import {
   type DatabaseConfig,
 } from '@agent-workflow/shared'
 import { openDb } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
@@ -46,7 +46,7 @@ interface Input {
 const file = process.argv[2]
 if (file === undefined) throw new Error('missing worker input')
 const input = JSON.parse(readFileSync(file, 'utf8')) as Input
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let close: () => Promise<void>
 if (input.provider.kind === 'sqlite') {
   const opened = openDb({
@@ -99,6 +99,7 @@ try {
     nodes: [],
     edges: [],
   })
+  const { workflows, tasks } = tablesOf(db)
   await db
     .insert(workflows)
     .values({

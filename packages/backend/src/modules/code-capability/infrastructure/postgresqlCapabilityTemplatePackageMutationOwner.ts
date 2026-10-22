@@ -1,11 +1,11 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import { capabilityTemplates } from '@/db/schema'
 import { prepareCapabilityTemplatePackageWrite } from '../application/capabilityTemplateOperations'
 import type { CapabilityTemplateRecord } from '../application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from './capabilityTemplatePersistence'
 import { createPostgresqlCapabilityTemplatePackageCommit } from './capabilityTemplatePackageCommit'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { PostgresqlResourceCatalogTransaction } from '@/modules/resource-catalog/infrastructure/postgresql/repositorySupport'
 import { ValidationError } from '@/util/errors'
@@ -31,11 +31,11 @@ async function ownerNameExists(
     readonly excludeId: string | null
   },
 ): Promise<boolean> {
+  const { capabilityTemplates } = tablesOf(transaction)
   const rows = await transaction
     .select({ id: capabilityTemplates.id, ownerUserId: capabilityTemplates.ownerUserId })
     .from(capabilityTemplates)
     .where(eq(capabilityTemplates.name, input.name))
-    .all()
   return rows.some((row) => row.ownerUserId === input.ownerUserId && row.id !== input.excludeId)
 }
 
@@ -46,7 +46,7 @@ async function ownerNameExists(
  * against the aggregate's reserved transaction.
  */
 export function createPostgresqlCapabilityTemplatePackageMutationOwner(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly now?: () => number
 }): PostgresqlCapabilityTemplatePackageMutationOwner {
   const persistence = createCapabilityTemplatePersistence(input.db)

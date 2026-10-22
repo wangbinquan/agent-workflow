@@ -1,14 +1,11 @@
 // RFC-359 W4-B2 —— MCP 运行时测试（playground）的会话 / 轮次 / 事件持久化：一份实现，两个 provider 共用。
 // 此前 sqlite / postgresql 两份约两千行只差同步 / 异步形态与客户端类型（对拍脚本归一后 0 处语义差异）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  mcpRuntimeTestCreateReceipts,
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestTurns,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import type {
@@ -27,8 +24,8 @@ import type {
 } from '../application/mcps/runtimeTestPersistence'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
-type SessionRow = typeof mcpRuntimeTestSessions.$inferSelect
-type TurnRow = typeof mcpRuntimeTestTurns.$inferSelect
+type SessionRow = PersistenceTables['mcpRuntimeTestSessions']['$inferSelect']
+type TurnRow = PersistenceTables['mcpRuntimeTestTurns']['$inferSelect']
 const UNUSABLE_NATIVE_SESSION_STATE: SessionRow['nativeSessionState'] = 'unusable'
 const QUARANTINED_CLEANUP_STATE: SessionRow['cleanupState'] = 'quarantined'
 const RUNNING_TURN_STATUS: TurnRow['status'] = 'running'
@@ -69,7 +66,7 @@ function canResumeNativeSession(
 const UNIQUE_VIOLATION_ATTEMPTS = 5
 
 async function runCatalogTransactionRetryingUniqueViolations<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   body: (tx: Parameters<Parameters<typeof runResourceCatalogTransaction>[1]>[0]) => Promise<T>,
 ): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
@@ -87,18 +84,18 @@ async function runCatalogTransactionRetryingUniqueViolations<T>(
 }
 
 export function createMcpRuntimeTestPersistence(
-  db: ProviderNeutralDatabase,
-  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
+  db: PersistenceDb,
+  beforeWrite?: (tx: PersistenceDb) => Promise<void>,
 ): McpRuntimeTestPersistence {
   const guarded =
-    <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>) =>
-    async (tx: ProviderNeutralDatabase): Promise<T> => {
+    <T>(body: (tx: PersistenceDb) => Promise<T>) =>
+    async (tx: PersistenceDb): Promise<T> => {
       await beforeWrite?.(tx)
       return body(tx)
     }
-  const write = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>) =>
+  const write = <T>(body: (tx: PersistenceDb) => Promise<T>) =>
     runResourceCatalogTransaction(db, guarded(body))
-  const retryUnique = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>) =>
+  const retryUnique = <T>(body: (tx: PersistenceDb) => Promise<T>) =>
     runCatalogTransactionRetryingUniqueViolations(db, guarded(body))
   const persistence: McpRuntimeTestPersistence = {
     identity: db,
@@ -109,59 +106,64 @@ export function createMcpRuntimeTestPersistence(
       // 抛出去的话这条事件就丢了，抓取被判失败、整个测试台会话被标成 unusable——而 SQLite 上两条
       // 都好端端落库。
       return retryUnique(async (tx) => {
-        const turn = await tx
-          .select({
-            captureState: mcpRuntimeTestTurns.captureState,
-            lastEventSeq: mcpRuntimeTestTurns.captureLastEventSeq,
-            eventBytes: mcpRuntimeTestTurns.captureEventBytes,
-            firstEventSeq: mcpRuntimeTestTurns.captureFirstEventSeq,
-          })
-          .from(mcpRuntimeTestTurns)
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.id, input.turnId),
-              eq(mcpRuntimeTestTurns.sessionId, input.sessionId),
+        const { mcpRuntimeTestTurns, mcpRuntimeTestEvents, mcpRuntimeTestSessions } = tablesOf(tx)
+        const turn = await first(
+          tx
+            .select({
+              captureState: mcpRuntimeTestTurns.captureState,
+              lastEventSeq: mcpRuntimeTestTurns.captureLastEventSeq,
+              eventBytes: mcpRuntimeTestTurns.captureEventBytes,
+              firstEventSeq: mcpRuntimeTestTurns.captureFirstEventSeq,
+            })
+            .from(mcpRuntimeTestTurns)
+            .where(
+              and(
+                eq(mcpRuntimeTestTurns.id, input.turnId),
+                eq(mcpRuntimeTestTurns.sessionId, input.sessionId),
+              ),
             ),
-          )
-          .get()
+        )
         if (turn === undefined) {
           throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
         }
         if (turn.captureState !== 'live') return 'stopped'
         if (input.externalEventKey !== null) {
-          const duplicate = await tx
-            .select({ id: mcpRuntimeTestEvents.id })
-            .from(mcpRuntimeTestEvents)
-            .where(
-              and(
-                eq(mcpRuntimeTestEvents.testSessionId, input.sessionId),
-                eq(mcpRuntimeTestEvents.externalEventKey, input.externalEventKey),
+          const duplicate = await first(
+            tx
+              .select({ id: mcpRuntimeTestEvents.id })
+              .from(mcpRuntimeTestEvents)
+              .where(
+                and(
+                  eq(mcpRuntimeTestEvents.testSessionId, input.sessionId),
+                  eq(mcpRuntimeTestEvents.externalEventKey, input.externalEventKey),
+                ),
               ),
-            )
-            .get()
+          )
           if (duplicate !== undefined) return 'duplicate'
         }
         const sessionEventCount =
           (
-            await tx
-              .select({ count: count() })
-              .from(mcpRuntimeTestEvents)
-              .where(eq(mcpRuntimeTestEvents.testSessionId, input.sessionId))
-              .get()
+            await first(
+              tx
+                .select({ count: count() })
+                .from(mcpRuntimeTestEvents)
+                .where(eq(mcpRuntimeTestEvents.testSessionId, input.sessionId)),
+            )
           )?.count ?? 0
         const sessionBytes =
           (
-            await tx
-              .select({
-                // `.mapWith(Number)`：PostgreSQL 的 sum(bigint) 是 numeric，驱动按 SQLSTATE 规范
-                // 原样交回**字符串**；没有 mapper 的话这里会拿到 '12345' 并在算术里变成拼接。
-                bytes: sql`coalesce(sum(${mcpRuntimeTestTurns.captureEventBytes}), 0)`.mapWith(
-                  Number,
-                ),
-              })
-              .from(mcpRuntimeTestTurns)
-              .where(eq(mcpRuntimeTestTurns.sessionId, input.sessionId))
-              .get()
+            await first(
+              tx
+                .select({
+                  // `.mapWith(Number)`：PostgreSQL 的 sum(bigint) 是 numeric，驱动按 SQLSTATE 规范
+                  // 原样交回**字符串**；没有 mapper 的话这里会拿到 '12345' 并在算术里变成拼接。
+                  bytes: sql`coalesce(sum(${mcpRuntimeTestTurns.captureEventBytes}), 0)`.mapWith(
+                    Number,
+                  ),
+                })
+                .from(mcpRuntimeTestTurns)
+                .where(eq(mcpRuntimeTestTurns.sessionId, input.sessionId)),
+            )
           )?.bytes ?? 0
         if (
           input.payloadBytes > input.maxSingleEventBytes ||
@@ -172,7 +174,6 @@ export function createMcpRuntimeTestPersistence(
             .update(mcpRuntimeTestTurns)
             .set({ captureState: 'truncated', captureIncompleteReason: null })
             .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-            .run()
           await tx
             .update(mcpRuntimeTestSessions)
             .set({
@@ -183,32 +184,29 @@ export function createMcpRuntimeTestPersistence(
               END`,
             })
             .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-            .run()
           return 'truncated'
         }
-        const last = await tx
-          .select({ seq: mcpRuntimeTestEvents.eventSeq })
-          .from(mcpRuntimeTestEvents)
-          .where(eq(mcpRuntimeTestEvents.testSessionId, input.sessionId))
-          .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
-          .limit(1)
-          .get()
+        const last = await first(
+          tx
+            .select({ seq: mcpRuntimeTestEvents.eventSeq })
+            .from(mcpRuntimeTestEvents)
+            .where(eq(mcpRuntimeTestEvents.testSessionId, input.sessionId))
+            .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
+            .limit(1),
+        )
         const eventSeq = (last?.seq ?? 0) + 1
-        await tx
-          .insert(mcpRuntimeTestEvents)
-          .values({
-            testSessionId: input.sessionId,
-            firstSeenTurnId: input.turnId,
-            eventSeq,
-            ts: input.ts,
-            kind: input.kind,
-            payload: input.payload,
-            sessionId: input.runtimeSessionId,
-            parentSessionId: input.parentSessionId,
-            source: input.source,
-            externalEventKey: input.externalEventKey,
-          })
-          .run()
+        await insertOne(tx, mcpRuntimeTestEvents, {
+          testSessionId: input.sessionId,
+          firstSeenTurnId: input.turnId,
+          eventSeq,
+          ts: input.ts,
+          kind: input.kind,
+          payload: input.payload,
+          sessionId: input.runtimeSessionId,
+          parentSessionId: input.parentSessionId,
+          source: input.source,
+          externalEventKey: input.externalEventKey,
+        })
         await tx
           .update(mcpRuntimeTestTurns)
           .set({
@@ -217,36 +215,40 @@ export function createMcpRuntimeTestPersistence(
             captureEventBytes: turn.eventBytes + input.payloadBytes,
           })
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .run()
         return 'appended'
       })
     },
 
     async loadRuntimeSessionId(sessionId) {
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       return (
-        await db
-          .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, sessionId))
-          .get()
+        await first(
+          db
+            .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, sessionId)),
+        )
       )?.runtimeSessionId
     },
 
     async setRootSession(input) {
       return write(async (tx) => {
-        const row = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns, mcpRuntimeTestEvents } = tablesOf(tx)
+        const row = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (row === undefined) {
           throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
         }
-        const turn = await tx
-          .select({ captureState: mcpRuntimeTestTurns.captureState })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const turn = await first(
+          tx
+            .select({ captureState: mcpRuntimeTestTurns.captureState })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (turn === undefined) {
           throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
         }
@@ -264,7 +266,6 @@ export function createMcpRuntimeTestPersistence(
             .update(mcpRuntimeTestSessions)
             .set({ nativeSessionState: 'unusable' })
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
           throw new ConflictError(
             'mcp-test-runtime-session-changed',
             'runtime returned a different native session id',
@@ -275,7 +276,6 @@ export function createMcpRuntimeTestPersistence(
             .update(mcpRuntimeTestSessions)
             .set({ runtimeSessionId: input.runtimeSessionId })
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
         }
         if (input.previousRuntimeSessionId !== undefined) {
           await tx
@@ -288,7 +288,6 @@ export function createMcpRuntimeTestPersistence(
                 isNull(mcpRuntimeTestEvents.parentSessionId),
               ),
             )
-            .run()
           await tx
             .update(mcpRuntimeTestEvents)
             .set({ parentSessionId: input.runtimeSessionId })
@@ -298,12 +297,10 @@ export function createMcpRuntimeTestPersistence(
                 eq(mcpRuntimeTestEvents.parentSessionId, input.previousRuntimeSessionId),
               ),
             )
-            .run()
           await tx
             .update(mcpRuntimeTestSessions)
             .set({ nativeSessionState: 'ready' })
             .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-            .run()
         }
         return { captureLive: turn.captureState === 'live' }
       })
@@ -311,22 +308,25 @@ export function createMcpRuntimeTestPersistence(
 
     async markRootSessionResetPending(input) {
       return write(async (tx) => {
-        const row = await tx
-          .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const row = await first(
+          tx
+            .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (row?.runtimeSessionId !== input.runtimeSessionId) {
           throw new ConflictError(
             'mcp-test-runtime-session-changed',
             'runtime conversation reset did not match the persisted native session',
           )
         }
-        const turn = await tx
-          .select({ captureState: mcpRuntimeTestTurns.captureState })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const turn = await first(
+          tx
+            .select({ captureState: mcpRuntimeTestTurns.captureState })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (turn === undefined) {
           throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
         }
@@ -334,25 +334,25 @@ export function createMcpRuntimeTestPersistence(
           .update(mcpRuntimeTestSessions)
           .set({ nativeSessionState: 'unusable' })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return { captureLive: turn.captureState === 'live' }
       })
     },
 
     async markCaptureTerminal(input) {
       await write(async (tx) => {
-        const turn = await tx
-          .select({ captureState: mcpRuntimeTestTurns.captureState })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestTurns, mcpRuntimeTestSessions } = tablesOf(tx)
+        const turn = await first(
+          tx
+            .select({ captureState: mcpRuntimeTestTurns.captureState })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (turn === undefined || turn.captureState === 'incomplete') return
         if (turn.captureState === 'truncated' && input.state !== 'incomplete') return
         await tx
           .update(mcpRuntimeTestTurns)
           .set({ captureState: input.state, captureIncompleteReason: input.reason })
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .run()
         if (input.state !== 'complete') {
           await tx
             .update(mcpRuntimeTestSessions)
@@ -367,26 +367,26 @@ export function createMcpRuntimeTestPersistence(
               END`,
             })
             .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-            .run()
         }
       })
     },
 
     async shutdown(now, idleDeadlineAt) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
         const sessions = await tx
           .select()
           .from(mcpRuntimeTestSessions)
           .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
-          .all()
         const rows: McpRuntimeTestRunningRef[] = []
         for (const session of sessions) {
           if (session.inFlightTurnId === null) continue
-          const turn = await tx
-            .select()
-            .from(mcpRuntimeTestTurns)
-            .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId))
-            .get()
+          const turn = await first(
+            tx
+              .select()
+              .from(mcpRuntimeTestTurns)
+              .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId)),
+          )
           if (turn?.status === 'queued') {
             const timedOut = turn.hardDeadlineAt <= now
             await tx
@@ -401,7 +401,6 @@ export function createMcpRuntimeTestPersistence(
                 durationMs: Math.max(0, now - turn.createdAt),
               })
               .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .run()
             const resumable = session.status === 'active' && canResumeNativeSession(session)
             await tx
               .update(mcpRuntimeTestSessions)
@@ -426,7 +425,6 @@ export function createMcpRuntimeTestPersistence(
                     },
               )
               .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .run()
             rows.push({ sessionId: session.id, turnId: null })
           } else if (turn?.status === 'running') {
             await tx
@@ -440,12 +438,10 @@ export function createMcpRuntimeTestPersistence(
                     : 'mcp-test-daemon-shutdown'),
               })
               .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .run()
             await tx
               .update(mcpRuntimeTestSessions)
               .set({ sessionVersion: session.sessionVersion + 1, updatedAt: now })
               .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .run()
             rows.push({ sessionId: session.id, turnId: turn.id })
           } else {
             rows.push({ sessionId: session.id, turnId: null })
@@ -456,6 +452,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async listEndingWithoutInFlight() {
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       const rows = await db
         .select({ id: mcpRuntimeTestSessions.id })
         .from(mcpRuntimeTestSessions)
@@ -465,23 +462,24 @@ export function createMcpRuntimeTestPersistence(
             isNull(mcpRuntimeTestSessions.inFlightTurnId),
           ),
         )
-        .all()
       return rows.map((row) => row.id)
     },
 
     async findCreateReceipt(input) {
+      const { mcpRuntimeTestCreateReceipts } = tablesOf(db)
       return (
-        (await db
-          .select()
-          .from(mcpRuntimeTestCreateReceipts)
-          .where(
-            and(
-              eq(mcpRuntimeTestCreateReceipts.mcpId, input.mcpId),
-              eq(mcpRuntimeTestCreateReceipts.ownerUserId, input.ownerUserId),
-              eq(mcpRuntimeTestCreateReceipts.clientCreateId, input.clientCreateId),
+        (await first(
+          db
+            .select()
+            .from(mcpRuntimeTestCreateReceipts)
+            .where(
+              and(
+                eq(mcpRuntimeTestCreateReceipts.mcpId, input.mcpId),
+                eq(mcpRuntimeTestCreateReceipts.ownerUserId, input.ownerUserId),
+                eq(mcpRuntimeTestCreateReceipts.clientCreateId, input.clientCreateId),
+              ),
             ),
-          )
-          .get()) ?? null
+        )) ?? null
       )
     },
 
@@ -493,17 +491,20 @@ export function createMcpRuntimeTestPersistence(
       // 换一笔事务重来即可：新快照读得到对方刚提交的活会话，走回上面那条 409（还带着会话 id）。
       // 幂等键相同的两笔并发同理——重跑时读得到对方的 receipt，按重放返回同一个会话。
       return retryUnique(async (tx) => {
-        const replay = await tx
-          .select()
-          .from(mcpRuntimeTestCreateReceipts)
-          .where(
-            and(
-              eq(mcpRuntimeTestCreateReceipts.mcpId, input.mcpId),
-              eq(mcpRuntimeTestCreateReceipts.ownerUserId, input.ownerUserId),
-              eq(mcpRuntimeTestCreateReceipts.clientCreateId, input.clientCreateId),
+        const { mcpRuntimeTestCreateReceipts, mcpRuntimeTestSessions, mcpRuntimeTestTurns } =
+          tablesOf(tx)
+        const replay = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestCreateReceipts)
+            .where(
+              and(
+                eq(mcpRuntimeTestCreateReceipts.mcpId, input.mcpId),
+                eq(mcpRuntimeTestCreateReceipts.ownerUserId, input.ownerUserId),
+                eq(mcpRuntimeTestCreateReceipts.clientCreateId, input.clientCreateId),
+              ),
             ),
-          )
-          .get()
+        )
         if (replay !== undefined) {
           if (replay.requestDigest !== input.requestDigest) {
             throw new ConflictError(
@@ -517,17 +518,18 @@ export function createMcpRuntimeTestPersistence(
             shouldQueue: false,
           }
         }
-        const live = await tx
-          .select({ id: mcpRuntimeTestSessions.id, status: mcpRuntimeTestSessions.status })
-          .from(mcpRuntimeTestSessions)
-          .where(
-            and(
-              eq(mcpRuntimeTestSessions.mcpId, input.mcpId),
-              eq(mcpRuntimeTestSessions.ownerUserId, input.ownerUserId),
-              inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
+        const live = await first(
+          tx
+            .select({ id: mcpRuntimeTestSessions.id, status: mcpRuntimeTestSessions.status })
+            .from(mcpRuntimeTestSessions)
+            .where(
+              and(
+                eq(mcpRuntimeTestSessions.mcpId, input.mcpId),
+                eq(mcpRuntimeTestSessions.ownerUserId, input.ownerUserId),
+                inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
+              ),
             ),
-          )
-          .get()
+        )
         if (live !== undefined) {
           throw new ConflictError(
             'mcp-test-session-exists',
@@ -535,17 +537,18 @@ export function createMcpRuntimeTestPersistence(
             { sessionId: live.id, status: live.status },
           )
         }
-        const quarantined = await tx
-          .select({ id: mcpRuntimeTestSessions.id })
-          .from(mcpRuntimeTestSessions)
-          .where(
-            and(
-              eq(mcpRuntimeTestSessions.mcpId, input.mcpId),
-              eq(mcpRuntimeTestSessions.ownerUserId, input.ownerUserId),
-              eq(mcpRuntimeTestSessions.cleanupState, 'quarantined'),
+        const quarantined = await first(
+          tx
+            .select({ id: mcpRuntimeTestSessions.id })
+            .from(mcpRuntimeTestSessions)
+            .where(
+              and(
+                eq(mcpRuntimeTestSessions.mcpId, input.mcpId),
+                eq(mcpRuntimeTestSessions.ownerUserId, input.ownerUserId),
+                eq(mcpRuntimeTestSessions.cleanupState, 'quarantined'),
+              ),
             ),
-          )
-          .get()
+        )
         if (quarantined !== undefined) {
           throw new ConflictError(
             'mcp-test-cleanup-quarantined',
@@ -564,89 +567,79 @@ export function createMcpRuntimeTestPersistence(
               eq(mcpRuntimeTestSessions.cleanupState, 'complete'),
             ),
           )
-          .all()
         for (const previous of replaceable) {
-          await tx
-            .delete(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, previous.id))
-            .run()
+          await tx.delete(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, previous.id))
         }
-        await tx
-          .insert(mcpRuntimeTestSessions)
-          .values({
-            id: input.sessionId,
-            mcpId: input.mcpId,
-            ownerUserId: input.ownerUserId,
-            clientCreateId: input.clientCreateId,
-            clientCreateDigest: input.requestDigest,
-            status: 'active',
-            endReason: null,
-            mcpConfigHash: input.mcpConfigHash,
-            runtimeRowId: input.runtimeRowId,
-            runtimeName: input.runtimeName,
-            runtimeProtocol: input.runtimeProtocol,
-            runtimeSnapshotJson: input.runtimeSnapshotJson,
-            runtimeBinaryPath: input.runtimeBinaryPath,
-            runtimeSessionId: input.runtimeSessionId,
-            nativeSessionState: 'pending',
-            inFlightTurnId: input.turnId,
-            turnSeq: 1,
-            sessionVersion: 1,
-            idleDeadlineAt: null,
-            scratchRoot: input.scratchRoot,
-            cleanupState: 'not-started',
-            createdAt: input.now,
-            updatedAt: input.now,
-          })
-          .run()
-        await tx
-          .insert(mcpRuntimeTestTurns)
-          .values({
-            id: input.turnId,
-            sessionId: input.sessionId,
-            seq: 1,
-            clientMessageId: input.clientMessageId,
-            promptText: input.message,
-            status: 'queued',
-            hardDeadlineAt: input.hardDeadlineAt,
-            captureState: 'live',
-            createdAt: input.now,
-          })
-          .run()
-        await tx
-          .insert(mcpRuntimeTestCreateReceipts)
-          .values({
-            mcpId: input.mcpId,
-            ownerUserId: input.ownerUserId,
-            clientCreateId: input.clientCreateId,
-            requestDigest: input.requestDigest,
-            sessionId: input.sessionId,
-            acceptedTurnId: input.turnId,
-            createdAt: input.now,
-            expiresAt: input.receiptExpiresAt,
-          })
-          .run()
+        await insertOne(tx, mcpRuntimeTestSessions, {
+          id: input.sessionId,
+          mcpId: input.mcpId,
+          ownerUserId: input.ownerUserId,
+          clientCreateId: input.clientCreateId,
+          clientCreateDigest: input.requestDigest,
+          status: 'active',
+          endReason: null,
+          mcpConfigHash: input.mcpConfigHash,
+          runtimeRowId: input.runtimeRowId,
+          runtimeName: input.runtimeName,
+          runtimeProtocol: input.runtimeProtocol,
+          runtimeSnapshotJson: input.runtimeSnapshotJson,
+          runtimeBinaryPath: input.runtimeBinaryPath,
+          runtimeSessionId: input.runtimeSessionId,
+          nativeSessionState: 'pending',
+          inFlightTurnId: input.turnId,
+          turnSeq: 1,
+          sessionVersion: 1,
+          idleDeadlineAt: null,
+          scratchRoot: input.scratchRoot,
+          cleanupState: 'not-started',
+          createdAt: input.now,
+          updatedAt: input.now,
+        })
+        await insertOne(tx, mcpRuntimeTestTurns, {
+          id: input.turnId,
+          sessionId: input.sessionId,
+          seq: 1,
+          clientMessageId: input.clientMessageId,
+          promptText: input.message,
+          status: 'queued',
+          hardDeadlineAt: input.hardDeadlineAt,
+          captureState: 'live',
+          createdAt: input.now,
+        })
+        await insertOne(tx, mcpRuntimeTestCreateReceipts, {
+          mcpId: input.mcpId,
+          ownerUserId: input.ownerUserId,
+          clientCreateId: input.clientCreateId,
+          requestDigest: input.requestDigest,
+          sessionId: input.sessionId,
+          acceptedTurnId: input.turnId,
+          createdAt: input.now,
+          expiresAt: input.receiptExpiresAt,
+        })
         return { sessionId: input.sessionId, acceptedTurnId: input.turnId, shouldQueue: true }
       })
     },
 
     async findTurnByClientMessage(sessionId, clientMessageId) {
+      const { mcpRuntimeTestTurns } = tablesOf(db)
       return (
-        (await db
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.sessionId, sessionId),
-              eq(mcpRuntimeTestTurns.clientMessageId, clientMessageId),
+        (await first(
+          db
+            .select()
+            .from(mcpRuntimeTestTurns)
+            .where(
+              and(
+                eq(mcpRuntimeTestTurns.sessionId, sessionId),
+                eq(mcpRuntimeTestTurns.clientMessageId, clientMessageId),
+              ),
             ),
-          )
-          .get()) ?? null
+        )) ?? null
       )
     },
 
     async acceptMessage(input: McpRuntimeTestAcceptMessageInput) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
         // RFC-359 W8-T28 —— 会话聚合根行锁，先锁再读（design §10.1）。
         // 这一笔的写值全部由读到的会话行算出来：新轮次的 `seq = turnSeq + 1` 落在
         // `uniq_mcp_runtime_test_turns_session_seq` 上，会话的 `sessionVersion` 自增落在会话行上。
@@ -661,16 +654,17 @@ export function createMcpRuntimeTestPersistence(
           mcpRuntimeTestSessions.id,
           input.sessionId,
         )
-        const replay = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.sessionId, input.sessionId),
-              eq(mcpRuntimeTestTurns.clientMessageId, input.clientMessageId),
+        const replay = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestTurns)
+            .where(
+              and(
+                eq(mcpRuntimeTestTurns.sessionId, input.sessionId),
+                eq(mcpRuntimeTestTurns.clientMessageId, input.clientMessageId),
+              ),
             ),
-          )
-          .get()
+        )
         if (replay !== undefined) {
           if (replay.promptText !== input.message) {
             throw new ConflictError(
@@ -678,22 +672,24 @@ export function createMcpRuntimeTestPersistence(
               'clientMessageId was already used with a different message',
             )
           }
-          const session = await tx
-            .select({ version: mcpRuntimeTestSessions.sessionVersion })
-            .from(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-            .get()
+          const session = await first(
+            tx
+              .select({ version: mcpRuntimeTestSessions.sessionVersion })
+              .from(mcpRuntimeTestSessions)
+              .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+          )
           return {
             turnId: replay.id,
             version: session?.version ?? input.expectedSessionVersion,
             shouldQueue: false,
           }
         }
-        const current = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const current = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (current === undefined || current.mcpId !== input.mcpId) {
           throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
         }
@@ -723,7 +719,6 @@ export function createMcpRuntimeTestPersistence(
               updatedAt: input.now,
             })
             .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-            .run()
           return { turnId: null, version: current.sessionVersion + 1, shouldQueue: false }
         }
         if (current.sessionVersion !== input.expectedSessionVersion) {
@@ -740,20 +735,17 @@ export function createMcpRuntimeTestPersistence(
           )
         }
         const seq = current.turnSeq + 1
-        await tx
-          .insert(mcpRuntimeTestTurns)
-          .values({
-            id: input.turnId,
-            sessionId: input.sessionId,
-            seq,
-            clientMessageId: input.clientMessageId,
-            promptText: input.message,
-            status: 'queued',
-            hardDeadlineAt: input.hardDeadlineAt,
-            captureState: 'live',
-            createdAt: input.now,
-          })
-          .run()
+        await insertOne(tx, mcpRuntimeTestTurns, {
+          id: input.turnId,
+          sessionId: input.sessionId,
+          seq,
+          clientMessageId: input.clientMessageId,
+          promptText: input.message,
+          status: 'queued',
+          hardDeadlineAt: input.hardDeadlineAt,
+          captureState: 'live',
+          createdAt: input.now,
+        })
         await tx
           .update(mcpRuntimeTestSessions)
           .set({
@@ -764,28 +756,30 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return { turnId: input.turnId, version: current.sessionVersion + 1, shouldQueue: true }
       })
     },
 
     async cancel(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.id, input.turnId),
-              eq(mcpRuntimeTestTurns.sessionId, input.sessionId),
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestTurns)
+            .where(
+              and(
+                eq(mcpRuntimeTestTurns.id, input.turnId),
+                eq(mcpRuntimeTestTurns.sessionId, input.sessionId),
+              ),
             ),
-          )
-          .get()
+        )
         if (session === undefined || turn === undefined) {
           throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
         }
@@ -804,7 +798,6 @@ export function createMcpRuntimeTestPersistence(
               durationMs: 0,
             })
             .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
           if (canResumeNativeSession(session)) {
             await tx
               .update(mcpRuntimeTestSessions)
@@ -815,7 +808,6 @@ export function createMcpRuntimeTestPersistence(
                 updatedAt: input.now,
               })
               .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .run()
             return { abort: false, cleanup: false }
           }
           await tx
@@ -830,30 +822,29 @@ export function createMcpRuntimeTestPersistence(
               updatedAt: input.now,
             })
             .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
           return { abort: false, cleanup: true }
         }
         await tx
           .update(mcpRuntimeTestTurns)
           .set({ cancelRequestedAt: turn.cancelRequestedAt ?? input.now })
           .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
         await tx
           .update(mcpRuntimeTestSessions)
           .set({ sessionVersion: session.sessionVersion + 1, updatedAt: input.now })
           .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
         return { abort: true, cleanup: false }
       })
     },
 
     async end(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (session === undefined) {
           throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
         }
@@ -864,11 +855,12 @@ export function createMcpRuntimeTestPersistence(
         const turn =
           session.inFlightTurnId === null
             ? undefined
-            : await tx
-                .select()
-                .from(mcpRuntimeTestTurns)
-                .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId))
-                .get()
+            : await first(
+                tx
+                  .select()
+                  .from(mcpRuntimeTestTurns)
+                  .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId)),
+              )
         let inFlightTurnId = session.inFlightTurnId
         if (turn?.status === 'queued') {
           await tx
@@ -882,14 +874,12 @@ export function createMcpRuntimeTestPersistence(
               durationMs: 0,
             })
             .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
           inFlightTurnId = null
         } else if (turn?.status === 'running') {
           await tx
             .update(mcpRuntimeTestTurns)
             .set({ cancelRequestedAt: turn.cancelRequestedAt ?? input.now })
             .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
         }
         await tx
           .update(mcpRuntimeTestSessions)
@@ -902,80 +892,84 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
         return { turnId: inFlightTurnId, cleanup: inFlightTurnId === null }
       })
     },
 
     async loadSession(sessionId, mcpId) {
-      const row = await db
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          mcpId === undefined
-            ? eq(mcpRuntimeTestSessions.id, sessionId)
-            : and(
-                eq(mcpRuntimeTestSessions.id, sessionId),
-                eq(mcpRuntimeTestSessions.mcpId, mcpId),
-              ),
-        )
-        .get()
+      const { mcpRuntimeTestSessions } = tablesOf(db)
+      const row = await first(
+        db
+          .select()
+          .from(mcpRuntimeTestSessions)
+          .where(
+            mcpId === undefined
+              ? eq(mcpRuntimeTestSessions.id, sessionId)
+              : and(
+                  eq(mcpRuntimeTestSessions.id, sessionId),
+                  eq(mcpRuntimeTestSessions.mcpId, mcpId),
+                ),
+          ),
+      )
       return row ?? null
     },
 
     async loadTurn(turnId) {
+      const { mcpRuntimeTestTurns } = tablesOf(db)
       return (
-        (await db
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, turnId))
-          .get()) ?? null
+        (await first(
+          db.select().from(mcpRuntimeTestTurns).where(eq(mcpRuntimeTestTurns.id, turnId)),
+        )) ?? null
       )
     },
 
     async findLatestSession(mcpId, ownerUserId) {
-      const live = await db
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.mcpId, mcpId),
-            eq(mcpRuntimeTestSessions.ownerUserId, ownerUserId),
-            inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
-          ),
-        )
-        .orderBy(desc(mcpRuntimeTestSessions.updatedAt))
-        .limit(1)
-        .get()
-      return (
-        live ??
-        (await db
+      const { mcpRuntimeTestSessions } = tablesOf(db)
+      const live = await first(
+        db
           .select()
           .from(mcpRuntimeTestSessions)
           .where(
             and(
               eq(mcpRuntimeTestSessions.mcpId, mcpId),
               eq(mcpRuntimeTestSessions.ownerUserId, ownerUserId),
-              eq(mcpRuntimeTestSessions.status, 'ended'),
+              inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
             ),
           )
           .orderBy(desc(mcpRuntimeTestSessions.updatedAt))
-          .limit(1)
-          .get()) ??
+          .limit(1),
+      )
+      return (
+        live ??
+        (await first(
+          db
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(
+              and(
+                eq(mcpRuntimeTestSessions.mcpId, mcpId),
+                eq(mcpRuntimeTestSessions.ownerUserId, ownerUserId),
+                eq(mcpRuntimeTestSessions.status, 'ended'),
+              ),
+            )
+            .orderBy(desc(mcpRuntimeTestSessions.updatedAt))
+            .limit(1),
+        )) ??
         null
       )
     },
 
     async listTurns(sessionId) {
+      const { mcpRuntimeTestTurns } = tablesOf(db)
       return await db
         .select()
         .from(mcpRuntimeTestTurns)
         .where(eq(mcpRuntimeTestTurns.sessionId, sessionId))
         .orderBy(asc(mcpRuntimeTestTurns.seq))
-        .all()
     },
 
     async listEvents(sessionId) {
+      const { mcpRuntimeTestEvents } = tablesOf(db)
       return await db
         .select({
           id: mcpRuntimeTestEvents.eventSeq,
@@ -989,51 +983,55 @@ export function createMcpRuntimeTestPersistence(
         .from(mcpRuntimeTestEvents)
         .where(eq(mcpRuntimeTestEvents.testSessionId, sessionId))
         .orderBy(asc(mcpRuntimeTestEvents.eventSeq))
-        .all()
     },
 
     async latestEventSequence(sessionId) {
+      const { mcpRuntimeTestEvents } = tablesOf(db)
       return (
         (
-          await db
-            .select({ seq: mcpRuntimeTestEvents.eventSeq })
-            .from(mcpRuntimeTestEvents)
-            .where(eq(mcpRuntimeTestEvents.testSessionId, sessionId))
-            .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
-            .limit(1)
-            .get()
+          await first(
+            db
+              .select({ seq: mcpRuntimeTestEvents.eventSeq })
+              .from(mcpRuntimeTestEvents)
+              .where(eq(mcpRuntimeTestEvents.testSessionId, sessionId))
+              .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
+              .limit(1),
+          )
         )?.seq ?? 0
       )
     },
 
     async loadBroadcastSnapshot(sessionId): Promise<McpRuntimeTestBroadcastSnapshot | null> {
-      const session = await db
-        .select({
-          ownerUserId: mcpRuntimeTestSessions.ownerUserId,
-          sessionVersion: mcpRuntimeTestSessions.sessionVersion,
-          inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-        })
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .get()
+      const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+      const session = await first(
+        db
+          .select({
+            ownerUserId: mcpRuntimeTestSessions.ownerUserId,
+            sessionVersion: mcpRuntimeTestSessions.sessionVersion,
+            inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
+          })
+          .from(mcpRuntimeTestSessions)
+          .where(eq(mcpRuntimeTestSessions.id, sessionId)),
+      )
       if (session === undefined) return null
-      const turn = await db
-        .select({
-          status: mcpRuntimeTestTurns.status,
-          captureState: mcpRuntimeTestTurns.captureState,
-        })
-        .from(mcpRuntimeTestTurns)
-        .where(
-          session.inFlightTurnId === null
-            ? eq(mcpRuntimeTestTurns.sessionId, sessionId)
-            : and(
-                eq(mcpRuntimeTestTurns.sessionId, sessionId),
-                eq(mcpRuntimeTestTurns.id, session.inFlightTurnId),
-              ),
-        )
-        .orderBy(desc(mcpRuntimeTestTurns.seq))
-        .limit(1)
-        .get()
+      const turn = await first(
+        db
+          .select({
+            status: mcpRuntimeTestTurns.status,
+            captureState: mcpRuntimeTestTurns.captureState,
+          })
+          .from(mcpRuntimeTestTurns)
+          .where(
+            session.inFlightTurnId === null
+              ? eq(mcpRuntimeTestTurns.sessionId, sessionId)
+              : and(
+                  eq(mcpRuntimeTestTurns.sessionId, sessionId),
+                  eq(mcpRuntimeTestTurns.id, session.inFlightTurnId),
+                ),
+          )
+          .orderBy(desc(mcpRuntimeTestTurns.seq))
+          .limit(1),
+      )
       return {
         ...session,
         turnStatus: turn?.status ?? null,
@@ -1044,6 +1042,7 @@ export function createMcpRuntimeTestPersistence(
 
     async invalidateMcp(input) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1053,7 +1052,6 @@ export function createMcpRuntimeTestPersistence(
               inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
             ),
           )
-          .all()
         for (const row of rows) {
           await tx
             .update(mcpRuntimeTestSessions)
@@ -1068,7 +1066,6 @@ export function createMcpRuntimeTestPersistence(
               updatedAt: input.now,
             })
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
         }
         return rows.map((row) => ({ sessionId: row.id, turnId: row.inFlightTurnId }))
       })
@@ -1076,6 +1073,7 @@ export function createMcpRuntimeTestPersistence(
 
     async invalidateOwner(input) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1085,7 +1083,6 @@ export function createMcpRuntimeTestPersistence(
               eq(mcpRuntimeTestSessions.status, 'active'),
             ),
           )
-          .all()
         for (const row of rows) {
           await tx
             .update(mcpRuntimeTestSessions)
@@ -1097,7 +1094,6 @@ export function createMcpRuntimeTestPersistence(
               updatedAt: input.now,
             })
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
         }
         return rows.map((row) => ({ sessionId: row.id, turnId: row.inFlightTurnId }))
       })
@@ -1105,6 +1101,7 @@ export function createMcpRuntimeTestPersistence(
 
     async markMcpConfigChanged(input) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1114,7 +1111,6 @@ export function createMcpRuntimeTestPersistence(
               eq(mcpRuntimeTestSessions.status, 'active'),
             ),
           )
-          .all()
         const idleSessionIds: string[] = []
         for (const row of rows) {
           if (row.inFlightTurnId === null) idleSessionIds.push(row.id)
@@ -1137,7 +1133,6 @@ export function createMcpRuntimeTestPersistence(
                   },
             )
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
         }
         const changedRows = await tx
           .select({ id: mcpRuntimeTestSessions.id })
@@ -1148,13 +1143,13 @@ export function createMcpRuntimeTestPersistence(
               inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
             ),
           )
-          .all()
         return { idleSessionIds, changedSessionIds: changedRows.map((row) => row.id) }
       })
     },
 
     async markRuntimeProfileChanged(input) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1164,7 +1159,6 @@ export function createMcpRuntimeTestPersistence(
               eq(mcpRuntimeTestSessions.status, 'active'),
             ),
           )
-          .all()
         const idleSessionIds: string[] = []
         for (const row of rows) {
           if (row.inFlightTurnId === null) idleSessionIds.push(row.id)
@@ -1187,7 +1181,6 @@ export function createMcpRuntimeTestPersistence(
                   },
             )
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
         }
         const changedRows = await tx
           .select({ id: mcpRuntimeTestSessions.id })
@@ -1198,13 +1191,13 @@ export function createMcpRuntimeTestPersistence(
               inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
             ),
           )
-          .all()
         return { idleSessionIds, changedSessionIds: changedRows.map((row) => row.id) }
       })
     },
 
     async invalidateRuntime(input) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1214,7 +1207,6 @@ export function createMcpRuntimeTestPersistence(
               eq(mcpRuntimeTestSessions.status, 'active'),
             ),
           )
-          .all()
         for (const row of rows) {
           await tx
             .update(mcpRuntimeTestSessions)
@@ -1226,13 +1218,13 @@ export function createMcpRuntimeTestPersistence(
               updatedAt: input.now,
             })
             .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
         }
         return rows.map((row) => ({ sessionId: row.id, turnId: row.inFlightTurnId }))
       })
     },
 
     async assertMcpDeleteReady(mcpId) {
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       const sessions = await db
         .select({
           id: mcpRuntimeTestSessions.id,
@@ -1241,7 +1233,6 @@ export function createMcpRuntimeTestPersistence(
         })
         .from(mcpRuntimeTestSessions)
         .where(eq(mcpRuntimeTestSessions.mcpId, mcpId))
-        .all()
       const unsafe = sessions.find(
         (row) => row.status !== 'ended' || row.cleanupState !== 'complete',
       )
@@ -1256,6 +1247,7 @@ export function createMcpRuntimeTestPersistence(
 
     async expireIdle(now) {
       return write(async (tx) => {
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1266,7 +1258,6 @@ export function createMcpRuntimeTestPersistence(
               lte(mcpRuntimeTestSessions.idleDeadlineAt, now),
             ),
           )
-          .all()
         for (const row of rows) {
           await tx
             .update(mcpRuntimeTestSessions)
@@ -1284,13 +1275,13 @@ export function createMcpRuntimeTestPersistence(
                 isNull(mcpRuntimeTestSessions.inFlightTurnId),
               ),
             )
-            .run()
         }
         return rows.map((row) => row.id)
       })
     },
 
     async listCleanupCandidates() {
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       const rows = await db
         .select({ id: mcpRuntimeTestSessions.id })
         .from(mcpRuntimeTestSessions)
@@ -1300,20 +1291,20 @@ export function createMcpRuntimeTestPersistence(
             eq(mcpRuntimeTestSessions.cleanupState, 'pending'),
           ),
         )
-        .all()
       return rows.map((row) => row.id)
     },
 
     async listExpiredReceipts(now) {
+      const { mcpRuntimeTestCreateReceipts } = tablesOf(db)
       return await db
         .select()
         .from(mcpRuntimeTestCreateReceipts)
         .where(lte(mcpRuntimeTestCreateReceipts.expiresAt, now))
-        .all()
     },
 
     async deleteExpiredReceipt(receipt, now) {
       await write(async (tx) => {
+        const { mcpRuntimeTestCreateReceipts } = tablesOf(tx)
         await tx
           .delete(mcpRuntimeTestCreateReceipts)
           .where(
@@ -1324,11 +1315,11 @@ export function createMcpRuntimeTestPersistence(
               lte(mcpRuntimeTestCreateReceipts.expiresAt, now),
             ),
           )
-          .run()
       })
     },
 
     async listQuarantinedCandidates() {
+      const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
       const sessions = await db
         .select()
         .from(mcpRuntimeTestSessions)
@@ -1338,19 +1329,19 @@ export function createMcpRuntimeTestPersistence(
             eq(mcpRuntimeTestSessions.cleanupState, 'quarantined'),
           ),
         )
-        .all()
       return Promise.all(
         sessions.map(async (session): Promise<McpRuntimeTestQuarantinedCandidate> => {
-          const turn = await db
-            .select()
-            .from(mcpRuntimeTestTurns)
-            // Quarantine prevents a subsequent turn. Its latest turn may own a
-            // durable remote receipt instead of a local PID; the selected
-            // effects decide whether that execution can be proven settled.
-            .where(eq(mcpRuntimeTestTurns.sessionId, session.id))
-            .orderBy(desc(mcpRuntimeTestTurns.seq))
-            .limit(1)
-            .get()
+          const turn = await first(
+            db
+              .select()
+              .from(mcpRuntimeTestTurns)
+              // Quarantine prevents a subsequent turn. Its latest turn may own a
+              // durable remote receipt instead of a local PID; the selected
+              // effects decide whether that execution can be proven settled.
+              .where(eq(mcpRuntimeTestTurns.sessionId, session.id))
+              .orderBy(desc(mcpRuntimeTestTurns.seq))
+              .limit(1),
+          )
           return { session, turn: turn ?? null }
         }),
       )
@@ -1358,20 +1349,23 @@ export function createMcpRuntimeTestPersistence(
 
     async recoverQuarantined(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select({
-            pid: mcpRuntimeTestTurns.pid,
-            spawnedAt: mcpRuntimeTestTurns.spawnedAt,
-            sessionId: mcpRuntimeTestTurns.sessionId,
-          })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx
+            .select({
+              pid: mcpRuntimeTestTurns.pid,
+              spawnedAt: mcpRuntimeTestTurns.spawnedAt,
+              sessionId: mcpRuntimeTestTurns.sessionId,
+            })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (
           session?.status !== 'ended' ||
           session.cleanupState !== 'quarantined' ||
@@ -1385,7 +1379,6 @@ export function createMcpRuntimeTestPersistence(
           .update(mcpRuntimeTestTurns)
           .set({ pid: null })
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .run()
         await tx
           .update(mcpRuntimeTestSessions)
           .set({
@@ -1395,13 +1388,13 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return true
       })
     },
 
     async expireTurns(now, idleDeadlineAt): Promise<McpRuntimeTestExpiredTurnResult> {
       return write(async (tx) => {
+        const { mcpRuntimeTestTurns, mcpRuntimeTestSessions } = tablesOf(tx)
         const turns = await tx
           .select()
           .from(mcpRuntimeTestTurns)
@@ -1411,15 +1404,15 @@ export function createMcpRuntimeTestPersistence(
               lte(mcpRuntimeTestTurns.hardDeadlineAt, now),
             ),
           )
-          .all()
         const settled: Array<{ sessionId: string; turnId: string; end: boolean }> = []
         const abort: Array<{ sessionId: string; turnId: string }> = []
         for (const turn of turns) {
-          const session = await tx
-            .select()
-            .from(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, turn.sessionId))
-            .get()
+          const session = await first(
+            tx
+              .select()
+              .from(mcpRuntimeTestSessions)
+              .where(eq(mcpRuntimeTestSessions.id, turn.sessionId)),
+          )
           if (session?.status !== 'active' || session.inFlightTurnId !== turn.id) continue
           if (turn.status === 'running') {
             if (turn.cancelRequestedAt === null || turn.failureCode !== 'mcp-test-turn-timeout') {
@@ -1430,12 +1423,10 @@ export function createMcpRuntimeTestPersistence(
                   failureCode: 'mcp-test-turn-timeout',
                 })
                 .where(eq(mcpRuntimeTestTurns.id, turn.id))
-                .run()
               await tx
                 .update(mcpRuntimeTestSessions)
                 .set({ sessionVersion: session.sessionVersion + 1, updatedAt: now })
                 .where(eq(mcpRuntimeTestSessions.id, session.id))
-                .run()
             }
             abort.push({ sessionId: session.id, turnId: turn.id })
             continue
@@ -1451,7 +1442,6 @@ export function createMcpRuntimeTestPersistence(
               durationMs: Math.max(0, now - turn.createdAt),
             })
             .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
           const resumable = canResumeNativeSession(session)
           await tx
             .update(mcpRuntimeTestSessions)
@@ -1474,7 +1464,6 @@ export function createMcpRuntimeTestPersistence(
                   },
             )
             .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
           settled.push({ sessionId: session.id, turnId: turn.id, end: !resumable })
         }
         return { settled, abort }
@@ -1482,26 +1471,26 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async listDurableIntentCandidates() {
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       const rows = await db
         .select()
         .from(mcpRuntimeTestSessions)
         .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
-        .all()
       return rows.filter((row) => row.status === 'ending' || row.continuationBlockedReason !== null)
     },
 
     async settleQueuedDurableIntent(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx.select().from(mcpRuntimeTestTurns).where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (
           session?.status !== 'ending' ||
           session.inFlightTurnId !== input.turnId ||
@@ -1520,7 +1509,6 @@ export function createMcpRuntimeTestPersistence(
             durationMs: 0,
           })
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .run()
         await tx
           .update(mcpRuntimeTestSessions)
           .set({
@@ -1529,30 +1517,31 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return true
       })
     },
 
     async requestRunningTurnCancel(turnId, now) {
       await write(async (tx) => {
+        const { mcpRuntimeTestTurns } = tablesOf(tx)
         await tx
           .update(mcpRuntimeTestTurns)
           .set({
             cancelRequestedAt: sql`coalesce(${mcpRuntimeTestTurns.cancelRequestedAt}, ${now})`,
           })
           .where(and(eq(mcpRuntimeTestTurns.id, turnId), eq(mcpRuntimeTestTurns.status, 'running')))
-          .run()
       })
     },
 
     async clearTerminalDurableIntent(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (session?.status !== 'ending' || session.inFlightTurnId !== input.turnId) return false
         await tx
           .update(mcpRuntimeTestSessions)
@@ -1562,26 +1551,27 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return true
       })
     },
 
     async listBootSessions() {
+      const { mcpRuntimeTestSessions } = tablesOf(db)
       return await db
         .select()
         .from(mcpRuntimeTestSessions)
         .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
-        .all()
     },
 
     async recoverBootSession(input: McpRuntimeTestBootRecoveryInput) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (
           session === undefined ||
           session.inFlightTurnId !== input.expectedTurnId ||
@@ -1589,11 +1579,12 @@ export function createMcpRuntimeTestPersistence(
         ) {
           return false
         }
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.expectedTurnId))
-          .get()
+        const turn = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, input.expectedTurnId)),
+        )
         if (turn !== undefined && !isTerminalTurn(turn.status)) {
           await tx
             .update(mcpRuntimeTestTurns)
@@ -1613,7 +1604,6 @@ export function createMcpRuntimeTestPersistence(
               durationMs: turn.startedAt === null ? 0 : Math.max(0, input.now - turn.startedAt),
             })
             .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
         }
         await tx
           .update(mcpRuntimeTestSessions)
@@ -1645,23 +1635,22 @@ export function createMcpRuntimeTestPersistence(
                 },
           )
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return true
       })
     },
 
     async admitTurn(input): Promise<McpRuntimeTestAdmittedTurn | null> {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx.select().from(mcpRuntimeTestTurns).where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (
           session === undefined ||
           turn === undefined ||
@@ -1683,7 +1672,6 @@ export function createMcpRuntimeTestPersistence(
               durationMs: input.now - turn.createdAt,
             })
             .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
           await tx
             .update(mcpRuntimeTestSessions)
             .set(
@@ -1705,37 +1693,38 @@ export function createMcpRuntimeTestPersistence(
                   },
             )
             .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
           return null
         }
         await tx
           .update(mcpRuntimeTestTurns)
           .set({ status: 'running', startedAt: input.now })
           .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
         return { session, turn: { ...turn, status: RUNNING_TURN_STATUS, startedAt: input.now } }
       })
     },
 
     async isSpawnAllowed(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select({
-            status: mcpRuntimeTestSessions.status,
-            inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-          })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select({
-            status: mcpRuntimeTestTurns.status,
-            cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-            hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
-          })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select({
+              status: mcpRuntimeTestSessions.status,
+              inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
+            })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx
+            .select({
+              status: mcpRuntimeTestTurns.status,
+              cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
+              hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
+            })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         return (
           session?.status === 'active' &&
           session.inFlightTurnId === input.turnId &&
@@ -1748,16 +1737,16 @@ export function createMcpRuntimeTestPersistence(
 
     async recordSpawn(input: McpRuntimeTestSpawnReceiptInput) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx.select().from(mcpRuntimeTestTurns).where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (session === undefined || turn === undefined) {
           throw new Error('mcp-test-spawn-receipt-owner-missing')
         }
@@ -1769,7 +1758,6 @@ export function createMcpRuntimeTestPersistence(
             spawnBinaryPath: input.spawnBinaryPath,
           })
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .run()
         const expired = turn.hardDeadlineAt <= input.fenceAt
         if (expired) {
           await tx
@@ -1779,7 +1767,6 @@ export function createMcpRuntimeTestPersistence(
               failureCode: 'mcp-test-turn-timeout',
             })
             .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-            .run()
         }
         return (
           session.status === 'active' &&
@@ -1793,11 +1780,13 @@ export function createMcpRuntimeTestPersistence(
 
     async failBeforeRun(input) {
       await write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (session === undefined || session.status === 'ended') return
         const ending = session.status === 'ending'
         await tx
@@ -1812,7 +1801,6 @@ export function createMcpRuntimeTestPersistence(
             finishedAt: input.now,
           })
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .run()
         await tx
           .update(mcpRuntimeTestSessions)
           .set({
@@ -1824,22 +1812,21 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
       })
     },
 
     async settleTurn(input: McpRuntimeTestSettlementInput) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
+        const turn = await first(
+          tx.select().from(mcpRuntimeTestTurns).where(eq(mcpRuntimeTestTurns.id, input.turnId)),
+        )
         if (session === undefined || turn === undefined || isTerminalTurn(turn.status)) {
           return session?.status === 'ending'
         }
@@ -1876,7 +1863,6 @@ export function createMcpRuntimeTestPersistence(
             pid: input.childUnreaped ? turn.pid : null,
           })
           .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
 
         const captureBlocked =
           turn.captureState === 'truncated' || turn.captureState === 'incomplete'
@@ -1921,7 +1907,6 @@ export function createMcpRuntimeTestPersistence(
                 : {}),
             })
             .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
           return true
         }
         await tx
@@ -1935,18 +1920,19 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
         return false
       })
     },
 
     async invalidateSession(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (session === undefined || session.status !== 'active') {
           return session?.inFlightTurnId ?? null
         }
@@ -1960,18 +1946,16 @@ export function createMcpRuntimeTestPersistence(
             updatedAt: input.now,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return session.inFlightTurnId
       })
     },
 
     async prepareCleanup(sessionId, now) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, sessionId))
-          .get()
+        const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(tx)
+        const session = await first(
+          tx.select().from(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, sessionId)),
+        )
         if (
           session === undefined ||
           session.inFlightTurnId !== null ||
@@ -1980,23 +1964,23 @@ export function createMcpRuntimeTestPersistence(
         ) {
           return null
         }
-        const running = await tx
-          .select({ id: mcpRuntimeTestTurns.id })
-          .from(mcpRuntimeTestTurns)
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.sessionId, sessionId),
-              inArray(mcpRuntimeTestTurns.status, ['queued', 'running']),
+        const running = await first(
+          tx
+            .select({ id: mcpRuntimeTestTurns.id })
+            .from(mcpRuntimeTestTurns)
+            .where(
+              and(
+                eq(mcpRuntimeTestTurns.sessionId, sessionId),
+                inArray(mcpRuntimeTestTurns.status, ['queued', 'running']),
+              ),
             ),
-          )
-          .get()
+        )
         if (running !== undefined) return null
         if (session.cleanupState !== 'quarantined') {
           await tx
             .update(mcpRuntimeTestSessions)
             .set({ cleanupState: 'pending', updatedAt: now })
             .where(eq(mcpRuntimeTestSessions.id, sessionId))
-            .run()
         }
         return {
           scratchRoot: session.scratchRoot,
@@ -2008,11 +1992,13 @@ export function createMcpRuntimeTestPersistence(
 
     async finishCleanup(input) {
       return write(async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
+        const session = await first(
+          tx
+            .select()
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, input.sessionId)),
+        )
         if (
           session === undefined ||
           session.inFlightTurnId !== null ||
@@ -2032,28 +2018,29 @@ export function createMcpRuntimeTestPersistence(
             sessionVersion: session.sessionVersion + 1,
           })
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .run()
         return true
       })
     },
 
     async nextDeadline() {
+      const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
       const earliestIdle = (
-        await db
-          .select({ deadline: mcpRuntimeTestSessions.idleDeadlineAt })
-          .from(mcpRuntimeTestSessions)
-          .where(
-            and(
-              eq(mcpRuntimeTestSessions.status, 'active'),
-              isNull(mcpRuntimeTestSessions.inFlightTurnId),
-              // 没有空闲截止的活跃会话不是候选：SQLite 把 NULL 排最前、PG 排最后，不显式排除
-              // 就会在 SQLite 上把「最早截止」读成 null（RFC-359 W4-B4a 放宽 PG 执行面后抓到）。
-              isNotNull(mcpRuntimeTestSessions.idleDeadlineAt),
-            ),
-          )
-          .orderBy(asc(mcpRuntimeTestSessions.idleDeadlineAt))
-          .limit(1)
-          .get()
+        await first(
+          db
+            .select({ deadline: mcpRuntimeTestSessions.idleDeadlineAt })
+            .from(mcpRuntimeTestSessions)
+            .where(
+              and(
+                eq(mcpRuntimeTestSessions.status, 'active'),
+                isNull(mcpRuntimeTestSessions.inFlightTurnId),
+                // 没有空闲截止的活跃会话不是候选：SQLite 把 NULL 排最前、PG 排最后，不显式排除
+                // 就会在 SQLite 上把「最早截止」读成 null（RFC-359 W4-B4a 放宽 PG 执行面后抓到）。
+                isNotNull(mcpRuntimeTestSessions.idleDeadlineAt),
+              ),
+            )
+            .orderBy(asc(mcpRuntimeTestSessions.idleDeadlineAt))
+            .limit(1),
+        )
       )?.deadline
       const activeInFlight = await db
         .select({ turnId: mcpRuntimeTestSessions.inFlightTurnId })
@@ -2064,19 +2051,19 @@ export function createMcpRuntimeTestPersistence(
             isNotNull(mcpRuntimeTestSessions.inFlightTurnId),
           ),
         )
-        .all()
       let earliestTurn: number | null = null
       for (const row of activeInFlight) {
         if (row.turnId === null) continue
-        const turn = await db
-          .select({
-            deadline: mcpRuntimeTestTurns.hardDeadlineAt,
-            cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-            status: mcpRuntimeTestTurns.status,
-          })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, row.turnId))
-          .get()
+        const turn = await first(
+          db
+            .select({
+              deadline: mcpRuntimeTestTurns.hardDeadlineAt,
+              cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
+              status: mcpRuntimeTestTurns.status,
+            })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, row.turnId)),
+        )
         if (
           turn === undefined ||
           !['queued', 'running'].includes(turn.status) ||

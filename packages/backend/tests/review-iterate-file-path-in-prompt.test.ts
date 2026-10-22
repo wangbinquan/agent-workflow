@@ -19,6 +19,7 @@
 // submitReviewDecision), and the doc_versions schema migration that adds
 // the source_file_path column.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -29,7 +30,6 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { docVersions, nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
@@ -216,13 +216,14 @@ async function buildHarness(): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
     },
   )
 
+  const { nodeRuns } = tablesOf(db)
   const reviewRuns = await db
     .select()
     .from(nodeRuns)
@@ -265,6 +266,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
   })
 
   test('dispatch captures source_file_path on doc_versions', async () => {
+    const { docVersions } = tablesOf(h.db)
     const dvs = await h.db
       .select()
       .from(docVersions)
@@ -299,6 +301,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       expectedReviewIteration: 0,
     })
 
+    const { docVersions } = tablesOf(h.db)
     const dvs = await h.db
       .select()
       .from(docVersions)
@@ -347,6 +350,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       binaryOverride: h.stubOpencode,
     })
 
+    const { nodeRuns } = tablesOf(h.db)
     const designerRuns = await h.db
       .select()
       .from(nodeRuns)

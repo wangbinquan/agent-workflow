@@ -26,13 +26,14 @@
 // 黄金锁：不传 defer/questionIds 的整轮提交语义不变——轮 answered + 恰好一条 clarify-answer 续跑
 // （RFC-132 后由统一 autoDispatchClarifyRound 驱动 + resume；legacy immediate mint 已删）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound, resolveCrossNodeStopped } from '../src/services/clarify/service'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -46,7 +47,7 @@ import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string } // regular user — task owner / member
   carol: { id: string; token: string } // regular user — stranger (non-member)
@@ -134,14 +135,15 @@ const CROSS_DEF = {
 }
 
 async function seedTaskRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   def: object,
   _opts: { deferred?: boolean } = {},
 ): Promise<string> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -149,7 +151,7 @@ async function seedTaskRow(
     version: 1,
     schemaVersion: (def as { $schema_version: number }).$schema_version,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     ownerUserId,
@@ -169,13 +171,14 @@ async function seedTaskRow(
 /** Seed a self clarify round owned by `ownerUserId`; returns task + the clarify node-run id
  *  (= the `:nodeRunId` the answers/seal endpoint keys on = origin/intermediary id). */
 async function seedSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = await seedTaskRow(db, ownerUserId, SELF_DEF)
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -200,13 +203,14 @@ async function seedSelfRound(
 
 /** Seed a cross clarify round owned by `ownerUserId`; returns task + the cross node-run id. */
 async function seedCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   questions: ClarifyQuestion[],
   opts: { deferred?: boolean } = {},
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = await seedTaskRow(db, ownerUserId, CROSS_DEF, opts)
   const questionerRunId = ulid()
+  const { nodeRuns } = tablesOf(db)
   await db.insert(nodeRuns).values([
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     { id: ulid(), taskId, nodeId: 'designer', status: 'done', iteration: 0, preSnapshot: 'stub' },
@@ -225,11 +229,13 @@ async function seedCrossRound(
   return { taskId, nodeRunId: crossClarifyNodeRunId }
 }
 
-function roundOf(db: ProviderNeutralDatabase, taskId: string) {
+function roundOf(db: PersistenceDb, taskId: string) {
+  const { clarifyRounds } = tablesOf(db)
   return db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
 }
 
-async function clarifyAnswerReruns(db: ProviderNeutralDatabase, taskId: string): Promise<number> {
+async function clarifyAnswerReruns(db: PersistenceDb, taskId: string): Promise<number> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   return rows.filter((r) => r.rerunCause === 'clarify-answer').length
 }
@@ -243,7 +249,8 @@ interface ListedQuestion {
   staged: boolean
 }
 
-async function nodeRunStatus(db: ProviderNeutralDatabase, id: string): Promise<string | undefined> {
+async function nodeRunStatus(db: PersistenceDb, id: string): Promise<string | undefined> {
+  const { nodeRuns } = tablesOf(db)
   const [r] = await db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, id))
   return r?.status
 }
@@ -807,6 +814,7 @@ describeEachProviderHttpApplication(
       const [round] = await roundOf(h.db, taskId)
       expect(round?.status).toBe('answered')
       expect(round?.directive).toBe('stop')
+      const { clarifyRounds } = tablesOf(h.db)
       const [legacy] = await h.db
         .select()
         .from(clarifyRounds)
@@ -843,6 +851,7 @@ describeEachProviderHttpApplication(
       const [round] = await roundOf(h.db, taskId)
       expect(round?.status).toBe('awaiting_human')
       expect(round?.directive ?? null).toBeNull() // clarify_rounds: not prematurely 'stop'
+      const { clarifyRounds } = tablesOf(h.db)
       const [legacy] = await h.db
         .select()
         .from(clarifyRounds)

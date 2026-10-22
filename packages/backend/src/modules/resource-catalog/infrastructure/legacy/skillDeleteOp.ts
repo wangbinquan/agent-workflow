@@ -14,13 +14,10 @@
 // External skills have no managed directory: their deletion is a single-tx DB
 // row drop (atomic, no op needed) — handled by the caller, not here.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, skills } from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   abandonOperation,
   advancePhase,
@@ -78,7 +75,7 @@ export class SkillDeleteReferencedError extends Error {
  * DELETE and the phase='db-committed' advance share one tx (§6a ③).
  */
 export async function deleteManagedSkillOp(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fsOpts: SkillOpFsOptions,
   skill: { id: string },
   hooks: SkillDeleteOpHooks = {},
@@ -117,16 +114,19 @@ export async function deleteManagedSkillOp(
       if (expected !== undefined) await assertDeleteFence(tx, skill.id, expected)
       const refs = await findAgentsUsingManagedSkill(
         {
-          find: async (skillId) =>
-            await findAgentsReferencingIdInJsonColumn(tx, {
+          find: async (skillId) => {
+            const { agents } = tablesOf(tx)
+            return await findAgentsReferencingIdInJsonColumn(tx, {
               column: agents.skills,
               id: skillId,
               matches: matchesManagedSkillReference,
-            }),
+            })
+          },
         },
         skill.id,
       )
       if (refs.length > 0) throw new SkillDeleteReferencedError(refs)
+      const { skills } = tablesOf(tx)
       await tx.delete(skills).where(eq(skills.id, skill.id))
       await advancePhase(tx, opId, 'db-committed')
     })
@@ -153,10 +153,11 @@ export async function deleteManagedSkillOp(
 }
 
 async function assertDeleteFence(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   skillId: string,
   expected: SkillDeleteFence,
 ): Promise<void> {
+  const { skills } = tablesOf(tx)
   const live = (
     await tx
       .select({

@@ -2,7 +2,7 @@
 // database, task facts (offered by task-execution) and the runtime directory.
 
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CallObservationLifecycle, CallObservations } from '../application/callObservations'
 import {
   createObservationQueries,
@@ -25,7 +25,7 @@ export interface RunObservation {
 
 /** The write side alone: what runtime callers need to record their calls. */
 export function composeRunObservationCalls(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   clock: () => number = Date.now,
 ): CallObservations & CallObservationLifecycle {
   return createCallRecorder({
@@ -36,7 +36,7 @@ export function composeRunObservationCalls(
 }
 
 export function composeRunObservation(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly tasks: ObservationTaskFactsPort
   readonly runtimes: RuntimeDirectoryPort
   readonly clock?: () => number

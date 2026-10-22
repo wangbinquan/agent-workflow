@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   actionTemplateContentSchema,
   validateActionTemplateForPublish,
@@ -45,7 +45,7 @@ const VALID_CONTENT = {
   retryDefaults: { sameSession: 2, freshSession: 1 },
 } as const
 
-function newDeps(db: ProviderNeutralDatabase): ActionTemplateCommandDeps {
+function newDeps(db: PersistenceDb): ActionTemplateCommandDeps {
   let tick = 1_000_000
   return { store: createActionTemplatePersistence(db), now: () => ++tick }
 }

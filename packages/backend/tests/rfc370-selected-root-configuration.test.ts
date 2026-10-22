@@ -2,6 +2,7 @@
 // RFC-370: both real provider roots must share the selected asynchronous live
 // configuration query. Scheduled writes/launch wait for it; read failure does
 // not silently switch to the file query. No worker or real task is started.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
@@ -9,7 +10,6 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from './helpers/userFixture'
 import { createWorkflow } from '@/services/workflow'
-import { scheduledTasks } from '@/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 function deferred<T>() {
@@ -120,8 +120,10 @@ describeEachProviderHttpApplication(
         scheduleSpec: { kind: 'daily', at: '09:00', timezone: 'UTC' },
         enabled: true,
       }
-      const rows = (name: string) =>
-        scope.harness.db.select().from(scheduledTasks).where(eq(scheduledTasks.name, name))
+      const rows = (name: string) => {
+        const { scheduledTasks } = tablesOf(scope.harness.db)
+        return scope.harness.db.select().from(scheduledTasks).where(eq(scheduledTasks.name, name))
+      }
       const waitForRead = () => {
         const next = { entered: deferred<void>(), release: deferred<void>() }
         gate = next

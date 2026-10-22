@@ -3,18 +3,19 @@
 // for ordinary tasks; if the join silently drops the field, every row
 // renders empty.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   args: { taskName: string; status?: 'awaiting_human' | 'answered' },
 ) {
   const wfId = ulid()
@@ -22,51 +23,43 @@ async function seed(
   const nrId = ulid()
   const csId = ulid()
   const now = Date.now()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      description: '',
-      definition: '{}',
-      version: 1,
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
-  await db
-    .insert(tasks)
-    .values({
-      executionLineageId: tId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: tId, workflowRevision: null },
-      ]),
-      id: tId,
-      name: args.taskName,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/r',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${tId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: now,
-    })
-    .run()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id: nrId,
-      taskId: tId,
-      nodeId: 'clarify-1',
-      retryIndex: 0,
-      iteration: 0,
-      status: 'awaiting_human',
-      startedAt: now,
-    })
-    .run()
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    description: '',
+    definition: '{}',
+    version: 1,
+    schemaVersion: 1,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await insertOne(db, tasks, {
+    executionLineageId: tId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: tId, workflowRevision: null },
+    ]),
+    id: tId,
+    name: args.taskName,
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/r',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${tId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: now,
+  })
+  await insertOne(db, nodeRuns, {
+    id: nrId,
+    taskId: tId,
+    nodeId: 'clarify-1',
+    retryIndex: 0,
+    iteration: 0,
+    status: 'awaiting_human',
+    startedAt: now,
+  })
   await insertClarifyRoundRaw(db, {
     id: csId,
     taskId: tId,

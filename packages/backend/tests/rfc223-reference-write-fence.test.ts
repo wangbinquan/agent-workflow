@@ -7,6 +7,8 @@
 // stored ref is grandfathered. RFC-228 intentionally ends the historical
 // allowance for never-resolved managed-Skill refs.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   CreateWorkgroupSchema,
   type CreateAgent,
@@ -18,18 +20,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { stringify } from 'yaml'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  mcps,
-  plugins,
-  resourceGrants,
-  skills,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
 import { createAgent, getAgentById, updateAgent } from '../src/services/agent'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 import { importWorkflowYaml } from '../src/services/workflow.yaml'
@@ -66,8 +58,9 @@ function actor(id: string): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string): Promise<void> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -97,12 +90,9 @@ function workflowDefinition(agentId?: string): WorkflowDefinition {
   }
 }
 
-async function seedMcp(
-  db: ProviderNeutralDatabase,
-  id: string,
-  ownerUserId = 'target-owner',
-): Promise<void> {
-  await db.insert(mcps).values({
+async function seedMcp(db: PersistenceDb, id: string, ownerUserId = 'target-owner'): Promise<void> {
+  const { mcps } = tablesOf(db)
+  await insertOne(db, mcps, {
     id,
     name: `mcp-${id}`,
     type: 'local',
@@ -114,12 +104,13 @@ async function seedMcp(
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: 'agent' | 'mcp',
   resourceId: string,
   userId: string,
 ): Promise<void> {
-  await db.insert(resourceGrants).values({
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
     resourceType: type,
     resourceId,
     userId,
@@ -129,7 +120,7 @@ async function grant(
 }
 
 describeEachProvider('RFC-223 ordinary reference final-transaction fences', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let editor: Actor
 
   beforeEach(async () => {
@@ -147,13 +138,15 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         seed: async (id: string) => seedMcp(db, id),
         input: (id: string): Partial<CreateAgent> => ({ mcp: [id] }),
         hide: async (id: string) => {
+          const { mcps } = tablesOf(db)
           await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, id))
         },
       },
       {
         kind: 'plugin',
         seed: async (id: string) => {
-          await db.insert(plugins).values({
+          const { plugins } = tablesOf(db)
+          await insertOne(db, plugins, {
             id,
             name: `plugin-${id}`,
             spec: 'pkg@1',
@@ -167,6 +160,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         },
         input: (id: string): Partial<CreateAgent> => ({ plugins: [id] }),
         hide: async (id: string) => {
+          const { plugins } = tablesOf(db)
           await db.update(plugins).set({ visibility: 'private' }).where(eq(plugins.id, id))
         },
       },
@@ -174,6 +168,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         kind: 'dependsOn',
         seed: async (id: string) => {
           await createAgent(db, { name: `dep-${id}`, ...EMPTY_AGENT }, { id })
+          const { agents } = tablesOf(db)
           await db
             .update(agents)
             .set({ ownerUserId: 'target-owner', visibility: 'public' })
@@ -181,13 +176,15 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         },
         input: (id: string): Partial<CreateAgent> => ({ dependsOn: [id] }),
         hide: async (id: string) => {
+          const { agents } = tablesOf(db)
           await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, id))
         },
       },
       {
         kind: 'managed-skill',
         seed: async (id: string) => {
-          await db.insert(skills).values({
+          const { skills } = tablesOf(db)
+          await insertOne(db, skills, {
             id,
             name: `skill-${id}`,
             ownerUserId: 'target-owner',
@@ -198,6 +195,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
           skills: [{ kind: 'managed', skillId: id }],
         }),
         hide: async (id: string) => {
+          const { skills } = tablesOf(db)
           await db.update(skills).set({ visibility: 'private' }).where(eq(skills.id, id))
         },
       },
@@ -221,6 +219,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         code: 'acl-missing-refs',
         details: { missing: [{ name: targetId }] },
       })
+      const { agents } = tablesOf(db)
       expect(
         (await db.select({ name: agents.name }).from(agents)).some(
           (row) => row.name === sourceName,
@@ -239,17 +238,20 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         { name: 'system-writer', ...EMPTY_AGENT, mcp: [mcpId] },
         {
           beforeWriteTransaction: async () => {
+            const { mcps } = tablesOf(db)
             await db.delete(mcps).where(eq(mcps.id, mcpId))
           },
         },
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+    const { agents } = tablesOf(db)
     expect((await db.select().from(agents)).some((row) => row.name === 'system-writer')).toBe(false)
   })
 
   test('agent update rejects grant revocation and leaves the ref unset', async () => {
     const mcpId = ulid()
     await seedMcp(db, mcpId)
+    const { mcps, resourceGrants } = tablesOf(db)
     await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcpId))
     await grant(db, 'mcp', mcpId, editor.user.id)
     const source = await createAgent(
@@ -286,6 +288,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { name: 'grandfathered-agent', ...EMPTY_AGENT, mcp: [mcpId] },
       { ownerUserId: editor.user.id, actor: editor },
     )
+    const { mcps } = tablesOf(db)
     await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcpId))
 
     const updated = await updateAgent(db, source.id, { description: 'unrelated edit' }, editor, {
@@ -314,6 +317,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         issues: [{ code: 'skill-not-found', refKind: 'skill', direct: true }],
       },
     })
+    const { agents } = tablesOf(db)
     expect(
       (await db.select({ name: agents.name }).from(agents)).some(
         (row) => row.name === 'dormant-skill-ref',
@@ -339,11 +343,13 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
           ownerUserId: editor.user.id,
           actor: editor,
           beforeWriteTransaction: async () => {
+            const { agents } = tablesOf(db)
             await db.delete(agents).where(eq(agents.id, target.id))
           },
         },
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+    const { workflows } = tablesOf(db)
     expect(await db.select().from(workflows)).toHaveLength(0)
 
     const dangling = await createWorkflow(
@@ -364,6 +370,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { name: 'workflow-update-target', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
+    const { agents, resourceGrants } = tablesOf(db)
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
     await grant(db, 'agent', target.id, editor.user.id)
     const empty = await createWorkflow(
@@ -420,6 +427,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { name: 'portable-target', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
+    const { agents, resourceGrants, workflows } = tablesOf(db)
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
     await grant(db, 'agent', target.id, editor.user.id)
 
@@ -461,6 +469,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { name: 'raced-member', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
+    const { agents } = tablesOf(db)
     await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, baseAgent.id))
     await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, racedAgent.id))
     const createInput = CreateWorkgroupSchema.parse({
@@ -590,12 +599,13 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, agents } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'runtime-host',
       definition: JSON.stringify(workflowDefinition()),
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'runtime-task',
       workflowId,

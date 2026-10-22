@@ -1,3 +1,7 @@
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-279 — locks the seven-column physical cleanup, fail-closed polarity,
 // direct-upgrade URL escrow, and current single-id operation contract.
@@ -12,7 +16,6 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { DbClient } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
 import { ensureCredentialsSealed, unsealRepoUrl } from '../src/services/repoCredentials'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
@@ -44,7 +47,7 @@ describe('RFC-279 migration 0147', () => {
 
     sqlite = new Database(':memory:')
     sqlite.exec('PRAGMA foreign_keys = OFF')
-    db = drizzle(sqlite) as unknown as DbClient
+    db = inheritDatabaseHandle(drizzle(sqlite), schemaFixtureDb()) as unknown as DbClient
     migrate(db, { migrationsFolder: tempMigrations })
   })
 
@@ -155,14 +158,15 @@ describe('RFC-279 migration 0147', () => {
         .get(),
     ).toEqual({ name: 'uq_skill_operations_active' })
 
-    const escrow = db.select().from(cachedRepos).get()!
+    const { cachedRepos } = tablesOf(db)
+    const escrow = first(db.select().from(cachedRepos))!
     expect(escrow.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(true)
     expect(unsealRepoUrl(escrow, box)).toBeNull()
 
     const store = composeSqliteRepositoryWorkspaceStore(db)
     const sealed = await ensureCredentialsSealed(store, box)
     expect(sealed.sealed).toBe(1)
-    const current = db.select().from(cachedRepos).get()!
+    const current = first(db.select().from(cachedRepos))!
     expect(current.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(false)
     expect(current.urlRedacted).toBe('https://***@github.com/acme/legacy.git')
     expect(unsealRepoUrl(current, box)).toBe(LEGACY_URL)
@@ -252,7 +256,8 @@ describe('RFC-279 migration 0147', () => {
     await expect(
       ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), undefined),
     ).rejects.toThrow(/legacy URL escrow requires SecretBox sealing/)
-    expect(db.select().from(cachedRepos).get()?.urlEnc).toStartWith('aw-legacy-url-hex-v1:')
+    const { cachedRepos } = tablesOf(db)
+    expect(first(db.select().from(cachedRepos))?.urlEnc).toStartWith('aw-legacy-url-hex-v1:')
   })
 
   test('an already sealed URL survives the migration unchanged', async () => {
@@ -270,7 +275,8 @@ describe('RFC-279 migration 0147', () => {
       .run(sealed)
     apply0147()
 
-    const row = db.select().from(cachedRepos).get()!
+    const { cachedRepos } = tablesOf(db)
+    const row = first(db.select().from(cachedRepos))!
     expect(row.urlEnc).toBe(sealed)
     expect(unsealRepoUrl(row, box)).toBe(LEGACY_URL)
     expect(

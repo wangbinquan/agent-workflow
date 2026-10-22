@@ -14,13 +14,14 @@
 //   - the dw admission guard: a generated definition may never contain call
 //     nodes (workgroups are closure leaves — design §5.4-7).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { workflows } from '../src/db/schema'
 import { dwCallNodeRejections } from '../src/services/dynamicWorkflowRunner'
 import {
   loadWorkflowValidationContext,
@@ -45,12 +46,13 @@ const def = (partial: Partial<WorkflowDefinition>): WorkflowDefinition => ({
 })
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   name: string,
   definition: WorkflowDefinition,
 ): Promise<void> {
-  await db.insert(workflows).values({ id, name, definition: JSON.stringify(definition) })
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, { id, name, definition: JSON.stringify(definition) })
 }
 
 /** Child with one text input `topic` and one output port `result`. */

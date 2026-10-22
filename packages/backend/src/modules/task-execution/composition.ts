@@ -13,7 +13,7 @@ import type {
 // RFC-328 — the daemon-owned task-execution composition root.
 
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { TaskClaimGate } from './application/taskClaimGate'
 import { DrizzleTaskOwnershipPersistence } from './infrastructure/taskOwnershipPersistence'
@@ -52,7 +52,7 @@ export class TaskExecutionModule {
    * `read` / `revokeExact` / `markRecoveryRequired` / `heartbeat`。同一件事两份实现，正是本 RFC
    * 要消灭的形态；现在统一从这里按库取中立那份（PG 侧的驱动生命周期本来就是这个形状）。
    */
-  ownershipFor(db: ProviderNeutralDatabase): TaskOwnershipPersistence {
+  ownershipFor(db: PersistenceDb): TaskOwnershipPersistence {
     return new DrizzleTaskOwnershipPersistence(db)
   }
 
@@ -72,7 +72,7 @@ export class TaskExecutionModule {
    * 夹具按调用点补 await。
    */
   async claim(input: {
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     intentId: string
     now?: number
     leaseMs?: number

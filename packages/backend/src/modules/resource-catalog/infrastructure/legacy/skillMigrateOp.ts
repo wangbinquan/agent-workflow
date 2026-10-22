@@ -1,12 +1,9 @@
 // RFC-223 PR-5 — crash-safe skills/{name} -> skills/{id} migration operation.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import { skills, skillVersions } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createFileSkillIdentityContentStore } from '../local/fileSkillIdentityContentStore'
 import {
   legacySkillRootAbs,
@@ -39,7 +36,7 @@ interface MigratePrecondition {
 }
 
 export async function migrateSkillIdentityOp(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fsOpts: SkillOpFsOptions,
   skill: { id: string; name: string },
   hooks: SkillIdentityMigrationHooks = {},
@@ -93,7 +90,8 @@ export const migrateRecoveryHandler: OpRecoveryHandler = {
   },
 }
 
-async function writeCanonicalPaths(tx: DatabaseTransaction, skillId: string): Promise<void> {
+async function writeCanonicalPaths(tx: PersistenceTx, skillId: string): Promise<void> {
+  const { skillVersions, skills } = tablesOf(tx)
   const rows = await tx
     .select({ versionIndex: skillVersions.versionIndex })
     .from(skillVersions)

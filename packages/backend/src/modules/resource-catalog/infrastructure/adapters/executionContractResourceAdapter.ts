@@ -1,15 +1,16 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, workflows } from '@/db/schema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { exposedFrontmatterExtra } from '../agentPersistence'
 import { decodeStoredWorkflowDefinition } from '../workflowPersistence'
 import type { ExecutionContractResourceLookup } from '../../application/ports/executionContractResourceLookup'
 
 export function createExecutionContractResourceLookup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ExecutionContractResourceLookup {
   return {
     async loadAgent(id) {
+      const { agents } = tablesOf(db)
       const rows = await db
         .select({
           name: agents.name,
@@ -30,6 +31,7 @@ export function createExecutionContractResourceLookup(
       }
     },
     async loadWorkflow(id) {
+      const { workflows } = tablesOf(db)
       const rows = await db
         .select({
           name: workflows.name,

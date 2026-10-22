@@ -7,12 +7,12 @@
 //      （epoch +1）必须仍然命中同一行，否则 round 卡死（设计门 P1-3）。
 //   ③ claim CAS 与 admission 写入在**同一个事务**里：中途抛错，两者都不留（AC-3）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import { DomainError } from '@/util/errors'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { reactionExecutionAdmissions } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { composeReactionExecutionAdmissionParticipantInTx } from '@/modules/task-execution/application/adapters/reaction-admission-adapter'
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
@@ -110,7 +110,8 @@ describe('RFC-368 T6 —— Reaction admission（record-before-act）', () => {
         mint: () => 'execution-second-must-not-be-used',
       })
       expect(replay).toBe(first)
-      const rows = await harness.db.select().from(reactionExecutionAdmissions).all()
+      const { reactionExecutionAdmissions } = tablesOf(harness.db)
+      const rows = await harness.db.select().from(reactionExecutionAdmissions)
       expect(rows).toHaveLength(1)
       // fence 推进到当前 epoch，行仍是那一行（P1-3：epoch 不参与唯一键）。
       expect(rows[0]?.claimEpoch).toBe(2)
@@ -148,7 +149,8 @@ describe('RFC-368 T6 —— Reaction admission（record-before-act）', () => {
       await expect(
         admit({ expectedPreviousEpoch: null, nextEpoch: epoch(1), throwAfterAdmit: true }),
       ).rejects.toThrow('rfc368-rollback-probe')
-      expect(await harness.db.select().from(reactionExecutionAdmissions).all()).toHaveLength(0)
+      const { reactionExecutionAdmissions } = tablesOf(harness.db)
+      expect(await harness.db.select().from(reactionExecutionAdmissions)).toHaveLength(0)
     })
 
     test('closeClaim 收口这一轮的**所有** attempt 行，不留 admitted 残留', async () => {
@@ -169,7 +171,8 @@ describe('RFC-368 T6 —— Reaction admission（record-before-act）', () => {
           reason: 'completed',
         })
       })
-      const rows = await harness.db.select().from(reactionExecutionAdmissions).all()
+      const { reactionExecutionAdmissions } = tablesOf(harness.db)
+      const rows = await harness.db.select().from(reactionExecutionAdmissions)
       expect(rows).toHaveLength(2)
       expect(rows.every((row) => row.state === 'closed')).toBe(true)
     })

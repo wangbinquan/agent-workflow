@@ -38,18 +38,10 @@
 // The single-path invariant still holds: self/q (auto-triggered) + designer (manual-triggered) go
 // through the ONE dispatchTaskQuestions mechanism — a single delivery path, two triggers.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  committedEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify/service'
 import { hasOpenDispatchedEntryOnHome } from './rerunLedger'
 import { sealRoundQuestions, type ClarifySealDecisionParticipantInTx } from './seal'
@@ -130,11 +122,12 @@ function parseQuestionIds(questionsJson: string): string[] {
  *  a worktree rollback (the SAME predicate submitClarifyAnswers uses: NOT inline session mode AND a
  *  pre_snapshot exists), else null. Caller has already gated kind==='self' + a non-empty worktree. */
 async function resolveSelfRollbackRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   askingNodeRunId: string,
   intermediaryNodeId: string,
   workflowSnapshot: string,
-): Promise<typeof nodeRuns.$inferSelect | null> {
+): Promise<PersistenceTables['nodeRuns']['$inferSelect'] | null> {
+  const { nodeRuns } = tablesOf(db)
   const askingRun = (
     await db.select().from(nodeRuns).where(eq(nodeRuns.id, askingNodeRunId)).limit(1)
   )[0]
@@ -151,14 +144,17 @@ async function resolveSelfRollbackRun(
  *  (inlined to avoid a module-init import cycle — clarifyAutoDispatch is a leaf consumer). Only built
  *  for a member self run; a null-shard home skips it (see selfHomeHasOpenLedger). */
 async function buildDispatchedEntryShardResolver(
-  db: ProviderNeutralDatabase,
-  entries: ReadonlyArray<Pick<typeof taskQuestions.$inferSelect, 'originNodeRunId' | 'sourceKind'>>,
+  db: PersistenceDb,
+  entries: ReadonlyArray<
+    Pick<PersistenceTables['taskQuestions']['$inferSelect'], 'originNodeRunId' | 'sourceKind'>
+  >,
 ): Promise<(e: { originNodeRunId: string; sourceKind: string }) => string | null> {
   const origins = Array.from(
     new Set(entries.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
   )
   const shardByOrigin = new Map<string, string | null>()
   if (origins.length > 0) {
+    const { clarifyRounds } = tablesOf(db)
     const rounds = await db
       .select({ origin: clarifyRounds.intermediaryNodeRunId, shard: clarifyRounds.askingShardKey })
       .from(clarifyRounds)
@@ -178,7 +174,7 @@ async function buildDispatchedEntryShardResolver(
  * shim converts pre-upgrade leftovers to dispatched entries, so this ONE gate covers all owners.)
  */
 async function selfHomeHasOpenLedger(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   homeNodeId: string,
   /** RFC-172b (T6, S4): the shard of the self run being rolled back (workgroup member = assignment
@@ -186,6 +182,7 @@ async function selfHomeHasOpenLedger(
    *  no longer blocks THIS member's rollback. null = ordinary home (shard-blind, golden-lock). */
   selfShardKey: string | null,
 ): Promise<boolean> {
+  const { nodeRuns, nodeRunOutputs, taskQuestions } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = new Set(
     runs.length === 0
@@ -252,7 +249,7 @@ async function selfHomeHasOpenLedger(
 }
 
 export interface AutoDispatchClarifyRoundArgs {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /** Provider-selected, bootstrap-owned post-commit memory participant. */
   memoryDistillEnqueuer: MemoryDistillEnqueuer
   /** The clarify / cross-clarify round's intermediary node_run id (= the route's :nodeRunId =
@@ -326,7 +323,7 @@ export interface AutoDispatchClarifyDecisionResult extends AutoDispatchClarifyRo
  *  RFC-041 distill enqueue and the RFC-099 attribution freeze). Throws on a
  *  partial seal; returns the sealed question ids. */
 async function sealRoundAsWholeFinalize(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   args: AutoDispatchClarifyRoundArgs,
   round: {
     id: string
@@ -409,7 +406,7 @@ async function sealRoundAsWholeFinalize(
  *  auto-dispatch (aggregate sibling rounds → same board dispatch path; park
  *  等齐 on DESIGNER_DEFERRABLE_CONFLICTS). No-op for kind='self'. */
 async function dispatchSealedDesignerEntries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   args: AutoDispatchClarifyRoundArgs,
   round: { kind: 'self' | 'cross'; taskId: string },
   originNodeRunId: string,
@@ -427,6 +424,7 @@ async function dispatchSealedDesignerEntries(
   //    dispatch (never nested). self rounds have no designer entries ⇒ no-op for kind==='self'.
   let designerDispatch: DispatchTaskQuestionsResult = EMPTY_DISPATCH
   if (round.kind === 'cross') {
+    const { taskQuestions } = tablesOf(db)
     // This round's sealed-undispatched-open designer entries → their effective target designer(s)
     // (override ?? graph designer).
     const thisRoundDesigner = await db
@@ -544,7 +542,7 @@ function mergeDurableDispatchResult(
     typeof humanGateComposition.decodeCollaborationCommittedEvent
   >[],
   entries: readonly Pick<
-    typeof taskQuestions.$inferSelect,
+    PersistenceTables['taskQuestions']['$inferSelect'],
     'id' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'dispatchedAt'
   >[],
 ): DispatchTaskQuestionsResult {
@@ -610,10 +608,11 @@ function mergeDurableDispatchResult(
 }
 
 async function rebuildCommittedClarifyDispatch(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   operationId: string,
   local: DispatchTaskQuestionsResult,
 ): Promise<DispatchTaskQuestionsResult> {
+  const { committedEvents, taskQuestions } = tablesOf(db)
   const rows = await db
     .select({ payloadJson: committedEvents.payloadJson })
     .from(committedEvents)
@@ -653,13 +652,14 @@ async function rebuildCommittedClarifyDispatch(
 }
 
 export async function finishCommittedClarifyAutoDispatch(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
   readonly operationId: string
   readonly expectedTaskId?: string
   readonly expectedOriginNodeRunId?: string
   readonly expectedContinuationRef?: string
 }): Promise<AutoDispatchClarifyRoundResult> {
+  const { collaborationGateOperations, taskQuestions, clarifyRounds } = tablesOf(input.db)
   const operation = (
     await input.db
       .select()
@@ -785,6 +785,7 @@ export async function finishCommittedClarifyAutoDispatch(input: {
 export async function autoDispatchClarifyRoundWithDecision(
   args: AutoDispatchClarifyRoundArgs & { readonly decision?: ClarifyDecisionArgs },
 ): Promise<AutoDispatchClarifyDecisionResult> {
+  const { clarifyRounds, tasks } = tablesOf(args.db)
   const round = (
     await args.db
       .select({
@@ -901,6 +902,7 @@ export async function autoDispatchClarifyRound(
 ): Promise<AutoDispatchClarifyRoundResult> {
   const { db, originNodeRunId } = args
 
+  const { clarifyRounds, tasks, taskQuestions } = tablesOf(db)
   // 1. Locate the round (kind + task + questions + asking run + clarify node). The route already
   //    gated membership. askingNodeRunId + intermediaryNodeId feed the self-clarify rollback below.
   const round = (
@@ -1242,7 +1244,7 @@ export async function autoDispatchClarifyRound(
  *  the runTask tick top (scheduler.ts), pre-deriveFrontier, so a freshly-released home (its
  *  in-flight rerun just completed) redispatches on the very tick that completion triggers. */
 export async function autoDispatchDeferredQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<void> {
   // Codex impl-gate P2: TASK_QUESTION_CONFLICT.targetChanged resolves by RE-PLANNING, not by waiting —

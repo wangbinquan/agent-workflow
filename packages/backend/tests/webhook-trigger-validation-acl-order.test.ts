@@ -19,11 +19,12 @@
 //   但 RFC-260 已经把 webhook 的**读**面下放给了全体用户，写面下放是可预见的演进；
 //   没有这条锁，那一天泄漏会静默变成真漏洞。因此测试直接在**服务层**构造一个
 //   role='user' 的 actor，绕开路由权限矩阵，精确断言函数自身的顺序契约。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
 import { createUser } from './helpers/userFixture'
@@ -40,7 +41,7 @@ const SECRET_INPUT_KEYS = ['classified_prompt', 'classified_ref', 'classified_mo
 // RFC-359 AC-6：`assertWebhookTriggerSaveable` 的三个实参（ScheduledTaskOperations /
 // Actor / IntegrationTriggerResourceAuthority）本来就是中立面，夹具只差一个中立的库句柄。
 async function seedFixture(providerHarness: ProviderHarness): Promise<{
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   workflowId: string
   owner: Actor
   outsider: Actor
@@ -59,7 +60,8 @@ async function seedFixture(providerHarness: ProviderHarness): Promise<{
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'classified-workflow',
     description: '',

@@ -13,11 +13,12 @@
 //     drops the legacy tables + migrates all writers to clarify_rounds, the
 //     PR-A baseline tests will exercise these helpers indirectly.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   getClarifyRoundDetail,
   listClarifyRoundSummaries,
@@ -28,7 +29,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; definition: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const definition: WorkflowDefinition = {
@@ -44,7 +45,8 @@ async function seedTask(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rounds-test',
     description: '',
@@ -52,7 +54,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -112,6 +114,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
   test('kind=all returns both self + cross; kind filter narrows', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
     await db.insert(nodeRuns).values([
       {
         id: 'nr_d',
@@ -190,6 +193,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
   test('limit caps the result set; default status=awaiting_human filters answered', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
     await db.insert(nodeRuns).values([
       {
         id: 'nr_d',
@@ -251,12 +255,13 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
 // ---------------------------------------------------------------------------
 
 async function seedNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   id: string,
   nodeId: string,
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -272,7 +277,8 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: 'r1',
       taskId,
       kind: 'self',
@@ -320,6 +326,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c1', 'clarify1')
     await seedNodeRun(db, taskId, 'nr_c2', 'clarify1')
+    const { clarifyRounds } = tablesOf(db)
     await db.insert(clarifyRounds).values([
       {
         id: 'r_open',
@@ -366,6 +373,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
     await seedNodeRun(db, taskId, 'nr_q', 'questioner')
     await seedNodeRun(db, taskId, 'nr_c1', 'clarify1')
     await seedNodeRun(db, taskId, 'nr_cc1', 'cc1')
+    const { clarifyRounds } = tablesOf(db)
     await db.insert(clarifyRounds).values([
       {
         id: 'r_self',
@@ -411,7 +419,8 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: 'r1',
       taskId,
       kind: 'self',
@@ -441,7 +450,8 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: 'r_ans',
       taskId,
       kind: 'self',

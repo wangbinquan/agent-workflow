@@ -119,7 +119,9 @@ describe('RFC-349 code-capability provider boundary', () => {
     // 被删的注释正好含这个名字，裸 `not.toContain` 会被自己的注释绊倒。
     expect(source).not.toContain('export function createSqliteCapabilityTemplatePackageCommitSync')
     expect(source).toContain('createPostgresqlCapabilityTemplatePackageCommit')
-    expect(source).toContain('tx.insert(capabilityTemplates)')
+    expect(source).toMatch(
+      /(?:\.insert\(\s*capabilityTemplates\s*\)|\binsertOne\([^,]+,\s*capabilityTemplates\s*,)/,
+    )
     expect(source).toContain('await tx')
   })
 

@@ -6,13 +6,14 @@
 // touch any node_runs.injected_memories_json column (historical inject
 // snapshots are frozen; admin edits only affect future inject reads).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, memoryScopeMoveEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -25,7 +26,7 @@ import type { Memory } from '@agent-workflow/shared'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   daemonToken: string
   adminUserId: string
@@ -261,7 +262,8 @@ describeEachProviderHttpApplication(
       // that includes a record of the memory at its v1 state. PATCHing the
       // memory must NOT rewrite this historical column.
       const workflowId = ulid()
-      await h.db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: workflowId,
         name: 'wf-test',
         description: '',
@@ -272,7 +274,7 @@ describeEachProviderHttpApplication(
         updatedAt: Date.now(),
       })
       const taskId = ulid()
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         id: taskId,
         name: 'task-rfc045-test',
         workflowId,
@@ -300,7 +302,7 @@ describeEachProviderHttpApplication(
           approvedAt: Date.now(),
         },
       ])
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -350,7 +352,8 @@ describeEachProviderHttpApplication(
 
     test('trusted route identity moves a candidate and persists its audit receipt', async () => {
       const agentId = ulid()
-      await h.db.insert(agents).values({
+      const { agents, memoryScopeMoveEvents } = tablesOf(h.db)
+      await insertOne(h.db, agents, {
         id: agentId,
         name: `route-move-agent-${agentId.slice(-6)}`,
         description: '',
@@ -421,6 +424,7 @@ describeEachProviderHttpApplication(
         }),
       )
       expect(res.status).toBe(422)
+      const { memoryScopeMoveEvents } = tablesOf(h.db)
       expect(await h.db.select().from(memoryScopeMoveEvents)).toEqual([])
     })
   },

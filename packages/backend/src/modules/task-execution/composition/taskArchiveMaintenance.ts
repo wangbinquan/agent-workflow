@@ -1,5 +1,5 @@
 // RFC-370: select archive content at composition; both providers share the original coordinator.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
 import type {
   TaskArchiveMaintenanceCommand,
@@ -31,7 +31,7 @@ export interface TaskArchiveContentBinding {
 }
 
 export function createDrizzleTaskArchiveMaintenanceCommand(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly content?: TaskArchiveContentPort
     readonly locations?: TaskArchiveContentBinding['locations']

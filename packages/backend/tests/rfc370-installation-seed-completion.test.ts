@@ -1,5 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { agents, capabilityTemplates, workflows } from '@/db/schema'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
@@ -12,11 +12,14 @@ describeEachProvider('RFC-370 selected installation seed completion', (harness) 
     resourceCatalog: composeDemoResourceCatalogSeedParticipant(harness.db),
     codeCapability: composeCodeCapabilityDemoSeedParticipant(harness.db),
   })
-  const snapshot = async () => ({
-    agents: await harness.db.select().from(agents).all(),
-    workflows: await harness.db.select().from(workflows).all(),
-    templates: await harness.db.select().from(capabilityTemplates).all(),
-  })
+  const snapshot = async () => {
+    const { agents, workflows, capabilityTemplates } = tablesOf(harness.db)
+    return {
+      agents: await harness.db.select().from(agents),
+      workflows: await harness.db.select().from(workflows),
+      templates: await harness.db.select().from(capabilityTemplates),
+    }
+  }
 
   for (const offered of [true, false]) {
     test(`awaits selected ${offered ? 'completed' : 'fresh'} fact before calling any owner`, async () => {

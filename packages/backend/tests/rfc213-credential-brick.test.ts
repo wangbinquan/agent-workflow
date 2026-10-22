@@ -8,6 +8,8 @@
 // MUTATION CHECK (manually verified): make checkSealedCredentials always return
 // ok:true → the mismatched-key and missing-key cases red.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { mkdtempSync, unlinkSync } from 'node:fs'
@@ -17,7 +19,6 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBox } from '../src/auth/secretBox'
 import { openDb, type DbClient } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
 import { checkSealedCredentials } from '../src/cli/doctor'
 import { sealRepoUrl } from '../src/services/repoCredentials'
 
@@ -57,16 +58,15 @@ function seed(appHome: string): void {
   const keyPath = join(appHome, 'secret.key')
   const box = createSecretBox(keyPath)
   const db: DbClient = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
-  db.insert(cachedRepos)
-    .values({
-      id: ulid(),
-      urlHash: 'abcd1234',
-      urlEnc: sealRepoUrl(box, 'https://user:token@github.com/a/b.git'),
-      localPath: '/x',
-      lastFetchedAt: 0,
-      createdAt: 0,
-    })
-    .run()
+  const { cachedRepos } = tablesOf(db)
+  insertOne(db, cachedRepos, {
+    id: ulid(),
+    urlHash: 'abcd1234',
+    urlEnc: sealRepoUrl(box, 'https://user:token@github.com/a/b.git'),
+    localPath: '/x',
+    lastFetchedAt: 0,
+    createdAt: 0,
+  })
   const s = (db as unknown as { $client: Database }).$client
   s.exec('PRAGMA wal_checkpoint(TRUNCATE);')
   s.close()

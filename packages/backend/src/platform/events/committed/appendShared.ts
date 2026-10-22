@@ -3,9 +3,9 @@
 // 这些以前在 `sqliteStore.ts` 与 `postgresqlPersistence.ts` 各抄一份。RFC-359 把 append 路径
 // 合成一份实现（`append.ts`），纯函数随之只剩这一份，两个引擎的存储层都从这里取。
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { canonicalJson } from '@agent-workflow/shared'
 
-import type { committedEventFamilyCutovers, committedEvents } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type {
   AppendCommittedEventInput,
@@ -75,7 +75,7 @@ export function validateAppendInput(input: AppendCommittedEventInput<string, unk
 }
 
 export function cutoverFromRow(
-  row: typeof committedEventFamilyCutovers.$inferSelect,
+  row: PersistenceTables['committedEventFamilyCutovers']['$inferSelect'],
 ): CommittedEventCutover {
   return {
     producer: row.producer,
@@ -87,7 +87,9 @@ export function cutoverFromRow(
   }
 }
 
-export function eventRefFromRow(row: typeof committedEvents.$inferSelect): CommittedEventRef {
+export function eventRefFromRow(
+  row: PersistenceTables['committedEvents']['$inferSelect'],
+): CommittedEventRef {
   return {
     eventId: row.id,
     payloadDigest: row.payloadDigest,
@@ -105,7 +107,9 @@ export function eventRefFromRow(row: typeof committedEvents.$inferSelect): Commi
   }
 }
 
-export function storedEventFromRow(row: typeof committedEvents.$inferSelect): StoredCommittedEvent {
+export function storedEventFromRow(
+  row: PersistenceTables['committedEvents']['$inferSelect'],
+): StoredCommittedEvent {
   if (!payloadDigestMatches(row.payloadJson, row.payloadDigest)) {
     throw new Error(`committed event payload digest does not match: ${row.id}`)
   }

@@ -1,18 +1,12 @@
 // RFC-359 —— 问题派发场景的双引擎夹具（移植自 rfc140-one-click-dispatch-all.test.ts 的种子）。
 // 只用 provider-中立的 drizzle 写入，SQLite 与 PostgreSQL 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -83,9 +77,10 @@ function ans(qid: string) {
   }
 }
 
-export async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+export async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359',
     description: '',
@@ -93,7 +88,7 @@ export async function seedTask(db: ProviderNeutralDatabase, taskId: string): Pro
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359',
     workflowId: `wf_${taskId}`,
@@ -115,13 +110,14 @@ export async function seedTask(db: ProviderNeutralDatabase, taskId: string): Pro
 }
 
 export async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -131,13 +127,13 @@ export async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
 
 export async function seedRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   kind: 'self' | 'cross',
   questions: ClarifyQuestion[],
@@ -152,7 +148,8 @@ export async function seedRound(
     status: open ? 'awaiting_human' : 'done',
   })
   const roundId = ulid()
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: roundId,
     taskId,
     kind,
@@ -172,7 +169,7 @@ export async function seedRound(
 }
 
 export async function insertEntry(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   e: {
     originNodeRunId: string
@@ -185,7 +182,8 @@ export async function insertEntry(
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -209,13 +207,15 @@ export async function insertEntry(
   return id
 }
 
-export const entryById = async (db: ProviderNeutralDatabase, id: string) =>
-  (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+export const entryById = async (db: PersistenceDb, id: string) => {
+  const { taskQuestions } = tablesOf(db)
+  return (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+}
 
 /** 混批夹具：DESIGNER home 上 self（clarify-answer）+ designer（cross-clarify-answer）两类 cause；
  *  self staged 更早 → aging 选 self 先发，designer 批被 defer。 */
 export async function seedMixedBatch(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ selfIds: string[]; designerIds: string[] }> {
   await seedTask(db, taskId)

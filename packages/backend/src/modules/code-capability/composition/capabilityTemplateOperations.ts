@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCapabilityTemplateOperations,
   type CapabilityTemplateOperations,
@@ -24,7 +24,7 @@ export type {
  * 而 `createCapabilityTemplatePersistence` 本来就收中立客户端。收成一份（plan §5ds）。
  */
 export function composeCapabilityTemplateOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly access: CapabilityTemplateResourceAccess
   readonly now?: () => number
 }): CapabilityTemplateOperations {

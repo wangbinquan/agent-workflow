@@ -13,10 +13,10 @@
 // collaboration 侧的投影由 `DatabaseHumanGateOpenParticipantInTx` 在同一笔事务里完成；本文件只
 // 负责任务生命周期 CAS、围栏与提交后的事件发布。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/infrastructure/humanGateOpenParticipant'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
@@ -71,6 +71,7 @@ async function parkRevision(
   input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],
 ): Promise<number> {
   if (input.token === undefined) return input.prepared.expectedTaskRevision
+  const { tasks } = tablesOf(tx)
   const row = (
     await tx
       .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
@@ -92,7 +93,7 @@ function gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipant
 
 export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskLifecycle {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly runtimeLifecycle: DrizzleTaskRuntimeLifecyclePersistence,
   ) {}
 
@@ -145,6 +146,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
   ): ReturnType<HumanGateTaskLifecycle['settleManualQuestionParks']> {
     const result = await withTaskExecutionSerializable(this.db, async (tx) => {
       await fence(tx, input.taskId, input.token, input.now)
+      const { tasks } = tablesOf(tx)
       const task = (
         await tx
           .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })

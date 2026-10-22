@@ -1,9 +1,10 @@
 // RFC-359 W4-D12 —— requirement bundle 指针行的持久化：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, desc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { developmentBundleRefs } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   RequirementBundleRefPersistence,
@@ -34,7 +35,9 @@ function retentionStateOf(value: string): RequirementBundleRefRecord['retentionS
   }
 }
 
-function recordOf(row: typeof developmentBundleRefs.$inferSelect): RequirementBundleRefRecord {
+function recordOf(
+  row: PersistenceTables['developmentBundleRefs']['$inferSelect'],
+): RequirementBundleRefRecord {
   return {
     id: row.id,
     missionId: row.missionId,
@@ -48,11 +51,14 @@ function recordOf(row: typeof developmentBundleRefs.$inferSelect): RequirementBu
   }
 }
 
-function valuesOf(record: RequirementBundleRefRecord): typeof developmentBundleRefs.$inferInsert {
+function valuesOf(
+  record: RequirementBundleRefRecord,
+): PersistenceTables['developmentBundleRefs']['$inferInsert'] {
   return { ...record }
 }
 
-function latestOf(missionId: string, purpose: RequirementBundleRefPurpose) {
+function latestOf(db: object, missionId: string, purpose: RequirementBundleRefPurpose) {
+  const { developmentBundleRefs } = tablesOf(db)
   return {
     where: and(
       eq(developmentBundleRefs.missionId, missionId),
@@ -63,14 +69,16 @@ function latestOf(missionId: string, purpose: RequirementBundleRefPurpose) {
 }
 
 export function createRequirementBundleRefPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): RequirementBundleRefPersistence {
   const session = databaseSessionFor(db)
   return {
     async insert(record) {
-      await db.insert(developmentBundleRefs).values(valuesOf(record))
+      const { developmentBundleRefs } = tablesOf(db)
+      await insertOne(db, developmentBundleRefs, valuesOf(record))
     },
     async get(id) {
+      const { developmentBundleRefs } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -81,7 +89,8 @@ export function createRequirementBundleRefPersistence(
       return row === undefined ? null : recordOf(row)
     },
     async latest(missionId, purpose) {
-      const query = latestOf(missionId, purpose)
+      const query = latestOf(db, missionId, purpose)
+      const { developmentBundleRefs } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -93,6 +102,7 @@ export function createRequirementBundleRefPersistence(
       return row === undefined ? null : recordOf(row)
     },
     async findManifest(missionId, manifestDigest) {
+      const { developmentBundleRefs } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -114,7 +124,8 @@ export function createRequirementBundleRefPersistence(
       return await session.transaction(async (tx) => {
         let copied = 0
         for (const copy of input.copies) {
-          const query = latestOf(input.fromMissionId, copy.purpose)
+          const query = latestOf(tx, input.fromMissionId, copy.purpose)
+          const { developmentBundleRefs } = tablesOf(tx)
           const row = (
             await tx
               .select()
@@ -124,7 +135,7 @@ export function createRequirementBundleRefPersistence(
               .limit(1)
           )[0]
           if (row === undefined) continue
-          await tx.insert(developmentBundleRefs).values({
+          await insertOne(tx, developmentBundleRefs, {
             ...row,
             id: copy.id,
             missionId: input.toMissionId,

@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type {
   ResourcePackagePendingResourceId as PostgresqlResourcePackagePendingResourceId,
   ResourcePackageRequestIds as PostgresqlResourcePackageRequestIds,
@@ -24,17 +26,6 @@ import { decodeBundleIdentityRef, type ResourceVisibility } from '@agent-workflo
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
-import {
-  agents,
-  capabilityTemplates,
-  mcps,
-  plugins,
-  resourceGrants,
-  skills,
-  users,
-  workflows,
-  workgroups,
-} from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import type {
   ResourcePackageHumanMemberMapping,
@@ -258,7 +249,8 @@ async function getResourceById(
 ): Promise<PostgresqlResourcePackageResource | null> {
   switch (type) {
     case 'agent': {
-      const row = await transaction.select().from(agents).where(eq(agents.id, id)).get()
+      const { agents } = tablesOf(transaction)
+      const row = await first(transaction.select().from(agents).where(eq(agents.id, id)))
       return row === undefined
         ? null
         : Object.freeze({
@@ -272,7 +264,8 @@ async function getResourceById(
           })
     }
     case 'skill': {
-      const row = await transaction.select().from(skills).where(eq(skills.id, id)).get()
+      const { skills } = tablesOf(transaction)
+      const row = await first(transaction.select().from(skills).where(eq(skills.id, id)))
       return row === undefined
         ? null
         : Object.freeze({
@@ -287,7 +280,8 @@ async function getResourceById(
           })
     }
     case 'mcp': {
-      const row = await transaction.select().from(mcps).where(eq(mcps.id, id)).get()
+      const { mcps } = tablesOf(transaction)
+      const row = await first(transaction.select().from(mcps).where(eq(mcps.id, id)))
       return row === undefined
         ? null
         : Object.freeze({
@@ -300,7 +294,8 @@ async function getResourceById(
           })
     }
     case 'plugin': {
-      const row = await transaction.select().from(plugins).where(eq(plugins.id, id)).get()
+      const { plugins } = tablesOf(transaction)
+      const row = await first(transaction.select().from(plugins).where(eq(plugins.id, id)))
       return row === undefined
         ? null
         : Object.freeze({
@@ -313,7 +308,8 @@ async function getResourceById(
           })
     }
     case 'workflow': {
-      const row = await transaction.select().from(workflows).where(eq(workflows.id, id)).get()
+      const { workflows } = tablesOf(transaction)
+      const row = await first(transaction.select().from(workflows).where(eq(workflows.id, id)))
       return row === undefined
         ? null
         : Object.freeze({
@@ -323,7 +319,8 @@ async function getResourceById(
           })
     }
     case 'workgroup': {
-      const row = await transaction.select().from(workgroups).where(eq(workgroups.id, id)).get()
+      const { workgroups } = tablesOf(transaction)
+      const row = await first(transaction.select().from(workgroups).where(eq(workgroups.id, id)))
       return row === undefined
         ? null
         : Object.freeze({
@@ -333,11 +330,10 @@ async function getResourceById(
           })
     }
     case 'capability_template': {
-      const row = await transaction
-        .select()
-        .from(capabilityTemplates)
-        .where(eq(capabilityTemplates.id, id))
-        .get()
+      const { capabilityTemplates } = tablesOf(transaction)
+      const row = await first(
+        transaction.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id)),
+      )
       return row === undefined
         ? null
         : Object.freeze({
@@ -359,32 +355,36 @@ async function findBuiltinResource(
   name: string,
 ): Promise<PostgresqlResourcePackageResource | null> {
   let id: string | undefined
+  const { agents, workflows, capabilityTemplates } = tablesOf(transaction)
   switch (type) {
     case 'agent':
       id = (
-        await transaction
-          .select({ id: agents.id })
-          .from(agents)
-          .where(and(eq(agents.name, name), eq(agents.builtin, true)))
-          .get()
+        await first(
+          transaction
+            .select({ id: agents.id })
+            .from(agents)
+            .where(and(eq(agents.name, name), eq(agents.builtin, true))),
+        )
       )?.id
       break
     case 'workflow':
       id = (
-        await transaction
-          .select({ id: workflows.id })
-          .from(workflows)
-          .where(and(eq(workflows.name, name), eq(workflows.builtin, true)))
-          .get()
+        await first(
+          transaction
+            .select({ id: workflows.id })
+            .from(workflows)
+            .where(and(eq(workflows.name, name), eq(workflows.builtin, true))),
+        )
       )?.id
       break
     case 'capability_template':
       id = (
-        await transaction
-          .select({ id: capabilityTemplates.id })
-          .from(capabilityTemplates)
-          .where(and(eq(capabilityTemplates.name, name), eq(capabilityTemplates.builtin, true)))
-          .get()
+        await first(
+          transaction
+            .select({ id: capabilityTemplates.id })
+            .from(capabilityTemplates)
+            .where(and(eq(capabilityTemplates.name, name), eq(capabilityTemplates.builtin, true))),
+        )
       )?.id
       break
     case 'skill':
@@ -442,17 +442,19 @@ export function bindPostgresqlResourcePackageTransactionReader(
   ): Promise<PostgresqlResourcePackageResource | null> {
     const resource = await getResourceById(transaction, type, id)
     if (resource === null) return null
-    const grant = await transaction
-      .select({ level: resourceGrants.level })
-      .from(resourceGrants)
-      .where(
-        and(
-          eq(resourceGrants.resourceType, type),
-          eq(resourceGrants.resourceId, id),
-          eq(resourceGrants.userId, actor.user.id),
+    const { resourceGrants } = tablesOf(transaction)
+    const grant = await first(
+      transaction
+        .select({ level: resourceGrants.level })
+        .from(resourceGrants)
+        .where(
+          and(
+            eq(resourceGrants.resourceType, type),
+            eq(resourceGrants.resourceId, id),
+            eq(resourceGrants.userId, actor.user.id),
+          ),
         ),
-      )
-      .get()
+    )
     return canViewAccess(resolveResourceAccess(actor, resource, grant?.level ?? null))
       ? resource
       : null
@@ -494,11 +496,11 @@ export function bindPostgresqlResourcePackageTransactionReader(
     },
     async findActiveUsers(usernames) {
       if (usernames.length === 0) return []
+      const { users } = tablesOf(transaction)
       const rows = await transaction
         .select({ id: users.id, username: users.username, status: users.status })
         .from(users)
         .where(inArray(users.username, [...new Set(usernames)]))
-        .all()
       return rows
         .filter((row) => row.status === 'active')
         .map((row) => Object.freeze({ username: row.username, userId: row.id }))
@@ -506,11 +508,11 @@ export function bindPostgresqlResourcePackageTransactionReader(
     async findActiveUsersByIds(userIds) {
       const requested = [...new Set(userIds)]
       if (requested.length === 0) return []
+      const { users } = tablesOf(transaction)
       const rows = await transaction
         .select({ id: users.id })
         .from(users)
         .where(and(inArray(users.id, requested), eq(users.status, 'active')))
-        .all()
       const active = new Set(rows.map((row) => row.id))
       return requested.flatMap((userId) => (active.has(userId) ? [Object.freeze({ userId })] : []))
     },

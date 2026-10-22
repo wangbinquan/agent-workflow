@@ -10,12 +10,13 @@
 //   - taskNodeRunsProjection 响应 mapper 带出 rerunCause（P1-3 勘误缝位：routes 是薄
 //     委托、无 select 可加——wire 缝在 services/task.ts 的手写 mapper）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { tasks, workflows } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -54,8 +55,9 @@ describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCau
     const db = harness.db
     const taskId = ulid()
     const wfId = ulid()
-    await db.insert(workflows).values({ id: wfId, name: `wf-${wfId}`, definition: '{}' })
-    await db.insert(tasks).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'rfc182-wire',
       workflowId: wfId,
@@ -80,7 +82,7 @@ describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCau
       cause: 'wg-message-turn',
       overrides: { shardKey: 'msg:m-x:0' },
     })
-    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
+    const { runs } = await taskNodeRunsProjection({ db }, taskId)
     const run = runs.find((r) => r.id === runId)
     expect(run?.rerunCause).toBe('wg-message-turn')
   })

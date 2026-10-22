@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-382: exercise the real session graph on both databases, including pre-fix controls.
 import { afterEach, expect, spyOn, test } from 'bun:test'
@@ -7,7 +9,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { WorkflowDefinitionSchema, type Config } from '@agent-workflow/shared'
-import { agents, lifecycleAlerts, taskExecutionIntents } from '@/db/schema'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import { validateWorkflowDef } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
@@ -158,7 +159,8 @@ describeEachProvider('RFC-382 session task execution bundle', (harness) => {
       await fixture.waitForDrive(2)
       await bundle.executionModule.runtimeRegistry.awaitReleasedSettled(auto.taskId)
       const repair = await seedBundleTask(harness, appHome, 'pending', false)
-      await harness.db.insert(lifecycleAlerts).values({
+      const { lifecycleAlerts } = tablesOf(harness.db)
+      await insertOne(harness.db, lifecycleAlerts, {
         id: ulid(),
         taskId: repair.taskId,
         rule: 'S4',
@@ -254,6 +256,7 @@ describeEachProvider('RFC-382 session task execution bundle', (harness) => {
       errorSummary: 'task drive failed',
       errorMessage: 'rfc382-engine-failure',
     })
+    const { taskExecutionIntents } = tablesOf(harness.db)
     const [intent] = await harness.db
       .select()
       .from(taskExecutionIntents)
@@ -305,9 +308,14 @@ describeEachProvider('RFC-382 session task execution bundle', (harness) => {
     const fixture = taskBundleInput(harness, home()),
       bundle = fixture.compose(),
       id = ulid()
-    await harness.db
-      .insert(agents)
-      .values({ id, name: `builtin-${id}`, builtin: true, schemaVersion: 2, bodyMd: 'fixture' })
+    const { agents } = tablesOf(harness.db)
+    await insertOne(harness.db, agents, {
+      id,
+      name: `builtin-${id}`,
+      builtin: true,
+      schemaVersion: 2,
+      bodyMd: 'fixture',
+    })
     const authority = await admitTestDirectAuthority(fixture.identityAccess.directAuthority, {
       source: 'daemon',
     })

@@ -17,6 +17,8 @@
 // runNode call). Tests 3–5 use MOCK_OPENCODE_OUTPUTS to fake one envelope
 // per subprocess.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -24,9 +26,8 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -35,7 +36,7 @@ import {
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -57,7 +58,7 @@ function buildHarness(provider: ProviderHarness): Harness {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[],
   options: {
@@ -75,7 +76,8 @@ async function seedAgent(
     extra.outputKinds = options.outputKinds
   }
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -97,14 +99,15 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -196,6 +199,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
     // wrapper-fanout row done + __done__ signal port empty
@@ -266,6 +270,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       })
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
       expect(taskRows[0]?.status, innerKind).toBe('failed')
       const wrapperRows = await h.db
@@ -323,6 +328,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
@@ -409,6 +415,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
@@ -494,6 +501,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(taskRows[0]?.status).toBe('done')
     const innerRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
@@ -536,6 +544,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       fanoutMaxShardTotal: 3,
     })
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('failed')
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))

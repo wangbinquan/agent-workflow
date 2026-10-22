@@ -10,15 +10,16 @@
 //      本身就泄露了私有 scope 里有哪些记忆存在（这是本 RFC 唯一不可商量的约束）；
 //   3. MCP `resource_read` 的 query 真的透传到路由，`method:'facets'` 打到 facets 端点。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
 import { type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import { agents } from '../src/db/schema'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
 import {} from '@/modules/collaboration/composition/decisionCommands'
 import {
@@ -38,7 +39,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-interface Harness<TDb = ProviderNeutralDatabase> {
+interface Harness<TDb = PersistenceDb> {
   db: TDb
   identityAccess: IdentityAccessRuntime
   app: Hono
@@ -51,7 +52,7 @@ interface Harness<TDb = ProviderNeutralDatabase> {
 }
 
 /** 两条路共用的种子：建两个用户、发两枚会话票。 */
-async function seedHarness<TDb extends ProviderNeutralDatabase>(
+async function seedHarness<TDb extends PersistenceDb>(
   db: TDb,
   app: Hono,
   identityAccess: IdentityAccessRuntime,
@@ -259,7 +260,8 @@ describeEachProviderHttpApplication(
           title: 'g',
           tags: ['global-tag'],
         })
-        await h.db.insert(agents).values({
+        const { agents } = tablesOf(h.db)
+        await insertOne(h.db, agents, {
           id: 'agt_1',
           name: 'a1',
           ownerUserId: h.adminId,
@@ -281,7 +283,8 @@ describeEachProviderHttpApplication(
       })
 
       test('看不见的 scope 的标签不出现在 facets 里（标签名本身也是泄露）', async () => {
-        await h.db.insert(agents).values({
+        const { agents } = tablesOf(h.db)
+        await insertOne(h.db, agents, {
           id: 'agt_private',
           name: 'private-agent',
           ownerUserId: h.adminId,

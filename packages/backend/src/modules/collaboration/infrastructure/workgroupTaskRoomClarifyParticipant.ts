@@ -1,18 +1,19 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, ne } from 'drizzle-orm'
 
-import { clarifyRounds, taskNodeClarifyDirectives } from '@/db/schema'
 import type { WorkgroupTaskRoomClarifyParticipantInTx } from '@/modules/task-execution/public/commands'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /**
  * RFC-359 W4-D19a —— Collaboration 在工作组任务房事务里的那一半：一份实现，两个 provider 共用。
  * 调用方持有事务；这个参与者只碰 Collaboration 自己的表，不开嵌套事务、不读 TaskExecution / Resource Catalog。
  */
 export function createWorkgroupTaskRoomClarifyParticipantInTx(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
 ): WorkgroupTaskRoomClarifyParticipantInTx {
   return Object.freeze({
     async loadProjection(taskId) {
+      const { clarifyRounds, taskNodeClarifyDirectives } = tablesOf(transaction)
       const [open, directives] = await Promise.all([
         transaction
           .select({ askingNodeRunId: clarifyRounds.askingNodeRunId })
@@ -45,6 +46,7 @@ export function createWorkgroupTaskRoomClarifyParticipantInTx(
       })
     },
     async dismissOpenSelfClarifies(input) {
+      const { clarifyRounds } = tablesOf(transaction)
       const open = await transaction
         .select({
           id: clarifyRounds.id,

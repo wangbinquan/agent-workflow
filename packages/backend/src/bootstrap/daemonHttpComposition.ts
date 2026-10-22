@@ -12,7 +12,7 @@ import { type DaemonObservationModules } from '@/bootstrap/daemonModules/observa
 import { type SelectedDaemonProviderCore } from '@/bootstrap/daemonModules/providerCore'
 import { type DaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
 import { type DaemonResourceCatalogModules } from '@/bootstrap/daemonModules/resourceCatalog'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import type {
   PortArtifactOperations,
@@ -90,7 +90,7 @@ import type {
 
 /** Named production entry points keep provider selection explicit at bootstrap. */
 export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly token: string
   readonly appHome: string
   readonly secretBox: SecretBox

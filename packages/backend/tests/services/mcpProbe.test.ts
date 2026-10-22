@@ -22,7 +22,7 @@
 //   - Env isolation: buildStdioEnv drops daemon SOME_FAKE_TOKEN and includes
 //     only PATH/HOME/LANG + the explicit mcp.config.env keys.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type { Mcp } from '@agent-workflow/shared'
 import {
   buildStdioEnv,
@@ -106,10 +106,6 @@ function makeFakeClient(opts: FakeClientOpts): ProbedMcpClient {
 function fakeOpener(client: ProbedMcpClient, handshakeMs = 50): OpenClientFn {
   return async () => ({ client, handshakeMs })
 }
-
-afterEach(() => {
-  // Inflight map should empty after every test (probe Promise finally drops it).
-})
 
 // ----------------------------- tests -----------------------------------------
 

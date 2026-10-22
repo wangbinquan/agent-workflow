@@ -1,11 +1,11 @@
 // RFC-359 W4-D13 —— development 交付面的仓库 / MR 事实目录：一份实现，两个 provider 共用。
 // 无密钥嵌入下的「volatile 仓库 URL」按数据库句柄身份取（此前只有 SQLite 版接了这条回退）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos, developmentMissions, developmentMrClaims } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { matchRepoProvider } from '@/modules/integration/composition/codeHostEffects'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
@@ -70,9 +70,10 @@ function providerFrom(input: {
   return Object.freeze(provider)
 }
 
-function directoryOf(db: ProviderNeutralDatabase): DevelopmentDeliveryDirectory {
+function directoryOf(db: PersistenceDb): DevelopmentDeliveryDirectory {
   return {
     async repository(id) {
+      const { cachedRepos } = tablesOf(db)
       return (
         (
           await db
@@ -88,6 +89,7 @@ function directoryOf(db: ProviderNeutralDatabase): DevelopmentDeliveryDirectory 
       )
     },
     async mrFactTarget(input) {
+      const { developmentMissions, developmentMrClaims } = tablesOf(db)
       return (
         (
           await db
@@ -112,7 +114,7 @@ function directoryOf(db: ProviderNeutralDatabase): DevelopmentDeliveryDirectory 
 }
 
 export function createDevelopmentDeliveryProvider(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly secretBox?: SecretBox
   readonly connections: CodeHostConnectionsService
   readonly pipeline: SelectedPipelineEvidenceExecution

@@ -14,6 +14,8 @@
 // (or believe the scheduler will produce) and lock in current consistent
 // behavior. PR-B onwards keep these green by construction.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,16 +27,8 @@ import { eq, and } from 'drizzle-orm'
 // "scheduler picks the later row" non-deterministic.
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory()
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import { isFresherNodeRun } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
@@ -42,7 +36,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
   interface Harness {
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     appHome: string
     repoPath: string
     taskId: string
@@ -64,7 +58,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
     await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
     const db = harness.db
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks } = tablesOf(db)
+    await insertOne(db, agents, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -88,13 +83,13 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       edges: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 't',
       id: taskId,
       executionLineageId: taskId,
@@ -125,11 +120,12 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
   // one iteration. Uses the exported isFresherNodeRun comparator (same one
   // scheduler imports).
   async function pickLatestRow(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     taskId: string,
     nodeId: string,
     iteration = 0,
   ): Promise<{ id: string; status: string; retryIndex: number }> {
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select()
       .from(nodeRuns)
@@ -145,12 +141,13 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
   }
 
   async function seedAgentDone(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     taskId: string,
     opts: { retryIndex?: number; clarifyIteration?: number; portContent?: string } = {},
   ): Promise<string> {
     const id = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId: 'doc',
@@ -160,14 +157,16 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       startedAt: Date.now() - 200,
       finishedAt: Date.now() - 100,
     })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: id, portName: 'docpath', content: opts.portContent ?? '# v' })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: id,
+      portName: 'docpath',
+      content: opts.portContent ?? '# v',
+    })
     return id
   }
 
   async function seedReviewRow(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     taskId: string,
     opts: {
       status: 'pending' | 'awaiting_review' | 'done' | 'canceled' | 'failed'
@@ -179,7 +178,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
     },
   ): Promise<string> {
     const id = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId: 'rev_1',
@@ -208,6 +208,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(reviewId)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
@@ -232,6 +233,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(doneId)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
@@ -265,6 +267,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(placeholderId)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       // But dispatchReviewNode's RFC-052 "ANY top-level row done → short-circuit" rule
       // overrides freshness. Done row is preserved; placeholder is left alone too.
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
@@ -305,6 +308,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(pendingId)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
@@ -345,6 +349,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(clarifyRerunId)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       // Done row at ci=0 still triggers "ANY done → short-circuit" though! This is
       // intentional: once the user approved the review at some point, even a
       // clarify rerun shouldn't re-trigger the review. The clarify rerun row will
@@ -396,6 +401,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(p2)
 
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
@@ -443,7 +449,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       await seedAgentDone(h.db, h.taskId)
       // iter=0 done
       const iter0 = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: iter0,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -456,7 +463,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       })
       // iter=1 pending (e.g., a loop wrapper second iteration)
       const iter1 = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: iter1,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -479,7 +486,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       // Fan-out shard child (parentNodeRunId set). Even though it would
       // dominate by retryIndex, it must be skipped.
       const childId = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: childId,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -513,6 +521,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         reviewIteration: 5,
       })
 
+      const { tasks, docVersions, nodeRuns } = tablesOf(h.db)
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({
         db: h.db,

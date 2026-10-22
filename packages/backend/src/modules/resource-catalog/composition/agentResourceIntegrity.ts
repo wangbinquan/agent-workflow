@@ -1,5 +1,5 @@
 import type { AclResourceType } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDatabaseAgentResourceInventoryReadPort } from '../infrastructure/agentResourceInventory'
 import { isSkillAvailableThisBoot } from '../infrastructure/legacy/skillBootVerify'
 import type {
@@ -72,7 +72,7 @@ const skillAvailability = Object.freeze({
 
 /** 数据库句柄直入的装配：一份实现，两个 provider 共用（RFC-359 W4-D14）。消费者只拿到闭合的 source。 */
 export function composeDatabaseAgentResourceInventorySource(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly authorization: ResourceAuthorizationApplication
 }): AgentResourceInventorySource {
   return composeAgentResourceInventorySource({
@@ -85,7 +85,7 @@ export function composeDatabaseAgentResourceInventorySource(input: {
 }
 
 export function composeDatabaseAgentResourceIntegrity(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly authorization: ResourceAuthorizationApplication
 }): AgentResourceIntegrityComposition {
   return composeAgentResourceIntegrity(composeDatabaseAgentResourceInventorySource(input))

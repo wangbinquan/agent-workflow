@@ -3,16 +3,10 @@
 // copy in the database). Publication and deletion of exactly the source range
 // commit together; a service replacement resumes with the same lifetime; the
 // task object sweep releases the chunks of deleted tasks.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
-import {
-  hostedNodeEventArchives,
-  hostedObjectPublications,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/infrastructure/crewstation/backupReleaseHorizon'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { createHostedTaskObjectSweep } from '@/modules/task-execution/infrastructure/crewstation/hostedObjectSweep'
@@ -33,8 +27,9 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
   const setup = async () => {
     const db = harness.db,
       objects = objectFixture()
-    await db.insert(workflows).values({ id: 'wf', name: 'archive', definition: '{}' })
-    await db.insert(tasks).values({
+    const { workflows, tasks, nodeRuns, nodeRunEvents, hostedObjectPublications } = tablesOf(db)
+    await insertOne(db, workflows, { id: 'wf', name: 'archive', definition: '{}' })
+    await insertOne(db, tasks, {
       id: 'task',
       name: 'archive',
       workflowId: 'wf',
@@ -48,7 +43,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
       startedAt: 1,
       finishedAt: 2,
     })
-    await db.insert(nodeRuns).values({ id: 'run', taskId: 'task', nodeId: 'node', status: 'done' })
+    await insertOne(db, nodeRuns, { id: 'run', taskId: 'task', nodeId: 'node', status: 'done' })
     await db.insert(nodeRunEvents).values(
       Array.from({ length: 7 }, (_, i) => ({
         nodeRunId: 'run',
@@ -112,11 +107,12 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
       acquire: () => {
         held = true
       },
-      publications: () =>
-        db
+      publications: () => {
+        return db
           .select()
           .from(hostedObjectPublications)
-          .where(eq(hostedObjectPublications.owner, HOSTED_EVENT_ARCHIVE_OWNER)),
+          .where(eq(hostedObjectPublications.owner, HOSTED_EVENT_ARCHIVE_OWNER))
+      },
     }
   }
 
@@ -126,6 +122,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
     await expect(
       f.reopen().archive({ taskId: 'task', nodeRunId: 'run', rows: f.all.slice(0, 4) }),
     ).rejects.toThrow('lease lost')
+    const { nodeRunEvents, hostedNodeEventArchives } = tablesOf(f.db)
     expect(await f.db.select().from(nodeRunEvents)).toHaveLength(7)
     expect(await f.db.select().from(hostedNodeEventArchives)).toMatchObject([
       { state: 'prepared', objectId: null },
@@ -183,6 +180,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
       f.reopen().archive({ taskId: 'task', nodeRunId: 'run', rows: f.all.slice(0, 2) }),
     ).rejects.toThrow('pending-range')
     await expect(f.reopen().files('task')).rejects.toThrow('pending')
+    const { nodeRunEvents } = tablesOf(f.db)
     expect(await f.db.select().from(nodeRunEvents)).toHaveLength(7)
     await f.reopen().recover()
     expect(await f.db.select().from(nodeRunEvents).orderBy(asc(nodeRunEvents.id))).toMatchObject(
@@ -204,6 +202,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
     expect(result.perGroupArchived).toBe(4)
     expect(result.files[0]).toStartWith('aw-event-archive:')
     expect(await archive.read('task', 'run', 0, 100)).toEqual(f.all.slice(0, 4))
+    const { tasks, hostedNodeEventArchives } = tablesOf(f.db)
     // The chunk stays readable until the task's references are reconciled.
     await f.db.delete(tasks).where(eq(tasks.id, 'task'))
     expect(await f.reopen().read('task', 'run', 0, 100)).toEqual(f.all.slice(0, 4))
@@ -220,6 +219,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
     await expect(
       f.reopen().archive({ taskId: 'task', nodeRunId: 'run', rows: f.all }),
     ).rejects.toThrow('lease lost')
+    const { tasks, hostedNodeEventArchives } = tablesOf(f.db)
     await f.db.delete(tasks).where(eq(tasks.id, 'task'))
     f.acquire()
     // A prepared chunk of a deleted run no longer blocks recovery of live runs.

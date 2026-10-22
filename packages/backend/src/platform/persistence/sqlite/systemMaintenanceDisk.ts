@@ -13,6 +13,7 @@
 // System Operations SQLite disk-reclamation projection. Provider-independent filesystem cleanup
 // stays here beside the SQLite row-size estimator it reports.
 
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { sql } from 'drizzle-orm'
 import { chmodSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
@@ -85,7 +86,7 @@ export function reportDiskReclaimable(
   appHome: string = Paths.root,
 ): DiskReclaimReport {
   const pragma = (name: string, column: string): number => {
-    const rows = db.all<Record<string, number>>(sql.raw(`PRAGMA ${name}`))
+    const rows = rawRows<Record<string, number>>(db, sql.raw(`PRAGMA ${name}`))
     return Number(rows[0]?.[column] ?? 0)
   }
   const pageSize = pragma('page_size', 'page_size')

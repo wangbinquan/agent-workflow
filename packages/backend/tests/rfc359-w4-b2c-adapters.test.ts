@@ -2,33 +2,35 @@
 // 差异全是同步 / 异步形态），两个引擎各跑一遍：会话与轮次读取、事件追加与序号、租约的认领 / 预占 / 释放 /
 // 收割后修复。全量行为仍由 runtime-session-lease / rfc238 两个 SQLite 套件锁住。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { mcpRuntimeTestSessions, mcpRuntimeTestTurns, mcps, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMcpRuntimeTestLeaseOperations } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestLease'
 import { createMcpRuntimeTestPersistence } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const HASH = 'a'.repeat(64)
 
-async function seedSessionWithTurn(db: ProviderNeutralDatabase) {
+async function seedSessionWithTurn(db: PersistenceDb) {
   const suffix = ulid().toLowerCase()
   const userId = `u-lease-${suffix}`
   const mcpId = `mcp-lease-${suffix}`
   const sessionId = `ts-${suffix}`
   const turnId = `turn-${suffix}`
-  await db.insert(users).values({
+  const { users, mcps, mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+  await insertOne(db, users, {
     id: userId,
     username: userId,
     displayName: 'Lease User',
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(mcps).values({
+  await insertOne(db, mcps, {
     id: mcpId,
     name: mcpId,
     type: 'local',
@@ -36,7 +38,7 @@ async function seedSessionWithTurn(db: ProviderNeutralDatabase) {
     ownerUserId: userId,
     visibility: 'private',
   })
-  await db.insert(mcpRuntimeTestSessions).values({
+  await insertOne(db, mcpRuntimeTestSessions, {
     id: sessionId,
     mcpId,
     ownerUserId: userId,
@@ -59,7 +61,7 @@ async function seedSessionWithTurn(db: ProviderNeutralDatabase) {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(mcpRuntimeTestTurns).values({
+  await insertOne(db, mcpRuntimeTestTurns, {
     id: turnId,
     sessionId,
     seq: 1,

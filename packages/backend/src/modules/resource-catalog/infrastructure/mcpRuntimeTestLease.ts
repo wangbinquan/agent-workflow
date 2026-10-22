@@ -1,13 +1,10 @@
 // RFC-359 W4-B2 —— MCP playground 原生会话的单写者租约：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq, isNull } from 'drizzle-orm'
-import {
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessionLeases,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestTurns,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   McpRuntimeTestLeaseError,
   type McpRuntimeTestLeaseOperations,
@@ -44,25 +41,28 @@ async function assertLiveTurn(
   turnId: string,
   protocol: McpRuntimeProtocol,
 ): Promise<void> {
-  const session = await transaction
-    .select({
-      status: mcpRuntimeTestSessions.status,
-      inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-      runtimeProtocol: mcpRuntimeTestSessions.runtimeProtocol,
-    })
-    .from(mcpRuntimeTestSessions)
-    .where(eq(mcpRuntimeTestSessions.id, testSessionId))
-    .get()
-  const turn = await transaction
-    .select({
-      status: mcpRuntimeTestTurns.status,
-      cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-    })
-    .from(mcpRuntimeTestTurns)
-    .where(
-      and(eq(mcpRuntimeTestTurns.id, turnId), eq(mcpRuntimeTestTurns.sessionId, testSessionId)),
-    )
-    .get()
+  const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(transaction)
+  const session = await first(
+    transaction
+      .select({
+        status: mcpRuntimeTestSessions.status,
+        inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
+        runtimeProtocol: mcpRuntimeTestSessions.runtimeProtocol,
+      })
+      .from(mcpRuntimeTestSessions)
+      .where(eq(mcpRuntimeTestSessions.id, testSessionId)),
+  )
+  const turn = await first(
+    transaction
+      .select({
+        status: mcpRuntimeTestTurns.status,
+        cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
+      })
+      .from(mcpRuntimeTestTurns)
+      .where(
+        and(eq(mcpRuntimeTestTurns.id, turnId), eq(mcpRuntimeTestTurns.sessionId, testSessionId)),
+      ),
+  )
   if (
     session?.status !== 'active' ||
     session.inFlightTurnId !== turnId ||
@@ -75,36 +75,35 @@ async function assertLiveTurn(
 }
 
 async function claimNew(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: McpRuntimeTestLeaseInput,
 ): Promise<McpRuntimeTestLeaseToken> {
   const leasedAt = validate(input)
   return runResourceCatalogTransaction(db, async (transaction) => {
     await assertLiveTurn(transaction, input.testSessionId, input.turnId, input.protocol)
-    await transaction
-      .insert(mcpRuntimeTestSessionLeases)
-      .values({
-        protocol: input.protocol,
-        runtimeSessionId: input.runtimeSessionId,
-        testSessionId: input.testSessionId,
-        createdTurnId: input.turnId,
-        currentTurnId: input.turnId,
-        leaseTurnId: input.turnId,
-        leaseAcquiredAt: leasedAt,
-        leaseNonceDigest: input.leaseNonceDigest,
-      })
-      .run()
+    const { mcpRuntimeTestSessionLeases } = tablesOf(transaction)
+    await insertOne(transaction, mcpRuntimeTestSessionLeases, {
+      protocol: input.protocol,
+      runtimeSessionId: input.runtimeSessionId,
+      testSessionId: input.testSessionId,
+      createdTurnId: input.turnId,
+      currentTurnId: input.turnId,
+      leaseTurnId: input.turnId,
+      leaseAcquiredAt: leasedAt,
+      leaseNonceDigest: input.leaseNonceDigest,
+    })
     return input
   })
 }
 
 async function preclaim(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: McpRuntimeTestLeaseInput,
 ): Promise<McpRuntimeTestLeaseToken> {
   const leasedAt = validate(input)
   return runResourceCatalogTransaction(db, async (transaction) => {
     await assertLiveTurn(transaction, input.testSessionId, input.turnId, input.protocol)
+    const { mcpRuntimeTestSessionLeases } = tablesOf(transaction)
     const claimed = await transaction
       .update(mcpRuntimeTestSessionLeases)
       .set({
@@ -124,14 +123,13 @@ async function preclaim(
         ),
       )
       .returning({ id: mcpRuntimeTestSessionLeases.runtimeSessionId })
-      .all()
     if (claimed.length !== 1) fail('lease-held-or-missing')
     return input
   })
 }
 
 async function rotate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   token: McpRuntimeTestLeaseToken,
   nextRuntimeSessionId: string,
 ): Promise<McpRuntimeTestLeaseToken> {
@@ -140,14 +138,17 @@ async function rotate(
 
   return runResourceCatalogTransaction(db, async (transaction) => {
     await assertLiveTurn(transaction, token.testSessionId, token.turnId, token.protocol)
-    const session = await transaction
-      .select({
-        runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId,
-        nativeSessionState: mcpRuntimeTestSessions.nativeSessionState,
-      })
-      .from(mcpRuntimeTestSessions)
-      .where(eq(mcpRuntimeTestSessions.id, token.testSessionId))
-      .get()
+    const { mcpRuntimeTestSessions, mcpRuntimeTestSessionLeases, mcpRuntimeTestEvents } =
+      tablesOf(transaction)
+    const session = await first(
+      transaction
+        .select({
+          runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId,
+          nativeSessionState: mcpRuntimeTestSessions.nativeSessionState,
+        })
+        .from(mcpRuntimeTestSessions)
+        .where(eq(mcpRuntimeTestSessions.id, token.testSessionId)),
+    )
     if (session?.runtimeSessionId !== token.runtimeSessionId) fail('session-mismatch')
     if (session.nativeSessionState !== 'unusable') fail('reset-not-pending')
 
@@ -164,7 +165,6 @@ async function rotate(
         ),
       )
       .returning({ id: mcpRuntimeTestSessionLeases.runtimeSessionId })
-      .all()
     if (rotated.length !== 1) fail('lease-mismatch')
 
     const linked = await transaction
@@ -177,7 +177,6 @@ async function rotate(
         ),
       )
       .returning({ id: mcpRuntimeTestSessions.id })
-      .all()
     if (linked.length !== 1) fail('session-mismatch')
 
     await transaction
@@ -190,7 +189,6 @@ async function rotate(
           isNull(mcpRuntimeTestEvents.parentSessionId),
         ),
       )
-      .run()
     await transaction
       .update(mcpRuntimeTestEvents)
       .set({ parentSessionId: nextRuntimeSessionId })
@@ -200,16 +198,13 @@ async function rotate(
           eq(mcpRuntimeTestEvents.parentSessionId, token.runtimeSessionId),
         ),
       )
-      .run()
     return { ...token, runtimeSessionId: nextRuntimeSessionId }
   })
 }
 
-async function release(
-  db: ProviderNeutralDatabase,
-  token: McpRuntimeTestLeaseToken,
-): Promise<boolean> {
+async function release(db: PersistenceDb, token: McpRuntimeTestLeaseToken): Promise<boolean> {
   return runResourceCatalogTransaction(db, async (transaction) => {
+    const { mcpRuntimeTestSessionLeases } = tablesOf(transaction)
     const released = await transaction
       .update(mcpRuntimeTestSessionLeases)
       .set({ leaseTurnId: null, leaseAcquiredAt: null, leaseNonceDigest: null })
@@ -223,28 +218,29 @@ async function release(
         ),
       )
       .returning({ id: mcpRuntimeTestSessionLeases.runtimeSessionId })
-      .all()
     return released.length === 1
   })
 }
 
 async function repairAfterReap(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   testSessionId: string,
   turnId: string,
   childReaped: true,
 ): Promise<boolean> {
   if (childReaped !== true) fail('child-not-reaped')
-  const lease = await db
-    .select()
-    .from(mcpRuntimeTestSessionLeases)
-    .where(
-      and(
-        eq(mcpRuntimeTestSessionLeases.testSessionId, testSessionId),
-        eq(mcpRuntimeTestSessionLeases.leaseTurnId, turnId),
+  const { mcpRuntimeTestSessionLeases } = tablesOf(db)
+  const lease = await first(
+    db
+      .select()
+      .from(mcpRuntimeTestSessionLeases)
+      .where(
+        and(
+          eq(mcpRuntimeTestSessionLeases.testSessionId, testSessionId),
+          eq(mcpRuntimeTestSessionLeases.leaseTurnId, turnId),
+        ),
       ),
-    )
-    .get()
+  )
   if (lease === undefined || lease.leaseNonceDigest === null) return false
   return release(db, {
     protocol: lease.protocol,
@@ -256,10 +252,10 @@ async function repairAfterReap(
 }
 
 export function createMcpRuntimeTestLeaseOperations(
-  db: ProviderNeutralDatabase,
-  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
+  db: PersistenceDb,
+  beforeWrite?: (tx: PersistenceDb) => Promise<void>,
 ): McpRuntimeTestLeaseOperations {
-  const write = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> =>
+  const write = <T>(body: (tx: PersistenceDb) => Promise<T>): Promise<T> =>
     beforeWrite === undefined
       ? body(db)
       : runResourceCatalogTransaction(db, async (tx) => {

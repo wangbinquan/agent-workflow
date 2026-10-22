@@ -18,21 +18,12 @@
 // W10 去掉（单语句 CAS 本就原子），同步事务面因此 5 → 3 → 2
 // （账本 `rfc359-sync-transaction-highwater.test.ts`）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionMaintenanceMembers,
-  taskExecutionOwners,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { TaskOwnershipPersistence } from '../application/ports/taskOwnershipPersistence'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
@@ -51,7 +42,7 @@ import {
 } from '../domain/ownership'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 
-type OwnerRow = typeof taskExecutionOwners.$inferSelect
+type OwnerRow = PersistenceTables['taskExecutionOwners']['$inferSelect']
 
 function snapshot(row: OwnerRow): OwnerSnapshot {
   return {
@@ -71,9 +62,11 @@ function stale(message: string): TaskExecutionError {
 
 /** 任务还剩没结算的 attempt 或没释放的资源占用 —— owner 不能干净让出。 */
 export async function hasUnresolvedTaskEffectsInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   taskId: string,
 ): Promise<boolean> {
+  const { taskExecutionEffectAttempts, taskExecutionEffects, taskExecutionEffectFences } =
+    tablesOf(tx)
   const attempts = await tx
     .select({ id: taskExecutionEffectAttempts.id })
     .from(taskExecutionEffectAttempts)
@@ -112,7 +105,7 @@ export async function hasUnresolvedTaskEffectsInTx(
  * every old writer. The successor still acquires a new ordinary owner epoch;
  * neither a recovery receipt nor a stale worker can revive the old token. */
 export async function releaseRecoveredOwnerInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: Parameters<TaskOwnershipPersistence['releaseRecovered']>[0] & {
     readonly preserveIntentId?: string
   },
@@ -138,6 +131,7 @@ export async function releaseRecoveredOwnerInTx(
       claimedOwnerEpoch: input.owner.epoch,
     })
   } else {
+    const { taskExecutionIntents } = tablesOf(tx)
     const requeued = await tx
       .update(taskExecutionIntents)
       .set({
@@ -157,6 +151,7 @@ export async function releaseRecoveredOwnerInTx(
       .returning({ id: taskExecutionIntents.id })
     if (requeued.length !== 1) throw stale('recovered continuation intent changed')
   }
+  const { taskExecutionOwners } = tablesOf(tx)
   const [row] = await tx
     .update(taskExecutionOwners)
     .set({
@@ -205,13 +200,14 @@ export async function releaseRecoveredOwnerInTx(
  * **事务体只 await 数据库操作**。这里的回调由 `setTaskStatus` 传入，链路上只有库写。
  */
 export async function withOwnedTaskWrite<T>(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly token: OwnershipToken
   readonly now: number
-  readonly run: (tx: DatabaseTransaction, owned: OwnedTaskTx) => T | Promise<T>
+  readonly run: (tx: PersistenceTx, owned: OwnedTaskTx) => T | Promise<T>
 }): Promise<T> {
   assertOwnershipToken(input.token)
   return await databaseSessionFor(input.db).transaction(async (tx) => {
+    const { taskExecutionOwners } = tablesOf(tx)
     const fenced = await tx
       .update(taskExecutionOwners)
       .set({
@@ -240,7 +236,7 @@ export async function withOwnedTaskWrite<T>(input: {
 }
 
 export async function revokeExactOwnerInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     readonly owner: Readonly<{
       taskId: string
@@ -253,6 +249,7 @@ export async function revokeExactOwnerInTx(
     readonly recoveryCode?: string | undefined
   },
 ): Promise<OwnerSnapshot> {
+  const { taskExecutionOwners } = tablesOf(tx)
   const row = (
     await tx
       .update(taskExecutionOwners)
@@ -280,7 +277,7 @@ export async function revokeExactOwnerInTx(
 
 /** provider 中立的归属 / CAS / 租约边界：原子迁移各有其名，库句柄与事务作用域都不外泄。 */
 export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async claimPendingIntent(input: Parameters<TaskOwnershipPersistence['claimPendingIntent']>[0]) {
     assertWorkerIdentity(input.identity)
@@ -289,6 +286,8 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
     }
     // 每任务至多一个活跃 owner / 每任务至多一条 pending·claimed intent 都是跨行谓词，沿用 SERIALIZABLE。
     const claimed = await databaseSessionFor(this.db).serializable(async (tx) => {
+      const { taskExecutionIntents, taskExecutionMaintenanceMembers, taskExecutionOwners } =
+        tablesOf(tx)
       const intent = (
         await tx
           .select({
@@ -349,22 +348,19 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
       const revision = (old?.revision ?? 0) + 1
       const leaseUntil = input.now + input.leaseMs
       if (old === undefined) {
-        await tx
-          .insert(taskExecutionOwners)
-          .values({
-            taskId: intent.taskId,
-            ownerId: input.identity.ownerId,
-            daemonGeneration: input.identity.daemonGeneration,
-            epoch,
-            state: 'claimed',
-            leaseUntil,
-            revision,
-            lastHeartbeatAt: input.now,
-            recoveryCode: null,
-            recoveryProofDigest: null,
-            updatedAt: input.now,
-          })
-          .run()
+        await insertOne(tx, taskExecutionOwners, {
+          taskId: intent.taskId,
+          ownerId: input.identity.ownerId,
+          daemonGeneration: input.identity.daemonGeneration,
+          epoch,
+          state: 'claimed',
+          leaseUntil,
+          revision,
+          lastHeartbeatAt: input.now,
+          recoveryCode: null,
+          recoveryProofDigest: null,
+          updatedAt: input.now,
+        })
       } else {
         const updated = await tx
           .update(taskExecutionOwners)
@@ -417,6 +413,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
 
   async heartbeat(input: Parameters<TaskOwnershipPersistence['heartbeat']>[0]) {
     assertOwnershipToken(input.token)
+    const { taskExecutionOwners } = tablesOf(this.db)
     const row = (
       await this.db
         .update(taskExecutionOwners)
@@ -471,6 +468,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
     input: Parameters<TaskOwnershipPersistence['markRecoveryRequired']>[0],
   ) {
     assertOwnershipToken(input.token)
+    const { taskExecutionOwners } = tablesOf(this.db)
     const row = (
       await this.db
         .update(taskExecutionOwners)
@@ -515,6 +513,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
           `task '${input.token.taskId}' still has unresolved effects or resource holds`,
         )
       }
+      const { taskExecutionOwners, taskExecutionIntents } = tablesOf(tx)
       const row = (
         await tx
           .update(taskExecutionOwners)
@@ -548,7 +547,6 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
             eq(taskExecutionIntents.state, 'claimed'),
           ),
         )
-        .run()
       return snapshot(row)
     })
   }
@@ -558,6 +556,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
   }
 
   async read(taskId: string) {
+    const { taskExecutionOwners } = tablesOf(this.db)
     const row = (
       await this.db
         .select()

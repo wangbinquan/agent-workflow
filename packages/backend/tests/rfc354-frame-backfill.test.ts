@@ -8,12 +8,13 @@
 //     maintenance_state marker makes the next boot a no-op, `force` re-walks;
 //   • `doctor --backfill-containers` refuses while the daemon runs.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds, maintenanceState, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { frameBackfillCommand } from '../src/cli/frameBackfill'
 import { FRAME_BACKFILL_MARKER_KEY } from '../src/modules/task-execution/application/frameBackfillJob'
 import { runFrameBackfillOnBoot } from '../src/modules/task-execution/composition/frameBackfill'
@@ -160,10 +161,11 @@ const DEFINITION: WorkflowDefinition = {
   edges: [],
 }
 
-async function seedLegacyTask(db: ProviderNeutralDatabase) {
+async function seedLegacyTask(db: PersistenceDb) {
   const wfId = '01WF0000000000000000000000'
   const taskId = '01TASK00000000000000000000'
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'nested',
     description: '',
@@ -171,7 +173,7 @@ async function seedLegacyTask(db: ProviderNeutralDatabase) {
     version: 1,
     schemaVersion: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'nested',
     executionLineageId: taskId,
@@ -196,7 +198,7 @@ async function seedLegacyTask(db: ProviderNeutralDatabase) {
     { id: '05I000000000000000000000000', nodeId: 'iloop', iteration: 1 },
   ]
   for (const r of legacy) {
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: r.id,
       taskId,
       nodeId: r.nodeId,
@@ -210,7 +212,7 @@ async function seedLegacyTask(db: ProviderNeutralDatabase) {
     })
   }
   // a self-clarify round whose park row is the round-0 worker run
-  await db.insert(clarifyRounds).values({
+  await insertOne(db, clarifyRounds, {
     id: '01ROUND0000000000000000000',
     taskId,
     kind: 'self',
@@ -244,6 +246,7 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
     expect(first.unreadableTasks).toEqual([])
     expect(first.unresolvedRows).toBe(0)
 
+    const { nodeRuns, clarifyRounds, maintenanceState } = tablesOf(db)
     const runs = await db
       .select({
         id: nodeRuns.id,
@@ -310,6 +313,7 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
   test('a task whose snapshot cannot be parsed is reported and left untouched', async () => {
     const db = harness.db
     const { taskId } = await seedLegacyTask(db)
+    const { tasks, nodeRuns } = tablesOf(db)
     await db.update(tasks).set({ workflowSnapshot: '{not json' }).where(eq(tasks.id, taskId))
     const report = await runFrameBackfillOnBoot({
       db,

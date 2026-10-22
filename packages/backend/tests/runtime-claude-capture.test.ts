@@ -4,15 +4,17 @@
 // visibility (parity with opencode's RFC-027 SQLite walk). Failure writes a
 // `subagent_capture_failed` marker (graceful).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   captureClaudeSessions,
   claudeUserConfigRoots,
@@ -22,18 +24,20 @@ import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { createLogger, type Logger } from '../src/util/log'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
-const capturePersistence = (db: ProviderNeutralDatabase) =>
-  createRuntimeSessionCapturePersistence(db)
+const capturePersistence = (db: PersistenceDb) => createRuntimeSessionCapturePersistence(db)
 
-async function seed(
-  db: ProviderNeutralDatabase,
-): Promise<{ db: ProviderNeutralDatabase; nodeRunId: string }> {
+async function seed(db: PersistenceDb): Promise<{ db: PersistenceDb; nodeRunId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: '{}', createdAt: 0, updatedAt: 0 })
-  await db.insert(tasks).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'wf',
+    definition: '{}',
+    createdAt: 0,
+    updatedAt: 0,
+  })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -47,7 +51,7 @@ async function seed(
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'n1', status: 'running' })
+  await insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'n1', status: 'running' })
   return { db, nodeRunId }
 }
 
@@ -105,6 +109,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
       worktreePath: worktree,
     })
 
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows.length).toBe(1)
     expect(rows[0]?.sessionId).toBe('agent-slugcase')
@@ -149,6 +154,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
       worktreePath: worktree,
     })
 
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows.length).toBe(2)
     // tagged under a subagent session id, parented to the root session
@@ -269,6 +275,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
       worktreePath: worktree,
     })
 
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     const parents = new Map(rows.map((row) => [row.sessionId, row.parentSessionId]))
     expect(rows).toHaveLength(6)
@@ -314,7 +321,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
     const transientDb = new Proxy(db, {
       get(target, property) {
         if (property === 'run') {
-          return (...args: Parameters<ProviderNeutralDatabase['run']>) => {
+          return (...args: [Parameters<typeof rawExec>[1]]) => {
             if (JSON.stringify(args[0]).includes('BEGIN IMMEDIATE')) {
               beginAttempts++
               if (failFirstBegin) {
@@ -325,13 +332,13 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
                 throw error
               }
             }
-            return target.run(...args)
+            return rawExec(target, ...args)
           }
         }
         const value = Reflect.get(target, property, target) as unknown
         return typeof value === 'function' ? value.bind(target) : value
       },
-    }) as ProviderNeutralDatabase
+    }) as PersistenceDb
     const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = []
     const log: Logger = {
       debug: () => undefined,
@@ -351,6 +358,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
       worktreePath: worktree,
     })
 
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows).toHaveLength(205)
     // One failed attempt + two batches (200 and 5), not 205 autocommit writes.
@@ -370,6 +378,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
       configRoots: [join(tmpdir(), 'does-not-exist-' + ulid())],
       worktreePath: '/w',
     })
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows.length).toBe(0)
   })
@@ -409,6 +418,7 @@ describeEachProvider('captureClaudeSessions (RFC-111 PR-D)', (harness) => {
       worktreePath: worktree,
     })
 
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
     expect(rows.length).toBe(1)
     expect(rows[0]?.sessionId).toBe('agent-multi')
@@ -510,6 +520,7 @@ describeEachProvider(
         else process.env.CLAUDE_CONFIG_DIR = prevEnv
       }
 
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select()
         .from(nodeRunEvents)
@@ -548,6 +559,7 @@ describeEachProvider(
         if (prevEnv !== undefined) process.env.CLAUDE_CONFIG_DIR = prevEnv
       }
 
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select()
         .from(nodeRunEvents)

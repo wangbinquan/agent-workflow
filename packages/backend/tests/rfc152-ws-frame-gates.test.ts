@@ -17,15 +17,16 @@
 //      stale on supersede" is a registered known limitation (design.md §1),
 //      improving it is explicitly out of scope for RFC-152.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderWebSocketApplication,
   type ProviderWebSocketScope,
 } from './helpers/providerWebSocketScope'
-import { agents, memories, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import {
   MEMORY_CHANNEL,
@@ -46,7 +47,7 @@ const SCOPE_OPTIONS = {
 } as const
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   url: string
   adminToken: string
   aliceToken: string
@@ -144,7 +145,8 @@ describeEachProviderWebSocketApplication(
       resetBroadcastersForTests()
       h = await buildHarness(scope)
       privateWfId = ulid()
-      await h.db.insert(workflows).values({
+      const { workflows } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: privateWfId,
         name: 'private-flow',
         definition: '{}',
@@ -153,7 +155,7 @@ describeEachProviderWebSocketApplication(
       })
       // RFC-359 AC-20 因果屏障用：任何连接都有权看见的公共工作流。
       publicWfId = ulid()
-      await h.db.insert(workflows).values({
+      await insertOne(h.db, workflows, {
         id: publicWfId,
         name: 'public-control-flow',
         definition: '{}',
@@ -245,7 +247,8 @@ describeEachProviderWebSocketApplication(
       resetBroadcastersForTests()
       h = await buildHarness(scope)
       privateAgentId = ulid()
-      await h.db.insert(agents).values({
+      const { agents, memories } = tablesOf(h.db)
+      await insertOne(h.db, agents, {
         id: privateAgentId,
         name: `priv-${privateAgentId}`,
         ownerUserId: h.aliceId,

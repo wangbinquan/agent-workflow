@@ -18,6 +18,7 @@
 //      reader treats NULL as "every question is 'designer'", and any
 //      regression that fails to set NULL would break that compat path.
 
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -39,9 +40,13 @@ describe('RFC-059 migration 0032 — table schema changes', () => {
 
   test('RFC-217 T8 终态：question_scopes_json 与两张遗留表在 HEAD 已不存在（0107 收尾）', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = db.all<{ name: string }>(sql`SELECT name FROM pragma_table_info('clarify_rounds')`)
+    const cols = rawRows<{ name: string }>(
+      db,
+      sql`SELECT name FROM pragma_table_info('clarify_rounds')`,
+    )
     expect(cols.map((c) => c.name)).not.toContain('question_scopes_json')
-    const tables = db.all<{ name: string }>(
+    const tables = rawRows<{ name: string }>(
+      db,
       sql`SELECT name FROM sqlite_master WHERE type='table' AND name IN ('clarify_sessions','cross_clarify_sessions')`,
     )
     expect(tables).toEqual([])

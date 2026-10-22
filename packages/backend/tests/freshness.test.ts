@@ -8,6 +8,7 @@
 // current done row is NOT a staleness signal" and the "null/garbage consumed =
 // fresh" hard-cut rule (design §9.1 / D4).
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -17,9 +18,7 @@ import {
   parseConsumedJson,
   pickReusableShardRun,
 } from '../src/services/freshness'
-import type { nodeRuns } from '../src/db/schema'
-
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 function run(id: string, consumed: Record<string, string> | null): Row {
   return {

@@ -13,20 +13,14 @@
 //
 // selectAgentQueue is UNWIRED in PR-1 (no scheduler caller); these are direct DB fixtures.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import {
-  clarifyRounds,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   bindTriggerRun,
   selectAgentQueue,
@@ -58,8 +52,9 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -67,7 +62,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -83,7 +78,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: {
@@ -96,7 +91,8 @@ async function seedRun(
   } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -108,14 +104,14 @@ async function seedRun(
     ...(over.shardKey !== undefined ? { shardKey: over.shardKey } : {}),
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
 
 /** Seed an answered clarify round; returns its intermediary node_run id (= entries' originNodeRunId). */
 async function seedAnsweredRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     kind: 'self' | 'cross'
@@ -136,7 +132,8 @@ async function seedAnsweredRound(
     status: 'awaiting_human',
     ...(opts.askingShardKey !== undefined ? { shardKey: opts.askingShardKey } : {}),
   })
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId,
     kind: opts.kind,
@@ -170,14 +167,11 @@ interface EntrySeed {
   manualBody?: string | null
 }
 
-async function insertEntry(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  e: EntrySeed,
-): Promise<string> {
+async function insertEntry(db: PersistenceDb, taskId: string, e: EntrySeed): Promise<string> {
   const id = ulid()
   const sourceKind = e.sourceKind ?? (e.roleKind === 'self' ? 'self' : 'cross')
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -201,7 +195,8 @@ async function insertEntry(
   return id
 }
 
-function entryRow(db: ProviderNeutralDatabase, id: string) {
+function entryRow(db: PersistenceDb, id: string) {
+  const { taskQuestions } = tablesOf(db)
   return db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
 }
 

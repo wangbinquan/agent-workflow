@@ -3,8 +3,8 @@
 // hosted_task_artifacts rows commit in each ready transaction. A retried
 // request reuses its objects; a changed request is refused. Coverage moved here
 // from the deleted recovery-input test (its recovery machinery was removed).
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { hostedObjectPublications, hostedTaskArtifacts } from '@/db/schema'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { createHostedTaskInputFiles } from '@/modules/task-execution/infrastructure/crewstation/taskInputFiles'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -59,6 +59,7 @@ describeEachProvider('RFC-370 hosted task input files', (harness) => {
       Buffer.from('# spec').toString('hex'),
       '000102',
     ])
+    const { hostedTaskArtifacts, hostedObjectPublications } = tablesOf(harness.db)
     expect(
       (await harness.db.select().from(hostedTaskArtifacts)).map((row) => row.reference).sort(),
     ).toEqual([

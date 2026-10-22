@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-368 实现门（2026-09-23，Claude 子代理，只审功能）findings 的回归锁。
 //
@@ -26,7 +28,6 @@ import {
   scriptedPort,
   seedReaction,
 } from './helpers/rfc368ReactionFixture'
-import { employeeCases, reactionExecutionAdmissions, tasks, workflows } from '@/db/schema'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 import type {
   ReactionOperationRef,
@@ -125,12 +126,12 @@ describe('RFC-368 实现门 findings', () => {
       await seedReaction(harness.db)
       const port = scriptedPort()
       port.launchBehavior = async () => {
+        const { employeeCases } = tablesOf(harness.db)
         // launch 期间用户终止了案例（terminate 那时看到的任务还没建出来，停不掉）。
         await harness.db
           .update(employeeCases)
           .set({ state: 'terminal', terminalKind: 'user-terminated' })
           .where(eq(employeeCases.id, REACTION_CASE))
-          .run()
       }
       expect(await reactionService(harness.db, { port, now, mint }).dispatchOneReaction()).toBe(
         'launched',
@@ -145,11 +146,11 @@ describe('RFC-368 实现门 findings', () => {
       crashed.launchBehavior = () => new Promise<void>(() => {})
       void reactionService(harness.db, { port: crashed, now, mint }).dispatchOneReaction()
       await Bun.sleep(50)
+      const { employeeCases } = tablesOf(harness.db)
       await harness.db
         .update(employeeCases)
         .set({ state: 'terminal', terminalKind: 'user-terminated', terminalAt: 12_345 })
         .where(eq(employeeCases.id, REACTION_CASE))
-        .run()
       clock += REACTION_LEASE_MS + 1
       const port = scriptedPort()
       expect(await reactionService(harness.db, { port, now, mint }).dispatchOneReaction()).toBe(
@@ -169,24 +170,22 @@ describe('RFC-368 实现门 findings', () => {
     test('P3-3：epoch 冲突 ⇒ 跳过本轮，不当成派发失败', async () => {
       reset()
       await seedReaction(harness.db)
+      const { reactionExecutionAdmissions } = tablesOf(harness.db)
       // TE 日志上这一轮的 epoch 已被推进到 5（数字员工侧仍以为是 0）。
-      await harness.db
-        .insert(reactionExecutionAdmissions)
-        .values({
-          operationRef: `reaction:${REACTION_ROUND}:9`,
-          caseId: REACTION_CASE,
-          roundRef: REACTION_ROUND,
-          claimEpoch: 5,
-          fenceRevision: 5,
-          requestHash: 'f'.repeat(64),
-          authoritySubject: 'system',
-          authorityRevision: 1,
-          executionRef: 'execution-elsewhere',
-          state: 'admitted',
-          createdAt: 1,
-          updatedAt: 1,
-        })
-        .run()
+      await insertOne(harness.db, reactionExecutionAdmissions, {
+        operationRef: `reaction:${REACTION_ROUND}:9`,
+        caseId: REACTION_CASE,
+        roundRef: REACTION_ROUND,
+        claimEpoch: 5,
+        fenceRevision: 5,
+        requestHash: 'f'.repeat(64),
+        authoritySubject: 'system',
+        authorityRevision: 1,
+        executionRef: 'execution-elsewhere',
+        state: 'admitted',
+        createdAt: 1,
+        updatedAt: 1,
+      })
       const port = scriptedPort()
       expect(await reactionService(harness.db, { port, now, mint }).dispatchOneReaction()).toBe(
         'idle',
@@ -241,6 +240,7 @@ describe('RFC-368 实现门 findings', () => {
 
   describeEachProvider('P2-1：收割带真实原因取消', (harness) => {
     async function seedRunningTask(id: string): Promise<void> {
+      const { workflows, tasks } = tablesOf(harness.db)
       await harness.db
         .insert(workflows)
         .values({
@@ -252,28 +252,24 @@ describe('RFC-368 实现门 findings', () => {
           updatedAt: 1,
         })
         .onConflictDoNothing()
-        .run()
-      await harness.db
-        .insert(tasks)
-        .values({
-          id,
-          name: id,
-          workflowId: `wf-${id}`,
-          workflowSnapshot: '{}',
-          repoPath: '/tmp/rfc368-reap',
-          worktreePath: '/tmp/rfc368-reap',
-          baseBranch: 'main',
-          branch: `agent-workflow/${id}`,
-          baseCommit: null,
-          status: 'running',
-          inputs: '{}',
-          startedAt: 1,
-          executionLineageId: id,
-          lineageSlotPathJson: JSON.stringify([
-            { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
-          ]),
-        })
-        .run()
+      await insertOne(harness.db, tasks, {
+        id,
+        name: id,
+        workflowId: `wf-${id}`,
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/rfc368-reap',
+        worktreePath: '/tmp/rfc368-reap',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        baseCommit: null,
+        status: 'running',
+        inputs: '{}',
+        startedAt: 1,
+        executionLineageId: id,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+        ]),
+      })
     }
 
     test('状态与原因同一次写入落下；数字员工据此判 failed（按失败重试），不是 stopped', async () => {
@@ -283,6 +279,7 @@ describe('RFC-368 实现门 findings', () => {
         summary: 'task-time-limit-exceeded',
         message: 'task ran 61000ms, exceeding configured limit 60000ms',
       })
+      const { tasks } = tablesOf(harness.db)
       const [row] = await harness.db
         .select({
           status: tasks.status,
@@ -291,7 +288,6 @@ describe('RFC-368 实现门 findings', () => {
         })
         .from(tasks)
         .where(eq(tasks.id, 'task-reaped'))
-        .all()
       expect(row).toEqual({
         status: 'canceled',
         errorSummary: 'task-time-limit-exceeded',

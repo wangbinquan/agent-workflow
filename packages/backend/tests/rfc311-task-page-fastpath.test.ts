@@ -20,6 +20,9 @@
 // 一份引擎中立的纯函数（`helpers/taskForestBackfill.ts`）用于种数据，**同时**在 SQLite
 // 那一侧保留「迁移 SQL 的结果与复算逐行相等」的对拍——那条锁没丢，只是换了个地方钉。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { TASK_STATUS, type TaskOperationsListItem } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -28,8 +31,7 @@ import { sql } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isDefaultView } from '../src/modules/task-execution/infrastructure/taskListPage'
 import { describeEachProvider } from './helpers/eachProvider'
 import { computeForestBackfill } from './helpers/taskForestBackfill'
@@ -38,7 +40,7 @@ import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/t
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -49,6 +51,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seedBase(db: Db): Promise<void> {
   const now = 1_788_278_400_000
+  const { users, workflows } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob'].map((id) => ({
       id,
@@ -59,7 +62,7 @@ async function seedBase(db: Db): Promise<void> {
       updatedAt: now,
     })),
   )
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -100,6 +103,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
     rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
   }))
   for (let offset = 0; offset < values.length; offset += 100) {
+    const { tasks } = tablesOf(db)
     await db.insert(tasks).values(values.slice(offset, offset + 100))
   }
 }
@@ -188,7 +192,8 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
     const db = harness.db
     await seedBase(db)
     await insertForest(db, buildForest(60))
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId: 't005',
       userId: 'bob',
       role: 'collaborator',
@@ -237,6 +242,7 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
     const forest = buildForest(60)
     // 故意种错的 branch_started_at，只有迁移自己的回填能把它算对。
     for (let offset = 0; offset < forest.length; offset += 100) {
+      const { tasks } = tablesOf(db)
       await db.insert(tasks).values(
         forest.slice(offset, offset + 100).map((r) => ({
           id: r.id,
@@ -266,6 +272,7 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
     const expected = computeForestBackfill(
       forest.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
     )
+    const { tasks } = tablesOf(db)
     const got = await db.select({ id: tasks.id, bsa: tasks.branchStartedAt }).from(tasks)
     expect(got.length).toBe(forest.length)
     for (const row of got)
@@ -275,16 +282,16 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
   test('the paging boundary keeps an ordered index seek (no TEMP B-TREE)', () => {
     if (harness.capabilities.provider !== 'sqlite') return
     const db = createInMemoryDb(MIGRATIONS)
-    const plan = db
-      .all<{ detail: string }>(
-        sql.raw(
-          `EXPLAIN QUERY PLAN SELECT t.id FROM tasks t
+    const plan = rawRows<{ detail: string }>(
+      db,
+      sql.raw(
+        `EXPLAIN QUERY PLAN SELECT t.id FROM tasks t
              WHERE (t.parent_task_id IS NULL
                OR NOT EXISTS (SELECT 1 FROM tasks p WHERE p.id = t.parent_task_id))
                AND (t.branch_started_at, t.id) < (?, ?)
              ORDER BY t.branch_started_at DESC, t.id DESC LIMIT 51`,
-        ),
-      )
+      ),
+    )
       .map((row) => row.detail)
       .join('\n')
     expect(plan).toContain('idx_tasks_branch_started_id')

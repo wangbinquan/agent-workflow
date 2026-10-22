@@ -45,10 +45,12 @@
 //  ③【存得下】`json-text` 列今天合法地存着非法 JSON，两个引擎都逐字节存取。
 //  ④【真库】PostgreSQL 上 jsonb 往返确实不保字节（执行一次，不靠记忆）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { tasks, webhookDeliveries, webhookEndpoints, workflows } from '@/db/schema'
 import { truncateDeliveryBody } from '@/modules/integration/domain/webhookDelivery'
 import {
   createLogicalTableChunk,
@@ -154,7 +156,8 @@ describeEachProvider('RFC-359 W6-T23 —— json-text 列在真库上的存取',
     expect(stored.length).toBeLessThan(body.length)
     expect(() => JSON.parse(stored), '截断后的请求体居然还是合法 JSON —— 语料要加长').toThrow()
 
-    await harness.db.insert(webhookEndpoints).values({
+    const { webhookEndpoints, webhookDeliveries } = tablesOf(harness.db)
+    await insertOne(harness.db, webhookEndpoints, {
       id: 'wep-w6t23',
       name: 'w6t23',
       provider: 'gitlab',
@@ -163,7 +166,7 @@ describeEachProvider('RFC-359 W6-T23 —— json-text 列在真库上的存取',
       createdAt: 1,
       updatedAt: 1,
     })
-    await harness.db.insert(webhookDeliveries).values({
+    await insertOne(harness.db, webhookDeliveries, {
       id: 'wd-w6t23',
       endpointId: 'wep-w6t23',
       status: 'received',
@@ -177,8 +180,9 @@ describeEachProvider('RFC-359 W6-T23 —— json-text 列在真库上的存取',
   })
 
   test('③b 非规范形态的 JSON 也逐字节存取（这正是 jsonb 会破坏的性质）', async () => {
-    await harness.db.insert(workflows).values({ id: 'wf-w6t23', name: 'w6t23', definition: '{}' })
-    await harness.db.insert(tasks).values({
+    const { workflows, tasks } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, { id: 'wf-w6t23', name: 'w6t23', definition: '{}' })
+    await insertOne(harness.db, tasks, {
       id: 'w6t23-task',
       name: 'w6t23',
       workflowId: 'wf-w6t23',
@@ -213,7 +217,8 @@ describeEachProvider('RFC-359 W6-T23 —— json-text 列在真库上的存取',
       expect(harness.capabilities.provider).toBe('sqlite')
       return
     }
-    const [row] = await harness.db.all<{ via: string }>(
+    const [row] = await rawRows<{ via: string }>(
+      harness.db,
       // `::text::jsonb`：少了中间那步，驱动会把 JS 字符串当成一个 jsonb **字符串标量**送过去。
       sql`select ((${NON_CANONICAL_JSON})::text::jsonb)::text as via`,
     )

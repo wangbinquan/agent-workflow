@@ -1,5 +1,7 @@
 // RFC-385: reproduce former standalone wiring through real boot recovery on both providers,
 // then prove process generations release crash/shutdown owners for a real successor claim.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,7 +9,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { nodeRuns, taskExecutionIntents, taskExecutionOwners } from '@/db/schema'
 import {
   createProviderTaskExecutionModule,
   createTaskExecutionShutdownController,
@@ -41,8 +42,9 @@ describeEachProvider('RFC-385 process execution generation', (harness) => {
     const persistence = bundle.persistence
     const seeded = await seedBundleTask(harness, appHome)
     const runId = ulid()
+    const { nodeRuns, taskExecutionIntents } = tablesOf(harness.db)
     // A dead process with no remaining native child: the real reaper takes its no-pid path.
-    await harness.db.insert(nodeRuns).values({
+    await insertOne(harness.db, nodeRuns, {
       id: runId,
       taskId: seeded.taskId,
       nodeId: 'worker',
@@ -72,14 +74,17 @@ describeEachProvider('RFC-385 process execution generation', (harness) => {
       bundle,
       persistence,
       owner,
-      run: async () => (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!,
-      intent: async () =>
-        (
+      run: async () => {
+        return (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+      },
+      intent: async () => {
+        return (
           await harness.db
             .select()
             .from(taskExecutionIntents)
             .where(eq(taskExecutionIntents.id, seeded.intentId))
-        )[0]!,
+        )[0]!
+      },
       recover: (generation: string) =>
         runTaskExecutionBootRecovery({
           persistence,
@@ -182,6 +187,7 @@ describeEachProvider('RFC-385 process execution generation', (harness) => {
       expect(report.reap).toEqual({ tasks: shutdownSurvivor ? 0 : 1, runs: 1 })
       expect(report.finalization.releasedTaskIds).toEqual([fixture.taskId])
       expect(report.finalization.outcomeUnknownTaskIds).toEqual([])
+      const { taskExecutionOwners } = tablesOf(harness.db)
       const owner = (
         await harness.db
           .select()

@@ -9,7 +9,7 @@
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent, deleteAgent, renameAgent, updateAgent } from '../src/services/agent'
 import { ConflictError } from '../src/util/errors'
 import type { Agent } from '@agent-workflow/shared'
@@ -21,11 +21,7 @@ const T6_ACTOR = buildActor({
   source: 'session',
 })
 
-async function seed(
-  db: ProviderNeutralDatabase,
-  name: string,
-  dependsOn: string[] = [],
-): Promise<Agent> {
+async function seed(db: PersistenceDb, name: string, dependsOn: string[] = []): Promise<Agent> {
   return createAgent(db, {
     name,
     description: '',
@@ -42,7 +38,7 @@ async function seed(
 }
 
 describeEachProvider('RFC-022 reverse-dep guard on delete / rename', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })

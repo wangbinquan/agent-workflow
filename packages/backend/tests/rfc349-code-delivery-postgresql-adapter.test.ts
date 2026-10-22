@@ -1,9 +1,9 @@
 // RFC-349 — PostgreSQL delivery-chain reads answer the same three bounded
 // troubleshooting questions as the SQLite adapter.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeDeliveryChainQuery } from '@/modules/code-capability/application/codeMatrixQuery'
 import { createDeliveryChainRead } from '@/modules/code-capability/infrastructure/deliveryChainRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -28,7 +28,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql: query, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -57,10 +60,6 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL code delivery adapter', () => {
   test('answers project, correlation, and failure reads through the closed port', async () => {

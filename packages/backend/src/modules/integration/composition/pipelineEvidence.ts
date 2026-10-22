@@ -9,7 +9,7 @@
 // 透传）；真实内网 adapter 只读取已发布定义点名的 connectionRef 与
 // daemon-boot secretProjection。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createPipelineEvidenceAdapter,
   type PipelineEvidenceExecution,
@@ -30,9 +30,7 @@ function runner(input: {
 }
 
 /** RFC-359 W4-D6：一份装配，两个 provider 共用（绑定解析经中立 store 的 Promise 读）。 */
-export function composePipelineEvidenceRunnerFor(
-  db: ProviderNeutralDatabase,
-): PipelineEvidenceExecution {
+export function composePipelineEvidenceRunnerFor(db: PersistenceDb): PipelineEvidenceExecution {
   const store = createDevelopmentAdapterStore(db)
   return runner({
     resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
@@ -50,7 +48,7 @@ import {
 import type { PipelineAdapterBinding } from '../application/ports/developmentPurposeBinding'
 
 export function composeSelectedPipelineEvidenceRunnerFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   binding: PipelineAdapterBinding,
 ): SelectedPipelineEvidenceExecution {
   const store = createDevelopmentAdapterStore(db)

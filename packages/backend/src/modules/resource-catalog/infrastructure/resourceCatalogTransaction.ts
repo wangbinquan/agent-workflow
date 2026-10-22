@@ -4,16 +4,13 @@
 // 目录写入有跨行不变量（owner + name 唯一、grant 与 ACL 行成对、包应用的多表成组），沿用 SERIALIZABLE
 // （`DatabaseSession.serializable`：PG 抬升隔离级别并按 40001/40P01 退避重试；SQLite 与 transaction 同一条路）。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
-export type ResourceCatalogTransaction = DatabaseTransaction
+export type ResourceCatalogTransaction = PersistenceTx
 
 export function runResourceCatalogTransaction<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   body: (transaction: ResourceCatalogTransaction) => Promise<T>,
 ): Promise<T> {
   return databaseSessionFor(db).serializable(body)

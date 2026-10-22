@@ -12,19 +12,13 @@
 //      projects exactly like a workflow task.
 //   4. Cross-output-node port collisions are deterministic (node-id order,
 //      later wins) and surfaced as warnings.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupMessages,
-  workgroupTaskState,
-} from '../src/db/schema'
 import {
   getExecutionOutcome,
   projectExecutionOutcome,
@@ -233,9 +227,10 @@ describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
     test('result_message_id anchors the projection; noise decision rows cannot win', async () => {
       const db = harness.db
       const wfId = ulid()
-      await db.insert(workflows).values({ id: wfId, name: 'wf-wg', definition: '{}' })
+      const { workflows, tasks, workgroupMessages, workgroupTaskState } = tablesOf(db)
+      await insertOne(db, workflows, { id: wfId, name: 'wf-wg', definition: '{}' })
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -258,7 +253,7 @@ describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
       const anchorId = ulid()
       // 先插一条同 kind 同 author 的噪声行（zero-delta 告警形态），再插真结果 ——
       // 锚必须精确指到真结果，任何 kind/author 启发式都会取错。
-      await db.insert(workgroupMessages).values({
+      await insertOne(db, workgroupMessages, {
         id: ulid(),
         taskId,
         round: 1,
@@ -267,7 +262,7 @@ describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
         bodyMd: '⚠️ zero-delta warning noise',
         createdAt: Date.now(),
       })
-      await db.insert(workgroupMessages).values({
+      await insertOne(db, workgroupMessages, {
         id: anchorId,
         taskId,
         round: 1,
@@ -276,7 +271,7 @@ describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
         bodyMd: 'free-collab converged — 2 task(s) done',
         createdAt: Date.now() + 1,
       })
-      await db.insert(workgroupTaskState).values({
+      await insertOne(db, workgroupTaskState, {
         taskId,
         gateStatus: 'idle',
         resultMessageId: anchorId,
@@ -349,12 +344,13 @@ describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
       }
       const workflowId = ulid()
       const taskId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: `wf-${workflowId.slice(-6).toLowerCase()}`,
         definition: JSON.stringify(definition),
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -373,7 +369,7 @@ describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
         finishedAt: Date.now(),
       })
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: 'out-a',
@@ -383,7 +379,7 @@ describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: runId,
         portName: 'report',
         content: 'hello',

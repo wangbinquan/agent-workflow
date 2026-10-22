@@ -5,7 +5,7 @@ import {
 } from '../../src/services/runner'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 
@@ -23,7 +23,7 @@ export type RunNodeOptions = Omit<
   | 'runtimeRegistry'
   | 'observationInvocations'
 > &
-  Readonly<{ db: ProviderNeutralDatabase }> &
+  Readonly<{ db: PersistenceDb }> &
   Partial<
     Pick<
       ProviderRunNodeOptions,

@@ -1,4 +1,4 @@
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   createResourceScopeAccessParticipant,
   type ResourceScopeAccessParticipant,
@@ -6,10 +6,9 @@ import {
 import { resourceScopeAccessReads } from '../infrastructure/aggregateAdapters/resourceScopeAuthorization'
 
 /** Bootstrap-only composition seam for memory's atomic resource-scope access port（两个 provider 同一份）。 */
-export function composeResourceScopeAccessParticipant(): ResourceScopeAccessParticipant<DatabaseTransaction> {
+export function composeResourceScopeAccessParticipant(): ResourceScopeAccessParticipant<PersistenceTx> {
   return createResourceScopeAccessParticipant(resourceScopeAccessReads)
 }
 
 /** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export type PostgresqlResourceScopeAccessParticipant =
-  ResourceScopeAccessParticipant<DatabaseTransaction>
+export type PostgresqlResourceScopeAccessParticipant = ResourceScopeAccessParticipant<PersistenceTx>

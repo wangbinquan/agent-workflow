@@ -14,12 +14,14 @@
 //     inheritance) preserves reviewIteration on the new source-agent row
 //     (locked here too).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -38,7 +40,7 @@ const QUESTION: ClarifyQuestion = {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; reviewRunId: string; docVersionId: string; sourceRunId: string }> {
   const taskId = `task_${ulid()}`
   const def: WorkflowDefinition = {
@@ -53,7 +55,8 @@ async function seed(
     outputs: [],
   }
   const wfId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'stub',
     description: '',
@@ -66,7 +69,7 @@ async function seed(
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -84,19 +87,20 @@ async function seed(
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
 
   // Source agent node_run that produced both an output and a clarify envelope.
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -109,7 +113,7 @@ async function seed(
   // Pre-existing awaiting_review node_run on review1 with a pending doc_version.
   const reviewRunId = ulid()
   const docVersionId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'review1',
@@ -118,7 +122,7 @@ async function seed(
     iteration: 0,
     reviewIteration: 2,
   })
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: docVersionId,
     taskId,
     reviewNodeId: 'review1',
@@ -147,6 +151,7 @@ describeEachProvider('clarify activity does not perturb in-flight reviews', (har
     const db = harness.db
     const { taskId, reviewRunId, docVersionId, sourceRunId } = await seed(db)
 
+    const { nodeRuns, docVersions } = tablesOf(db)
     const reviewBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]
     const dvBefore = (
       await db.select().from(docVersions).where(eq(docVersions.id, docVersionId))

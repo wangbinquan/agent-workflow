@@ -4,6 +4,7 @@
 // **只用在 SELECT 的 WHERE 里**：drizzle 在 UPDATE 里渲染外层列可能不带表名限定，相关子查询里的
 // 外层列会误绑到内层 alias（设计门 r2 P3-2）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   and,
   eq,
@@ -16,13 +17,10 @@ import {
   type AnyColumn,
   type SQL,
 } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/sqlite-core'
+import { alias } from '@/platform/persistence/tableAlias'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
-
-type QueryBuilder = ProviderNeutralDatabase | DatabaseTransaction
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+type QueryBuilder = PersistenceDb | PersistenceTx
 
 type NodeRunColumns = {
   readonly id: AnyColumn
@@ -40,9 +38,10 @@ function nullableEquals(left: AnyColumn, right: AnyColumn): SQL {
 
 /** 同帧存在更新一代（design §3 (a) 的 EXISTS 部分），`target` 是被判定的那一行。 */
 function newerGenerationExists(db: QueryBuilder, target: NodeRunColumns, aliasName: string): SQL {
+  const { nodeRuns } = tablesOf(db)
   const newer = alias(nodeRuns, aliasName)
   return exists(
-    (db as ProviderNeutralDatabase)
+    (db as PersistenceDb)
       .select({ one: sql`1` })
       .from(newer)
       .where(
@@ -68,11 +67,12 @@ function newerGenerationExists(db: QueryBuilder, target: NodeRunColumns, aliasNa
  *   (b) 它的父行是顶层行且同帧有更新一代。
  */
 export function structurallySupersededCondition(db: QueryBuilder): SQL {
+  const { nodeRuns } = tablesOf(db)
   const parent = alias(nodeRuns, 'nr_superseded_parent')
   return or(
     and(isNull(nodeRuns.parentNodeRunId), newerGenerationExists(db, nodeRuns, 'nr_newer_self')),
     exists(
-      (db as ProviderNeutralDatabase)
+      (db as PersistenceDb)
         .select({ one: sql`1` })
         .from(parent)
         .where(

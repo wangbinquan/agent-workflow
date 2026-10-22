@@ -1,11 +1,11 @@
 // RFC-349 — the PostgreSQL admission lookup preserves repository > group >
 // global precedence and returns the same provider-neutral revision content.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeDevelopmentAdmissionLookup } from '@/modules/development-automation/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -48,7 +48,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql: query, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -76,10 +79,6 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL development admission lookup', () => {
   test('selected-provider persistence supplies the required reconcile and HTTP lookup', () => {

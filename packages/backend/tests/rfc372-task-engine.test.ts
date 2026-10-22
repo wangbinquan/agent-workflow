@@ -1,4 +1,6 @@
 // RFC-372: actual scheduler and native mock CLIs; no alternate Task host or continuation.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import {
   clarifyAnswerBasis,
@@ -15,7 +17,6 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import { clarifyRounds, agents, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
@@ -97,7 +98,8 @@ async function setup(
   cross: boolean,
 ) {
   const agentId = ulid()
-  await h.db.insert(agents).values({
+  const { agents, workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, agents, {
     id: agentId,
     name: 'designer',
     runtime: protocol,
@@ -157,10 +159,8 @@ async function setup(
   }
   const taskId = ulid()
   const workflowId = ulid()
-  await h.db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -228,6 +228,7 @@ describe('RFC-372 mindmap uses the original TaskEngine continuation', () => {
           await withEnv({ ...capture, [`${prefix}_CLARIFY_BODY`]: CLARIFY_BODY }, () =>
             runTask(common),
           )
+          const { clarifyRounds, tasks } = tablesOf(h.db)
           const round = (
             await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
           )[0]!

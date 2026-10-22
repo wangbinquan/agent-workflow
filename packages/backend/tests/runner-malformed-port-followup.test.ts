@@ -13,8 +13,10 @@
 // (scheduler-envelope-followup-branch.test.ts) 据此前缀 + 本测试断言的 sessionId/agentText
 // 触发同会话重试——两条测试合起来闭环「producer 失败 → 重试」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -22,13 +24,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -59,21 +60,22 @@ function makeAgent(): Agent {
   } as Agent
 }
 
-async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-malformed-port-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -95,9 +97,10 @@ async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -169,6 +172,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
     expect(result.exitCode).toBe(0)
     expect(result.sessionId).toBeDefined()
 
+    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     expect(row.status).toBe('failed')
     // The malformed port must NOT have been persisted as a blank row — a ghost
@@ -206,6 +210,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
     )
 
     expect(result.status).toBe('done')
+    const { nodeRunOutputs } = tablesOf(h.db)
     const outputs = await h.db
       .select()
       .from(nodeRunOutputs)

@@ -14,6 +14,8 @@
 //     reviews by brute-forcing ULIDs).
 //   - HTTP route returns the same shape and 404s consistently.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -22,16 +24,15 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { DbClient } from '../src/db/client'
-import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import { getDocVersionDetail } from '@/modules/collaboration/infrastructure/review'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
 
-interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
+interface Seed<Database extends PersistenceDb = DbClient> {
   db: Database
   appHome: string
   taskId: string
@@ -44,7 +45,7 @@ interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
 
 // RFC-359 AC-6：无参重载（自建 SQLite 内存库）的调用方已经全部改走 `seedForProvider`，
 // 这里只剩「把 harness 的库传进来」这一条路。
-async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDatabase>> {
+async function seed(db: PersistenceDb): Promise<Seed<PersistenceDb>> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc013-'))
   const appHome = join(tmp, 'home')
   mkdirSync(appHome, { recursive: true })
@@ -53,7 +54,8 @@ async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDa
   const taskId = 'task'
   const nodeRunId = 'run_rev'
 
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, docVersions, reviewComments } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -63,7 +65,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDa
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -79,7 +81,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDa
     // 库总是由 harness 传进来，血缘列因此总是补齐（合一前只有 provider 那条路补）。
     ...providerTaskLineage(taskId),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'rev_1',
@@ -143,7 +145,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDa
     }
     commentsByVersion[v.index] = cIds
 
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: v.id,
       taskId,
       reviewNodeId: 'rev_1',
@@ -159,7 +161,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDa
     })
 
     for (const lc of liveComments) {
-      await db.insert(reviewComments).values({
+      await insertOne(db, reviewComments, {
         id: lc.id,
         docVersionId: v.id,
         anchorSectionPath: `## v${v.index} section`,
@@ -190,7 +192,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDa
 
 describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
   describe('fixture lifetime', () => {
-    let s: Seed<ProviderNeutralDatabase>
+    let s: Seed<PersistenceDb>
     beforeEach(async () => {
       s = await seedForProvider(harness.db)
     })
@@ -224,7 +226,7 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
 
 describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
   describe('fixture lifetime', () => {
-    let s: Seed<ProviderNeutralDatabase>
+    let s: Seed<PersistenceDb>
     beforeEach(async () => {
       s = await seedForProvider(harness.db)
     })
@@ -256,10 +258,11 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
     })
 
     test('archived commentsJson sorts by anchor.paragraphIdx asc, then offsetStart', async () => {
+      const { docVersions } = tablesOf(s.db)
       // We seed in (paragraphIdx 0, then 1) order, but the JSON is opaque
       // to the storage layer; the read path must enforce the sort. Verify
       // by injecting an out-of-order JSON for an extra version.
-      await s.db.insert(docVersions).values({
+      await insertOne(s.db, docVersions, {
         id: 'dv_v_unsorted',
         taskId: s.taskId,
         reviewNodeId: 'rev_1',
@@ -313,7 +316,8 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
     })
 
     test('corrupt commentsJson degrades to empty array (does not throw)', async () => {
-      await s.db.insert(docVersions).values({
+      const { docVersions } = tablesOf(s.db)
+      await insertOne(s.db, docVersions, {
         id: 'dv_v_corrupt',
         taskId: s.taskId,
         reviewNodeId: 'rev_1',
@@ -340,7 +344,7 @@ describeEachProvider(
     describe('fixture lifetime', () => {
       let application: ProviderHttpApplication | undefined
       async function composeProviderApp(
-        input: ProviderHttpApplicationInput & { db: ProviderNeutralDatabase },
+        input: ProviderHttpApplicationInput & { db: PersistenceDb },
       ) {
         application = await createProviderHttpApplication(harness, {
           token: input.token,
@@ -352,7 +356,7 @@ describeEachProvider(
         return application.app
       }
 
-      let s: Seed<ProviderNeutralDatabase>
+      let s: Seed<PersistenceDb>
       let prevHome: string | undefined
       beforeEach(async () => {
         s = await seedForProvider(harness.db)
@@ -406,7 +410,7 @@ describeEachProvider(
     describe('fixture lifetime', () => {
       let application: ProviderHttpApplication | undefined
       async function composeProviderApp(
-        input: ProviderHttpApplicationInput & { db: ProviderNeutralDatabase },
+        input: ProviderHttpApplicationInput & { db: PersistenceDb },
       ) {
         application = await createProviderHttpApplication(harness, {
           token: input.token,
@@ -418,7 +422,7 @@ describeEachProvider(
         return application.app
       }
 
-      let s: Seed<ProviderNeutralDatabase>
+      let s: Seed<PersistenceDb>
       let prevHome: string | undefined
       beforeEach(async () => {
         s = await seedForProvider(harness.db)
@@ -451,9 +455,10 @@ describeEachProvider(
       // RFC-359 AC-6：这条此前只跑 SQLite（自建 `seed()` + `createApp`），判据在双引擎那半里
       // 并不存在。折进来时把同步的 `app()` 换成这边的 async 形态。
       test('404 — versionId from a different nodeRunId', async () => {
+        const { nodeRuns, docVersions } = tablesOf(s.db)
         // Keep the parent run valid and visible so this exercises the version/run
         // ownership fence rather than short-circuiting on an unknown run.
-        await s.db.insert(nodeRuns).values({
+        await insertOne(s.db, nodeRuns, {
           id: 'run_other',
           taskId: s.taskId,
           nodeId: 'rev_other',
@@ -462,7 +467,7 @@ describeEachProvider(
           reviewIteration: 0,
           status: 'awaiting_review',
         })
-        await s.db.insert(docVersions).values({
+        await insertOne(s.db, docVersions, {
           id: 'dv_other',
           taskId: s.taskId,
           reviewNodeId: 'rev_other',
@@ -502,7 +507,7 @@ describeEachProvider(
 )
 
 // RFC-359 W49: preserve the native seed and supply the selected provider to the same seed core.
-function seedForProvider(db: ProviderNeutralDatabase) {
+function seedForProvider(db: PersistenceDb) {
   return seed(db)
 }
 function providerTaskLineage(id: string) {

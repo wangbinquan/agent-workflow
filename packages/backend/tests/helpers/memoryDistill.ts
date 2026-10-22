@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
@@ -132,10 +132,7 @@ export function distillTick(options: NativeTickOptions): ReturnType<typeof selec
   )
 }
 
-export function createSqliteMemoryDistillTestContext(
-  db: ProviderNeutralDatabase,
-  root = appHome(),
-) {
+export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = appHome()) {
   const reviewedArtifacts = new DatabaseCommittedReviewArtifactReader(
     db,
     createFileReviewArtifactContent(root),
@@ -149,9 +146,7 @@ export function createSqliteMemoryDistillTestContext(
 }
 
 /** Provider-real test participant for consumers that only enqueue work. */
-export function createSqliteMemoryDistillEnqueuer(
-  db: ProviderNeutralDatabase,
-): MemoryDistillEnqueuer {
+export function createSqliteMemoryDistillEnqueuer(db: PersistenceDb): MemoryDistillEnqueuer {
   const store = new DrizzleMemoryDistillWorkStore(db)
   return Object.freeze({
     enqueue: async (input) => await enqueueDistillJob(store, input),

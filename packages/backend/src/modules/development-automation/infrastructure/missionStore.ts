@@ -7,26 +7,12 @@
 // 多语句原子操作（launch、快照 + 决策、effect 状态机迁移、wake hint 消费）走统一事务原语；effect 迁移是
 // 读—判—写，先 `lockAggregateRoot` 锁 effect 行（PG FOR UPDATE，SQLite 独占事务下 no-op）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentActionRuns,
-  developmentAgentAttempts,
-  developmentDecisions,
-  developmentDeferredWakes,
-  developmentEffects,
-  developmentFactSnapshots,
-  developmentFeedbackLedger,
-  developmentMissions,
-  developmentMissionSources,
-  developmentMrClaims,
-  developmentWakeHints,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ValidationError } from '@/util/errors'
 import type { DeferredWakeRow } from '../domain/deferredWake'
 import { MISSION_STATUSES } from '../domain/mission'
@@ -48,7 +34,7 @@ import type {
 import { insertUploadPlan } from './uploadPlanStore'
 import { claimUploadSessions } from './uploadSessionStore'
 
-type MissionDbRow = typeof developmentMissions.$inferSelect
+type MissionDbRow = PersistenceTables['developmentMissions']['$inferSelect']
 
 function toMissionRow(row: MissionDbRow): MissionRow {
   if (!MISSION_STATUSES.includes(row.status as MissionRow['status'])) {
@@ -115,7 +101,7 @@ function toMissionRow(row: MissionDbRow): MissionRow {
   }
 }
 
-function toEffectRow(row: typeof developmentEffects.$inferSelect): EffectRow {
+function toEffectRow(row: PersistenceTables['developmentEffects']['$inferSelect']): EffectRow {
   return {
     id: row.id,
     missionId: row.missionId,
@@ -129,7 +115,9 @@ function toEffectRow(row: typeof developmentEffects.$inferSelect): EffectRow {
   }
 }
 
-function toMissionSourceRow(row: typeof developmentMissionSources.$inferSelect): MissionSourceRow {
+function toMissionSourceRow(
+  row: PersistenceTables['developmentMissionSources']['$inferSelect'],
+): MissionSourceRow {
   if (row.sourceKind !== 'direct' && row.sourceKind !== 'external-reference') {
     throw new Error(`invalid persisted mission source kind: ${row.sourceKind}`)
   }
@@ -151,7 +139,7 @@ function toMissionSourceRow(row: typeof developmentMissionSources.$inferSelect):
 }
 
 function toWakeRow(
-  row: typeof developmentDeferredWakes.$inferSelect,
+  row: PersistenceTables['developmentDeferredWakes']['$inferSelect'],
 ): DeferredWakeRow & { readonly id: string } {
   return {
     id: row.id,
@@ -174,9 +162,10 @@ const EFFECT_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
 }
 
 async function insertMissionRow(
-  handle: ProviderNeutralDatabase,
+  handle: PersistenceDb,
   row: MissionRow,
 ): Promise<{ readonly created: boolean; readonly mission: MissionRow }> {
+  const { developmentMissions } = tablesOf(handle)
   const inserted = await handle
     .insert(developmentMissions)
     .values({ ...row, reopenedFromMissionId: row.reopenedFromMissionId ?? null })
@@ -198,10 +187,11 @@ async function insertMissionRow(
 }
 
 async function insertFactSnapshotRow(
-  handle: ProviderNeutralDatabase,
+  handle: PersistenceDb,
   input: MissionFactSnapshotWrite,
 ): Promise<void> {
-  await handle.insert(developmentFactSnapshots).values({
+  const { developmentFactSnapshots } = tablesOf(handle)
+  await insertOne(handle, developmentFactSnapshots, {
     id: input.id,
     missionId: input.missionId,
     missionRevision: input.missionRevision,
@@ -214,9 +204,10 @@ async function insertFactSnapshotRow(
 }
 
 async function insertDecisionRow(
-  handle: ProviderNeutralDatabase,
+  handle: PersistenceDb,
   input: MissionDecisionWrite,
 ): Promise<MissionDecisionWriteReceipt> {
+  const { developmentDecisions } = tablesOf(handle)
   const inserted = await handle
     .insert(developmentDecisions)
     .values({
@@ -256,7 +247,7 @@ async function insertDecisionRow(
   return { created: false, decisionId: existing.id }
 }
 
-export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPersistence {
+export function createMissionPersistence(db: PersistenceDb): MissionPersistence {
   const session = databaseSessionFor(db)
   const engine = session.engine
 
@@ -265,7 +256,8 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     to: EffectRow['state'],
     patch: Record<string, unknown>,
   ): Promise<void> {
-    await session.transaction(async (tx: DatabaseTransaction) => {
+    await session.transaction(async (tx: PersistenceTx) => {
+      const { developmentEffects } = tablesOf(tx)
       await engine.lockAggregateRoot(tx, developmentEffects, developmentEffects.id, id)
       const row = (
         await tx.select().from(developmentEffects).where(eq(developmentEffects.id, id)).limit(1)
@@ -300,7 +292,8 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
           })
           await insertUploadPlan(tx, input.upload.plan)
         }
-        await tx.insert(developmentMissionSources).values(input.source)
+        const { developmentMissionSources } = tablesOf(tx)
+        await insertOne(tx, developmentMissionSources, input.source)
         return created
       })
     },
@@ -308,12 +301,14 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return await insertMissionRow(db, row)
     },
     async getMission(id) {
+      const { developmentMissions } = tablesOf(db)
       const row = (
         await db.select().from(developmentMissions).where(eq(developmentMissions.id, id)).limit(1)
       )[0]
       return row === undefined ? null : toMissionRow(row)
     },
     async findByIdempotencyKey(key) {
+      const { developmentMissions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -326,6 +321,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     async occUpdate(missionId, expectedRevision, expectedEpoch, patch): Promise<OccResult> {
       return await session.transaction(async (tx) => {
         const next = expectedRevision + 1
+        const { developmentMissions } = tablesOf(tx)
         const updated = await tx
           .update(developmentMissions)
           .set({ ...patch, revision: next, updatedAt: Date.now() })
@@ -353,6 +349,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
     async bumpEpoch(missionId, expectedRevision, patch): Promise<OccResult> {
       return await session.transaction(async (tx) => {
+        const { developmentMissions } = tablesOf(tx)
         const row = (
           await tx
             .select()
@@ -380,9 +377,11 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async insertMissionSource(row) {
-      await db.insert(developmentMissionSources).values(row)
+      const { developmentMissionSources } = tablesOf(db)
+      await insertOne(db, developmentMissionSources, row)
     },
     async listMissionSources(missionId) {
+      const { developmentMissionSources } = tablesOf(db)
       return (
         await db
           .select()
@@ -392,6 +391,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async claimMr(input) {
+      const { developmentMrClaims } = tablesOf(db)
       const inserted = await db
         .insert(developmentMrClaims)
         .values({
@@ -412,12 +412,14 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         : { ok: false, code: 'mr-owned-by-another-mission' }
     },
     async releaseMr(claimId, now) {
+      const { developmentMrClaims } = tablesOf(db)
       await db
         .update(developmentMrClaims)
         .set({ state: 'released', releasedAt: now })
         .where(eq(developmentMrClaims.id, claimId))
     },
     async getMrClaim(claimId) {
+      const { developmentMrClaims } = tablesOf(db)
       const row = (
         await db
           .select({
@@ -435,6 +437,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return row ?? null
     },
     async findMrClaim(input) {
+      const { developmentMrClaims } = tablesOf(db)
       // 同一条 MR 可以有多行：唯一索引只约束 `state='active'`，released 的历史会累积——T81 的 reopen 链更是
       // **每重开一次就多一行**。所以这里必须显式定序：active 优先，同态取最新。不定序时返回哪一行是未定义的，
       // 而这个读面的调用方（webhook 反查、claim 撞车消歧）恰恰只关心「现在归谁」。
@@ -464,6 +467,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async recordWakeHint(input) {
+      const { developmentWakeHints } = tablesOf(db)
       const inserted = await db
         .insert(developmentWakeHints)
         .values({
@@ -479,6 +483,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
     async consumeWakeHints(missionId, now) {
       return await session.transaction(async (tx) => {
+        const { developmentWakeHints } = tablesOf(tx)
         const open = await tx
           .select({ id: developmentWakeHints.id })
           .from(developmentWakeHints)
@@ -504,6 +509,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async upsertFeedbackObservation(input) {
+      const { developmentFeedbackLedger } = tablesOf(db)
       const inserted = await db
         .insert(developmentFeedbackLedger)
         .values({
@@ -523,6 +529,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return { created: inserted.length === 1 }
     },
     async listFeedback(missionId) {
+      const { developmentFeedbackLedger } = tablesOf(db)
       return (await db
         .select()
         .from(developmentFeedbackLedger)
@@ -533,6 +540,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         )) as FeedbackLedgerRow[]
     },
     async setFeedbackState(input) {
+      const { developmentFeedbackLedger } = tablesOf(db)
       await db
         .update(developmentFeedbackLedger)
         .set({
@@ -544,6 +552,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         .where(eq(developmentFeedbackLedger.id, input.id))
     },
     async obsoleteFeedbackForOtherHeads(missionId, currentHeadSha, now) {
+      const { developmentFeedbackLedger } = tablesOf(db)
       const stale = await db
         .update(developmentFeedbackLedger)
         .set({ state: 'obsolete', updatedAt: now })
@@ -559,7 +568,8 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async armWake(input) {
-      await db.insert(developmentDeferredWakes).values({
+      const { developmentDeferredWakes } = tablesOf(db)
+      await insertOne(db, developmentDeferredWakes, {
         id: input.id,
         missionId: input.missionId,
         decisionId: input.decisionId,
@@ -572,6 +582,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       })
     },
     async getWake(missionId, decisionId) {
+      const { developmentDeferredWakes } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -587,6 +598,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return row === undefined ? null : toWakeRow(row)
     },
     async fireWake(id, _now) {
+      const { developmentDeferredWakes } = tablesOf(db)
       const updated = await db
         .update(developmentDeferredWakes)
         .set({ state: 'fired' })
@@ -597,12 +609,14 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return updated.length === 1
     },
     async settleWake(id, now) {
+      const { developmentDeferredWakes } = tablesOf(db)
       await db
         .update(developmentDeferredWakes)
         .set({ state: 'settled', settledAt: now })
         .where(eq(developmentDeferredWakes.id, id))
     },
     async listDueWakes(now) {
+      const { developmentDeferredWakes } = tablesOf(db)
       return (
         await db
           .select()
@@ -626,6 +640,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async createActionRun(input) {
+      const { developmentActionRuns } = tablesOf(db)
       const inserted = await db
         .insert(developmentActionRuns)
         .values({
@@ -651,6 +666,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         : { ok: false, code: 'writable-action-already-active' }
     },
     async settleActionRun(input) {
+      const { developmentActionRuns } = tablesOf(db)
       await db
         .update(developmentActionRuns)
         .set({
@@ -662,6 +678,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         .where(eq(developmentActionRuns.id, input.id))
     },
     async countActionRuns(missionId, capabilityId) {
+      const { developmentActionRuns } = tablesOf(db)
       return (
         await db
           .select({ id: developmentActionRuns.id })
@@ -675,6 +692,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       ).length
     },
     async getActionRun(id) {
+      const { developmentActionRuns } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -696,6 +714,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async claimAttempt(input) {
+      const { developmentAgentAttempts } = tablesOf(db)
       const inserted = await db
         .insert(developmentAgentAttempts)
         .values({
@@ -716,6 +735,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return inserted.length === 1 ? { ok: true } : { ok: false, code: 'attempt-ordinal-taken' }
     },
     async settleAttempt(input) {
+      const { developmentAgentAttempts } = tablesOf(db)
       await db
         .update(developmentAgentAttempts)
         .set({
@@ -727,6 +747,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         .where(eq(developmentAgentAttempts.id, input.id))
     },
     async listAttempts(actionRunId) {
+      const { developmentAgentAttempts } = tablesOf(db)
       return (
         await db
           .select()
@@ -750,6 +771,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
 
     async prepareEffect(input) {
+      const { developmentEffects } = tablesOf(db)
       const inserted = await db
         .insert(developmentEffects)
         .values({
@@ -789,12 +811,14 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       await transitionEffect(id, 'failed', { failureJson, settledAt: now })
     },
     async getEffect(id) {
+      const { developmentEffects } = tablesOf(db)
       const row = (
         await db.select().from(developmentEffects).where(eq(developmentEffects.id, id)).limit(1)
       )[0]
       return row === undefined ? null : toEffectRow(row)
     },
     async listUnsettledEffects(missionId) {
+      const { developmentEffects } = tablesOf(db)
       return (
         await db
           .select()
@@ -811,6 +835,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       ).map(toEffectRow)
     },
     async listPreparedEffects() {
+      const { developmentEffects } = tablesOf(db)
       return (
         await db
           .select()
@@ -828,6 +853,7 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
     },
     async commitRequirementCells(input) {
       return await session.transaction(async (tx) => {
+        const { developmentMissions, developmentFactSnapshots } = tablesOf(tx)
         await engine.lockAggregateRoot(
           tx,
           developmentMissions,

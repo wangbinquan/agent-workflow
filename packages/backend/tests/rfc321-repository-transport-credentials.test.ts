@@ -2,17 +2,14 @@
 // RFC-321 — only absence may fall through from personal to global. Storage
 // tests also prove personal secrets are sealed and isolated per user.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  repositoryTransportConnections,
-  userRepositoryTransportCredentials,
-} from '../src/db/schema'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { selectRepositoryTransportCredential } from '../src/modules/source-control/domain/repositoryTransportCredential'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
@@ -26,7 +23,7 @@ function subject(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
 }
 
-function repositoryOf(db: ProviderNeutralDatabase) {
+function repositoryOf(db: PersistenceDb) {
   return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
@@ -149,6 +146,7 @@ describeEachProvider('RFC-321 personal credential repository', (harness) => {
       credential: { credentialSource: 'personal', token: PERSONAL_TOKEN },
     })
 
+    const { userRepositoryTransportCredentials } = tablesOf(db)
     await db
       .update(userRepositoryTransportCredentials)
       .set({ endpointBindingDigest: 'b'.repeat(64) })
@@ -220,6 +218,7 @@ describeEachProvider('RFC-321 personal credential repository', (harness) => {
       configured: false,
     })
 
+    const { userRepositoryTransportCredentials } = tablesOf(db)
     const row = (
       await db
         .select()
@@ -289,6 +288,7 @@ describeEachProvider('RFC-321 personal credential repository', (harness) => {
       endpointBindingDigest: 'c'.repeat(64),
       updatedAt: 2,
     })
+    const { userRepositoryTransportCredentials, repositoryTransportConnections } = tablesOf(db)
     expect(await db.select().from(userRepositoryTransportCredentials)).toEqual([])
     expect(
       (

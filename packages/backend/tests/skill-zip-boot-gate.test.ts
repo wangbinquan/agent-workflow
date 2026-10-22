@@ -17,6 +17,8 @@
 //   - 'quarantined' was a one-way state (boot rescan skipped it) → a restored
 //     snapshot that re-matches content_hash now exits quarantine at boot.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { zipSync, type Zippable } from 'fflate'
@@ -25,8 +27,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skills, skillVersions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   commitSkillZipBuffer,
   type SkillZipFsOptions,
@@ -56,12 +57,12 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 const ALICE = actor('alice')
 
 interface H {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   fsOpts: SkillZipFsOptions
   cleanup: () => void
 }
 
-function build(db: ProviderNeutralDatabase): H {
+function build(db: PersistenceDb): H {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-zip-gate-'))
   return {
     db,
@@ -82,12 +83,13 @@ const skillMd = (name: string, desc = 'd') =>
   `---\nname: ${name}\ndescription: ${desc}\n---\nbody for ${name}\n`
 
 /** Raw row lookup — deliberately bypasses the gated getSkill. */
-async function rawRow(db: ProviderNeutralDatabase, name: string) {
-  return (await db.select().from(skills).where(eq(skills.name, name)).all())[0]
+async function rawRow(db: PersistenceDb, name: string) {
+  const { skills } = tablesOf(db)
+  return (await db.select().from(skills).where(eq(skills.name, name)))[0]
 }
 
 /** rawRow that must exist (throws instead of returning undefined). */
-async function mustRow(db: ProviderNeutralDatabase, name: string) {
+async function mustRow(db: PersistenceDb, name: string) {
   const row = await rawRow(db, name)
   if (row === undefined) throw new Error(`expected a skills row for '${name}'`)
   return row
@@ -95,25 +97,23 @@ async function mustRow(db: ProviderNeutralDatabase, name: string) {
 
 /** Insert a bare skills row the way the pre-fix zip importer did. */
 async function insertBareRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
-  over: Partial<typeof skills.$inferInsert> = {},
+  over: Partial<PersistenceTables['skills']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(skills)
-    .values({
-      id,
-      name,
-      description: 'bare',
-      managedPath: `skills/${id}/files`,
-      visibility: 'public',
-      createdAt: now,
-      updatedAt: now,
-      ...over,
-    })
-    .run()
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
+    id,
+    name,
+    description: 'bare',
+    managedPath: `skills/${id}/files`,
+    visibility: 'public',
+    createdAt: now,
+    updatedAt: now,
+    ...over,
+  })
   return id
 }
 
@@ -151,11 +151,11 @@ describeEachProvider('zip import create under the ACTIVE boot availability gate'
     expect(row.versionState).toBe('snapshot-authoritative')
     expect(row.reservationState).toBe('ready')
     expect(isSkillBootVerified(row.id)).toBe(true)
+    const { skillVersions } = tablesOf(h.db)
     const versions = await h.db
       .select()
       .from(skillVersions)
       .where(eq(skillVersions.skillId, row.id))
-      .all()
     expect(versions.length).toBe(1)
     const snapDir = join(h.fsOpts.appHome, 'skills', row.id, 'versions', 'v1', 'files')
     expect(existsSync(join(snapDir, 'SKILL.md'))).toBe(true)
@@ -317,8 +317,9 @@ describeEachProvider('quarantine recovery via boot rescan', (harness) => {
       frontmatterExtra: {},
     })
     const id = (await mustRow(h.db, 'quar')).id
+    const { skills } = tablesOf(h.db)
     // Simulate an earlier boot having quarantined it (snapshot intact on disk).
-    await h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
+    await h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id))
     resetSkillBootVerifyForTest()
 
     await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
@@ -339,11 +340,11 @@ describeEachProvider('quarantine recovery via boot rescan', (harness) => {
       frontmatterExtra: {},
     })
     const id = (await mustRow(h.db, 'frozen')).id
+    const { skills } = tablesOf(h.db)
     await h.db
       .update(skills)
       .set({ versionState: 'quarantined', reservationState: 'reserving' })
       .where(eq(skills.id, id))
-      .run()
     resetSkillBootVerifyForTest()
 
     await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
@@ -361,7 +362,8 @@ describeEachProvider('quarantine recovery via boot rescan', (harness) => {
       frontmatterExtra: {},
     })
     const id = (await mustRow(h.db, 'rot')).id
-    await h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
+    const { skills } = tablesOf(h.db)
+    await h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id))
     writeFileSync(
       join(h.fsOpts.appHome, 'skills', id, 'versions', 'v1', 'files', 'SKILL.md'),
       'tampered',

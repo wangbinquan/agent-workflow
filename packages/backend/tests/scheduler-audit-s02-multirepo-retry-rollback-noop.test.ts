@@ -27,6 +27,8 @@
 //   decideEnvelopeFollowup 走 fresh-session 重试而非 same-session follow-up；
 //   attempt 2 先落盘「重试起点的脏文件存在性清单」再输出合法 envelope 成功）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -35,9 +37,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRuns, taskRepos, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -95,7 +96,7 @@ process.stdout.write(
 process.exit(0)
 `
 
-interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
   db: TDatabase
   postgresql: boolean
   appHome: string
@@ -142,9 +143,10 @@ async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   }
 }
 
-async function seedWriterAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedWriterAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -175,14 +177,15 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
     ],
     edges: [],
   }
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, taskRepos } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -301,6 +304,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // The retry (attempt 2) succeeded → task done (unchanged by the fix; the
     // observable difference is what the retry inherited on disk, below).
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

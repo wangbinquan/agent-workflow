@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createManagedSkill,
@@ -57,7 +57,7 @@ describe('isProtectedSkillMainFile (lexical, shared)', () => {
 })
 
 describeEachProvider('writeSkillFile / deleteSkillFile SKILL.md guard', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: SkillFsOptions
   let skillId: string

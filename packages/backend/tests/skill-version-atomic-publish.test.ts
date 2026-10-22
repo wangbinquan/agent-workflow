@@ -11,13 +11,13 @@ import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('commitSkillVersion atomic publish', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string

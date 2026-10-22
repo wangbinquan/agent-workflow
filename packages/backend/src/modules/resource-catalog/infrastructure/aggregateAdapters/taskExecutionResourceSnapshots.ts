@@ -13,12 +13,13 @@
 // 事务由 task-execution 侧的 `snapshotRead` 打开（PG: REPEATABLE READ READ ONLY；
 // SQLite: BEGIN IMMEDIATE，与合一前 `dbTxSync` 同一条边界），闭包递归取数全绑在那一笔上。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { AclResourceType, Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import { asc, eq, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import { agents, mcps, plugins, skills, workflows, workgroupMembers, workgroups } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ConflictError, NotFoundError, SkillQuarantinedError, ValidationError } from '@/util/errors'
 import { agentFromPersistenceRow } from '../agentPersistence'
 import { mcpFromPersistenceRow } from '../mcpPersistence'
@@ -43,8 +44,8 @@ type TaskExecutionSkillSnapshot = Extract<
   { readonly kind: 'agent-injection' }
 >['skills'][number]
 
-type WorkflowRow = typeof workflows.$inferSelect
-type WorkgroupRow = typeof workgroups.$inferSelect
+type WorkflowRow = PersistenceTables['workflows']['$inferSelect']
+type WorkgroupRow = PersistenceTables['workgroups']['$inferSelect']
 type ManagedInjectionNameConflict = Readonly<{
   readonly kind: 'agent' | 'managed-skill' | 'mcp'
   readonly name: string
@@ -80,7 +81,7 @@ export interface TaskExecutionResourceDependencies {
 }
 
 export interface TaskExecutionResourceOptions {
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
   readonly authority: ResourceRequestContext
   readonly actor: Actor
 }
@@ -135,7 +136,8 @@ export function createTaskExecutionResourceSnapshotPorts(
     workflowId: string,
   ): Promise<TaskExecutionWorkflowSnapshot> => {
     const actor = actorFor(authority)
-    const row = await tx.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+    const { workflows } = tablesOf(tx)
+    const row = await first(tx.select().from(workflows).where(eq(workflows.id, workflowId)))
     if (row === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', row))) {
       throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
     }
@@ -148,16 +150,16 @@ export function createTaskExecutionResourceSnapshotPorts(
     request: Extract<TaskExecutionResourceRequest, { readonly kind: 'call-workflow' }>,
   ): Promise<TaskExecutionWorkflowSnapshot> => {
     const actor = actorFor(authority)
+    const { workflows } = tablesOf(tx)
     const rows = await tx
       .select()
       .from(workflows)
       .where(eq(workflows.name, request.name))
       .orderBy(asc(workflows.id))
-      .all()
     const hinted =
       request.idHint === undefined
         ? undefined
-        : await tx.select().from(workflows).where(eq(workflows.id, request.idHint)).get()
+        : await first(tx.select().from(workflows).where(eq(workflows.id, request.idHint)))
     const byId = new Map<string, WorkflowRow>()
     for (const row of [...rows, ...(hinted === undefined ? [] : [hinted])]) {
       if (!(await canViewResourceForTx(tx, actor, 'workflow', row))) continue
@@ -191,16 +193,16 @@ export function createTaskExecutionResourceSnapshotPorts(
     request: Extract<TaskExecutionResourceRequest, { readonly kind: 'call-workgroup' }>,
   ): Promise<TaskExecutionWorkgroupSnapshot> => {
     const actor = actorFor(authority)
+    const { workgroups, workgroupMembers } = tablesOf(tx)
     const rows = await tx
       .select()
       .from(workgroups)
       .where(eq(workgroups.name, request.name))
       .orderBy(asc(workgroups.id))
-      .all()
     const hinted =
       request.idHint === undefined
         ? undefined
-        : await tx.select().from(workgroups).where(eq(workgroups.id, request.idHint)).get()
+        : await first(tx.select().from(workgroups).where(eq(workgroups.id, request.idHint)))
     const byId = new Map<string, WorkgroupRow>()
     for (const row of [...rows, ...(hinted === undefined ? [] : [hinted])]) {
       if (!(await canViewResourceForTx(tx, actor, 'workgroup', row))) continue
@@ -223,7 +225,6 @@ export function createTaskExecutionResourceSnapshotPorts(
       .select()
       .from(workgroupMembers)
       .where(eq(workgroupMembers.workgroupId, row.id))
-      .all()
     try {
       return workgroupSnapshot(workgroupFromRows(row, members))
     } catch {
@@ -241,7 +242,8 @@ export function createTaskExecutionResourceSnapshotPorts(
     Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: 'agent-injection' }>
   > => {
     actorFor(authority)
-    const rootRow = await tx.select().from(agents).where(eq(agents.id, agentId)).get()
+    const { agents, skills, mcps, plugins } = tablesOf(tx)
+    const rootRow = await first(tx.select().from(agents).where(eq(agents.id, agentId)))
     if (rootRow === undefined) {
       return requestFailure('agent-not-found', `agent '${agentId}' not found`)
     }
@@ -261,7 +263,7 @@ export function createTaskExecutionResourceSnapshotPorts(
         )
       }
       if (seen.has(entry.id)) continue
-      const row = await tx.select().from(agents).where(eq(agents.id, entry.id)).get()
+      const row = await first(tx.select().from(agents).where(eq(agents.id, entry.id)))
       if (row === undefined) {
         return requestFailure(
           'agent-dependency-not-found',
@@ -289,7 +291,7 @@ export function createTaskExecutionResourceSnapshotPorts(
         skillSnapshots.push(Object.freeze({ kind: 'project', name: ref.name }))
         continue
       }
-      const row = await tx.select().from(skills).where(eq(skills.id, ref.skillId)).get()
+      const row = await first(tx.select().from(skills).where(eq(skills.id, ref.skillId)))
       if (row === undefined) {
         return requestFailure(
           'skill-not-found',
@@ -334,7 +336,7 @@ export function createTaskExecutionResourceSnapshotPorts(
     }
     const mcpIds = collectIds((agent) => agent.mcp)
     const mcpRows =
-      mcpIds.length === 0 ? [] : await tx.select().from(mcps).where(inArray(mcps.id, mcpIds)).all()
+      mcpIds.length === 0 ? [] : await tx.select().from(mcps).where(inArray(mcps.id, mcpIds))
     const mcpById = new Map(mcpRows.map((row) => [row.id, mcpFromPersistenceRow(row)]))
     if (mcpIds.some((id) => !mcpById.has(id))) {
       return requestFailure('mcp-not-found', `agent '${root.name}' references a missing MCP`)
@@ -361,7 +363,7 @@ export function createTaskExecutionResourceSnapshotPorts(
     const pluginRows =
       pluginIds.length === 0
         ? []
-        : await tx.select().from(plugins).where(inArray(plugins.id, pluginIds)).all()
+        : await tx.select().from(plugins).where(inArray(plugins.id, pluginIds))
     const pluginById = new Map(pluginRows.map((row) => [row.id, pluginFromPersistenceRow(row)]))
     if (pluginIds.some((id) => !pluginById.has(id))) {
       return requestFailure('plugin-not-found', `agent '${root.name}' references a missing Plugin`)

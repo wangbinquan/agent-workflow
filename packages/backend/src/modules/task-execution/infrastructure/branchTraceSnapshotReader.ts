@@ -1,14 +1,15 @@
 // RFC-359 W4-B1 —— 分支追踪快照读取：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { BranchTraceSnapshotReader } from '../application/ports/branchTraceSnapshotReader'
 
 export class DrizzleBranchTraceSnapshotReader implements BranchTraceSnapshotReader {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async read(taskId: string) {
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(this.db)
     const taskRows = await this.db
       .select({ workflowSnapshot: tasks.workflowSnapshot })
       .from(tasks)

@@ -1,22 +1,11 @@
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  clarifyRounds,
-  docVersions,
-  memories,
-  memoryDistillJobs,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskFeedback,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MemoryDistillSessionSinkInput,
   MemoryDistillWorkStore,
@@ -29,7 +18,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   private readonly sinkFactory: (input: MemoryDistillSessionSinkInput) => SystemAgentEventSinkV1
 
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     /**
      * RFC-367 test seam; production omits it and gets the real
      * `memory_distill_events` writer. (It replaces the old `capture` argument,
@@ -41,6 +30,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async findTaskScope(taskId: string) {
+    const { tasks, cachedRepos } = tablesOf(this.db)
     const row = (
       await this.db
         .select({
@@ -74,7 +64,8 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async enqueue(input: Parameters<MemoryDistillWorkStore['enqueue']>[0]): Promise<void> {
-    await this.db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(this.db)
+    await insertOne(this.db, memoryDistillJobs, {
       id: input.id,
       debounceKey: input.debounceKey,
       sourceKind: input.sourceKind,
@@ -90,6 +81,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listDue(now: number, limit: number) {
+    const { memoryDistillJobs } = tablesOf(this.db)
     return await this.db
       .select()
       .from(memoryDistillJobs)
@@ -99,6 +91,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listPendingSiblings(debounceKey: string) {
+    const { memoryDistillJobs } = tablesOf(this.db)
     return await this.db
       .select()
       .from(memoryDistillJobs)
@@ -113,6 +106,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async markRunning(ids: readonly string[], startedAt: number): Promise<void> {
     if (ids.length === 0) return
+    const { memoryDistillJobs } = tablesOf(this.db)
     await this.db
       .update(memoryDistillJobs)
       .set({ status: 'running', startedAt })
@@ -121,6 +115,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async markDone(ids: readonly string[], finishedAt: number): Promise<void> {
     if (ids.length === 0) return
+    const { memoryDistillJobs } = tablesOf(this.db)
     await this.db
       .update(memoryDistillJobs)
       .set({ status: 'done', finishedAt })
@@ -144,6 +139,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
             nextRunAt: input.retryAt,
             startedAt: null,
           }
+    const { memoryDistillJobs } = tablesOf(this.db)
     await this.db
       .update(memoryDistillJobs)
       .set(patch)
@@ -151,6 +147,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async recoverRunning(): Promise<number> {
+    const { memoryDistillJobs } = tablesOf(this.db)
     const rows = await this.db
       .update(memoryDistillJobs)
       .set({ status: 'pending', startedAt: null })
@@ -160,6 +157,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async retryFailed(jobId: string, now: number) {
+    const { memoryDistillJobs } = tablesOf(this.db)
     const rows = await this.db
       .update(memoryDistillJobs)
       .set({
@@ -176,6 +174,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async cancelPending(jobId: string, now: number): Promise<boolean> {
+    const { memoryDistillJobs } = tablesOf(this.db)
     const rows = await this.db
       .update(memoryDistillJobs)
       .set({ status: 'canceled', finishedAt: now })
@@ -190,6 +189,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async listClarifySources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { clarifyRounds } = tablesOf(this.db)
     return await this.db
       .select({
         id: clarifyRounds.id,
@@ -205,6 +205,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async listReviewSources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { docVersions } = tablesOf(this.db)
     return await this.db
       .select({
         id: docVersions.id,
@@ -219,6 +220,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async listReviewComments(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { reviewComments } = tablesOf(this.db)
     return await this.db
       .select({
         docVersionId: reviewComments.docVersionId,
@@ -233,6 +235,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async listFeedbackSources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { taskFeedback } = tablesOf(this.db)
     return await this.db
       .select({
         id: taskFeedback.id,
@@ -247,6 +250,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   // RFC-366 agent-run 源：结算的那一行 node_run 本身。
   async listAgentRunSources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { nodeRuns } = tablesOf(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,
@@ -270,6 +274,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   // 「这个 agent 前后说了两套」的假象，所以只取活的。
   async listNodeRunOutputs(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { nodeRunOutputs } = tablesOf(this.db)
     return await this.db
       .select({
         nodeRunId: nodeRunOutputs.nodeRunId,
@@ -285,6 +290,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   // RFC-366 task-run 源：任务本身的收尾快照。
   async listTaskRunSources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { tasks } = tablesOf(this.db)
     return await this.db
       .select({
         id: tasks.id,
@@ -313,6 +319,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
    */
   async listTaskNodeStatuses(taskIds: readonly string[]) {
     if (taskIds.length === 0) return []
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
       .select({
         taskId: nodeRuns.taskId,
@@ -352,6 +359,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async listNodeRuns(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { nodeRuns } = tablesOf(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,
@@ -366,6 +374,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async listNodeRunEvents(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { nodeRunEvents } = tablesOf(this.db)
     return await this.db
       .select({
         id: nodeRunEvents.id,
@@ -385,6 +394,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
     scopeType: 'agent' | 'workflow' | 'repo' | 'global',
     scopeId: string | null,
   ) {
+    const { memories } = tablesOf(this.db)
     const where =
       scopeId === null
         ? and(eq(memories.scopeType, scopeType), eq(memories.status, 'approved'))
@@ -410,6 +420,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
     userPromptMd: string,
     dedupSnapshotIdsJson: string,
   ): Promise<void> {
+    const { memoryDistillJobs } = tablesOf(this.db)
     await this.db
       .update(memoryDistillJobs)
       .set({ userPromptMd, dedupSnapshotIdsJson })
@@ -420,6 +431,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
     jobId: string,
     input: Parameters<MemoryDistillWorkStore['saveSpawnResult']>[1],
   ): Promise<void> {
+    const { memoryDistillJobs } = tablesOf(this.db)
     await this.db
       .update(memoryDistillJobs)
       .set({
@@ -436,7 +448,8 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async insertCandidate(input: Parameters<MemoryDistillWorkStore['insertCandidate']>[0]) {
     const memory = input.memory
-    await this.db.insert(memories).values({
+    const { memories } = tablesOf(this.db)
+    await insertOne(this.db, memories, {
       id: memory.id,
       scopeType: memory.scopeType,
       scopeId: memory.scopeId,

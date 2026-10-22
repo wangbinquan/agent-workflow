@@ -5,6 +5,8 @@
 // events spill into a "(unknown)" bucket and break the conversation
 // view.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -12,15 +14,14 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -47,20 +48,21 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc027-runner-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -83,9 +85,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 
@@ -142,6 +145,7 @@ describeEachProvider('runner stdout → node_run_events session tagging', (harne
         }),
     )
 
+    const { nodeRunEvents } = tablesOf(h.db)
     const rows = await h.db
       .select()
       .from(nodeRunEvents)
@@ -179,6 +183,7 @@ describeEachProvider('runner stdout → node_run_events session tagging', (harne
           db: h.db,
         }),
     )
+    const { nodeRunEvents } = tablesOf(h.db)
     const rows = await h.db
       .select()
       .from(nodeRunEvents)

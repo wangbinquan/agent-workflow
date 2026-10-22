@@ -5,19 +5,10 @@
 // adopts the same platform subtask instead of paying for a second model call.
 // The earlier shape (adopt-and-wait inside `reap`) blocked activation on a
 // running model call and crash-looped on a 410/gap; these cases lock that out.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import {
-  hostedExecutionBindings,
-  nodeRuns,
-  nodeRunEvents,
-  runtimeSessionLeases,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import {
   createTaskExecutionPersistence,
@@ -45,14 +36,15 @@ const proof = createExclusiveDaemonLockProof({
 describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harness) => {
   async function fixture(options: { binding?: boolean; runStatus?: 'running' | 'done' } = {}) {
     const db = harness.db
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns, runtimeSessionLeases } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: 'workflow',
       name: 'hosted',
       definition: snapshot,
       version: 1,
       schemaVersion: 2,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: 'task',
       name: 'hosted',
       workflowId: 'workflow',
@@ -91,7 +83,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
         ...(options.runStatus === 'done' ? { finishedAt: Date.now() } : {}),
       },
     ])
-    await db.insert(runtimeSessionLeases).values({
+    await insertOne(db, runtimeSessionLeases, {
       protocol: 'opencode',
       sessionId: 'session',
       taskId: 'task',
@@ -185,8 +177,10 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
     }
     return { family, recovery, persistence, context, store, run }
   }
-  const nodeRun = async (id: string) =>
-    (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+  const nodeRun = async (id: string) => {
+    const { nodeRuns } = tablesOf(harness.db)
+    return (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+  }
 
   test('an unsettled remote execution is handed off without any platform call and keeps its original run', async () => {
     const f = await fixture()
@@ -213,6 +207,12 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
         iteration: 0,
       }),
     ).toMatchObject({ id: 'wrapper' })
+    const {
+      taskExecutionEffectAttempts,
+      taskExecutionEffects,
+      taskExecutionEffectFences,
+      runtimeSessionLeases,
+    } = tablesOf(harness.db)
     const [attempt] = await harness.db.select().from(taskExecutionEffectAttempts)
     expect(attempt).toMatchObject({ state: 'succeeded', applicationEvidence: 'applied' })
     expect(JSON.parse(attempt!.receiptJson!)).toEqual({
@@ -242,6 +242,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
     const { finalized } = await f.run()
     expect(finalized.releasedTaskIds).toEqual(['task'])
     expect(f.recovery.recoveredTaskIds()).toEqual([])
+    const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(harness.db)
     const [attempt] = await harness.db.select().from(taskExecutionEffectAttempts)
     expect(attempt).toMatchObject({
       state: 'failed-not-applied',
@@ -277,6 +278,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
 
   test('a hosted orphan with a local process id is a contract violation, not a silent kill', async () => {
     const f = await fixture()
+    const { nodeRuns } = tablesOf(harness.db)
     await harness.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, 'run'))
     await f.family.prepare()
     await expect(Promise.resolve(f.family.reap())).rejects.toThrow(
@@ -317,6 +319,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
       executionContext: f.context,
       events: [{ ts: Date.now(), kind: 'text', payload: 'native' }],
     })
+    const { nodeRunEvents, hostedExecutionBindings } = tablesOf(harness.db)
     expect((await harness.db.select().from(nodeRunEvents)).map((row) => row.payload)).toEqual([
       event.payload,
       'native',

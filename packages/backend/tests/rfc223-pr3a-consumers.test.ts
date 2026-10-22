@@ -8,13 +8,14 @@
 //     DIFFERENT agent's same-named task neither blocks the op nor leaks its id
 //     (R3-3 cross-tenant isolation — the failure PR-8 name-uniqueness would open).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
 import { createWorkgroup } from '../src/services/workgroups'
@@ -173,7 +174,7 @@ describe('buildMintNodeRunValues — agentOverrideId', () => {
 // launch freeze (A2) + task guard (R3-3) — DB-backed.
 // ---------------------------------------------------------------------------
 describeEachProvider('RFC-223 PR-3a — DB locks', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -199,11 +200,12 @@ describeEachProvider('RFC-223 PR-3a — DB locks', (harness) => {
 
   test('R3-3: a same-named task with a DIFFERENT source_agent_id neither blocks nor leaks', async () => {
     const a = await createAgent(db, AGENT_INPUT('writer'))
-    await db.insert(workflows).values({ id: 'wf', name: 'wf', definition: '{}' })
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, { id: 'wf', name: 'wf', definition: '{}' })
     // A live task whose display name is 'writer' but whose CANONICAL owner is a
     // different agent id (simulating a cross-tenant / ABA same-name collision).
     const otherTaskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: otherTaskId,
       name: 'other',
       workflowId: 'wf',

@@ -77,7 +77,7 @@ import type { PortableDatabaseBackupInspection } from '@/modules/system-operatio
 import type { RestoreArtifactPathResolver } from '@/modules/system-operations/infrastructure/restoreArtifactIngress'
 import type { RestoreArtifactRef } from '@/modules/system-operations/public/types'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
@@ -184,7 +184,7 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
       runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
       // RFC-359 W9：应用侧资产（workflow / worktree 行）已合成中立实现由组合根注入；
       // 本文件把整条 createBackup 都 stub 掉，客户端一次也不用。
-      db: {} as ProviderNeutralDatabase,
+      db: {} as PersistenceDb,
       appHome,
       createBackup: async () => ({
         path: join(appHome, 'backups', 'backup.tar.gz'),

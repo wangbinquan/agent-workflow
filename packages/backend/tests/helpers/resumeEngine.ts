@@ -17,7 +17,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createRuntimeSessionLeaseOperations,
   createTaskExecutionPersistence,
@@ -54,10 +54,7 @@ export interface ResumeEngine {
   resume(taskId: string): Promise<Task>
 }
 
-export function createResumeEngine(
-  db: ProviderNeutralDatabase,
-  options: ResumeEngineOptions,
-): ResumeEngine {
+export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptions): ResumeEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-resume-engine-'))
   const log = createLogger('task')
   return {

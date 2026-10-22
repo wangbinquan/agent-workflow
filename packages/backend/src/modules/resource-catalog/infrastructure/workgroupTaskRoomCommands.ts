@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 import {
   WorkflowDefinitionSchema,
@@ -5,12 +7,6 @@ import {
   workgroupHasHumanMember,
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import {
-  workgroupAssignments,
-  workgroupMemberCursors,
-  workgroupMessages,
-  workgroupTaskState,
-} from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { WorkgroupTaskRoomCommands } from '../public/commands'
@@ -102,7 +98,8 @@ export function createWorkgroupTaskRoomCommands(
         const assignmentIds: string[] = []
         for (const member of mentioned) {
           const assignmentId = nextId()
-          await transaction.insert(workgroupAssignments).values({
+          const { workgroupAssignments } = tablesOf(transaction)
+          await insertOne(transaction, workgroupAssignments, {
             id: assignmentId,
             taskId: input.taskId,
             round,
@@ -118,7 +115,8 @@ export function createWorkgroupTaskRoomCommands(
           assignmentIds.push(assignmentId)
         }
         const messageId = nextId()
-        await transaction.insert(workgroupMessages).values({
+        const { workgroupMessages } = tablesOf(transaction)
+        await insertOne(transaction, workgroupMessages, {
           id: messageId,
           taskId: input.taskId,
           round,
@@ -171,6 +169,7 @@ export function createWorkgroupTaskRoomCommands(
             issues: parsed.error.issues,
           })
         }
+        const { workgroupAssignments, workgroupMessages } = tablesOf(transaction)
         const assignment = (
           await transaction
             .select()
@@ -214,7 +213,7 @@ export function createWorkgroupTaskRoomCommands(
         const bodyMd =
           parsed.data.body ??
           `${parsed.data.summary ?? ''}${parsed.data.detail ? `\n\n${parsed.data.detail}` : ''}`
-        await transaction.insert(workgroupMessages).values({
+        await insertOne(transaction, workgroupMessages, {
           id: messageId,
           taskId: input.taskId,
           round: assignment.round,
@@ -276,6 +275,7 @@ export function createWorkgroupTaskRoomCommands(
         await dependencies.continuation.assertResumable(input.taskId, 'resume')
         const at = now()
         const nextGate = parsed.data.decision === 'approve' ? 'approved' : 'rejected'
+        const { workgroupTaskState, workgroupMessages } = tablesOf(transaction)
         const changed = await transaction
           .update(workgroupTaskState)
           .set({
@@ -315,7 +315,7 @@ export function createWorkgroupTaskRoomCommands(
           )
         }
         const messageId = nextId()
-        await transaction.insert(workgroupMessages).values({
+        await insertOne(transaction, workgroupMessages, {
           id: messageId,
           taskId: input.taskId,
           round: await messageRound(participant, input.taskId, loaded.config.mode),
@@ -400,6 +400,7 @@ export function createWorkgroupTaskRoomCommands(
           // 里做 worktreePreflight）一致。
           await dependencies.continuation.assertResumable(input.taskId, 'resume')
           const { rejectionComment: _rejectionComment, ...rest } = dw
+          const { workgroupTaskState } = tablesOf(transaction)
           await transaction
             .update(workgroupTaskState)
             .set({ dwStateJson: JSON.stringify({ ...rest, phase: 'executing' }), updatedAt: at })
@@ -430,6 +431,7 @@ export function createWorkgroupTaskRoomCommands(
             rejectRounds,
             rejectionComment: comment,
           }
+          const { workgroupTaskState } = tablesOf(transaction)
           await transaction
             .update(workgroupTaskState)
             .set({ dwStateJson: JSON.stringify(nextDw), updatedAt: at })
@@ -462,6 +464,7 @@ export function createWorkgroupTaskRoomCommands(
           rejectRounds,
           rejectionComment: comment,
         }
+        const { workgroupTaskState } = tablesOf(transaction)
         await transaction
           .update(workgroupTaskState)
           .set({ dwStateJson: JSON.stringify(nextDw), updatedAt: at })
@@ -568,6 +571,8 @@ export function createWorkgroupTaskRoomCommands(
           }
           for (const member of removed) changes.push(`removed @${member.displayName}`)
         }
+        const { workgroupMessages, workgroupAssignments, workgroupMemberCursors } =
+          tablesOf(transaction)
         const latestMessageId = (
           await transaction
             .select({ id: workgroupMessages.id })
@@ -788,7 +793,7 @@ export function createWorkgroupTaskRoomCommands(
           dismissedHumans = true
         }
         const messageId = nextId()
-        await transaction.insert(workgroupMessages).values({
+        await insertOne(transaction, workgroupMessages, {
           id: messageId,
           taskId: input.taskId,
           round: await messageRound(participant, input.taskId, loaded.config.mode),
@@ -849,6 +854,7 @@ export function createWorkgroupTaskRoomCommands(
     async cancelAssignment(authority, input) {
       const messageId = await withTransaction(async (transaction, participant) => {
         await loadVisibleTask(transaction, participant, authority, input.taskId)
+        const { workgroupAssignments, workgroupMessages } = tablesOf(transaction)
         const assignment = (
           await transaction
             .select()
@@ -883,7 +889,7 @@ export function createWorkgroupTaskRoomCommands(
           )
         }
         const id = nextId()
-        await transaction.insert(workgroupMessages).values({
+        await insertOne(transaction, workgroupMessages, {
           id,
           taskId: input.taskId,
           round: assignment.round,

@@ -9,12 +9,13 @@
 // 这套断言两个引擎各跑一遍写面的核心判据：一次创建落定问题行 + prepared 门操作 + 已提交事件；
 // 任务终态一律拒绝且什么都不落；重复 gateRef 的活跃操作按冲突拒绝。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { collaborationGateOperations, taskQuestions, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { DatabaseManualQuestionOpenWriter } from '@/modules/collaboration/infrastructure/manualQuestionOpenWriter'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -22,13 +23,14 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_788_969_900_000
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: 'running' | 'done' | 'canceled' = 'running',
 ): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'd26 manual question task',
     workflowId,
@@ -45,13 +47,13 @@ async function seedTask(
   return taskId
 }
 
-function writerFor(db: ProviderNeutralDatabase): DatabaseManualQuestionOpenWriter {
+function writerFor(db: PersistenceDb): DatabaseManualQuestionOpenWriter {
   return new DatabaseManualQuestionOpenWriter(db, new DatabaseHumanGateOperationJournal())
 }
 
 describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness) => {
   test('一次创建：问题行 + prepared 门操作 + 已提交事件同笔落定', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
 
     const created = await writerFor(db).create({
@@ -63,6 +65,7 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
       now: NOW,
     })
 
+    const { taskQuestions, collaborationGateOperations, tasks } = tablesOf(db)
     const question = (
       await db.select().from(taskQuestions).where(eq(taskQuestions.id, created.id)).limit(1)
     )[0]
@@ -114,7 +117,7 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
   })
 
   test('任务已终态：拒绝且一行都不落（两个引擎同一条判据）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     for (const status of ['done', 'canceled'] as const) {
       const taskId = await seedTask(db, status)
       let code = '<no-throw>'
@@ -131,6 +134,7 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
         code = (error as { code?: string }).code ?? (error as Error).message
       }
       expect(code).toBe('task-terminal')
+      const { taskQuestions, collaborationGateOperations } = tablesOf(db)
       expect(
         await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
       ).toHaveLength(0)
@@ -144,7 +148,7 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
   })
 
   test('任务不存在：按 task-not-found 拒绝', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     let code = '<no-throw>'
     try {
       await writerFor(db).create({
@@ -162,7 +166,7 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
   })
 
   test('同一任务连开两条手工提问：各自独立成门，互不冲突', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
     const writer = writerFor(db)
     const first = await writer.create({
@@ -184,6 +188,7 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
 
     expect(second.id).not.toBe(first.id)
     expect(second.manifest.gateRef).not.toBe(first.manifest.gateRef)
+    const { collaborationGateOperations } = tablesOf(db)
     const operations = await db
       .select({ id: collaborationGateOperations.id, state: collaborationGateOperations.state })
       .from(collaborationGateOperations)

@@ -1,5 +1,6 @@
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import { catchUpLegacySequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
@@ -26,13 +27,6 @@ import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import {
-  clarifyRounds,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  tasks,
-} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 // RFC-132 ②a 缺口② 回归锁: S3 + S6 drive answers through the unified autoDispatchClarifyRound.
@@ -92,6 +86,7 @@ function git(...args: string[]): Promise<string> {
 }
 
 async function runTask(options: Parameters<typeof runTaskBase>[0]): Promise<void> {
+  const { taskExecutionIntents } = tablesOf(options.db)
   const pendingGateIntent = (
     await options.db
       .select({ id: taskExecutionIntents.id })
@@ -222,6 +217,7 @@ function opencodeCmd(): string[] {
 }
 
 async function topLevel(db: DbClient, taskId: string, nodeId: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select()
     .from(nodeRuns)
@@ -230,6 +226,7 @@ async function topLevel(db: DbClient, taskId: string, nodeId: string) {
 }
 
 async function openClarifyRunId(db: DbClient, taskId: string): Promise<string> {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select()
     .from(clarifyRounds)
@@ -245,6 +242,7 @@ async function awaitingReviewRun(db: DbClient, taskId: string, nodeId: string) {
 }
 
 async function taskStatus(db: DbClient, taskId: string): Promise<string> {
+  const { tasks } = tablesOf(db)
   const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
   return t?.status ?? '??'
 }
@@ -467,6 +465,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const revTops = await topLevel(c.db, task.id, 'rev')
     const approvedRun = revTops.find((r) => r.status === 'done')
     expect(approvedRun).toBeDefined()
+    const { nodeRunOutputs } = tablesOf(c.db)
     const outs = await c.db
       .select()
       .from(nodeRunOutputs)
@@ -1408,6 +1407,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       iteration: 0,
       cause: 'clarify-answer',
     })
+    const { tasks } = tablesOf(c.db)
     await c.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, task.id))
 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
@@ -1910,6 +1910,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // questioner ran and asked cross-clarify → awaiting_human
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
 
+    const { clarifyRounds, nodeRuns } = tablesOf(c.db)
     // answer cross-clarify with continue → designer reruns + cascade
     const ccRows = await c.db
       .select()

@@ -14,6 +14,8 @@
 //      不命中。已 done 任务的 errorSummary/errorMessage/finishedAt 保持原值，
 //      不被 limit 文案涂掉。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -22,7 +24,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
 import { isTaskActive } from '../src/services/task'
@@ -83,7 +84,8 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
   const workerId = ulid()
-  await db.insert(agents).values({
+  const { agents, workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, agents, {
     id: workerId,
     name: 'worker',
     description: 'test',
@@ -103,12 +105,12 @@ async function buildHarness(): Promise<Harness> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf-rfc097-cancel',
     definition: JSON.stringify(definition),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc097-cancel-task',
     workflowId,
@@ -123,7 +125,7 @@ async function buildHarness(): Promise<Harness> {
     finishedAt: Date.now() - 30_000,
     errorSummary: 'boom',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: 'work',
@@ -155,12 +157,13 @@ async function waitFor(cond: () => boolean, what: string): Promise<void> {
 
 async function seedLimitsTask(
   db: DbClient,
-  overrides: Partial<typeof tasks.$inferInsert>,
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'limits-fixture',
     workflowId,
@@ -202,6 +205,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const returned = await cancelViaEngine(h.db, h.taskId)
     expect(returned.status).toBe('canceled')
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const final = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
     expect(final.status).toBe('canceled') // 非 done——cancel 赢
     expect(final.errorSummary).toBe('canceled by user')
@@ -234,6 +238,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const r = await enforceLimits(h.db, Date.now())
     expect(r).toEqual({ scanned: 0, canceled: [] })
 
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(t.status).toBe('done')
     expect(t.errorSummary).toBeNull()
@@ -264,6 +269,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const r = await race
     expect(r.scanned).toBe(1) // 任务确实在扫描集里（竞态真实发生过）
 
+    const { tasks } = tablesOf(h.db)
     // 两层防护殊途同归：cancelTask 对终态抛 task-not-cancelable（被 enforceLimits
     // 分类吞）；即使走到 fallback 也是 trySet 输掉；最后的文案覆写是条件写
     // `WHERE status='canceled'`——对 done 行不命中。原终态字段全部保持。

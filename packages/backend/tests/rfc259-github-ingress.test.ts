@@ -5,10 +5,12 @@
 //   GUID 的官方语义）、三段式 received、form content-type 误配的诊断路径、
 //   管理面创建 github 端点、以及 **AC-14：github 投递可 replay**（事件头从
 //   审计列重建——不修则 GitHub replay 全体 parse-failed，实现期自查 P0）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createHmac } from 'node:crypto'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -17,7 +19,6 @@ import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { ulid } from 'ulid'
 import { eventually } from './helpers/eventually'
-import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
 const SECRET = 'gh-webhook-secret'
@@ -84,7 +85,8 @@ async function harness(
   }
   const opened = await scope.open(opts?.config === undefined ? undefined : { config: opts.config })
   const box = opened.secretBox
-  await db.insert(webhookEndpoints).values({
+  const { webhookEndpoints, webhookTriggers } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-gh',
     name: 'github',
     provider: 'github',
@@ -92,7 +94,7 @@ async function harness(
     secretEnc: box.seal(SECRET),
     enabled: true,
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'trigger-github-fixture',
     name: 'GitHub 入口回归规则',
     endpointId: 'ep-gh',
@@ -128,7 +130,8 @@ function post(
 
 const URL_GH = '/webhooks/github/aw_whk_gh1'
 
-async function rows(db: ProviderNeutralDatabase) {
+async function rows(db: PersistenceDb) {
+  const { webhookDeliveries } = tablesOf(db)
   return db.select().from(webhookDeliveries)
 }
 
@@ -321,6 +324,7 @@ describeEachProviderHttpApplication(
       const deliveryId = ((await ingress.json()) as { deliveryId: string }).deliveryId
       // fake dispatcher 不推进状态；replay 前置要求终态——手动落 matched 模拟分发完成
       const { eq } = await import('drizzle-orm')
+      const { webhookDeliveries } = tablesOf(db)
       await db
         .update(webhookDeliveries)
         .set({ status: 'matched' })

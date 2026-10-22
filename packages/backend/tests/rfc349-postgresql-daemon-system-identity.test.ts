@@ -30,7 +30,7 @@ import { resolve } from 'node:path'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '../src/auth/actor'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '../src/auth/session'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
@@ -51,7 +51,7 @@ function handBuiltSystemActor(): Actor {
   })
 }
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let identityAccess: ReturnType<typeof createIdentityAccessRuntime>
 
 describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) => {

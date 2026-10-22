@@ -3,10 +3,11 @@
 // 此前 `services/taskDelete.ts` 的 `recoverInterruptedTaskDeletes` 形参是 `LegacySqliteTaskDatabase`，
 // 事务体用 dbTxSync + SQLite 递归 CTE，认领推进走 SQLite 同步 store——PostgreSQL daemon 就算修好
 // 启动序列也接不上：一次 daemon 崩溃留下的 delete 认领在 PG 上永远没人续做，成员任务永久占位
-// （dual-provider-parity-audit-2026-09-04 T7c）。这里按 `ProviderNeutralDatabase` +
+// （dual-provider-parity-audit-2026-09-04 T7c）。这里按 `PersistenceDb` +
 // `TerminalMaintenanceStore` 端口重写一次；级联树用 parent_task_id 的 BFS（与 snapshotTree 同形），
 // 事务开头锁认领行（PG `FOR UPDATE`，SQLite no-op）。清理计划的解析与磁盘清理是纯 I/O，随之搬入。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   TaskDeletionContentEffects,
   TaskDeletionEffects,
@@ -19,8 +20,7 @@ export { selectedTaskDeletionEffects } from '../composition/taskDeletionEffects'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { asc, eq, inArray, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, taskExecutionMaintenanceClaims, taskFeedback, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError } from '@/util/errors'
@@ -168,13 +168,14 @@ interface DeletedAudience {
  * `branch_started_at` up the ancestor chain and advance the claim to db-finalized — one transaction.
  */
 async function finalizeDeleteRowsTx(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly claim: TerminalMaintenanceClaim
   readonly rootTaskId: string
   readonly members: readonly MaintenanceMemberSnapshot[]
   readonly plan: DeleteCleanupPlanV2
 }): Promise<{ claim: TerminalMaintenanceClaim; audiences: readonly DeletedAudience[] }> {
   return await databaseSessionFor(input.db).transaction(async (tx) => {
+    const { taskExecutionMaintenanceClaims, tasks, taskCollaborators, taskFeedback } = tablesOf(tx)
     await engineOf(tx).lockAggregateRoot(
       tx,
       taskExecutionMaintenanceClaims,
@@ -245,8 +246,8 @@ async function finalizeDeleteRowsTx(input: {
         }
         return { taskId: row.id, visibleUserIds }
       })
-      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
-      await tx.delete(tasks).where(eq(tasks.id, input.rootTaskId)).run()
+      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds))
+      await tx.delete(tasks).where(eq(tasks.id, input.rootTaskId))
 
       let cursor = fresh.parentTaskId ?? input.plan.parentTaskId
       for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
@@ -268,7 +269,6 @@ async function finalizeDeleteRowsTx(input: {
           .update(tasks)
           .set({ branchStartedAt: Math.max(parent.startedAt ?? 0, childMax?.v ?? 0) })
           .where(eq(tasks.id, parent.id))
-          .run()
         cursor = parent.parentTaskId
       }
     }
@@ -283,7 +283,7 @@ async function finalizeDeleteRowsTx(input: {
 
 /** Resume exact RFC-328 delete claims left by a daemon/process crash. */
 export async function recoverInterruptedTaskDeletes(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   terminalMaintenance: TerminalMaintenanceStore = createTaskExecutionPersistence(db)
     .terminalMaintenance,
   selected?: TaskDeletionEffects,
@@ -304,6 +304,7 @@ export async function recoverInterruptedTaskDeletes(
       continue
     }
 
+    const { tasks } = tablesOf(db)
     const rootBefore = (
       await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, item.rootTaskId)).limit(1)
     )[0]

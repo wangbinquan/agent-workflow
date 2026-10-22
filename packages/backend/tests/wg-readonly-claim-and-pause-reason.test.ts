@@ -20,11 +20,12 @@
 //    resolveRoomPauseReason 输出——读方门槛：仅任务当前停在 awaiting_human 时
 //    非 null，陈值永不外泄（列因此无需清理）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { WorkgroupAssignment, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
@@ -37,8 +38,6 @@ import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/wor
 import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
 import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
-import { workgroupTaskState } from '../src/db/schema'
-
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 function deriveWake(input: WakeInput) {
   const { snapshot, inflight } = wakeSnapshotOf(input)
@@ -283,9 +282,10 @@ describeEachProvider('setPauseReason — 状态表单列更新（DB 级）', (ha
   test('写入/幂等覆盖 pause_reason；gate 列无损；无行时为空操作', async () => {
     const db = harness.db
     const wfId = ulid()
-    await db.insert(workflows).values({ id: wfId, name: 'wf-pause', definition: '{}' })
+    const { workflows, tasks, workgroupTaskState } = tablesOf(db)
+    await insertOne(db, workflows, { id: wfId, name: 'wf-pause', definition: '{}' })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'pause-slot-task',
       workflowId: wfId,
@@ -299,7 +299,7 @@ describeEachProvider('setPauseReason — 状态表单列更新（DB 级）', (ha
       startedAt: Date.now(),
       workgroupConfigJson: JSON.stringify({ maxRounds: 9 }),
     })
-    await db.insert(workgroupTaskState).values({
+    await insertOne(db, workgroupTaskState, {
       taskId,
       gateStatus: 'declared',
       gateSummary: 'done-ish',

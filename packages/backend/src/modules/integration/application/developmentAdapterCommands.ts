@@ -15,7 +15,7 @@ import {
   validateAdapterContract,
   type DevelopmentAdapterContent,
 } from '@/modules/integration/domain/developmentAdapterDefinition'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 export interface DevelopmentAdapterIdentityRow {
   readonly id: string
@@ -57,7 +57,7 @@ export interface DevelopmentAdapterAclIdentityPersistence {
   readonly type: 'development_adapter'
   getRevision(resourceId: string): Promise<number>
   loadForMutation(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     resourceId: string,
   ): Promise<DevelopmentAdapterAclIdentityMutation | undefined>
 }

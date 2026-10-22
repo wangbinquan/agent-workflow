@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCodeCapabilityDemoSeedParticipant,
   type CodeCapabilityDemoSeedParticipant,
@@ -13,7 +13,7 @@ export type { CodeCapabilityDemoSeedParticipant, CodeCapabilityDemoSeedReceipt }
  * 而 `createCodeCapabilityDemoSeedPersistence` 本来就收中立客户端。收成一份（plan §5ds）。
  */
 export function composeCodeCapabilityDemoSeedParticipant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): CodeCapabilityDemoSeedParticipant {
   return createCodeCapabilityDemoSeedParticipant(createCodeCapabilityDemoSeedPersistence(db))
 }

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -224,7 +224,7 @@ describe('RFC-307 — the stage graph over HTTP', () => {
 // RFC-359 AC-6：生命周期走共用的 `describeEachProviderHttpApplication`（`tests/helpers/`），
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
-  register: (buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>) => void,
+  register: (buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>) => void,
 ): void {
   describeEachProviderHttpApplication(
     'provider',

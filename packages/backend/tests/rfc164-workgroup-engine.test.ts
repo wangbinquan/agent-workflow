@@ -16,6 +16,8 @@
 //   - source locks: runTask branches on workgroup_id before runScope;
 //     renderUserPrompt REPLACES (not extends) the protocol block.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -35,18 +37,9 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import {
-  agents,
-  lifecycleAlerts,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-  workgroupMessages,
-} from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createAgent } from '../src/services/agent'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
@@ -73,7 +66,7 @@ import { createLogger } from '../src/util/log'
 
 const log = createLogger('rfc164-engine-test')
 
-async function seedNamedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedNamedAgent(db: PersistenceDb, name: string): Promise<string> {
   const created = await createAgent(db, {
     name,
     description: '',
@@ -87,6 +80,7 @@ async function seedNamedAgent(db: ProviderNeutralDatabase, name: string): Promis
     frontmatterExtra: {},
     bodyMd: name,
   })
+  const { agents } = tablesOf(db)
   // Engine fixtures are intentionally reused across actor-backed launch
   // scenarios. Preserve that cross-actor premise explicitly.
   await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, created.id))
@@ -135,7 +129,7 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
 }
 
 async function seedEngineTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   config: WorkgroupRuntimeConfig,
 ): Promise<{ taskId: string }> {
   const agentIds = new Map<string, string>()
@@ -156,6 +150,7 @@ async function seedEngineTask(
       frontmatterExtra: {},
       bodyMd,
     }).catch(() => null)
+    const { agents } = tablesOf(db)
     const existing =
       created ?? (await db.select().from(agents).where(eq(agents.name, name)).limit(1))[0] ?? null
     if (existing !== null) agentIds.set(name, existing.id)
@@ -170,14 +165,15 @@ async function seedEngineTask(
   }
   const taskId = ulid()
   const snapshot = buildWorkgroupHostSnapshot(canonicalConfig)
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: ulid(),
     name: `host-anchor-${taskId}`,
     definition: '{}',
     builtin: true,
   })
   const workflowRow = (await db.select().from(workflows).limit(1))[0]
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'wg-engine-task',
     workflowId: workflowRow?.id ?? ulid(),
@@ -278,7 +274,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-engine-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let token: string
     let a1Id: string
@@ -314,6 +310,7 @@ describeEachProviderHttpApplication(
     }
 
     test('builtin host workflow row is lazily ensured (idempotent; NOT migration-seeded)', async () => {
+      const { workflows } = tablesOf(db)
       // fresh DB stays clean — empty-fixture expectations elsewhere depend on it
       const before = await db.select().from(workflows)
       expect(before.some((w) => w.id === WORKGROUP_HOST_WORKFLOW_ID)).toBe(false)
@@ -384,6 +381,7 @@ describeEachProviderHttpApplication(
         code: 'resource-operation-stale',
         details: { expectedVersion: 2, currentVersion: 1 },
       })
+      const { tasks, workflows } = tablesOf(db)
       expect(await db.select().from(tasks)).toHaveLength(0)
       expect(
         (await db.select().from(workflows)).some((row) => row.id === WORKGROUP_HOST_WORKFLOW_ID),
@@ -405,6 +403,7 @@ describeEachProviderHttpApplication(
           { memberType: 'agent', agentId: deletedAgentId, displayName: 'ghost', roleDesc: '' },
         ],
       })
+      const { agents, tasks, workflows } = tablesOf(db)
       await db.delete(agents).where(eq(agents.id, deletedAgentId))
       const res = await req(`/api/workgroups/${group.id}/tasks`, {
         method: 'POST',
@@ -544,7 +543,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-engine-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })
@@ -580,6 +579,7 @@ describeEachProviderHttpApplication(
       // leader turn 2 saw the member result via the ledger/new-activity block
       expect(requests[2]?.promptTemplate).toContain('x is done')
 
+      const { workgroupAssignments, workgroupMessages, nodeRuns } = tablesOf(db)
       const assignments = await db
         .select()
         .from(workgroupAssignments)
@@ -615,7 +615,8 @@ describeEachProviderHttpApplication(
       })
       const { taskId } = await seedEngineTask(db, config)
       const parentId = ulid()
-      await db.insert(workgroupMessages).values({
+      const { workgroupMessages, nodeRuns } = tablesOf(db)
+      await insertOne(db, workgroupMessages, {
         id: parentId,
         taskId,
         round: 1,
@@ -763,6 +764,7 @@ describeEachProviderHttpApplication(
       })
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('awaiting_human')
+      const { workgroupAssignments } = tablesOf(db)
       const a = (
         await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.taskId, taskId))
       )[0]
@@ -794,6 +796,7 @@ describeEachProviderHttpApplication(
       expect(result.kind).toBe('ok')
       // exactly ONE grace round: 2 leader runs (dispatch + wrap-up), never a 3rd.
       expect(requests.filter((r) => r.nodeId === WG_LEADER_NODE_ID)).toHaveLength(2)
+      const { workgroupMessages } = tablesOf(db)
       const sys = (
         await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))
       ).filter((m) => m.kind === 'system')
@@ -825,6 +828,7 @@ describeEachProviderHttpApplication(
       })
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('ok')
+      const { nodeRuns } = tablesOf(db)
       const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       // the in-place retry row is tagged wg-protocol-retry (excluded from the count)...
       expect(runs.filter((r) => r.rerunCause === 'wg-protocol-retry')).toHaveLength(1)
@@ -841,6 +845,7 @@ describeEachProviderHttpApplication(
       })
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('awaiting_review')
+      const { nodeRuns } = tablesOf(db)
       // gate holder run satisfies "task awaiting_review ⟹ ∃ awaiting_review node_run"
       const gateRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
         (r) => r.rerunCause === 'wg-gate',
@@ -892,8 +897,9 @@ describeEachProvider('RFC-164 engine — stuck detector S1/S2 workgroup exemptio
     async function seedTask(workgroup: boolean): Promise<string> {
       const id = ulid()
       const wfId = ulid()
-      await db.insert(workflows).values({ id: wfId, name: `wf-${id}`, definition: '{}' })
-      await db.insert(tasks).values({
+      const { workflows, tasks } = tablesOf(db)
+      await insertOne(db, workflows, { id: wfId, name: `wf-${id}`, definition: '{}' })
+      await insertOne(db, tasks, {
         id,
         name: workgroup ? 'wg-parked' : 'plain-parked',
         workflowId: wfId,
@@ -915,6 +921,7 @@ describeEachProvider('RFC-164 engine — stuck detector S1/S2 workgroup exemptio
       operations: taskRecoveryOperations(db),
       now: () => Date.now(),
     })
+    const { lifecycleAlerts } = tablesOf(db)
     const alerts = await db.select().from(lifecycleAlerts)
     const byTask = (id: string) =>
       alerts.filter((a: { taskId: string; rule: string }) => a.taskId === id && a.rule === 'S1')
@@ -1129,7 +1136,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-engine-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })
@@ -1193,6 +1200,7 @@ describeEachProviderHttpApplication(
       // 首轮协议是 fc_member 版（含 tasks_add + 查重纪律）
       expect(requests[0]?.workgroupProtocolBlock).toContain('wg_tasks_add')
 
+      const { workgroupAssignments, workgroupMessages } = tablesOf(db)
       const assignments = await db
         .select()
         .from(workgroupAssignments)
@@ -1247,6 +1255,7 @@ describeEachProviderHttpApplication(
       })
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('awaiting_review')
+      const { nodeRuns } = tablesOf(db)
       const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
         (r) => r.rerunCause === 'wg-gate',
       )
@@ -1263,7 +1272,8 @@ describeEachProviderHttpApplication(
       const { taskId } = await seedEngineTask(db, config)
       // 模拟 PR-5 confirm approve 之后的状态：清单已收敛 + gate approved
       const aId = ulid()
-      await db.insert(workgroupAssignments).values({
+      const { workgroupAssignments, tasks } = tablesOf(db)
+      await insertOne(db, workgroupAssignments, {
         id: aId,
         taskId,
         round: 1,
@@ -1315,15 +1325,17 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-engine-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })
 
-    const kickoffs = async (taskId: string) =>
-      (
+    const kickoffs = async (taskId: string) => {
+      const { workgroupMessages } = tablesOf(db)
+      return (
         await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))
       ).filter((m) => m.authorKind === 'system' && m.kind === 'chat' && m.bodyMd === 'fix payments')
+    }
 
     test('leader_worker: leader-directed kickoff + goal block; worker never sees the goal', async () => {
       const { taskId } = await seedEngineTask(db, cfg())
@@ -1357,6 +1369,7 @@ describeEachProviderHttpApplication(
       expect(seeds).toHaveLength(1)
       expect(JSON.parse(seeds[0]?.mentionsJson ?? '[]')).toEqual(['m-lead'])
 
+      const { workgroupMessages } = tablesOf(db)
       // P1 regression: a FRESH launch room is NOT empty (the exact symptom) — the
       // goal is visible AND the leader dispatched, with zero human messages.
       const all = await db
@@ -1464,7 +1477,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-engine-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })
@@ -1526,6 +1539,7 @@ describeEachProviderHttpApplication(
       expect(result.detail?.message).toBe('leader-idle')
       expect(requests).toHaveLength(attemptsPerTurn * logicalTurns)
 
+      const { workgroupMessages } = tablesOf(db)
       const messages = await db
         .select()
         .from(workgroupMessages)
@@ -1557,6 +1571,7 @@ describeEachProviderHttpApplication(
       // assignment (req 2) — 3 member host runs total (was 2 at budget 1).
       expect(memberReqs).toHaveLength(3)
       expect(memberReqs[1]?.promptTemplate).toContain('Ask-back is OFF')
+      const { workgroupAssignments } = tablesOf(db)
       const cards = await db
         .select()
         .from(workgroupAssignments)
@@ -1593,7 +1608,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-engine-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })

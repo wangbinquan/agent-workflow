@@ -7,7 +7,7 @@
 // `ManualQuestionParkTransaction` 逐条同判据（同一个 owner 围栏、同一条 `transitionHumanGateTask`、
 // 同样提交后发事件），只是两个引擎共用同一份。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
 import {
   parkTaskAtHumanGate,
@@ -32,7 +32,7 @@ export async function parkPreparedHumanGate(
   input: {
     // RFC-359 W7：停靠原子本来就跑在中立的 `DatabaseHumanGateTaskLifecyclePersistence` 上
     // （W4-D25），这里的 `DbClient` 只是没跟着放宽的类型标注。
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly prepared: PreparedHumanGateRef
     readonly executionContext?: TaskExecutionContextRef
     readonly now?: number
@@ -56,7 +56,7 @@ export async function parkPreparedHumanGate(
 
 export async function settleManualQuestionParkObligations(
   input: {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly taskId: string
     readonly executionContext?: TaskExecutionContextRef
     readonly now?: number

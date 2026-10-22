@@ -10,6 +10,8 @@
 //   - 领队内部错误：房间补一条内部错误消息、任务失败。
 // 注入手段：包一层 `createWorkgroupTurnsPersistence`（与 rfc185-leader-fanout 同一接缝）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -19,15 +21,7 @@ import {
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-  workgroupMemberCursors,
-  workgroupMessages,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import {
@@ -64,7 +58,7 @@ interface Injection {
 }
 
 function injectedDrive(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   injection: Injection
   runHost: (request: WorkgroupTurnHostRequest) => Promise<WorkgroupTurnHostResult>
@@ -113,7 +107,8 @@ const mintsMember = (
       (cause === undefined || operation.cause === cause),
   )
 
-async function rowsOf(db: ProviderNeutralDatabase, taskId: string) {
+async function rowsOf(db: PersistenceDb, taskId: string) {
+  const { nodeRuns, workgroupAssignments, workgroupMessages } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const cards = await db
     .select()
@@ -140,7 +135,7 @@ function why(outcome: WorkgroupTurnsOutcome): string {
 
 // ---- leader_worker：领队派一张卡给成员 -------------------------------------------------------
 
-async function seedAgentRow(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedAgentRow(db: PersistenceDb, name: string): Promise<string> {
   const agent = await createAgent(db, {
     name,
     description: '',
@@ -157,14 +152,12 @@ async function seedAgentRow(db: ProviderNeutralDatabase, name: string): Promise<
   return agent.id
 }
 
-async function seedTaskRow(
-  db: ProviderNeutralDatabase,
-  config: WorkgroupRuntimeConfig,
-): Promise<string> {
+async function seedTaskRow(db: PersistenceDb, config: WorkgroupRuntimeConfig): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc369 internal error',
     workflowId,
@@ -182,7 +175,7 @@ async function seedTaskRow(
   return taskId
 }
 
-async function seedLeaderWorkerTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedLeaderWorkerTask(db: PersistenceDb): Promise<string> {
   const suffix = ulid().slice(-6).toLowerCase()
   const leaderName = `rfc369-lead-${suffix}`
   const workerName = `rfc369-work-${suffix}`
@@ -264,7 +257,7 @@ function expectRoundFailed(
 }
 
 describeEachProvider('RFC-369 AC-5 —— leader_worker 成员一轮内部错误即判失败', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -409,7 +402,7 @@ describeEachProvider('RFC-369 AC-5 —— leader_worker 成员一轮内部错误
 
 // ---- free_collab：批量认领 open 卡 / 采纳 pending run ------------------------------------------
 
-async function seedFreeCollabTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedFreeCollabTask(db: PersistenceDb): Promise<string> {
   const name = `rfc369-fc-${ulid().slice(-6).toLowerCase()}`
   const agentId = await seedAgentRow(db, name)
   const taskId = await seedTaskRow(db, {
@@ -434,8 +427,9 @@ async function seedFreeCollabTask(db: ProviderNeutralDatabase): Promise<string> 
       },
     ],
   })
+  const { nodeRuns } = tablesOf(db)
   // 预置一条 done 的成员行，跳过 fc 初始规划轮（与 rfc215-batch-engine 同形）。
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -448,13 +442,14 @@ async function seedFreeCollabTask(db: ProviderNeutralDatabase): Promise<string> 
 }
 
 async function seedCard(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   status: 'open' | 'dispatched' | 'awaiting_human',
   attemptCount: number,
 ): Promise<string> {
   const id = ulid()
-  await db.insert(workgroupAssignments).values({
+  const { workgroupAssignments } = tablesOf(db)
+  await insertOne(db, workgroupAssignments, {
     id,
     taskId,
     round: 0,
@@ -476,7 +471,7 @@ const batchDone: WorkgroupTurnHostResult = {
 }
 
 describeEachProvider('RFC-369 AC-5 —— free_collab 批量认领 / 采纳变体', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -520,7 +515,8 @@ describeEachProvider('RFC-369 AC-5 —— free_collab 批量认领 / 采纳变�
       const taskId = await seedFreeCollabTask(db)
       const cardId = await seedCard(db, taskId, status, 1)
       const adoptedId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: adoptedId,
         taskId,
         nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -573,7 +569,7 @@ describeEachProvider('RFC-369 AC-5 —— free_collab 批量认领 / 采纳变�
 })
 
 describeEachProvider('RFC-369 AC-5 补格（实现门 P2-1）', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -589,6 +585,7 @@ describeEachProvider('RFC-369 AC-5 补格（实现门 P2-1）', (harness) => {
         const scripted = leader(request)
         if (scripted !== null) return scripted
         if (!request.promptTemplate.includes('## Your assignment')) return memberDone
+        const { workgroupAssignments } = tablesOf(db)
         // 用户中途取消了这张卡，随后宿主内部出错：落卡片 failed 的那笔会 CAS 不中。
         await db
           .update(workgroupAssignments)
@@ -637,6 +634,7 @@ describeEachProvider('RFC-369 AC-5 补格（实现门 P2-1）', (harness) => {
     expect(failures).toHaveLength(1)
     expect(failures[0]?.bodyMd).toContain('internal error: message host exploded')
     expect(rows.memberRuns.find((run) => run.id === messageTurns[0])?.status).toBe('failed')
+    const { workgroupMemberCursors } = tablesOf(db)
     const cursor = (
       await db
         .select()
@@ -658,7 +656,8 @@ describeEachProvider('RFC-369 §4.4 —— fail-host-run 宿主账本操作', (h
       [pendingId, 'pending'],
       [doneId, 'done'],
     ] as const) {
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id,
         taskId,
         nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -683,6 +682,7 @@ describeEachProvider('RFC-369 §4.4 —— fail-host-run 宿主账本操作', (h
         }),
     )
     expect(receipt).toEqual({ committed: true, mintedRuns: [], failedRunIds: [pendingId] })
+    const { nodeRuns } = tablesOf(db)
     const byId = new Map(
       (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).map((run) => [
         run.id,

@@ -1,23 +1,26 @@
 // RFC-374: shared real persistence fixtures; assertions never depend on an absolute allocated seq.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
 import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
-import { nodeRunSeqAllocations, nodeRuns, tasks, workflows } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 
-export async function seedSequenceTask(db: ProviderNeutralDatabase): Promise<string> {
+export async function seedSequenceTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid(),
     id = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[],"outputs":[]}',
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     executionLineageId: id,
     lineageSlotPathJson: JSON.stringify([
@@ -38,7 +41,7 @@ export async function seedSequenceTask(db: ProviderNeutralDatabase): Promise<str
 }
 
 export async function mintSequenceRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   input: Partial<NodeRunMintInput> = {},
 ): Promise<string> {
@@ -60,27 +63,26 @@ export async function mintSequenceRun(
  * minted row.
  */
 export async function allocateNodeRunSeq(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeRunId: string,
 ): Promise<number> {
-  const allocation = await databaseSessionFor(db).transaction(
-    async (tx) =>
-      await tx
+  const allocation = await databaseSessionFor(db).transaction(async (tx) => {
+    const { nodeRunSeqAllocations } = tablesOf(tx)
+    return await first(
+      tx
         .insert(nodeRunSeqAllocations)
         .values({ taskId, nodeRunId, allocatedAt: Date.now() })
-        .returning({ seq: nodeRunSeqAllocations.seq })
-        .get(),
-  )
+        .returning({ seq: nodeRunSeqAllocations.seq }),
+    )
+  })
   if (allocation === undefined) throw new Error('node-run-seq-allocation-missing')
   return allocation.seq
 }
 
 /** Simulate rows written by the old binary, then exercise the real startup catch-up before resuming. */
-export async function catchUpLegacySequenceTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<void> {
+export async function catchUpLegacySequenceTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { nodeRuns } = tablesOf(db)
   await db.update(nodeRuns).set({ seq: null }).where(eq(nodeRuns.taskId, taskId))
   await backfillNodeRunSequences(createNodeRunSeqBackfillStore(db))
 }

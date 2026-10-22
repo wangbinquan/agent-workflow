@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createProviderTaskExecutionModule,
   taskExecutionModule,
@@ -12,12 +12,10 @@ export interface TaskExecutionBinding {
   readonly module: TaskExecutionModule
   readonly claim: (intentId: string) => Promise<ClaimedTaskExecution>
   /** Retains the process deployment's isolation cleanup receipt. */
-  readonly legacyConnection?: ProviderNeutralDatabase
+  readonly legacyConnection?: PersistenceDb
 }
 
-export function composeProcessTaskExecutionBinding(
-  db: ProviderNeutralDatabase,
-): TaskExecutionBinding {
+export function composeProcessTaskExecutionBinding(db: PersistenceDb): TaskExecutionBinding {
   return Object.freeze({
     module: taskExecutionModule,
     claim: (intentId: string) => taskExecutionModule.claim({ db, intentId }),

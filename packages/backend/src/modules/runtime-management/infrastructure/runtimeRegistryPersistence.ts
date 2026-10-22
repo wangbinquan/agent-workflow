@@ -11,13 +11,14 @@
 //   · `setRuntimeEnabled` / `deleteRuntime` / `seedBuiltinRuntimes` —— `serializable`
 //     （都是「先查后写」跨行判据：默认 runtime 不能停用、最后一个 runtime 不能删、种子只种一次）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { runtimes } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { RuntimeProfileTestInvalidationInTx } from '@/modules/resource-catalog/public/participants'
 import type { RuntimeProfileUsageReader } from '../application/ports/runtimeProfileParticipants'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   RuntimeRegistryPersistence,
@@ -25,41 +26,47 @@ import type {
   RuntimeUpdateRecord,
 } from '@/modules/runtime-management/application/ports/runtimeRegistry'
 
-function runtimePatch(patch: RuntimeUpdateRecord): Record<string, unknown> {
+function runtimePatch(db: object, patch: RuntimeUpdateRecord): Record<string, unknown> {
   const { incrementProbeFence, ...values } = patch
+  const { runtimes } = tablesOf(db)
   return incrementProbeFence ? { ...values, probeFence: sql`${runtimes.probeFence} + 1` } : values
 }
 
 export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersistence {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly participants: {
-      readonly testInvalidation: RuntimeProfileTestInvalidationInTx<DatabaseTransaction>
-      readonly usage: RuntimeProfileUsageReader<DatabaseTransaction>
+      readonly testInvalidation: RuntimeProfileTestInvalidationInTx<PersistenceTx>
+      readonly usage: RuntimeProfileUsageReader<PersistenceTx>
     },
   ) {}
 
   async listRuntimes(): Promise<readonly RuntimeRow[]> {
-    return await this.db.select().from(runtimes).all()
+    const { runtimes } = tablesOf(this.db)
+    return await this.db.select().from(runtimes)
   }
 
   async getRuntime(name: string): Promise<RuntimeRow | null> {
-    return (await this.db.select().from(runtimes).where(eq(runtimes.name, name)).get()) ?? null
+    const { runtimes } = tablesOf(this.db)
+    return (await first(this.db.select().from(runtimes).where(eq(runtimes.name, name)))) ?? null
   }
 
   async insertRuntime(record: Parameters<RuntimeRegistryPersistence['insertRuntime']>[0]) {
-    await this.db.insert(runtimes).values(record).run()
+    const { runtimes } = tablesOf(this.db)
+    await insertOne(this.db, runtimes, record)
   }
 
   async updateRuntime(
     input: Parameters<RuntimeRegistryPersistence['updateRuntime']>[0],
   ): Promise<void> {
+    const persistenceDb = this.db
+
     await databaseSessionFor(this.db).transaction(async (transaction) => {
+      const { runtimes } = tablesOf(transaction)
       await transaction
         .update(runtimes)
-        .set(runtimePatch(input.patch))
+        .set(runtimePatch(persistenceDb, input.patch))
         .where(eq(runtimes.name, input.name))
-        .run()
       if (input.executionProfileChanged) {
         await this.participants.testInvalidation.invalidate(transaction, {
           runtimeNames: [input.name],
@@ -74,6 +81,7 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
     input: Parameters<RuntimeRegistryPersistence['cacheRuntimeProbe']>[0],
   ): Promise<boolean> {
     const fingerprint = input.target.fingerprint
+    const { runtimes } = tablesOf(this.db)
     const updated = await this.db
       .update(runtimes)
       .set({ lastProbeJson: input.lastProbeJson, updatedAt: input.updatedAt })
@@ -111,7 +119,6 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
         ),
       )
       .returning({ id: runtimes.id })
-      .all()
     return updated.length === 1
   }
 
@@ -120,6 +127,7 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
   ): Promise<number> {
     if (input.protocols.length === 0) return 0
     return await databaseSessionFor(this.db).transaction(async (transaction) => {
+      const { runtimes } = tablesOf(transaction)
       const updated = await transaction
         .update(runtimes)
         .set({
@@ -129,7 +137,6 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
         })
         .where(and(inArray(runtimes.protocol, [...input.protocols]), isNull(runtimes.binaryPath)))
         .returning({ name: runtimes.name })
-        .all()
       await this.participants.testInvalidation.invalidate(transaction, {
         runtimeNames: updated.map((row) => row.name),
         reason: 'runtime-profile-changed',
@@ -143,11 +150,13 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
     input: Parameters<RuntimeRegistryPersistence['setRuntimeEnabled']>[0],
   ): ReturnType<RuntimeRegistryPersistence['setRuntimeEnabled']> {
     return await databaseSessionFor(this.db).serializable(async (transaction) => {
-      const row = await transaction
-        .select({ enabled: runtimes.enabled })
-        .from(runtimes)
-        .where(eq(runtimes.name, input.name))
-        .get()
+      const { runtimes } = tablesOf(transaction)
+      const row = await first(
+        transaction
+          .select({ enabled: runtimes.enabled })
+          .from(runtimes)
+          .where(eq(runtimes.name, input.name)),
+      )
       if (row === undefined) return { status: 'not-found' as const }
       if (!input.enabled && input.name === input.effectiveDefaultName) {
         return { status: 'default-cannot-disable' as const }
@@ -157,7 +166,6 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
         .update(runtimes)
         .set({ enabled: input.enabled, updatedAt: input.now })
         .where(eq(runtimes.name, input.name))
-        .run()
       if (!input.enabled) {
         await this.participants.testInvalidation.invalidate(transaction, {
           runtimeNames: [input.name],
@@ -173,10 +181,10 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
     input: Parameters<RuntimeRegistryPersistence['deleteRuntime']>[0],
   ): ReturnType<RuntimeRegistryPersistence['deleteRuntime']> {
     return await databaseSessionFor(this.db).serializable(async (transaction) => {
+      const { runtimes } = tablesOf(transaction)
       const all = await transaction
         .select({ name: runtimes.name, binaryPath: runtimes.binaryPath })
         .from(runtimes)
-        .all()
       const row = all.find((candidate) => candidate.name === input.name)
       if (row === undefined) return { status: 'not-found' as const }
       if (all.length <= 1) return { status: 'last-runtime' as const }
@@ -211,7 +219,7 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
         reason: 'runtime-deleted',
         now: input.now,
       })
-      await transaction.delete(runtimes).where(eq(runtimes.name, input.name)).run()
+      await transaction.delete(runtimes).where(eq(runtimes.name, input.name))
       return { status: 'deleted' as const, binaryPath: row.binaryPath }
     })
   }
@@ -220,15 +228,17 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
     builtins: Parameters<RuntimeRegistryPersistence['seedBuiltinRuntimes']>[0],
   ): Promise<void> {
     await databaseSessionFor(this.db).serializable(async (transaction) => {
-      const exists = await transaction.select({ id: runtimes.id }).from(runtimes).limit(1).get()
+      const { runtimes } = tablesOf(transaction)
+      const exists = await first(transaction.select({ id: runtimes.id }).from(runtimes).limit(1))
       if (exists !== undefined) return
-      for (const builtin of builtins) await transaction.insert(runtimes).values(builtin).run()
+      for (const builtin of builtins) await insertOne(transaction, runtimes, builtin)
     })
   }
 
   async backfillBuiltinBinary(
     input: Parameters<RuntimeRegistryPersistence['backfillBuiltinBinary']>[0],
   ): Promise<void> {
+    const { runtimes } = tablesOf(this.db)
     await this.db
       .update(runtimes)
       .set({ binaryPath: input.binaryPath, updatedAt: input.updatedAt })
@@ -239,13 +249,13 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
           isNull(runtimes.binaryPath),
         ),
       )
-      .run()
   }
 
   async listBuiltinProfiles(
     names: Parameters<RuntimeRegistryPersistence['listBuiltinProfiles']>[0],
   ): ReturnType<RuntimeRegistryPersistence['listBuiltinProfiles']> {
     if (names.length === 0) return []
+    const { runtimes } = tablesOf(this.db)
     return await this.db
       .select({
         name: runtimes.name,
@@ -258,6 +268,5 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
       })
       .from(runtimes)
       .where(inArray(runtimes.name, [...names]))
-      .all()
   }
 }

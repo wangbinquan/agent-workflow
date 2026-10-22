@@ -14,6 +14,7 @@
 // 启动恢复递给它的 actor，排队那条变更真的推进到 applied；②当年那种手捏投影**确实**
 // 会被同一个目录拒掉——这条把「为什么不能手捏」钉在测试里，而不是靠注释。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -22,9 +23,8 @@ import { ulid } from 'ulid'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { admitDurableWorkOwner } from '../src/auth/session'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { intentSessions, intentWorkingSetChanges } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   composeIntentPersistence,
@@ -58,7 +58,7 @@ import {
 } from './helpers/intentResourceCatalogBinding'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let actor: Actor
 let persistence: IntentPersistence
 let visibility: IntentContextResourceAuthorization
@@ -147,6 +147,7 @@ async function seedQueuedSuccessor(): Promise<{ sessionId: string; changeId: str
   const session = (
     await createIntentSession(persistence, visibility, actor, { message: 'build it' })
   ).session
+  const { intentSessions } = tablesOf(db)
   await db
     .update(intentSessions)
     .set({
@@ -268,6 +269,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
       resumed,
       '启动恢复一条都没领走 ⇒ 排队的变更永远停在 queued，会话永远停在「生成中」',
     ).toBe(1)
+    const { intentWorkingSetChanges } = tablesOf(db)
     expect(
       (
         await db
@@ -311,6 +313,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
       resourceCatalogFor: productionShapedResourceCatalogFor(),
       runFn,
     })
+    const { intentWorkingSetChanges } = tablesOf(db)
     const row = (
       await db
         .select()

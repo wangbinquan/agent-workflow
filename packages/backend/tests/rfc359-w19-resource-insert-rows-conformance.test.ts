@@ -1,13 +1,15 @@
 // RFC-359 AC1: share only MCP/plugin INSERT row construction. The existing
 // array-returning writer and Intent's single-row/default-column shape retain
 // their own statements and caller-owned transactions. No artifact work runs here.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import ts from 'typescript'
 import type { CreateMcp } from '@agent-workflow/shared'
-import { mcps, plugins, users } from '@/db/schema'
 import {
   createMcpInsertValues,
   insertMcpRowInTx,
@@ -109,7 +111,8 @@ function expectedPluginValues(record: PluginInsertRecord) {
 
 describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
   beforeEach(async () => {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: OWNER,
       displayName: 'Insert Owner',
@@ -134,6 +137,7 @@ describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
       const values = createMcpInsertValues(record)
       expect(values).toEqual(expected)
       expect(Object.hasOwn(values, 'schemaVersion')).toBe(false)
+      const { mcps } = tablesOf(harness.db)
       const originalSql = harness.db.insert(mcps).values(expected).returning().toSQL()
       expect(harness.db.insert(mcps).values(values).returning().toSQL()).toEqual(originalSql)
       expect(
@@ -162,10 +166,10 @@ describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
         id: `${record.id}-single`,
         input: { ...input, name: `${input.name}-single` },
       }
-      const singleRow = await harness.session.transaction(
-        async (tx) =>
-          await tx.insert(mcps).values(createMcpInsertValues(singleRecord)).returning().get(),
-      )
+      const singleRow = await harness.session.transaction(async (tx) => {
+        const { mcps } = tablesOf(tx)
+        return await first(tx.insert(mcps).values(createMcpInsertValues(singleRecord)).returning())
+      })
       if (singleRow === undefined) throw new Error('MCP single-row insert returned no row')
       expect(singleRow).toEqual({ ...expectedMcpValues(singleRecord), schemaVersion: 1 })
       expect(await harness.db.select().from(mcps).where(eq(mcps.id, singleRecord.id))).toEqual([
@@ -180,6 +184,7 @@ describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
       const values = createPluginInsertValues(record)
       expect(values).toEqual(expected)
       expect(Object.hasOwn(values, 'schemaVersion')).toBe(false)
+      const { plugins } = tablesOf(harness.db)
       const originalSql = harness.db.insert(plugins).values(expected).returning().toSQL()
       expect(harness.db.insert(plugins).values(values).returning().toSQL()).toEqual(originalSql)
       expect(
@@ -200,10 +205,12 @@ describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
       expect(await harness.db.select().from(plugins).where(eq(plugins.id, record.id))).toEqual(rows)
 
       const singleRecord = { ...record, id: `${record.id}-single`, name: `${record.name}-single` }
-      const singleRow = await harness.session.transaction(
-        async (tx) =>
-          await tx.insert(plugins).values(createPluginInsertValues(singleRecord)).returning().get(),
-      )
+      const singleRow = await harness.session.transaction(async (tx) => {
+        const { plugins } = tablesOf(tx)
+        return await first(
+          tx.insert(plugins).values(createPluginInsertValues(singleRecord)).returning(),
+        )
+      })
       if (singleRow === undefined) throw new Error('plugin single-row insert returned no row')
       expect(singleRow).toEqual({ ...expectedPluginValues(singleRecord), schemaVersion: 1 })
       expect(
@@ -228,12 +235,14 @@ describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
       harness.session.transaction(async (tx) => {
         const rows = await insertMcpRowInTx(tx, record)
         const single = { ...record, id: 'rollback-mcp-single', input: { ...input, name: 'single' } }
-        const row = await tx.insert(mcps).values(createMcpInsertValues(single)).returning().get()
+        const { mcps } = tablesOf(tx)
+        const row = await first(tx.insert(mcps).values(createMcpInsertValues(single)).returning())
         if (row === undefined) throw new Error('MCP rollback insert returned no row')
         expect<McpRow[]>(await tx.select().from(mcps).orderBy(mcps.id)).toEqual([...rows, row])
         throw sentinel
       }),
     ).rejects.toBe(sentinel)
+    const { mcps } = tablesOf(harness.db)
     expect(await harness.db.select().from(mcps)).toEqual([])
   })
 
@@ -245,16 +254,16 @@ describeEachProvider('RFC-359 shared resource INSERT rows', (harness) => {
       harness.session.transaction(async (tx) => {
         const rows = await insertPluginRowInTx(tx, record)
         const single = { ...record, id: `${record.id}-single`, name: `${record.name}-single` }
-        const row = await tx
-          .insert(plugins)
-          .values(createPluginInsertValues(single))
-          .returning()
-          .get()
+        const { plugins } = tablesOf(tx)
+        const row = await first(
+          tx.insert(plugins).values(createPluginInsertValues(single)).returning(),
+        )
         if (row === undefined) throw new Error('plugin rollback insert returned no row')
         expect(await tx.select().from(plugins).orderBy(plugins.id)).toEqual([...rows, row])
         throw sentinel
       }),
     ).rejects.toBe(sentinel)
+    const { plugins } = tablesOf(harness.db)
     expect(await harness.db.select().from(plugins)).toEqual([])
   })
 })
@@ -315,7 +324,7 @@ test('Intent retains its statements, omitted schema version, defaults and exact 
     if (!ts.isVariableDeclaration(node) || node.initializer === undefined)
       throw new Error('insert result missing')
     expect(compact(node.initializer.getText(source))).toBe(
-      `awaittransaction.insert(${table}).values(${compact(values.arguments[0]?.getText(source) ?? '')},).returning().get()`,
+      `awaitfirst(transaction.insert(${table}).values(${compact(values.arguments[0]?.getText(source) ?? '')},).returning(),)`,
     )
   }
   expect(source.text).toContain(

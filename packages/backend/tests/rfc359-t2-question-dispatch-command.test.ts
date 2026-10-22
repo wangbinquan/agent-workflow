@@ -4,10 +4,10 @@
 // 就 500（dual-provider-parity-audit F-H2-1）。现在 `createQuestionDispatchCommand` 对两个 provider
 // 是同一段代码：决定 + 派发 + rerun 铸造 + receipt 同一事务，同 idempotencyKey 重放返回同一 receipt。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import { collaborationGateOperations, nodeRuns } from '@/db/schema'
 import { createQuestionDispatchCommand } from '@/modules/collaboration/infrastructure/questionDispatchCommand'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
@@ -58,6 +58,7 @@ describeEachProvider('RFC-359 T2a —— 问题派发命令端口', (harness) =>
     expect(first.reruns).toHaveLength(1)
     expect(first.receipt.replayed).toBe(false)
     expect((await entryById(db, id))!.dispatchedBy).toBe('u1')
+    const { nodeRuns, collaborationGateOperations } = tablesOf(db)
     const minted = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (run) => run.rerunCause === 'cross-clarify-answer',
     )

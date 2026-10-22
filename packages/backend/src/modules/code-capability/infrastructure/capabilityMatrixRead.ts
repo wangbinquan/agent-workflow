@@ -4,10 +4,10 @@
 // statements. It deliberately returns facts, not a readiness verdict: the
 // application remains the only owner of deriveReadiness and repair actions.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, capabilityTemplates, repoCapabilityConfig, webhookTriggers } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CapabilityMatrixReadPort,
   CapabilityMatrixReadRow,
@@ -31,10 +31,11 @@ function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
   }
 }
 
-export function createCapabilityMatrixRead(db: ProviderNeutralDatabase): CapabilityMatrixReadPort {
+export function createCapabilityMatrixRead(db: PersistenceDb): CapabilityMatrixReadPort {
   const endpointReader = createRepoEndpointRead(db)
   return {
     async loadForRepo(repoId) {
+      const { repoCapabilityConfig, capabilityTemplates, webhookTriggers, agents } = tablesOf(db)
       const cells = await db
         .select({
           repoId: repoCapabilityConfig.repoId,

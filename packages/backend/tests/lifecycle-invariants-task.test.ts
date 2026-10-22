@@ -6,6 +6,8 @@
 //   U1  per (task, nodeId, reviewIter, clarifyIter, shardKey) ≤ 1 row in
 //       {awaiting_review, awaiting_human}
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,10 +16,9 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 type TaskStatus =
@@ -31,13 +32,13 @@ type TaskStatus =
   | 'interrupted'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
 
 async function buildHarness(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskStatus: TaskStatus,
   nodes: WorkflowNode[],
 ): Promise<Harness> {
@@ -46,9 +47,10 @@ async function buildHarness(
 
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [] }
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -65,7 +67,7 @@ async function buildHarness(
 }
 
 async function insertRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     nodeId: string
@@ -77,7 +79,8 @@ async function insertRun(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId,

@@ -21,6 +21,8 @@
 // Together with clarify-options-cap.test.ts (CLI limits guard) this rounds
 // out the 7-case T11 unit budget per RFC-023 design.md §13.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -36,10 +38,9 @@ import { monotonicFactory } from 'ulid'
 // later-seeded rerun always sorts freshest — mirrors scheduler-clarify-mid-batch.test.ts.
 const ulid = monotonicFactory()
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { allocateNodeRunSeq } from './helpers/rfc374Fixtures'
-import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -57,7 +58,7 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 // carries no directive — the scheduler reads nodeStopOverride), so callers pair this with
 // setNodeClarifyDirective(...,'stop').
 async function seedDispatchedSelfQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   originNodeRunId: string,
   questionIds: string[],
@@ -65,6 +66,7 @@ async function seedDispatchedSelfQuestions(
   triggerRunId: string | null,
 ): Promise<void> {
   for (const qid of questionIds) {
+    const { taskQuestions } = tablesOf(db)
     const existing = (
       await db
         .select({ id: taskQuestions.id })
@@ -92,7 +94,7 @@ async function seedDispatchedSelfQuestions(
         .where(eq(taskQuestions.id, existing.id))
       continue
     }
-    await db.insert(taskQuestions).values({
+    await insertOne(db, taskQuestions, {
       id: ulid(),
       taskId,
       originNodeRunId,
@@ -121,10 +123,11 @@ async function seedDispatchedSelfQuestions(
 // the answer channel (autoDispatchClarifyRound). We mirror the update onto
 // `clarify_rounds` so the new read path observes the same state.
 async function mirrorClarifyAnswered(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   sessionId: string,
   fields: { answersJson: string; directive?: 'continue' | 'stop' },
 ): Promise<void> {
+  const { clarifyRounds } = tablesOf(db)
   await db
     .update(clarifyRounds)
     .set({
@@ -140,7 +143,7 @@ async function mirrorClarifyAnswered(
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -182,11 +185,12 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[] = ['summary'],
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -206,12 +210,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -331,6 +336,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
@@ -391,6 +397,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, clarifyRounds } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(taskRow?.status).toBe('failed')
     expect(taskRow?.errorMessage ?? '').toContain('clarify-required')
@@ -437,6 +444,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(taskRow?.status).toBe('failed')
     expect(taskRow?.errorMessage ?? '').toContain('clarify-no-channel')
@@ -483,6 +491,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
     // Step 2: synthesize an answer + a rerun row (this is what the unified
     // answer dispatch normally does — we exercise scheduler->runner here
     // without invoking the REST path).
@@ -517,7 +526,7 @@ function registerCases(provider: ProviderHarness) {
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -625,7 +634,8 @@ function registerCases(provider: ProviderHarness) {
     // This is what production task 01KRT38TKXQGKEDHCPQXPXTB9J actually had:
     // retry=6 / clarify=0 / done from process retries that succeeded.
     const staleId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: staleId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, staleId),
@@ -673,7 +683,7 @@ function registerCases(provider: ProviderHarness) {
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -778,6 +788,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
     // Step 2: synthesize the answered session + the clarify-rerun row the
     // answer channel normally mints (synthesized here at retry=0).
     const sessRow = (
@@ -817,7 +828,7 @@ function registerCases(provider: ProviderHarness) {
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -934,6 +945,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
     // Step 2: synthesize the answered session with directive='stop' (the user
     // clicked Stop → finalize round) + the clarify-rerun row.
     const sessRow = (
@@ -963,7 +975,7 @@ function registerCases(provider: ProviderHarness) {
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -1078,6 +1090,7 @@ function registerCases(provider: ProviderHarness) {
         sessionRestartBudget: 0,
       }),
     )
+    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
     const round1Sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
@@ -1110,7 +1123,7 @@ function registerCases(provider: ProviderHarness) {
 
     // Round 2 (ci=1): mint rerun row, drive it through to ask "Which env?".
     const ci1Id = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ci1Id,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, ci1Id),
@@ -1194,7 +1207,7 @@ function registerCases(provider: ProviderHarness) {
 
     // Mint the ci=2 rerun row, immediately mark interrupted (daemon restart).
     const ci2Id = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ci2Id,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, ci2Id),

@@ -20,17 +20,17 @@
 // would bury the incident the operator came for.
 
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createCodeDeliveryChainQuery as createCodeDeliveryChainQueryFromPort } from '../src/modules/code-capability/application/codeMatrixQuery'
 import { createDeliveryChainRead } from '../src/modules/code-capability/infrastructure/deliveryChainRead'
 import { seedDelivery } from './helpers/legacyCapabilitySeed'
 
-const createCodeDeliveryChainQuery = (db: ProviderNeutralDatabase) =>
+const createCodeDeliveryChainQuery = (db: PersistenceDb) =>
   createCodeDeliveryChainQueryFromPort(createDeliveryChainRead(db))
 
 describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db

@@ -13,6 +13,9 @@
 // its option value. Reuse now travels as `cachedRepoId` and the daemon resolves
 // the real URL itself — hence the second block.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -20,7 +23,6 @@ import { ulid } from 'ulid'
 import { CachedRepoSchema } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { cachedRepos } from '../src/db/schema'
 import { listCachedRepos } from '../src/services/gitRepoCache'
 import { normalizeStartTaskRepos } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
@@ -29,16 +31,15 @@ const TOKEN = 'ghp_SUPERSECRET_TOKEN_VALUE'
 
 function seedCredentialedRepo(db: ReturnType<typeof createInMemoryDb>, id: string): void {
   const now = Date.now()
-  db.insert(cachedRepos)
-    .values({
-      id,
-      urlHash: 'a1b2c3d4',
-      urlRedacted: 'https://***@github.com/acme/private.git',
-      localPath: '/tmp/repos/a1b2c3d4-private',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  const { cachedRepos } = tablesOf(db)
+  insertOne(db, cachedRepos, {
+    id,
+    urlHash: 'a1b2c3d4',
+    urlRedacted: 'https://***@github.com/acme/private.git',
+    localPath: '/tmp/repos/a1b2c3d4-private',
+    lastFetchedAt: now,
+    createdAt: now,
+  })
 }
 
 describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
@@ -67,17 +68,16 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
   test('a row missing url_redacted fails closed to a placeholder', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    db.insert(cachedRepos)
-      .values({
-        id: ulid(),
-        urlHash: 'legacy00',
-        urlEnc: 'unreadable-without-key',
-        localPath: '/tmp/repos/legacy00',
-        lastFetchedAt: now,
-        createdAt: now,
-      })
-      .run()
-    const row = db.select().from(cachedRepos).all()[0]
+    const { cachedRepos } = tablesOf(db)
+    insertOne(db, cachedRepos, {
+      id: ulid(),
+      urlHash: 'legacy00',
+      urlEnc: 'unreadable-without-key',
+      localPath: '/tmp/repos/legacy00',
+      lastFetchedAt: now,
+      createdAt: now,
+    })
+    const row = queryRows(db.select().from(cachedRepos))[0]
     expect(row?.urlRedacted).toBeNull()
 
     const items = await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))
@@ -90,16 +90,15 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     // slugs (and therefore local_path, which IS on the wire) can embed one.
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    db.insert(cachedRepos)
-      .values({
-        id: ulid(),
-        urlHash: 'deadbeef',
-        urlRedacted: 'https://github.com/acme/p.git?access_token=***',
-        localPath: `/tmp/repos/deadbeef-p.git?access_token=${TOKEN}`,
-        lastFetchedAt: now,
-        createdAt: now,
-      })
-      .run()
+    const { cachedRepos } = tablesOf(db)
+    insertOne(db, cachedRepos, {
+      id: ulid(),
+      urlHash: 'deadbeef',
+      urlRedacted: 'https://github.com/acme/p.git?access_token=***',
+      localPath: `/tmp/repos/deadbeef-p.git?access_token=${TOKEN}`,
+      lastFetchedAt: now,
+      createdAt: now,
+    })
 
     expect(
       JSON.stringify(await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))),

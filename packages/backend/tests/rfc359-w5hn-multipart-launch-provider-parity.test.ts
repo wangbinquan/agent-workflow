@@ -8,13 +8,13 @@
 //
 // 用 `scratch: true`：multipart + scratch 是合法组合（上传物落进新建的 scratch 仓），
 // 这样不必起 git smart-HTTP 远端夹具，也就不把网络时序混进等价性判据里。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { eq } from 'drizzle-orm'
 
-import { tasks } from '@/db/schema'
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -231,6 +231,7 @@ describeEachProviderHttpApplication(
         'scratch 启动没有规划目录，spaceNodes 就该是空的（plan §5hn 批次二 ⑥）',
       ).toBe(0)
 
+      const { tasks } = tablesOf(scope.harness.db)
       // **落库那一行**也要比：响应体是 `taskProjection(...)` 现算的投影，不是回读。
       const row = (
         await scope.harness.db

@@ -30,10 +30,10 @@
 // Frontier.blocked[].reason is a DIAGNOSTIC payload, not an API contract —
 // assertions below prefix-match only (design §2.2 备注).
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, NodeRunStatus, WorkflowDefinition } from '@agent-workflow/shared'
 import { NODE_RUN_STATUS } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import {
   decideScopeOutcome,
   isDispatchable,
@@ -46,7 +46,7 @@ import {
   type Frontier,
 } from '../src/modules/task-execution/composition/dagFrontier'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

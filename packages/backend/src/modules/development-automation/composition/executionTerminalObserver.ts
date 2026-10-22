@@ -1,7 +1,7 @@
 // RFC-344 — context-owned terminal wake participant for bootstrap launchers.
 
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MissionPersistence } from '../application/ports/missionStore'
 import { missionIdOfExecutionRef } from '../infrastructure/reconcilerReaders'
 import { createMissionPersistence } from '../infrastructure/missionStore'
@@ -41,7 +41,7 @@ function observer(deps: {
 
 /** 两个 provider 同一份（RFC-359 W4-D10）：终态观察者只依赖中立的 Mission 持久化与执行引用读面。 */
 export function createDevelopmentMissionExecutionTerminalObserver(deps: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly drive: (missionId: string) => Promise<unknown>
 }): DevelopmentMissionExecutionTerminalObserver {
   return observer({

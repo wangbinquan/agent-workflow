@@ -18,6 +18,8 @@
 // for us to inject a fresh pending row, then completes; the scheduler's
 // next batch must dispatch the injected row.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -26,9 +28,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -39,7 +40,7 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -76,12 +77,9 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   }
 }
 
-async function seedAgent(
-  db: ProviderNeutralDatabase,
-  name: string,
-  outputs: string[],
-): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgent(db: PersistenceDb, name: string, outputs: string[]): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -101,12 +99,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -202,7 +201,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     // if a previous scheduler invocation finished + paused). The
     // rerun-equivalent row sits pending with clarifyIteration=1.
     const firstRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: firstRunId,
       taskId,
       nodeId: 'd',
@@ -213,7 +213,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       finishedAt: Date.now() - 1000,
     })
     const rerunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: rerunId,
       taskId,
       nodeId: 'd',
@@ -327,6 +327,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // Both sibling branches finished. asker → awaiting_human; crasher → failed.
     // The aggregation contract: awaiting_human outranks failed.
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

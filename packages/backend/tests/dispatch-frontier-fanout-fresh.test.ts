@@ -18,13 +18,13 @@
 // (a) drops wrapper-fanout from WRAPPER_KINDS, or (b) starts decoding progress for
 // fanout, these tests go red. Mirror the harness in dispatch-frontier.test.ts.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import { isDispatchable, wrapperHasFreshInnerWork } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 // Minimal node-run row factory (identical shape to dispatch-frontier.test.ts).
 function run(over: Partial<Row>): Row {

@@ -1,4 +1,5 @@
-// RFC-395 I-a: compatibility exports of the bootstrap-composed schema.
+// RFC-395 I-b: schema wiring for native providers and drizzle-kit migration generation.
+export { nativeTableSets, persistenceSchema } from '@/bootstrap/persistenceSchema'
 export {
   capabilityTemplates,
   repoCapabilityConfig,

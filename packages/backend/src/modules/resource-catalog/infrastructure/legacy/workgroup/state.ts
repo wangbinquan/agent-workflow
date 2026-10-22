@@ -14,8 +14,11 @@
 // G3 grep-locks (rfc217-architecture-locks.test.ts) keep gate-field literals
 // and retired-slot accesses out of every other module.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx, PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   DwStateSchema,
   perCardInputDescriptionBudget,
@@ -29,17 +32,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
-import {
-  clarifyRounds,
-  nodeRuns,
-  workgroupAssignments,
-  workgroupMemberCursors,
-  workgroupMessages,
-  workgroupTaskState,
-  tasks,
-} from '@/db/schema'
 import { getAgentById } from '../agent'
 import {
   WG_LEADER_NODE_ID,
@@ -131,7 +124,9 @@ const DEFAULT_STATE: WorkgroupTaskState = {
   resultMessageId: null,
 }
 
-function rowToState(row: typeof workgroupTaskState.$inferSelect | undefined): WorkgroupTaskState {
+function rowToState(
+  row: PersistenceTables['workgroupTaskState']['$inferSelect'] | undefined,
+): WorkgroupTaskState {
   if (row === undefined) return { ...DEFAULT_STATE }
   let dw: DwState | null = null
   if (row.dwStateJson !== null) {
@@ -153,9 +148,10 @@ function rowToState(row: typeof workgroupTaskState.$inferSelect | undefined): Wo
 }
 
 export async function loadWorkgroupTaskState(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<WorkgroupTaskState> {
+  const { workgroupTaskState } = tablesOf(db)
   const row = (
     await db.select().from(workgroupTaskState).where(eq(workgroupTaskState.taskId, taskId)).limit(1)
   )[0]
@@ -163,11 +159,10 @@ export async function loadWorkgroupTaskState(
 }
 
 export function loadWorkgroupTaskStateTx(tx: DbTxSync, taskId: string): WorkgroupTaskState {
-  const row = tx
-    .select()
-    .from(workgroupTaskState)
-    .where(eq(workgroupTaskState.taskId, taskId))
-    .get()
+  const { workgroupTaskState } = tablesOf(tx)
+  const row = first(
+    tx.select().from(workgroupTaskState).where(eq(workgroupTaskState.taskId, taskId)),
+  )
   return rowToState(row ?? undefined)
 }
 
@@ -179,9 +174,10 @@ export function loadWorkgroupTaskStateTx(tx: DbTxSync, taskId: string): Workgrou
  * bypass startTask keep exercising the real gate machine).
  */
 export async function ensureWorkgroupTaskStateRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<void> {
+  const { workgroupTaskState } = tablesOf(db)
   await db
     .insert(workgroupTaskState)
     .values({ taskId, gateStatus: 'idle', updatedAt: Date.now() })
@@ -190,14 +186,13 @@ export async function ensureWorkgroupTaskStateRow(
 
 /** startTask companion — same transaction as the tasks INSERT. */
 export function insertWorkgroupTaskStateTx(tx: DbTxSync, taskId: string, dw: DwState | null): void {
-  tx.insert(workgroupTaskState)
-    .values({
-      taskId,
-      gateStatus: 'idle',
-      dwStateJson: dw === null ? null : JSON.stringify(DwStateSchema.parse(dw)),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workgroupTaskState } = tablesOf(tx)
+  insertOne(tx, workgroupTaskState, {
+    taskId,
+    gateStatus: 'idle',
+    dwStateJson: dw === null ? null : JSON.stringify(DwStateSchema.parse(dw)),
+    updatedAt: Date.now(),
+  })
 }
 
 export interface GateCasArgs {
@@ -209,7 +204,9 @@ export interface GateCasArgs {
   rejectedComment?: string
 }
 
-function gatePatch(args: GateCasArgs): Partial<typeof workgroupTaskState.$inferInsert> {
+function gatePatch(
+  args: GateCasArgs,
+): Partial<PersistenceTables['workgroupTaskState']['$inferInsert']> {
   switch (args.to) {
     case 'declared':
       return { gateSummary: args.summary ?? null, gateRejectedComment: null }
@@ -236,11 +233,12 @@ function gatePatch(args: GateCasArgs): Partial<typeof workgroupTaskState.$inferI
  * 测试只用异步的 `casGateStatus`），留着等于留一条没人走的 SQLite-only 岔路。
  */
 export async function casGateStatus(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   args: GateCasArgs,
 ): Promise<boolean> {
   assertGateTransition(args.from, args.to)
+  const { workgroupTaskState } = tablesOf(db)
   const updated = await db
     .update(workgroupTaskState)
     .set({ gateStatus: args.to, updatedAt: Date.now(), ...gatePatch(args) })
@@ -256,10 +254,11 @@ export async function casGateStatus(
 
 // RFC-359：体内只有一条中立的 drizzle UPDATE，`DbClient` 是纯粹多余的收紧。
 export async function setPauseReason(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   reason: string | null,
 ): Promise<void> {
+  const { workgroupTaskState } = tablesOf(db)
   await db
     .update(workgroupTaskState)
     .set({ pauseReason: reason, updatedAt: Date.now() })
@@ -270,11 +269,8 @@ export async function setPauseReason(
 // 唯一的生产调用方是 `services/task.ts` 里 resume 准入 CAS 的 `onClaimTx`，而那笔写事务已经
 // 搬到 `databaseSessionFor(db).transaction`。名字保持 `…Tx`（本仓 `…Tx` 表示「吃事务句柄」，
 // 中立的 `setNodeRunStatusTx` 同款），facade 符号表因此不动。
-export async function setDwStateTx(
-  tx: DatabaseTransaction,
-  taskId: string,
-  dw: DwState,
-): Promise<void> {
+export async function setDwStateTx(tx: PersistenceTx, taskId: string, dw: DwState): Promise<void> {
+  const { workgroupTaskState } = tablesOf(tx)
   await tx
     .update(workgroupTaskState)
     .set({ dwStateJson: JSON.stringify(DwStateSchema.parse(dw)), updatedAt: Date.now() })
@@ -282,6 +278,7 @@ export async function setDwStateTx(
 }
 
 export async function setDwState(db: DbClient, taskId: string, dw: DwState): Promise<void> {
+  const { workgroupTaskState } = tablesOf(db)
   await db
     .update(workgroupTaskState)
     .set({ dwStateJson: JSON.stringify(DwStateSchema.parse(dw)), updatedAt: Date.now() })
@@ -300,7 +297,7 @@ export interface EngineDbState {
   assignments: WorkgroupAssignment[]
   messages: WorkgroupMessage[]
   cursors: Map<string, string>
-  hostRuns: Array<typeof nodeRuns.$inferSelect>
+  hostRuns: Array<PersistenceTables['nodeRuns']['$inferSelect']>
   /** RFC-187 F3 — open/closed clarify sessions for the task (source node + status).
    *  Feeds `deriveLeaderClarifyPark`; the SESSION (not the __wg_clarify__ run) is the
    *  authoritative, answerable park signal (Codex P0-1). */
@@ -328,7 +325,7 @@ const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
  * skipped entirely so no user identity can leak into the prompt.
  */
 export async function buildRosterAgentCards(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   config: WorkgroupRuntimeConfig,
 ): Promise<Map<string, string>> {
   const cards = new Map<string, string>()
@@ -364,7 +361,9 @@ export async function buildRosterAgentCards(
   return cards
 }
 
-export function rowToAssignment(r: typeof workgroupAssignments.$inferSelect): WorkgroupAssignment {
+export function rowToAssignment(
+  r: PersistenceTables['workgroupAssignments']['$inferSelect'],
+): WorkgroupAssignment {
   return {
     id: r.id,
     taskId: r.taskId,
@@ -384,7 +383,9 @@ export function rowToAssignment(r: typeof workgroupAssignments.$inferSelect): Wo
   }
 }
 
-export function rowToMessage(r: typeof workgroupMessages.$inferSelect): WorkgroupMessage {
+export function rowToMessage(
+  r: PersistenceTables['workgroupMessages']['$inferSelect'],
+): WorkgroupMessage {
   let mentions: string[] = []
   try {
     const parsed = JSON.parse(r.mentionsJson) as unknown
@@ -412,6 +413,14 @@ export function rowToMessage(r: typeof workgroupMessages.$inferSelect): Workgrou
 }
 
 export async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState | null> {
+  const {
+    tasks,
+    workgroupAssignments,
+    workgroupMessages,
+    workgroupMemberCursors,
+    nodeRuns,
+    clarifyRounds,
+  } = tablesOf(db)
   const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (taskRow === undefined || taskRow.workgroupConfigJson === null) return null
   let rawConfig: Record<string, unknown>
@@ -487,6 +496,7 @@ export async function stampWorkgroupResultAnchor(
   taskId: string,
   messageId: string,
 ): Promise<void> {
+  const { workgroupTaskState } = tablesOf(db)
   await db
     .update(workgroupTaskState)
     .set({ resultMessageId: messageId, updatedAt: Date.now() })

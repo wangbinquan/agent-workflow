@@ -17,22 +17,24 @@
 //   - **≥2 条**：**无法自愈**——框架没法替用户凭空造一个仓库组（挂载布局 /
 //     ref / 只读是人的设计意图，不是能从两个 URL 推出来的）。停发并说清怎么改。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { rejectRetiredStartTaskKeys } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { scheduledTasks } from '../src/db/schema'
 import { integrationTriggerResourceBinding } from './helpers/integrationTriggerResourceBinding'
 import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/composition/scheduledTasks'
 import { healScheduledLaunchPayloads as healScheduledLaunchPayloadsWithPort } from '../src/services/scheduledTasks'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 // The healer uses the real neutral persistence. Other runtime operations are
 // outside these stored-payload cases and must stay unused.
-function healScheduledLaunchPayloads(database: ProviderNeutralDatabase) {
+function healScheduledLaunchPayloads(database: PersistenceDb) {
   const unusedOperation = (): never => {
     throw new Error('stored payload healing reached an unrelated runtime operation')
   }
@@ -51,27 +53,27 @@ function healScheduledLaunchPayloads(database: ProviderNeutralDatabase) {
 async function seed(payload: unknown): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(scheduledTasks)
-    .values({
-      id,
-      name: 's',
-      ownerUserId: 'u1',
-      launchKind: 'workflow',
-      launchPayload: JSON.stringify(payload),
-      scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 60_000, tz: 'UTC' }),
-      enabled: true,
-      nextRunAt: now + 60_000,
-      consecutiveFailures: 0,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { scheduledTasks } = tablesOf(db)
+  await insertOne(db, scheduledTasks, {
+    id,
+    name: 's',
+    ownerUserId: 'u1',
+    launchKind: 'workflow',
+    launchPayload: JSON.stringify(payload),
+    scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 60_000, tz: 'UTC' }),
+    enabled: true,
+    nextRunAt: now + 60_000,
+    consecutiveFailures: 0,
+    createdAt: now,
+    updatedAt: now,
+  })
   return id
 }
 
-const read = async (id: string) =>
-  await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).get()
+const read = async (id: string) => {
+  const { scheduledTasks } = tablesOf(db)
+  return await firstRow(db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)))
+}
 const payloadOf = async (id: string) =>
   JSON.parse((await read(id))!.launchPayload) as Record<string, unknown>
 

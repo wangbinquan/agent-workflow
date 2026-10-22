@@ -18,8 +18,10 @@
 // `runner-inject-snapshot-eager-write-source.test.ts` separately locks that
 // the UPDATE statement physically precedes the final UPDATE in source order.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent, TaskWsMessage } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -27,7 +29,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
-import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskExecutionPersistence } from '../src/modules/task-execution/application/ports/taskExecutionPersistence'
@@ -36,7 +37,7 @@ import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -63,21 +64,22 @@ function makeAgent(): Agent {
   } as Agent
 }
 
-async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc047-runner-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -100,12 +102,13 @@ async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
 }
 
 async function insertNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  overrides: Partial<typeof nodeRuns.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -152,22 +155,20 @@ describeEachProvider(
     })
 
     test('E1: normal path — eager broadcast fires once and column ends populated', async () => {
-      await h.db
-        .insert(memories)
-        .values({
-          id: 'mem_g1',
-          scopeType: 'global',
-          scopeId: null,
-          title: 'G',
-          bodyMd: 'general',
-          tags: JSON.stringify(['g']),
-          status: 'approved',
-          sourceKind: 'review',
-          version: 1,
-          approvedAt: 1_700_000_000_000,
-          createdAt: Date.now(),
-        })
-        .run()
+      const { memories, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, memories, {
+        id: 'mem_g1',
+        scopeType: 'global',
+        scopeId: null,
+        title: 'G',
+        bodyMd: 'general',
+        tags: JSON.stringify(['g']),
+        status: 'approved',
+        sourceKind: 'review',
+        version: 1,
+        approvedAt: 1_700_000_000_000,
+        createdAt: Date.now(),
+      })
       const nodeRunId = await insertNodeRun(h.db, h.taskId)
       await withEnv(
         {
@@ -237,6 +238,7 @@ describeEachProvider(
       // RFC-036's throttled re-ping inside stdoutPump may fire alongside the
       // eager broadcast; assert "at least once" instead of "exactly once".
       expect(runningEvents.length).toBeGreaterThanOrEqual(1)
+      const { nodeRuns } = tablesOf(h.db)
       const rows = await h.db.select({ json: nodeRuns.injectedMemoriesJson }).from(nodeRuns)
       expect(rows[0]?.json).toBeNull()
     })
@@ -302,6 +304,7 @@ describeEachProvider(
       )
       // See E1's note — RFC-036 throttled re-ping may fire too.
       expect(runningEvents.length).toBeGreaterThanOrEqual(1)
+      const { nodeRuns } = tablesOf(h.db)
       const rows = await h.db
         .select({ id: nodeRuns.id, json: nodeRuns.injectedMemoriesJson })
         .from(nodeRuns)
@@ -313,22 +316,20 @@ describeEachProvider(
     })
 
     test('E4: eager-write SQL throws — run survives, final UPDATE persists snapshot', async () => {
-      await h.db
-        .insert(memories)
-        .values({
-          id: 'mem_g_e4',
-          scopeType: 'global',
-          scopeId: null,
-          title: 'G',
-          bodyMd: 'body',
-          tags: JSON.stringify([]),
-          status: 'approved',
-          sourceKind: 'review',
-          version: 1,
-          approvedAt: 1_700_000_000_000,
-          createdAt: Date.now(),
-        })
-        .run()
+      const { memories, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, memories, {
+        id: 'mem_g_e4',
+        scopeType: 'global',
+        scopeId: null,
+        title: 'G',
+        bodyMd: 'body',
+        tags: JSON.stringify([]),
+        status: 'approved',
+        sourceKind: 'review',
+        version: 1,
+        approvedAt: 1_700_000_000_000,
+        createdAt: Date.now(),
+      })
       const nodeRunId = await insertNodeRun(h.db, h.taskId)
 
       // RFC-359 AC-6：注入点从「猴补 drizzle 的 update builder」上移到**端口边界**。

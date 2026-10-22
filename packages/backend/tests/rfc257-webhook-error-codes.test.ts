@@ -1,6 +1,9 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257 — 路由错误码逐个行为触发（route-error-code-coverage 锁要求每个新
 // code 被测试点名——点名的正确姿势是把那条错误路径真的走一遍并断言 code）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -9,7 +12,7 @@ import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -19,7 +22,6 @@ import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
-import { webhookDeliveries, webhookEndpoints, webhookTriggers, workflows } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
@@ -53,7 +55,8 @@ async function scopedHarness(scope: ProviderHttpApplicationScope) {
   })
   const { token } = await createSession({ db, userId: admin.id })
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, webhookEndpoints } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -64,7 +67,7 @@ async function scopedHarness(scope: ProviderHttpApplicationScope) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'gl',
     provider: 'gitlab',
@@ -99,7 +102,8 @@ async function harness(opts?: { unsupportedDispatcher?: boolean }) {
     dispatchSubscription: async () => {},
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, webhookEndpoints } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -110,7 +114,7 @@ async function harness(opts?: { unsupportedDispatcher?: boolean }) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'gl',
     provider: 'gitlab',
@@ -120,7 +124,7 @@ async function harness(opts?: { unsupportedDispatcher?: boolean }) {
   })
   const app = (
     await openTestApplication(
-      { provider: 'sqlite', db: db },
+      { provider: 'sqlite', db },
       {
         token: 'a'.repeat(64),
         opencodeVersion: '1.14.25',
@@ -148,11 +152,12 @@ async function codeOf(res: Response): Promise<string> {
 
 async function seedDelivery(
   // RFC-359 AC-6：函数体本来就只有普通 insert，这个类型纯属未收敛——收成中立面。
-  db: ProviderNeutralDatabase,
-  overrides: Partial<typeof webhookDeliveries.$inferInsert> = {},
+  db: PersistenceDb,
+  overrides: Partial<PersistenceTables['webhookDeliveries']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(webhookDeliveries).values({
+  const { webhookDeliveries } = tablesOf(db)
+  await insertOne(db, webhookDeliveries, {
     id,
     endpointId: 'ep-1',
     eventUuid: null,
@@ -189,7 +194,8 @@ describeEachProviderHttpApplication('RFC-257 · 端点面错误码', SCOPE_OPTIO
     expect(await codeOf(await h.call('GET', '/api/webhook-endpoints/nope'))).toBe(
       'webhook-endpoint-not-found',
     )
-    await h.db.insert(webhookTriggers).values({
+    const { webhookTriggers } = tablesOf(h.db)
+    await insertOne(h.db, webhookTriggers, {
       id: 'tr-1',
       name: 't',
       endpointId: 'ep-1',
@@ -260,6 +266,7 @@ describeEachProviderHttpApplication('RFC-257 · 触发器面错误码', SCOPE_OP
 
   test('event-automation-rules:override-owner grant/revoke controls cross-owner mutation', async () => {
     const h = await scopedHarness(scope)
+    const { workflows } = tablesOf(h.db)
     await h.db
       .update(workflows)
       .set({ visibility: 'public' })
@@ -428,7 +435,7 @@ describeEachProviderHttpApplication(
         'webhook-endpoint-not-found',
       )
       // provider 列被手改成注册表外的值（raw SQL 绕过 enum 类型）→ provider-unknown
-      await h.db.run(sql`UPDATE webhook_endpoints SET provider = 'gitea' WHERE id = 'ep-1'`)
+      await rawExec(h.db, sql`UPDATE webhook_endpoints SET provider = 'gitea' WHERE id = 'ep-1'`)
       const strange = await seedDelivery(h.db)
       expect(await codeOf(await h.call('POST', `/api/webhook-deliveries/${strange}/replay`))).toBe(
         'webhook-provider-unknown',

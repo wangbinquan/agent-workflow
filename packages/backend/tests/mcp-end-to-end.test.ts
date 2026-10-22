@@ -11,7 +11,7 @@
 // the display-keyed `mcp.x: {...}` runtime config is broken — RFC-028 §1 fails.
 
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
@@ -22,12 +22,12 @@ import { getAgentById } from '../src/modules/resource-catalog/infrastructure/leg
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
 
-const dependencyLookup = (db: ProviderNeutralDatabase) => ({
+const dependencyLookup = (db: PersistenceDb) => ({
   get: (id: string) => getAgentById(db, id),
 })
 
 describeEachProvider('RFC-028 end-to-end inline injection', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })

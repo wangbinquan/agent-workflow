@@ -1,7 +1,8 @@
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
-import { eventTypeCatalog } from '@/db/schema'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/public/types'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
@@ -432,7 +433,8 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
         deliveryClass: eventType.deliveryClass,
         priority: eventType.priority,
       }
-      await db.insert(eventTypeCatalog).values({
+      const { eventTypeCatalog } = tablesOf(db)
+      await insertOne(db, eventTypeCatalog, {
         eventTypeId: eventType.eventTypeId,
         revision: eventType.version,
         sourceId: eventType.sourceRef.id,

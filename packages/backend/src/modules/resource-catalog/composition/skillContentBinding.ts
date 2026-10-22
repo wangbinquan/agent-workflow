@@ -47,7 +47,7 @@ export function selectSkillContentDependencies(
   })
 }
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
 import { createDatabaseSkillContent } from '../infrastructure/databaseSkillContent'
 
@@ -61,7 +61,7 @@ export interface CrewStationResourceContentSelections {
 
 /** Skill trees live in the database (the service slot has no persistent disk). */
 export function composeCrewStationResourceContent(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }): CrewStationResourceContentSelections {
   const skills = createDatabaseSkillContent({ db: input.db })
   return Object.freeze({

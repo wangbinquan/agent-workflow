@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { isMindmapRound, clarifyDecisionsEqual } from '@agent-workflow/shared'
 // RFC-349 SQLite compatibility adapter for the RFC-058 clarify-round helpers.
@@ -34,10 +35,10 @@ import {
 } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
+import { taskVisibilityCondition } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { chunkedAll } from '@/util/sqlChunk'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import {
   TERMINAL_TASK_STATUSES,
   type ClarifyAnswer,
@@ -153,14 +154,18 @@ export interface ListClarifyRoundsFilter {
 /** RFC-311 — the shared WHERE for clarify_rounds list surfaces, pushed into
  *  SQL so the existing (task_id) / (kind,status) indexes actually serve the
  *  15s inbox poll instead of a full-table scan + JS filter (audit L1-4). */
-function clarifyRoundsCondition(filter: {
-  taskId?: string
-  kind?: 'self' | 'cross' | 'all'
-  status?: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all'
-}): SQL<unknown> | undefined {
+function clarifyRoundsCondition(
+  db: object,
+  filter: {
+    taskId?: string
+    kind?: 'self' | 'cross' | 'all'
+    status?: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all'
+  },
+): SQL<unknown> | undefined {
   const desiredKind = filter.kind ?? 'all'
   const desiredStatus = filter.status ?? 'awaiting_human'
   const conditions: SQL<unknown>[] = []
+  const { clarifyRounds } = tablesOf(db)
   if (filter.taskId !== undefined) conditions.push(eq(clarifyRounds.taskId, filter.taskId))
   if (desiredKind !== 'all') conditions.push(eq(clarifyRounds.kind, desiredKind))
   if (desiredStatus !== 'all') conditions.push(eq(clarifyRounds.status, desiredStatus))
@@ -168,16 +173,17 @@ function clarifyRoundsCondition(filter: {
 }
 
 export async function listClarifyRounds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   filter: ListClarifyRoundsFilter = {},
-): Promise<Array<typeof clarifyRounds.$inferSelect>> {
+): Promise<Array<PersistenceTables['clarifyRounds']['$inferSelect']>> {
+  const { clarifyRounds } = tablesOf(db)
   // `id desc` secondary key: created_at has millisecond resolution and the old
   // "SQL order then JS filter" pass had no defined intra-millisecond order;
   // ULIDs are monotonic within a millisecond, so this pins newest-first.
   const base = db
     .select()
     .from(clarifyRounds)
-    .where(clarifyRoundsCondition(filter))
+    .where(clarifyRoundsCondition(db, filter))
     .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
   return filter.limit !== undefined ? await base.limit(filter.limit) : await base
 }
@@ -205,10 +211,11 @@ export interface ListClarifyRoundSummariesFilter {
  * `tasks.workflowSnapshot`. Sort: createdAt descending.
  */
 export async function listClarifyRoundSummaries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   filter: ListClarifyRoundSummariesFilter = {},
 ): Promise<ClarifyRoundSummary[]> {
   const desiredStatus = filter.status ?? 'awaiting_human'
+  const { clarifyRounds } = tablesOf(db)
   // RFC-311: predicates + order pushed into SQL. The awaiting_human branch
   // must NOT push the limit down — the RFC-202 T6 terminal-task filter below
   // runs before the window (a page of terminal-task zombies must not displace
@@ -216,7 +223,7 @@ export async function listClarifyRoundSummaries(
   const baseQuery = db
     .select()
     .from(clarifyRounds)
-    .where(clarifyRoundsCondition(filter))
+    .where(clarifyRoundsCondition(db, filter))
     .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
   let filtered =
     desiredStatus === 'awaiting_human'
@@ -272,11 +279,9 @@ export async function listClarifyRoundSummaries(
  * 与 `visibleTaskIds` 同一个片段，两条路不可能漂。往返数由
  * `rfc359-w57-clarify-badge-round-trip-budget` 双引擎钉住。
  */
-export async function countAwaitingClarifyRounds(
-  db: ProviderNeutralDatabase,
-  actor: Actor,
-): Promise<number> {
+export async function countAwaitingClarifyRounds(db: PersistenceDb, actor: Actor): Promise<number> {
   const canReadAllTasks = actor.permissions.has('tasks:read:all')
+  const { clarifyRounds, tasks } = tablesOf(db)
   const conditions: SQL<unknown>[] = [
     eq(clarifyRounds.status, 'awaiting_human'),
     or(isNull(tasks.id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]))!,
@@ -305,9 +310,10 @@ export async function countAwaitingClarifyRounds(
  * Throws NotFoundError when no matching row exists.
  */
 export async function getClarifyRoundDetail(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   intermediaryNodeRunId: string,
 ): Promise<ClarifyRound> {
+  const { clarifyRounds, nodeRuns } = tablesOf(db)
   const rows = await db
     .select()
     .from(clarifyRounds)
@@ -346,7 +352,7 @@ export async function getClarifyRoundDetail(
 }
 
 function rowToSummary(
-  row: typeof clarifyRounds.$inferSelect,
+  row: PersistenceTables['clarifyRounds']['$inferSelect'],
   taskNameByTaskId: Map<string, string>,
   titlesByTaskAndNode: Map<string, Map<string, string>>,
 ): ClarifyRoundSummary {
@@ -387,7 +393,7 @@ function rowToSummary(
 }
 
 function rowToDetail(
-  row: typeof clarifyRounds.$inferSelect,
+  row: PersistenceTables['clarifyRounds']['$inferSelect'],
   titlesByTaskAndNode: Map<string, Map<string, string>>,
 ): ClarifyRound {
   const titles = titlesByTaskAndNode.get(row.taskId)
@@ -469,11 +475,12 @@ function parseJsonRecord<T>(raw: string | null): T | null {
 }
 
 async function loadTaskStatusesByTaskId(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskIds: string[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ id: tasks.id, status: tasks.status })
     .from(tasks)
@@ -483,7 +490,7 @@ async function loadTaskStatusesByTaskId(
 }
 
 async function loadTaskNamesByTaskId(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskIds: string[],
 ): Promise<Map<string, string>> {
   // RFC-311: WHERE id IN + two-column projection. The previous shape read the
@@ -493,27 +500,29 @@ async function loadTaskNamesByTaskId(
   // correct shape.
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
-  const rows = await chunkedAll(taskIds, (ids) =>
-    db.select({ id: tasks.id, name: tasks.name }).from(tasks).where(inArray(tasks.id, ids)),
-  )
+  const rows = await chunkedAll(taskIds, (ids) => {
+    const { tasks } = tablesOf(db)
+    return db.select({ id: tasks.id, name: tasks.name }).from(tasks).where(inArray(tasks.id, ids))
+  })
   for (const t of rows) out.set(t.id, t.name)
   return out
 }
 
 async function loadNodeTitlesByTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskIds: string[],
 ): Promise<Map<string, Map<string, string>>> {
   // RFC-311: same WHERE id IN fix as loadTaskNamesByTaskId — this variant was
   // worse still because it JSON.parses every fetched row's workflowSnapshot.
   const out = new Map<string, Map<string, string>>()
   if (taskIds.length === 0) return out
-  const taskRows = await chunkedAll(taskIds, (ids) =>
-    db
+  const taskRows = await chunkedAll(taskIds, (ids) => {
+    const { tasks } = tablesOf(db)
+    return db
       .select({ id: tasks.id, workflowSnapshot: tasks.workflowSnapshot })
       .from(tasks)
-      .where(inArray(tasks.id, ids)),
-  )
+      .where(inArray(tasks.id, ids))
+  })
   for (const t of taskRows) {
     const inner = new Map<string, string>()
     try {
@@ -547,7 +556,7 @@ async function loadNodeTitlesByTask(
 // ---------------------------------------------------------------------------
 
 export interface SaveClarifyDraftArgs {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /** The intermediary (clarify / clarify-cross-agent) node_run the client is on. */
   intermediaryNodeRunId: string
   roundId: string
@@ -585,6 +594,7 @@ export interface SaveClarifyDraftResult {
 export async function saveClarifyDraft(
   args: SaveClarifyDraftArgs,
 ): Promise<SaveClarifyDraftResult> {
+  const { clarifyRounds } = tablesOf(args.db)
   const rows = await args.db
     .select()
     .from(clarifyRounds)
@@ -609,6 +619,7 @@ export async function saveClarifyDraft(
   }
   const now = Date.now()
   await databaseSessionFor(args.db).transaction(async (tx) => {
+    const { tasks, clarifyRounds } = tablesOf(tx)
     await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, row.taskId)
     const fresh = (
       await tx
@@ -711,7 +722,7 @@ export function freezeAnswerAttributions(args: {
  * the freeze rides the same write.
  */
 export async function buildFrozenAttributionSet(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   roundId: string,
   answers: readonly ClarifyAnswer[],
   submitter: { userId: string; role: TaskActorRole },
@@ -720,6 +731,7 @@ export async function buildFrozenAttributionSet(
   answerAttributionsJson: string
   draftAnswersJson: null
 }> {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select({
       draftAnswersJson: clarifyRounds.draftAnswersJson,

@@ -14,6 +14,7 @@
 //     + identical 404 (D1), owner-only writes, D15 new-agent-ref usability
 //     gate on create AND update (grandfathered existing refs pass).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -29,9 +30,8 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents, users } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {
@@ -57,7 +57,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 const agentId = (name: string): string => `agent-${name}`
 const AGENT_NAMES = ['planner-agent', 'coder-a', 'a', 'b', 'auditor', 'lead-agent'] as const
 
-async function getWorkgroupForTest(db: ProviderNeutralDatabase, name: string) {
+async function getWorkgroupForTest(db: PersistenceDb, name: string) {
   const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
   return row === undefined ? null : getWorkgroupById(db, row.id)
 }
@@ -91,7 +91,7 @@ function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
 }
 
 async function saveByName(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   next: (snapshot: WorkgroupDraftSnapshot) => WorkgroupDraftSnapshot,
 ) {
@@ -112,7 +112,7 @@ async function saveByName(
 }
 
 async function renameByName(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   newName: string,
   description?: string,
@@ -294,9 +294,10 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
   // 留下的形状。每个注册面在 PostgreSQL 上都要现建一个库并跑完整套迁移，所以这里合成
   // **一个**注册面；夹具语义没变（每条用例前重新种下 AGENT_NAMES 那批代理行）。
   describeEachProvider('workgroup CRUD + rename persistence', (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(async () => {
       db = harness.db
+      const { agents } = tablesOf(db)
       await db.insert(agents).values(
         AGENT_NAMES.map((name) => ({
           id: agentId(name),
@@ -431,6 +432,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
         { kind: 'actor', actor: T6_ACTOR },
         {
           beforeWriteTransaction: async () => {
+            const { users } = tablesOf(db)
             await db.update(users).set({ status: 'disabled' }).where(eq(users.id, u.id))
           },
         },
@@ -546,7 +548,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc164-workgroups-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let alice: { id: string; token: string }
     let bob: { id: string; token: string }
@@ -598,6 +600,7 @@ describeEachProviderHttpApplication(
       app = (await scope.open()).app
       alice = await mkUser('alice', 'user')
       bob = await mkUser('bob', 'user')
+      const { agents } = tablesOf(db)
       await db.insert(agents).values(
         AGENT_NAMES.map((name) => ({
           id: agentId(name),

@@ -2,10 +2,10 @@
 // one lease/CAS behavior across the synchronous SQLite mechanism and the
 // Promise-shaped PostgreSQL adapters.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createEventStore } from '@/modules/event-center/infrastructure/eventStore'
 import {
   eventContentDigest,
@@ -89,10 +89,10 @@ function postgresqlFixture(responses: Response[]) {
       return rows({ objects: [{ generation_id: 'dbg_event_delivery_pg' }] })
     return rows(responses.shift() ?? {})
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: run,
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -117,10 +117,6 @@ function postgresqlFixture(responses: Response[]) {
   }
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 Event Center provider behavior', () => {
   test('PostgreSQL notification settlement fences both lease owner and attempt count', async () => {

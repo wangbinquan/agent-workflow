@@ -10,12 +10,12 @@
 //     老化——只有「id >= 问题承接 rerun」的产出才老化它。
 //   - sinceRunId===null（问题尚未被任何 rerun 承接注入）→ NOT consumed（首次注入）。
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
-import type { nodeRuns } from '../src/db/schema'
 import { isTargetNodeConsumed } from '../src/services/clarifyRerunLedger'
 
-type NodeRunRow = typeof nodeRuns.$inferSelect
+type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
 const T = 'agent_T'
 
 function mkRun(over: Partial<NodeRunRow>): NodeRunRow {

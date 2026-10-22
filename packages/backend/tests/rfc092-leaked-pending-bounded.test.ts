@@ -19,6 +19,8 @@
 // scheduler-clarify-dispatch.test.ts（createInMemoryDb + fixtures/mock-opencode.ts +
 // 临时真实 git 仓）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -28,7 +30,6 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { NodeKind } from '@agent-workflow/shared'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
@@ -40,7 +41,7 @@ const ulid = monotonicFactory()
 // 纯函数层
 // ---------------------------------------------------------------------------
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 type ScopeNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 
@@ -195,12 +196,13 @@ function makeDef(agentName: string, agentId: string): WorkflowDefinition {
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -243,7 +245,8 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
     // `agent-not-found` 早期 return，预铸的 pending 行永远不被消费（泄漏行）。
     const taskId = await seedWorkflowAndTask(h, makeDef('ghost', 'ghost-agent-id'))
     const preMintedId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: preMintedId,
       taskId,
       nodeId: 'd',
@@ -281,7 +284,8 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
 
   test('对照：agent 存在时预铸 pending 行被恰好消费一次（pendingExisting 复用）→ 任务 done、零额外铸行', async () => {
     const designerId = ulid()
-    await h.db.insert(agents).values({
+    const { agents, nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, agents, {
       id: designerId,
       name: 'designer',
       description: 'test',
@@ -293,7 +297,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
     })
     const taskId = await seedWorkflowAndTask(h, makeDef('designer', designerId))
     const preMintedId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: preMintedId,
       taskId,
       nodeId: 'd',

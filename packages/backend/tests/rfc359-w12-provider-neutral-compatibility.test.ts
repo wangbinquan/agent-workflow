@@ -3,12 +3,13 @@
 // either database client. Exercise their real queries and runtime delegation
 // through the same harness before retiring their misleading SQLite names.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { compatibleAuthRuntimeOf } from '@/auth/infrastructure/compatibleAuthRuntime'
-import { users, workflows } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import * as userFixture from './helpers/userFixture'
 import type { SearchInput } from './helpers/userFixture'
@@ -51,7 +52,8 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
   })
 
   test('directory search and Git identity preserve the same user projection on either client', async () => {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'compat_search_user',
       username: 'compat_search',
       displayName: 'Mixed Case Display',
@@ -86,6 +88,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
   })
 
   test('compatibility searches share the canonical directory ordering before filtering and limiting', async () => {
+    const { users } = tablesOf(harness.db)
     await harness.db.insert(users).values([
       { id: 'mixed_z', username: 'MiXeD_z', displayName: 'Late', createdAt: 30, updatedAt: 30 },
       {
@@ -153,6 +156,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
       createdAt: index,
       updatedAt: index,
     }))
+    const { users } = tablesOf(harness.db)
     await harness.db.insert(users).values([...rows].reverse())
     const runtime = createIdentityAccessRuntime({ db: harness.db })
     try {
@@ -179,12 +183,13 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
   })
 
   test('owner/name conditions match null and named owners and honor the excluded row', async () => {
+    const { workflows } = tablesOf(harness.db)
     await harness.db.insert(workflows).values([
       { id: 'compat_unowned', name: 'Same name', definition: '{}', ownerUserId: null },
       { id: 'compat_owned', name: 'Same name', definition: '{}', ownerUserId: 'compat_owner' },
     ])
-    const ids = async (owner: string | null, excludedId?: string) =>
-      (
+    const ids = async (owner: string | null, excludedId?: string) => {
+      return (
         await harness.db
           .select({ id: workflows.id })
           .from(workflows)
@@ -198,6 +203,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
             ),
           )
       ).map((row) => row.id)
+    }
 
     expect(await ids(null)).toEqual(['compat_unowned'])
     expect(await ids('compat_owner')).toEqual(['compat_owned'])

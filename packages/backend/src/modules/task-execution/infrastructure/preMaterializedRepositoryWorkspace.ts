@@ -1,11 +1,11 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { preparedArtifactLane } from './workspaceLaunchLane'
 import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import type {
@@ -23,12 +23,13 @@ export function preMaterializedAdmissionPrefix(appHome: string): string {
 }
 
 async function assertUnadmitted(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
   taskId: string,
   operationRef: string,
   states: readonly string[],
 ) {
   const plan = await createWorkspacePreparationJournal(tx).read(taskId)
+  const { tasks } = tablesOf(tx)
   const task = (await tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)))[0]
   if (
     plan === null ||
@@ -47,7 +48,7 @@ async function assertUnadmitted(
 
 /** Same cleanup protocol for request rollback and the existing orphan maintenance job. */
 export async function compensatePreMaterializedRepository(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   taskId: string
 }): Promise<WorkspaceCleanupReport> {
@@ -119,7 +120,7 @@ export async function compensatePreMaterializedRepository(input: {
 
 /** Prepare and uploads precede the Task INSERT. The journal exists before Git/FS. */
 export async function preparePreMaterializedRepository(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   authority: RequestAuthority
   taskId: string
@@ -134,7 +135,7 @@ export async function preparePreMaterializedRepository(input: {
   signal: AbortSignal
 }): Promise<{
   space: MaterializedSpace
-  admit(tx: ProviderNeutralDatabase): Promise<TaskWorkspaceLaunchLane>
+  admit(tx: PersistenceDb): Promise<TaskWorkspaceLaunchLane>
   commit(): void
   rollback(): Promise<WorkspaceCleanupReport>
 }> {

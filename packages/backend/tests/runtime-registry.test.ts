@@ -6,14 +6,15 @@
 // config.defaultRuntime reference a row by name; node_runs freeze (protocol,
 // binary) so the registry stays mutable (tested in PR-C).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, runtimes } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   createRuntime,
@@ -28,9 +29,9 @@ import {
   updateRuntime,
 } from './helpers/runtimeRegistryApplication'
 
-const registryByDb = new WeakMap<ProviderNeutralDatabase, DrizzleRuntimeRegistryPersistence>()
+const registryByDb = new WeakMap<PersistenceDb, DrizzleRuntimeRegistryPersistence>()
 
-function registryFor(db: ProviderNeutralDatabase): DrizzleRuntimeRegistryPersistence {
+function registryFor(db: PersistenceDb): DrizzleRuntimeRegistryPersistence {
   const existing = registryByDb.get(db)
   if (existing !== undefined) return existing
   const registry = new DrizzleRuntimeRegistryPersistence(db)
@@ -38,16 +39,13 @@ function registryFor(db: ProviderNeutralDatabase): DrizzleRuntimeRegistryPersist
   return registry
 }
 
-async function insertAgent(
-  db: ProviderNeutralDatabase,
-  name: string,
-  runtime?: string,
-): Promise<void> {
-  await db.insert(agents).values({ id: ulid(), name, ...(runtime ? { runtime } : {}) })
+async function insertAgent(db: PersistenceDb, name: string, runtime?: string): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, { id: ulid(), name, ...(runtime ? { runtime } : {}) })
 }
 
 describeEachProvider('seedBuiltinRuntimes (RFC-112 PR-A)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -71,10 +69,11 @@ describeEachProvider('seedBuiltinRuntimes (RFC-112 PR-A)', (harness) => {
   })
 
   test('RFC-153: non-empty table → seed is a full no-op (never touches rows, never adds)', async () => {
+    const { runtimes } = tablesOf(db)
     // A user row (even one reusing a preseeded name under a DIFFERENT protocol)
     // makes the table non-empty; seed must NOT run, correct identity, or add the
     // other preseeded row — a deletion/customization sticks across restarts.
-    await db.insert(runtimes).values({
+    await insertOne(db, runtimes, {
       id: ulid(),
       name: 'opencode',
       protocol: 'claude-code',
@@ -92,7 +91,7 @@ describeEachProvider('seedBuiltinRuntimes (RFC-112 PR-A)', (harness) => {
 })
 
 describeEachProvider('createRuntime (RFC-112 PR-A)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(async () => {
     db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
@@ -209,7 +208,7 @@ describeEachProvider('createRuntime (RFC-112 PR-A)', (harness) => {
 })
 
 describeEachProvider('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(async () => {
     db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
@@ -376,7 +375,7 @@ describeEachProvider('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', (har
 })
 
 describeEachProvider('resolution: name → (protocol, binary) (RFC-112 PR-A)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(async () => {
     db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
@@ -426,7 +425,7 @@ describeEachProvider('resolution: name → (protocol, binary) (RFC-112 PR-A)', (
 })
 
 describeEachProvider('setRuntimeEnabled (RFC-118)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(async () => {
     db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
@@ -480,7 +479,7 @@ describeEachProvider('setRuntimeEnabled (RFC-118)', (harness) => {
 describeEachProvider(
   'migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -500,7 +499,8 @@ describeEachProvider(
     })
 
     test('does NOT write the opencode binary into a user row reusing the name under claude-code protocol', async () => {
-      await db.insert(runtimes).values({
+      const { runtimes } = tablesOf(db)
+      await insertOne(db, runtimes, {
         id: ulid(),
         name: 'opencode',
         protocol: 'claude-code',

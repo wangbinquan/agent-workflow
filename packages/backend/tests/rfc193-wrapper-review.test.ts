@@ -12,6 +12,8 @@
 // 占位文案。若未来有人把 review 的读取改回「对某个 worktree join 路径」，
 // 这两条会立刻红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -20,7 +22,6 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, docVersions, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
@@ -102,7 +103,8 @@ async function seedAgent(
   outputKinds: Record<string, string>,
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -157,12 +159,13 @@ function loopReviewDef(
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc193-wr',
     definition: JSON.stringify(definition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc193-wrapper-review',
     id: taskId,
     workflowId,
@@ -204,6 +207,7 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
+    const { tasks, docVersions } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.status).toBe('awaiting_review')
 
@@ -233,6 +237,7 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
+    const { tasks, docVersions } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.status).toBe('awaiting_review')
 
@@ -309,7 +314,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const { nodeRunOutputs, nodeRuns } = await import('../src/db/schema')
+    const { nodeRunOutputs, nodeRuns } = tablesOf(h.db)
     const { and } = await import('drizzle-orm')
     const { parseArchiveJson } = await import('@/modules/task-execution/public/queries')
     async function projectedRow(nodeId: string, port: string) {
@@ -392,6 +397,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
+    const { tasks, docVersions } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.status).toBe('awaiting_review')
     const dvs = await h.db.select().from(docVersions).where(eq(docVersions.taskId, taskId))

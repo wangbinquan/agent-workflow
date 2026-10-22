@@ -30,7 +30,7 @@ import {
   type StartedPipelineProviderMock,
 } from '@agent-workflow/system-mocks'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createDevelopmentAdapter,
@@ -52,7 +52,7 @@ const HEAD = 'a1'.repeat(20)
 const TARGET = 'b2'.repeat(20)
 
 let provider: StartedPipelineProviderMock
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 async function publishAdapter(input: {
   readonly name: string

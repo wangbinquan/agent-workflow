@@ -25,13 +25,14 @@
 // If any of these go red the runtime contract drifted — investigate before
 // relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   listTaskQuestions,
   loadUndispatchedSelfQuestionerTargets,
@@ -90,7 +91,7 @@ function makeAns(qid: string, idx = 0): ClarifyAnswer {
 // roleKind='designer' handler row targeting it), then a dispatch of that designer entry — which
 // mints the designer rerun through the SAME multi-source readiness gate + frontier mint.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -143,14 +144,12 @@ function defaultDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  opts: SeedOptions = {},
-): Promise<{ taskId: string }> {
+async function seedTask(db: PersistenceDb, opts: SeedOptions = {}): Promise<{ taskId: string }> {
   const taskId = opts.taskId ?? `task_${Math.random().toString(36).slice(2, 8)}`
   const def = opts.definition ?? defaultDef()
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -158,7 +157,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -180,12 +179,13 @@ async function seedTask(
 }
 
 async function seedQuestionerRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { id?: string; nodeId?: string } = {},
 ): Promise<string> {
   const id = opts.id ?? `nr_q_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId ?? 'questioner',
@@ -197,12 +197,13 @@ async function seedQuestionerRun(
 }
 
 async function seedDesignerRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { id?: string; nodeId?: string; clarifyIteration?: number; status?: string } = {},
 ): Promise<string> {
   const id = opts.id ?? `nr_d_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId ?? 'designer',
@@ -254,6 +255,7 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     expect(session.intermediaryNodeRunId).toBe(crossClarifyNodeRunId)
     expect(session.questions).toHaveLength(2)
 
+    const { clarifyRounds, nodeRuns, tasks, taskQuestions } = tablesOf(db)
     const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, session.id)))[0]
     expect(row?.status).toBe('awaiting_human')
     expect(row?.iteration).toBe(0)
@@ -595,7 +597,8 @@ describeEachProvider(
       const def = defaultDef()
       const { taskId } = await seedTask(db, { definition: def })
       const nrId = 'nr_pending_cross'
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: nrId,
         taskId,
         nodeId: 'cross1',
@@ -663,6 +666,7 @@ describeEachProvider(
         actor: { userId: 'u1', role: 'owner' },
       })
 
+      const { tasks, clarifyRounds } = tablesOf(db)
       // Task fails before the designer consumes the feedback. RFC-126: CR-1 is
       // RETIRED → the lifecycle scan must NOT abandon the round; it stays 'answered'
       // so the human's answer is preserved (the deferred queue re-injects it on resume).
@@ -724,6 +728,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
       answers: [makeAns('q1'), makeAns('q2')],
       actor,
     })
+    const { taskQuestions, nodeRuns } = tablesOf(db)
     // The round's questioner entries were materialized, sealed and DISPATCHED (consumed).
     const qEntries = (
       await db
@@ -787,6 +792,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     ])
     expect(results.filter((r) => r.status === 'fulfilled').length).toBe(1)
     expect(results.filter((r) => r.status === 'rejected').length).toBe(1)
+    const { nodeRuns } = tablesOf(db)
     const reruns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
     )
@@ -824,7 +830,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     // home + a DISPATCHED questioner task_question whose home (default) is 'questioner', bound to it
     // (in-flight / unconsumed).
     const dispatchedRerunId = `nr_qrr_${Math.random().toString(36).slice(2, 8)}`
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, taskQuestions, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: dispatchedRerunId,
       taskId,
       nodeId: 'questioner',
@@ -833,7 +840,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
       iteration: 0,
       rerunCause: 'cross-clarify-questioner-rerun',
     })
-    await db.insert(taskQuestions).values({
+    await insertOne(db, taskQuestions, {
       id: `tq_${Math.random().toString(36).slice(2, 8)}`,
       taskId,
       originNodeRunId: `other_round_${Math.random().toString(36).slice(2, 8)}`,

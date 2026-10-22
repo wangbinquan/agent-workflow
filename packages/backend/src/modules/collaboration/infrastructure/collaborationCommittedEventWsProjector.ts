@@ -6,7 +6,7 @@
 // **从未在真数据库上跑过**——它唯一的用例只对源码文本做断言。2026-09-07 的双引擎对拍
 // （`tests/rfc359-w9-collaboration-committed-event-projection-conformance.test.ts`）把两份
 // 各自在自己的引擎上跑了一遍，17 个场景逐帧相同：这一对**确实**没有分叉，于是按 PG 那份的
-// 异步形状收成一份中立实现（`ProviderNeutralDatabase` + `engineOf(db)` 的 NULL 排序）。
+// 异步形状收成一份中立实现（`PersistenceDb` + `engineOf(db)` 的 NULL 排序）。
 //
 // 唯一被丢掉的是 SQLite 那份多出来的 `questionIds` 前置过滤：`reruns[].entryIds` 由
 // `dispatchedReruns` 生成、`questionIds = dispatchIds ∪ deferredEntryIds`
@@ -18,6 +18,7 @@
 // 评审门挑「哪一份待审文档」的 `item_index ASC`（NULL = RFC-079 单文档判别位）与澄清决定
 // 回落读模型时的 `dispatched_at DESC`（NULL = 尚未下发）。两条都在对拍里带变异验证。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   ClarifyAnswer,
   ClarifyQuestion,
@@ -29,8 +30,7 @@ import type {
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, gte, isNotNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, committedEvents, docVersions, taskQuestions, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -63,8 +63,8 @@ function nodeTitle(snapshot: string, nodeId: string): string | null {
 }
 
 function selfSummary(
-  round: typeof clarifyRounds.$inferSelect,
-  task: Pick<typeof tasks.$inferSelect, 'name' | 'workflowSnapshot'>,
+  round: PersistenceTables['clarifyRounds']['$inferSelect'],
+  task: Pick<PersistenceTables['tasks']['$inferSelect'], 'name' | 'workflowSnapshot'>,
 ): ClarifySessionSummary {
   return {
     id: round.id,
@@ -84,7 +84,7 @@ function selfSummary(
   }
 }
 
-function selfSession(round: typeof clarifyRounds.$inferSelect): ClarifySession {
+function selfSession(round: PersistenceTables['clarifyRounds']['$inferSelect']): ClarifySession {
   const session: ClarifySession = {
     id: round.id,
     taskId: round.taskId,
@@ -109,11 +109,12 @@ function selfSession(round: typeof clarifyRounds.$inferSelect): ClarifySession {
 }
 
 async function openFrames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   event: CollaborationCommittedV1,
 ): Promise<readonly CollaborationProjectionFrame[]> {
   const gate = event.payload.gate
   if (event.family === 'review') {
+    const { docVersions } = tablesOf(db)
     const document = (
       await db
         .select()
@@ -139,6 +140,7 @@ async function openFrames(
     ]
   }
   if (event.family !== 'clarify') return []
+  const { clarifyRounds, tasks } = tablesOf(db)
   const round = (
     await db
       .select()
@@ -183,7 +185,7 @@ async function openFrames(
 }
 
 async function clarifyDecisionFrames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   event: CollaborationCommittedV1,
 ): Promise<readonly CollaborationProjectionFrame[]> {
   if (
@@ -194,6 +196,7 @@ async function clarifyDecisionFrames(
     return []
   }
   const gate = event.payload.gate
+  const { clarifyRounds, taskQuestions, committedEvents } = tablesOf(db)
   const round = (
     await db
       .select()
@@ -301,7 +304,7 @@ async function clarifyDecisionFrames(
 }
 
 async function projectionFrames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   event: CollaborationCommittedV1,
 ): Promise<readonly CollaborationProjectionFrame[]> {
   if (event.payload.projectionFrames.length > 0) return event.payload.projectionFrames
@@ -310,7 +313,7 @@ async function projectionFrames(
 }
 
 export function createCollaborationCommittedEventProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): CollaborationCommittedEventProjection {
   return Object.freeze({
     async frames(event: CollaborationCommittedV1) {

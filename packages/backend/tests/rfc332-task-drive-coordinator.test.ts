@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import {
   createOwnershipToken,
@@ -15,7 +16,6 @@ import {
   type TaskEngineOrchestrationPort,
 } from '../src/modules/task-execution/application/drive/taskDriveCoordinator'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
-import type { DbClient } from '../src/db/client'
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -58,7 +58,7 @@ function applicationFixture(input?: {
           execution: createTaskExecutionContext({
             intentId: request.intentId,
             token,
-            db: {} as DbClient,
+            db: schemaFixtureDb(),
           }),
         },
       }

@@ -14,16 +14,16 @@
 //      If this regresses, a skip silently becomes a dead end that only a brand
 //      new task can escape.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import {
   evaluateExitCondition,
   parseExitCondition,
 } from '../src/modules/task-execution/domain/loopExitCondition'
 import { isDispatchable } from '../src/services/dispatchFrontier'
-import type { nodeRuns } from '../src/db/schema'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 const ACTIVE = { content: 'x', active: true }
 const INACTIVE = { content: 'reason text', active: false }

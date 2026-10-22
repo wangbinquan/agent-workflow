@@ -5,14 +5,15 @@
 //   ② 目录自有类型的 ACL 写入提交后必须唤醒实时订阅（`resource-acl-changed`）——被升档 / 降档的观众不刷新页面也要
 //      拿到新的控件（e2e/rfc324-graded-grants.spec.ts「升档后徽标必须自己消失」红的来源）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { CreateAgentSchema, CreateWorkflowSchema, type CreateAgent } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { plugins, scheduledTasks, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { WorkflowAccessRow } from '@/modules/resource-catalog/application/workflows/ports'
 import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -29,11 +30,12 @@ import { describeEachProvider } from './helpers/eachProvider'
 const T0 = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ id: string; authority: DirectAuthenticatedAuthority }> {
   const id = ulid()
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -54,7 +56,7 @@ function agentInput(name: string, overrides: Partial<CreateAgent> = {}): CreateA
   return { ...CreateAgentSchema.parse({ name }), ...overrides }
 }
 
-function agentRepositoryFor(db: ProviderNeutralDatabase) {
+function agentRepositoryFor(db: PersistenceDb) {
   const catalog = composeResourceCatalogFor({ db })
   const semantics = createAgentPersistenceSemantics({
     db,
@@ -195,7 +197,8 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     const byWorkflow = await repository.create(owner, agentInput(name()))
     const workflowId = ulid()
     const workflowName = `wf-${workflowId.slice(-6).toLowerCase()}`
-    await db.insert(workflows).values({
+    const { workflows, tasks, scheduledTasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: workflowName,
       definition: JSON.stringify({
@@ -242,7 +245,7 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     // （未经可见性过滤，展示层只渲染计数——这里锁的是后端确实把它交出来了）。
     const byTask = await repository.create(owner, agentInput(name()))
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'live',
       workflowId,
@@ -269,7 +272,7 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     const bySchedule = await repository.create(owner, agentInput(name()))
     const scheduleId = ulid()
     const scheduleName = `sched-${scheduleId.slice(-6).toLowerCase()}`
-    await db.insert(scheduledTasks).values({
+    await insertOne(db, scheduledTasks, {
       id: scheduleId,
       name: scheduleName,
       ownerUserId: ownerId,
@@ -313,7 +316,8 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
 
     const pluginId = ulid()
     const pluginName = `plugin-${pluginId.slice(-6).toLowerCase()}`
-    await db.insert(plugins).values({
+    const { plugins } = tablesOf(db)
+    await insertOne(db, plugins, {
       id: pluginId,
       name: pluginName,
       spec: pluginName,

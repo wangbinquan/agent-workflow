@@ -69,8 +69,10 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
       ClarifyEnvelopeBodySchema: { parse: (value: unknown) => value },
       ClarifyQuestionSchema: { parse: (value: unknown) => value },
       findSelfGateRunForShard: async () => undefined,
-      tasks: taskTable,
-      clarifyRounds: roundTable,
+      tablesOf: (handle: unknown) => {
+        expect(handle).toBe(db)
+        return { tasks: taskTable, clarifyRounds: roundTable }
+      },
       eq: () => undefined,
       and: () => undefined,
       desc: () => undefined,

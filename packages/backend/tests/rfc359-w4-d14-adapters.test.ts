@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D14 —— resource-catalog 的 Agent 聚合：异步仓库 / 语义层 / portable-import 快照成为唯一实现，SQLite 装配
 // 也切到这一份。同一段断言在两个引擎上各跑一遍：创建 / 读 / 列表、owner 级 name 唯一（唯一冲突经能力矩阵映射）、
@@ -10,8 +12,7 @@ import { CreateAgentSchema, type CreateAgent } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
 import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -25,12 +26,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 const T0 = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   role: 'admin' | 'user' = 'user',
 ): Promise<DirectAuthenticatedAuthority> {
   const id = ulid()
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -50,7 +52,7 @@ function agentInput(name: string, overrides: Partial<CreateAgent> = {}): CreateA
   return { ...CreateAgentSchema.parse({ name }), ...overrides }
 }
 
-function repositoryFor(db: ProviderNeutralDatabase) {
+function repositoryFor(db: PersistenceDb) {
   const catalog = composeResourceCatalogFor({ db })
   const inventory = composeDatabaseAgentResourceInventorySource({
     db,
@@ -247,7 +249,7 @@ test('源码锁：Agent 聚合没有 provider 命名的仓库 / 语义 / 快照�
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source, neutral).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|DbTxSync/)
-    expect(source, neutral).toContain('ProviderNeutralDatabase')
+    expect(source, neutral).toContain('PersistenceDb')
   }
   for (const file of [
     'src/bootstrap/daemonModules/resourceCatalog.ts',

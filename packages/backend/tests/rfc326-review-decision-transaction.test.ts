@@ -23,6 +23,8 @@
 //     after the lock is released. Dropping the lock from `updateTaskMembers`
 //     (mutation evidence ⑦) turns the race cases red.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -40,18 +42,6 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents as agentsTable,
-  docVersions,
-  memoryDistillJobs,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
 import {
   submitReviewDecision,
   type SubmitReviewDecisionArgs,
@@ -79,6 +69,7 @@ const BODY =
 // ---------------------------------------------------------------------------
 
 async function snapshot(db: DbClient): Promise<Record<string, unknown[]>> {
+  const { nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).orderBy(asc(nodeRuns.id))
   return {
     docVersions: await db.select().from(docVersions).orderBy(asc(docVersions.id)),
@@ -188,6 +179,16 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const committedEvents = await installCommittedEventDeliveryHarness(db)
   const [owner, member, stranger, extraUser] = [ulid(), ulid(), ulid(), ulid()]
+  const {
+    users,
+    agents,
+    workflows,
+    tasks,
+    taskCollaborators,
+    nodeRuns,
+    nodeRunOutputs,
+    docVersions,
+  } = tablesOf(db)
   await db.insert(users).values(
     [owner, member, stranger, extraUser].map((id, i) => ({
       id,
@@ -199,7 +200,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
       updatedAt: NOW,
     })),
   )
-  await db.insert(agentsTable).values({
+  await insertOne(db, agents, {
     id: ulid(),
     name: 'doc',
     description: '',
@@ -224,11 +225,13 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     edges: [],
   }
   const workflowId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: JSON.stringify(definition) })
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'wf',
+    definition: JSON.stringify(definition),
+  })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -248,7 +251,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     { taskId, userId: member, role: 'collaborator', addedBy: owner, addedAt: NOW },
   ])
   const docRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: docRunId,
     taskId,
     nodeId: 'doc',
@@ -259,11 +262,9 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     startedAt: NOW - 1000,
     finishedAt: NOW - 900,
   })
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId: docRunId, portName: 'docpath', content: BODY })
+  await insertOne(db, nodeRunOutputs, { nodeRunId: docRunId, portName: 'docpath', content: BODY })
   const reviewRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -276,7 +277,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   const dvId = ulid()
   const bodyPath = `doc_versions/${dvId}.md`
   writeFileSync(join(appHome, bodyPath), BODY)
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: dvId,
     taskId,
     reviewNodeId: 'rev_1',
@@ -317,7 +318,8 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
  */
 async function addMultiInlineRound(f: Fixture): Promise<{ runId: string; ids: [string, string] }> {
   const runId = ulid()
-  await f.db.insert(nodeRuns).values({
+  const { nodeRuns, docVersions } = tablesOf(f.db)
+  await insertOne(f.db, nodeRuns, {
     id: runId,
     taskId: f.taskId,
     nodeId: 'rev_1',
@@ -331,7 +333,7 @@ async function addMultiInlineRound(f: Fixture): Promise<{ runId: string; ids: [s
   for (const [i, id] of ids.entries()) {
     const bodyPath = `doc_versions/${id}.md`
     writeFileSync(join(f.appHome, bodyPath), `# Item ${i}\n\nbody ${i} with export job\n`)
-    await f.db.insert(docVersions).values({
+    await insertOne(f.db, docVersions, {
       id,
       taskId: f.taskId,
       reviewNodeId: 'rev_1',
@@ -413,6 +415,7 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
         }
       }
       await f.committedEvents.drain()
+      const { memoryDistillJobs } = tablesOf(f.db)
       expect((await f.db.select().from(memoryDistillJobs)).length).toBe(1)
     },
   )
@@ -432,6 +435,7 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
     } finally {
       ev.stop()
     }
+    const { nodeRuns, docVersions, memoryDistillJobs } = tablesOf(f.db)
     const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
     expect(run.status).toBe('done')
     const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
@@ -460,6 +464,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
   ): Promise<Error> {
     const err = await failureOf(run)
     expect(await snapshot(f.db)).toEqual(before)
+    const { nodeRuns } = tablesOf(f.db)
     const row = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
     expect(row.status).toBe('awaiting_review')
     expect(row.reviewIteration).toBe(0)
@@ -501,6 +506,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
       submitReviewDecision(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
     )
     expect(err.message).toContain('injected after rollback')
+    const { nodeRuns } = tablesOf(f.db)
     const upstream = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
     expect(upstream.status).toBe('done')
     // RFC-333: prepare produced only a validated plan. The canonical worktree
@@ -523,6 +529,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
   test('a corrupt workflowSnapshot is refused in prepare — before the rollback, nothing written', async () => {
     f = await buildFixture({ rollbackOnIterate: true })
     ev = taskEvents(f.taskId)
+    const { tasks } = tablesOf(f.db)
     await f.db.update(tasks).set({ workflowSnapshot: '{not json' }).where(eq(tasks.id, f.taskId))
     const before = await snapshot(f.db)
     const err = await expectRolledBack(before, () =>
@@ -538,7 +545,8 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     ev = taskEvents(f.taskId)
     // A second review run with two inline items, both accepted; item 1's body is gone.
     const runId = ulid()
-    await f.db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(f.db)
+    await insertOne(f.db, nodeRuns, {
       id: runId,
       taskId: f.taskId,
       nodeId: 'rev_1',
@@ -552,7 +560,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     for (const [i, id] of ids.entries()) {
       const bodyPath = `doc_versions/${id}.md`
       writeFileSync(join(f.appHome, bodyPath), `# Item ${i}\n\nbody ${i}\n`)
-      await f.db.insert(docVersions).values({
+      await insertOne(f.db, docVersions, {
         id,
         taskId: f.taskId,
         reviewNodeId: 'rev_1',
@@ -642,6 +650,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     await revoke
     expect(result.reviewIteration).toBe(1)
     expect(worktreeState(f.repo)).toEqual(SNAPSHOT)
+    const { nodeRuns } = tablesOf(f.db)
     const retired = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
     expect(retired.status).toBe('canceled')
     expect(retired.rolledBack).toBe(true)
@@ -689,6 +698,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     const err = await failureOf(() => stale)
     expect((err as DomainError).code).toBe('forbidden')
     expect((err as DomainError).status).toBe(403)
+    const { tasks, taskCollaborators } = tablesOf(f.db)
     const task = (await f.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
     expect(task.ownerUserId).toBe(f.extraUser)
     const rows = await f.db
@@ -776,6 +786,7 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
         expect(i).toBeGreaterThan(beginAt)
         expect(i).toBeLessThan(commitAt)
       }
+      const { docVersions } = tablesOf(f.db)
       const rows = await f.db
         .select()
         .from(docVersions)
@@ -813,6 +824,7 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
     expect(err.message).toContain('injected after first archive')
     expect(await snapshot(f.db)).toEqual(before)
     expect(ev.types).toEqual([])
+    const { docVersions, nodeRuns } = tablesOf(f.db)
     const rows = await f.db
       .select()
       .from(docVersions)
@@ -862,6 +874,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     await transfer
     const result = await decide
     expect(result.batch?.commentsAdded).toBe(1)
+    const { docVersions } = tablesOf(f.db)
     const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
     expect(dv.decidedBy).toBe(f.owner)
     expect(dv.decidedByRole).toBe('user')
@@ -874,6 +887,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     await submitReviewDecision(
       decisionArgs(f, { decision: 'approved', author: 'sys', authorRole: 'admin' }),
     )
+    const { docVersions } = tablesOf(f.db)
     const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
     expect(dv.decidedByRole).toBe('admin')
   })
@@ -917,6 +931,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     expect(firstResult.ownerUserId).toBe(f.extraUser)
     expect(firstResult.members.map((m) => m.user.id)).not.toContain(f.extraUser)
     expect(firstResult.members.map((m) => m.user.id).sort()).toEqual([f.member, f.owner].sort())
+    const { tasks } = tablesOf(f.db)
     // …while the database has moved on to the second commit.
     const task = (await f.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
     expect(task.ownerUserId).toBe(f.stranger)

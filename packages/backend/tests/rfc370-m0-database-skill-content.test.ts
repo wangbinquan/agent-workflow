@@ -4,12 +4,12 @@
 // recorded in version metadata; every content port keeps its file-store
 // semantics; and real HTTP editing plus boot verification work end to end with
 // no skill file written to the local disk.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { skillContentEntries, skills } from '@/db/schema'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import { selectSkillContentDependencies } from '@/modules/resource-catalog/composition/skillContentBinding'
 import { createDatabaseSkillContent } from '@/modules/resource-catalog/infrastructure/databaseSkillContent'
@@ -229,6 +229,7 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
     expect(await content.lifecycleContent.hasLiveMain(SKILL)).toBe(true)
     await content.deletionContent.stage(plan)
     await content.deletionContent.discard(plan)
+    const { skillContentEntries } = tablesOf(harness.db)
     expect(
       await harness.db
         .select()
@@ -324,6 +325,7 @@ describeEachProviderHttpApplication(
       await boot.runIdentityMigrationBarrier()
       await boot.reconcileLiveFiles()
       expect(await boot.reverifySnapshots()).toEqual({ verified: 1, quarantined: 0 })
+      const { skills } = tablesOf(scope.harness.db)
       expect(
         (await scope.harness.db.select().from(skills).where(eq(skills.id, id)))[0],
       ).toMatchObject({ reservationState: 'ready', contentVersion: 2 })

@@ -19,18 +19,13 @@
 // Together with clarify-no-cross-review-interference (separate file), this
 // keeps the create/seal unit lock.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createClarifyRound, sealAnswersServerSide } from '../src/services/clarify/service'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
@@ -43,7 +38,7 @@ import type {
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { id?: string; worktreePath?: string; definition?: WorkflowDefinition } = {},
 ): Promise<{ taskId: string }> {
   const taskId = opts.id ?? `task_${Math.random().toString(36).slice(2, 8)}`
@@ -70,7 +65,8 @@ async function seedTask(
   }
   // Stub workflow row to satisfy tasks.workflow_id FK.
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -78,7 +74,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -127,7 +123,7 @@ function makeAnswer(overrides: Partial<ClarifyAnswer> = {}): ClarifyAnswer {
 
 let uninstallProjection = (): void => {}
 
-async function createProjectionDb(db: ProviderNeutralDatabase): Promise<ProviderNeutralDatabase> {
+async function createProjectionDb(db: PersistenceDb): Promise<PersistenceDb> {
   uninstallProjection = await installCommittedEventProjectionHarness(db)
   return db
 }
@@ -149,7 +145,8 @@ describeEachProvider('createClarifyRound', (harness) => {
 
     // Pre-existing source agent node_run (asking node_run).
     const sourceRunId = 'nr_source_1'
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds, tasks, taskQuestions } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: sourceRunId,
       taskId,
       nodeId: 'designer',
@@ -186,11 +183,11 @@ describeEachProvider('createClarifyRound', (harness) => {
     const nrRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
     expect(nrRows[0]?.status).toBe('awaiting_human')
     expect(nrRows[0]?.nodeId).toBe('clarify1')
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)).get())?.status).toBe(
+    expect((await firstRow(db.select().from(tasks).where(eq(tasks.id, taskId))))?.status).toBe(
       'awaiting_human',
     )
     expect(
-      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).get(),
+      await firstRow(db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))),
     ).toMatchObject({
       originNodeRunId: clarifyNodeRunId,
       questionId: 'q1',
@@ -207,7 +204,8 @@ describeEachProvider('createClarifyRound', (harness) => {
     const db = await createProjectionDb(harness.db)
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_source_reemit'
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds, taskQuestions, collaborationGateOperations } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: sourceRunId,
       taskId,
       nodeId: 'designer',
@@ -233,10 +231,10 @@ describeEachProvider('createClarifyRound', (harness) => {
     expect(replay.round.id).toBe(first.round.id)
     expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(1)
     expect(
-      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)),
     ).toHaveLength(1)
     expect(
-      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
     ).toHaveLength(1)
 
     const changed = await createClarifyRound({
@@ -247,11 +245,9 @@ describeEachProvider('createClarifyRound', (harness) => {
     expect(changed.intermediaryNodeRunId).toBe(first.intermediaryNodeRunId)
     expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(2)
     expect(
-      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)),
     ).toHaveLength(2)
-    expect(
-      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
-    ).toEqual([
+    expect(await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))).toEqual([
       expect.objectContaining({ questionId: 'q1', questionTitle: 'Which durable database?' }),
     ])
     expect(
@@ -260,7 +256,6 @@ describeEachProvider('createClarifyRound', (harness) => {
           .select({ revision: collaborationGateOperations.resultGateRevision })
           .from(collaborationGateOperations)
           .where(eq(collaborationGateOperations.taskId, taskId))
-          .all()
       )
         .map((operation) => operation.revision)
         .sort((left, right) => (left ?? 0) - (right ?? 0)),
@@ -271,7 +266,8 @@ describeEachProvider('createClarifyRound', (harness) => {
     const db = harness.db
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_multi_shard'
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: sourceRunId,
       taskId,
       nodeId: 'designer',

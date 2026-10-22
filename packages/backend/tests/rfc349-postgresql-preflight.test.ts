@@ -1,6 +1,7 @@
 // RFC-349 T3 — target preflight is deterministic, secret-free and leaves its
 // capability probe rolled back on both success and failure.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 import {
   PostgresqlPreflightError,
@@ -28,7 +29,7 @@ function fakeRuntime(input: {
   readonly failWhenSqlIncludes?: string
 }) {
   const queries: Array<{ sql: string; parameters: readonly unknown[] | undefined }> = []
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql, parameters) {
       queries.push({ sql, parameters })
       if (input.failWhenSqlIncludes !== undefined && sql.includes(input.failWhenSqlIncludes)) {
@@ -53,7 +54,7 @@ function fakeRuntime(input: {
       return rows([])
     },
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection

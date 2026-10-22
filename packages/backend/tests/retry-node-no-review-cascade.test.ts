@@ -7,6 +7,8 @@
 //
 // Locks the upstream half of the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
@@ -15,8 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -24,7 +25,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 // RFC-359 AC-1（第 9 刀）：`retry` 两份实现合一之后本文件验的是**共用**那一份的级联口径，
 // 两个引擎各跑一遍——合并前它只喂 SQLite 那份 `retryNode`。
 describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let repoPath: string
 
@@ -85,14 +86,15 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       ],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify(definition),
     })
 
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 'rfc-052-retry',
       id: taskId,
       workflowId,
@@ -110,7 +112,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
 
     // Latest agent run: done, what the user clicks "Retry" on.
     const agentRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: agentRunId,
       taskId,
       nodeId: 'agent_1',
@@ -121,7 +123,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       finishedAt: Date.now() - 100,
     })
     // Pre-existing rows for downstream nodes (will be in `downstream` set).
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'clarify_1',
@@ -131,7 +133,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       startedAt: Date.now() - 90,
       finishedAt: Date.now() - 80,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'rev_1',
@@ -145,7 +147,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
     // should still skip it because of the kind filter, not because there's
     // nothing to inherit from.)
 
-    await createRetryEngine(db, {}).retry({ taskId: taskId, nodeRunId: agentRunId, cascade: true })
+    await createRetryEngine(db, {}).retry({ taskId, nodeRunId: agentRunId, cascade: true })
 
     // The fresh placeholder must exist for agent_1 (retryIndex=1, failed),
     // but NOT for clarify_1 / rev_1 / out_1.
@@ -181,13 +183,14 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       ],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 'rfc-052-nocascade',
       id: taskId,
       workflowId,
@@ -202,7 +205,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       finishedAt: Date.now(),
     })
     const aRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: aRunId,
       taskId,
       nodeId: 'agent_a',
@@ -213,7 +216,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       finishedAt: Date.now() - 100,
     })
 
-    await createRetryEngine(db, {}).retry({ taskId: taskId, nodeRunId: aRunId, cascade: false })
+    await createRetryEngine(db, {}).retry({ taskId, nodeRunId: aRunId, cascade: false })
 
     const placeholders = (
       await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

@@ -1,4 +1,6 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -7,8 +9,7 @@ import { join, resolve } from 'node:path'
 
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { employeeTypePackages } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -57,7 +58,7 @@ const developmentContractRefs = developmentExecutionContractRegistrations.map(
  * 每个用例前重置到「刚迁移完」的状态。`fixtureModule()` 与各用例都从这里取句柄，
  * 因此不再有任何一行自己建 SQLite 内存库。
  */
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -715,7 +716,8 @@ describeEachProviderHttpApplication(
         )
         const frozen = structuredClone(current)
         frozen.typeRef.revision = current.typeRef.revision - 1
-        await db.insert(employeeTypePackages).values({
+        const { employeeTypePackages } = tablesOf(db)
+        await insertOne(db, employeeTypePackages, {
           typeId: frozen.typeRef.typeId,
           revision: frozen.typeRef.revision,
           descriptorJson: JSON.stringify(frozen),
@@ -804,7 +806,8 @@ describeEachProviderHttpApplication(
             ],
           },
         })
-        await db.insert(employeeTypePackages).values({
+        const { employeeTypePackages } = tablesOf(db)
+        await insertOne(db, employeeTypePackages, {
           typeId: 'development',
           revision: 8,
           descriptorJson: historicalDescriptorJson,

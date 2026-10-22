@@ -13,6 +13,7 @@
 // 这里锁两端：①真实启动冻出来的载荷确实不带行元数据（收窄合同还在）；
 // ②子启动的校验（`FrozenWorkgroupGroupSchema`）接受它，而整行 schema 会拒绝它。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,8 +22,7 @@ import { eq } from 'drizzle-orm'
 import { WorkgroupSchema } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { tasks } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { FrozenWorkgroupGroupSchema } from '../src/modules/task-execution/infrastructure/legacyCallClosure'
@@ -38,7 +38,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-wg-frozen-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let appHome: string
     let token: string
@@ -156,6 +156,7 @@ describeEachProviderHttpApplication(
       expect(launch.status, await launch.clone().text()).toBe(201)
       const task = (await launch.json()) as { id: string }
 
+      const { tasks } = tablesOf(db)
       const [row] = await db.select().from(tasks).where(eq(tasks.id, task.id))
       const closure = JSON.parse(row?.refClosureJson ?? 'null') as {
         workgroups: Record<string, { id: string; version: number; group: Record<string, unknown> }>

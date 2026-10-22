@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -7,7 +7,7 @@ import { triggerRevalidation } from '@/ws/revalidationHook'
 
 /** RFC-381: save and dispatch admission use the same candidate-aware launch gate. */
 export function composeDaemonScheduledTaskModules(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly assertAgentIntegrity: Parameters<
     typeof composeScheduledTaskRuntimeFor
   >[0]['validation']['assertAgentIntegrity']

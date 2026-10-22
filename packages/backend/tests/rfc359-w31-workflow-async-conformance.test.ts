@@ -1,10 +1,12 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, first as firstRow } from '@/platform/persistence/queryHelpers'
 import { type WorkflowDefinition } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   commitWorkflowSaveInTx,
   copyWorkflow,
@@ -29,8 +31,9 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 'user') {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -49,11 +52,12 @@ function gate(): { promise: Promise<void>; release(): void } {
   return { promise, release }
 }
 
-async function rows(db: ProviderNeutralDatabase) {
-  return db.select().from(workflows).orderBy(workflows.id).all()
+async function rows(db: PersistenceDb) {
+  const { workflows } = tablesOf(db)
+  return queryRows(db.select().from(workflows).orderBy(workflows.id))
 }
 
-async function seed(db: ProviderNeutralDatabase, name: string) {
+async function seed(db: PersistenceDb, name: string) {
   return createWorkflow(db, { name, description: 'original', definition })
 }
 
@@ -155,8 +159,9 @@ describeEachProvider('RFC359 W31 legacy workflow async persistence', (harness) =
       harness.session.transaction(async (tx) => {
         const result = await commitWorkflowSaveInTx(tx, prepared)
         expect(result.committed).toBe(true)
+        const { workflows } = tablesOf(tx)
         expect(
-          (await tx.select().from(workflows).where(eq(workflows.id, created.id)).get())
+          (await firstRow(tx.select().from(workflows).where(eq(workflows.id, created.id))))
             ?.description,
         ).toBe('rolled-back')
         throw failure
@@ -214,7 +219,8 @@ describeEachProvider('RFC359 W31 legacy workflow async persistence', (harness) =
             entered.release()
             try {
               await release.promise
-              observed = await tx.select().from(workflows).where(eq(workflows.id, id)).all()
+              const { workflows } = tablesOf(tx)
+              observed = await tx.select().from(workflows).where(eq(workflows.id, id))
             } finally {
               finished.release()
             }

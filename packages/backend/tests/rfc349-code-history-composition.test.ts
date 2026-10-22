@@ -2,13 +2,13 @@
 // aggregate. A PostgreSQL composition must reach all four history endpoints
 // without the route selecting or reopening SQLite.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -46,7 +46,10 @@ function postgresqlHistoryFixture() {
     executions.push({ sql, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -102,7 +105,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
   resetRouteMetaRegistry()
 })
 

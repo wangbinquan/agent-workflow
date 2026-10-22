@@ -104,7 +104,7 @@ import {
   type TaskCommittedEventIdentity,
 } from '../infrastructure/taskLifecycleCommittedEvents'
 import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
-// RFC-359 —— 下面三个是上面那批同步原子的**中立异步孪生**（`DatabaseTransaction` 上的形态）。
+// RFC-359 —— 下面三个是上面那批同步原子的**中立异步孪生**（`PersistenceTx` 上的形态）。
 // 生命周期写事务从 bun:sqlite 专属同步面搬走之后，`onTransitionTx` 回调里的参与者都要用这一侧。
 import { revokeExactOwnerInTx as revokeExactOwnerInTransactionInternal } from '../infrastructure/taskOwnershipPersistence'
 import { terminalizeTaskExecutionIntentsUncheckedInTx as terminalizeTaskExecutionIntentsInTransactionInternal } from '../infrastructure/taskExecutionIntentTerminalPersistence'

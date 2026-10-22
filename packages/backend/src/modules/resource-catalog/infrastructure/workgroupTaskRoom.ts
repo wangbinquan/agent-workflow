@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   DwStateSchema,
   WorkgroupOutputContractSchema,
@@ -14,12 +15,11 @@ import {
 import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 
-import { agents, resourceGrants, workgroupAssignments, workgroupTaskState } from '@/db/schema'
 import type {
   WorkgroupTaskRoomEventIdentity,
   WorkgroupTaskRoomTaskParticipantInTx,
 } from '@/modules/task-execution/public/commands'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { deriveBudgetUsed, roundedModeOf } from '../application/workgroups/workgroupRoomProjection'
 import {
@@ -35,7 +35,7 @@ import {
 } from './resourceCatalogTransaction'
 import { workgroupTaskSubmissionBody } from './workgroupTaskSubmission'
 
-type AssignmentRow = typeof workgroupAssignments.$inferSelect
+type AssignmentRow = PersistenceTables['workgroupAssignments']['$inferSelect']
 export type AssignmentStatus = AssignmentRow['status']
 export type RoomEvent =
   | Readonly<{ type: 'wg.message.created'; messageId: string; kind: string }>
@@ -87,7 +87,7 @@ export interface WorkgroupTaskRoomContinuationDriver {
 }
 
 export interface WorkgroupTaskRoomDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly taskParticipantFactory: WorkgroupTaskRoomTaskParticipantFactory
   readonly continuation: WorkgroupTaskRoomContinuationDriver
   readonly activeUsers: WorkgroupTaskRoomActiveUserDirectory
@@ -168,7 +168,7 @@ export const ConfigPatchSchema = z.object({
 })
 
 interface LoadedState {
-  readonly gateStatus: typeof workgroupTaskState.$inferSelect.gateStatus
+  readonly gateStatus: PersistenceTables['workgroupTaskState']['$inferSelect']['gateStatus']
   readonly gateSummary: string | null
   readonly gateRejectedComment: string | null
   readonly pauseReason: string | null
@@ -196,7 +196,9 @@ export function parseConfig(value: string | null): {
   }
 }
 
-function parseState(row: typeof workgroupTaskState.$inferSelect | undefined): LoadedState {
+function parseState(
+  row: PersistenceTables['workgroupTaskState']['$inferSelect'] | undefined,
+): LoadedState {
   let dw: DwState | null = null
   if (row?.dwStateJson != null) {
     try {
@@ -219,6 +221,7 @@ async function loadState(
   transaction: ResourceCatalogTransaction,
   taskId: string,
 ): Promise<LoadedState> {
+  const { workgroupTaskState } = tablesOf(transaction)
   return parseState(
     (
       await transaction
@@ -295,9 +298,10 @@ export async function transitionAssignment(
     from: AssignmentStatus
     to: AssignmentStatus
     now: number
-    patch?: Partial<typeof workgroupAssignments.$inferInsert>
+    patch?: Partial<PersistenceTables['workgroupAssignments']['$inferInsert']>
   }>,
 ): Promise<boolean> {
+  const { workgroupAssignments } = tablesOf(transaction)
   const changed = await transaction
     .update(workgroupAssignments)
     .set({ ...input.patch, status: input.to, updatedAt: input.now })
@@ -328,6 +332,7 @@ export async function visibleAgentRows(
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ id: string; name: string }>>> {
   if (ids.length === 0) return new Map()
+  const { agents, resourceGrants } = tablesOf(transaction)
   const rows = await transaction
     .select({
       id: agents.id,
@@ -390,6 +395,7 @@ export async function requeueDismissedAssignments(
   }
   if (ids.size === 0) return []
   const status = input.mode === 'free_collab' ? 'open' : 'dispatched'
+  const { workgroupAssignments } = tablesOf(transaction)
   const changed = await transaction
     .update(workgroupAssignments)
     .set({

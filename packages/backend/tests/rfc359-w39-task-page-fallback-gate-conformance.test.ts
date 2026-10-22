@@ -1,10 +1,12 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, SQL, StringChunk, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   encodeCursor,
   parseTaskOperationsQuery,
@@ -67,11 +69,11 @@ function inspectCte(query: SQL, end: string, select: string): SQL {
   throw new Error(`missing CTE boundary: ${end}`)
 }
 
-async function physicalRows(db: ProviderNeutralDatabase) {
+async function physicalRows(db: PersistenceDb) {
   return {
-    tasks: await db.all(sql`SELECT * FROM tasks ORDER BY id`),
-    users: await db.all(sql`SELECT * FROM users ORDER BY id`),
-    workflows: await db.all(sql`SELECT * FROM workflows ORDER BY id`),
+    tasks: await rawRows(db, sql`SELECT * FROM tasks ORDER BY id`),
+    users: await rawRows(db, sql`SELECT * FROM users ORDER BY id`),
+    workflows: await rawRows(db, sql`SELECT * FROM workflows ORDER BY id`),
   }
 }
 
@@ -228,8 +230,9 @@ function roots(count = 16): FixtureRow[] {
     startedAt: 1000 - i * 10,
   }))
 }
-async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
     displayName: 'W27 fixture',
@@ -238,7 +241,7 @@ async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): P
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'w27-workflow',
     name: 'W27 workflow',
     definition: '{ "fixture": true }',
@@ -247,7 +250,7 @@ async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): P
   })
   for (const row of rows) {
     const family = row.root === undefined ? row.id : row.root
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: row.name ?? 'match',
       workflowId: 'w27-workflow',
@@ -363,8 +366,8 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
       let originalRows: Record<string, unknown>[]
       let candidateRows: Record<string, unknown>[]
       try {
-        originalRows = await db.all<Record<string, unknown>>(original)
-        candidateRows = await db.all<Record<string, unknown>>(candidate)
+        originalRows = await rawRows<Record<string, unknown>>(db, original)
+        candidateRows = await rawRows<Record<string, unknown>>(db, candidate)
       } finally {
         recording.stop()
       }
@@ -386,10 +389,12 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
       expect(after.sql.split(GATED_FROM)).toHaveLength(2)
 
       const boundary = '    page_roots AS MATERIALIZED ('
-      const originalMetrics = await db.all<Record<string, unknown>>(
+      const originalMetrics = await rawRows<Record<string, unknown>>(
+        db,
         inspectCte(original, boundary, METRICS),
       )
-      const candidateMetrics = await db.all<Record<string, unknown>>(
+      const candidateMetrics = await rawRows<Record<string, unknown>>(
+        db,
         inspectCte(candidate, boundary, METRICS),
       )
       expect(candidateMetrics).toEqual(originalMetrics)
@@ -399,7 +404,8 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
       expect(Number(candidateMetrics[0]?.physical_count)).toBe(12)
       expect(Number(candidateMetrics[0]?.non_view_count)).toBe(entry.facets)
       expect(Number(candidateMetrics[0]?.root_count)).toBe(entry.rootCount)
-      const gateRows = await db.all(
+      const gateRows = await rawRows(
+        db,
         inspectCte(
           candidate,
           '    roots AS NOT MATERIALIZED (',
@@ -410,13 +416,21 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
 
       // VM control is SQLite-specific; both providers execute every behavior assertion above.
       if (harness.applicationBinding.provider === 'sqlite') {
-        const indexes = await db.all<{ rootpage: number }>(
+        const indexes = await rawRows<{ rootpage: number }>(
+          db,
           sql`SELECT rootpage FROM sqlite_schema WHERE type = 'index' AND name = 'idx_tasks_list_facets_cover'`,
+          { rootpage: 'int' },
         )
         expect(indexes).toHaveLength(1)
         const index = indexes[0]
         if (index === undefined) throw new Error('missing existing facet index')
-        const program = await db.all<Opcode>(sql`EXPLAIN ${candidate}`)
+        const program = await rawRows<Opcode>(db, sql`EXPLAIN ${candidate}`, {
+          addr: 'int',
+          p1: 'int',
+          p2: 'int',
+          p3: 'int',
+          p5: 'int',
+        })
         checkGateProgram(program, index.rootpage)
       }
       const final = await physicalRows(db)
@@ -426,11 +440,12 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
   }
 })
 
+// RFC-395 I-b: the inverse includes the shared instr capability; gate and binding proofs are unchanged.
 test('the gate inverse retains the complete published W38 query source', () => {
   const source = readFileSync(SOURCE_PATH, 'utf8')
   expect(source.split(GATE)).toHaveLength(2)
   expect(source.split(GATED_FROM)).toHaveLength(2)
   expect(createHash('sha256').update(restoreText(source)).digest('hex')).toBe(
-    '3e3b04a3d8517e92abec73abaea0ffe6300e513251df480249ff2d893a248a1f',
+    '4548ea7984a159a0947de69f50f7dca6b0ec793012c07a77bf72fbc114ec3b80',
   )
 })

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import type {
   SystemAgentRunFamily,
@@ -21,7 +23,6 @@ import {
   type ClarifyAnswer,
   type ClarifyQuestion,
 } from '@agent-workflow/shared'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '@/db/schema'
 import { createClarifyRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
@@ -83,13 +84,14 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'review',
     definition: JSON.stringify(definition),
     schemaVersion: 7,
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'review',
     executionLineageId: taskId,
@@ -106,9 +108,13 @@ async function seed(
     inputs: JSON.stringify(options.inputs ?? {}),
     startedAt: Date.now(),
   })
-  await h.db
-    .insert(nodeRuns)
-    .values({ id: askingNodeRunId, taskId, nodeId: 'asking', status: 'done', iteration: 0 })
+  await insertOne(h.db, nodeRuns, {
+    id: askingNodeRunId,
+    taskId,
+    nodeId: 'asking',
+    status: 'done',
+    iteration: 0,
+  })
   const round = await createClarifyRound({
     db: h.db,
     taskId,
@@ -128,13 +134,14 @@ async function seed(
       }),
     ],
   })
-  const read = async () =>
-    (
+  const read = async () => {
+    return (
       await h.db
         .select()
         .from(clarifyRounds)
         .where(eq(clarifyRounds.intermediaryNodeRunId, round.intermediaryNodeRunId))
     )[0]!
+  }
   return { taskId, askingNodeRunId, nodeRunId: round.intermediaryNodeRunId, read }
 }
 
@@ -214,6 +221,7 @@ describeEachProvider('RFC-372 review O1: task background for follow-ups', (h) =>
         taskId: fixture.taskId,
       }),
     ).toBeNull()
+    const { tasks } = tablesOf(h.db)
     await h.db.update(tasks).set({ inputs: '{' }).where(eq(tasks.id, other.taskId))
     expect(
       await generation(h).context({ askingNodeRunId: other.askingNodeRunId, taskId: other.taskId }),
@@ -366,6 +374,7 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
   for (const mode of ['standalone', 'hosted'] as const)
     test(`${mode}: selected binding receives frozen runtime, abort and original observation ownership`, async () => {
       const fixture = await seed(h)
+      const { nodeRuns } = tablesOf(h.db)
       await h.db
         .update(nodeRuns)
         .set({

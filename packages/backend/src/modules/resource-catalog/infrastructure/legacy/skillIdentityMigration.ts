@@ -1,8 +1,8 @@
 // RFC-223 PR-5 — the single boot/restore barrier for skill identity migration.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills, skillOperationLocks, skillVersions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   decodeSkillOperationIdentity,
@@ -41,7 +41,7 @@ export interface SkillIdentityMigrationReport {
 }
 
 export async function runSkillIdentityMigrationBarrier(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillOpFsOptions & {
     hooks?: SkillIdentityMigrationHooks
     /** Test-only fault seam after husk DB deletion, before empty-root cleanup. */
@@ -95,11 +95,12 @@ export async function runSkillIdentityMigrationBarrier(
 }
 
 export async function assertSkillIdentityPostcondition(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   inspector: SkillIdentityInspector = createFileSkillIdentityInspector(appHome),
 ): Promise<{ skills: number; versions: number }> {
   await assertNoActiveOperations(db)
+  const { skillOperationLocks, skills, skillVersions } = tablesOf(db)
   const locks = await db.select().from(skillOperationLocks)
   if (locks.length > 0) {
     throw new ValidationError(
@@ -158,13 +159,14 @@ export async function assertSkillIdentityPostcondition(
 }
 
 async function sweepMissingLegacyHusks(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   inspector: SkillIdentityInspector,
   beforeFsCleanup?: (skillId: string) => void,
 ): Promise<number> {
   const allRows = await loadIdentityRows(db)
   const inventory = await loadIdentityInventory(db, allRows)
   const sweep = await inspector.prepareHuskSweep(inventory)
+  const { skills, skillVersions } = tablesOf(db)
   const candidates = (
     await db
       .select({ id: skills.id, name: skills.name })
@@ -186,9 +188,10 @@ async function sweepMissingLegacyHusks(
     if (hasVersion) continue
     const plan = await sweep.plan(row)
     if (plan === null) continue
-    await databaseSessionFor(db).transaction(
-      async (tx) => await tx.delete(skills).where(eq(skills.id, row.id)),
-    )
+    await databaseSessionFor(db).transaction(async (tx) => {
+      const { skills } = tablesOf(tx)
+      return await tx.delete(skills).where(eq(skills.id, row.id))
+    })
     beforeFsCleanup?.(row.id)
     await sweep.discard(plan)
     removed++
@@ -196,7 +199,7 @@ async function sweepMissingLegacyHusks(
   return removed
 }
 
-async function assertNoActiveOperations(db: ProviderNeutralDatabase): Promise<void> {
+async function assertNoActiveOperations(db: PersistenceDb): Promise<void> {
   const active = await listActiveOps(db)
   if (active.length > 0) {
     throw new ValidationError(
@@ -206,10 +209,8 @@ async function assertNoActiveOperations(db: ProviderNeutralDatabase): Promise<vo
   }
 }
 
-async function versionPathsCanonical(
-  db: ProviderNeutralDatabase,
-  skillId: string,
-): Promise<boolean> {
+async function versionPathsCanonical(db: PersistenceDb, skillId: string): Promise<boolean> {
+  const { skillVersions } = tablesOf(db)
   return (
     await db
       .select({ versionIndex: skillVersions.versionIndex, filesPath: skillVersions.filesPath })
@@ -224,7 +225,8 @@ interface IdentityRow {
   managedPath: string | null
 }
 
-async function loadIdentityRows(db: ProviderNeutralDatabase): Promise<IdentityRow[]> {
+async function loadIdentityRows(db: PersistenceDb): Promise<IdentityRow[]> {
+  const { skills } = tablesOf(db)
   return (
     await db
       .select({ id: skills.id, name: skills.name, managedPath: skills.managedPath })
@@ -233,10 +235,11 @@ async function loadIdentityRows(db: ProviderNeutralDatabase): Promise<IdentityRo
 }
 
 async function assertRecoveryPreconditions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   active: SkillOperationRow[],
   inspector: SkillIdentityInspector,
 ): Promise<void> {
+  const { skillOperationLocks } = tablesOf(db)
   const locks = await db
     .select({
       lockedSkillId: skillOperationLocks.lockedSkillId,
@@ -277,13 +280,14 @@ async function assertRecoveryPreconditions(
 }
 
 async function assertOperationContentAuthority(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   op: SkillOperationRow,
   direction: 'rollback' | 'rollforward',
   inspector: SkillIdentityInspector,
 ): Promise<void> {
   if (op.kind === 'reserve' && (op.phase === 'fs-published' || direction === 'rollforward')) {
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
+    const { skillVersions } = tablesOf(db)
     const versionRow = (
       await db
         .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
@@ -328,10 +332,11 @@ async function assertOperationContentAuthority(
 }
 
 async function assertOperationDbAuthority(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   op: SkillOperationRow,
   direction: 'rollback' | 'rollforward',
 ): Promise<void> {
+  const { skills, skillVersions } = tablesOf(db)
   const row = (
     await db
       .select({
@@ -525,7 +530,7 @@ async function assertOperationDbAuthority(
 }
 
 async function identityInventoryRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   row: IdentityRow,
 ): Promise<SkillIdentityInventoryRow> {
   return {
@@ -537,7 +542,7 @@ async function identityInventoryRow(
 }
 
 async function loadIdentityInventory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   rows: readonly IdentityRow[],
 ): Promise<SkillIdentityInventoryRow[]> {
   const result: SkillIdentityInventoryRow[] = []
@@ -546,7 +551,7 @@ async function loadIdentityInventory(
 }
 
 async function preflightPhysicalOwnershipGraph(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   rows: readonly IdentityRow[],
   active: readonly SkillOperationRow[],
   inspector: SkillIdentityInspector,

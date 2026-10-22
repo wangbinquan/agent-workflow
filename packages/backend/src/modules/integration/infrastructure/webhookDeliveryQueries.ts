@@ -1,20 +1,11 @@
 // RFC-359 W4-B4 —— webhook 投递审计 / 回放读模型：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskCollaborators,
-  tasks,
-  webhookDeliveries,
-  csEventInbox,
-  csEventRoutes,
-  csEventTargets,
-  csWebhookVerifications,
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   WebhookDeliveryQueries,
   WebhookPlatformEventProvenance,
@@ -24,13 +15,14 @@ import { CREWSTATION_TARGET_RECEIPT_PREFIX } from './crewstation/eventContract'
 /** CrewStation redelivers one event a bounded number of times; the detail shows them all. */
 const PLATFORM_DELIVERY_LIMIT = 50
 
-export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): WebhookDeliveryQueries {
+export function createWebhookDeliveryQueries(db: PersistenceDb): WebhookDeliveryQueries {
   /** RFC-370 v3 — a delegated delivery's receipt names its frozen CrewStation target. */
   const platformEventOf = async (
     receipt: string,
   ): Promise<WebhookPlatformEventProvenance | null> => {
     if (!receipt.startsWith(CREWSTATION_TARGET_RECEIPT_PREFIX)) return null
     const targetId = receipt.slice(CREWSTATION_TARGET_RECEIPT_PREFIX.length)
+    const { csEventRoutes, csEventTargets, csEventInbox } = tablesOf(db)
     const route = (
       await db
         .select({
@@ -65,6 +57,7 @@ export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): Webho
   }
   const queries: WebhookDeliveryQueries = {
     async page(input) {
+      const { webhookDeliveries } = tablesOf(db)
       const conditions = [
         ...(input.endpointId === undefined
           ? []
@@ -111,12 +104,15 @@ export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): Webho
       }
     },
     async listRepoPaths() {
+      const { webhookDeliveries } = tablesOf(db)
       // Loose index scan over the (repo_path, received_at) index: K distinct
       // repositories cost K index seeks instead of rescanning millions of
       // retained deliveries on every filter-options refresh. Standard SQL —
       // both engines walk the index the same way (PostgreSQL's planner has no
       // native loose scan, so a plain DISTINCT would rescan the whole table).
-      const rows = await db.all<{ p: string }>(sql`
+      const rows = await rawRows<{ p: string }>(
+        db,
+        sql`
         WITH RECURSIVE repo_walk(p) AS (
           SELECT (SELECT min(${webhookDeliveries.repoPath}) FROM ${webhookDeliveries} WHERE ${webhookDeliveries.repoPath} IS NOT NULL)
           UNION ALL
@@ -124,10 +120,12 @@ export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): Webho
             FROM repo_walk WHERE repo_walk.p IS NOT NULL
         )
         SELECT p FROM repo_walk WHERE p IS NOT NULL
-      `)
+      `,
+      )
       return rows.map((row) => row.p)
     },
     async get(id) {
+      const { webhookDeliveries, csWebhookVerifications } = tablesOf(db)
       const row = (
         await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).limit(1)
       )[0]
@@ -150,6 +148,8 @@ export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): Webho
       }
     },
     async terminalControl(deliveryId, actor) {
+      const { webhookMrControlEffects, webhookMrControlTargets, tasks, taskCollaborators } =
+        tablesOf(db)
       const effect = (
         await db
           .select()
@@ -241,6 +241,7 @@ export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): Webho
       }
     },
     async hasTerminalControlEffect(deliveryId) {
+      const { webhookMrControlEffects } = tablesOf(db)
       return (
         (
           await db

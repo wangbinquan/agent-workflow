@@ -1,8 +1,9 @@
 // RFC-304/RFC-375 — the live parameter reader preserves the exact selected cell projection.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { capabilityTemplates, repoCapabilityConfig } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCapabilityParamRead } from '../src/modules/code-capability/infrastructure/capabilityParamRead'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -16,7 +17,7 @@ const TABLE = JSON.stringify([
 ])
 
 describeEachProvider('RFC-304 T47 — resolving a cell’s parameters', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -27,7 +28,8 @@ describeEachProvider('RFC-304 T47 — resolving a cell’s parameters', (harness
     paramDefaultsJson?: string
     paramsJson?: string
   }): Promise<void> => {
-    await db.insert(capabilityTemplates).values({
+    const { capabilityTemplates, repoCapabilityConfig } = tablesOf(db)
+    await insertOne(db, capabilityTemplates, {
       id: 'binding-1',
       name: 'binding-1',
       paramsJson: over.paramsJson ?? '{}',
@@ -37,7 +39,7 @@ describeEachProvider('RFC-304 T47 — resolving a cell’s parameters', (harness
       paramSchemaJson: over.paramSchemaJson ?? TABLE,
       paramDefaultsJson: over.paramDefaultsJson ?? '{}',
     })
-    await db.insert(repoCapabilityConfig).values({
+    await insertOne(db, repoCapabilityConfig, {
       id: ulid(),
       repoId: REPO,
       capability: 'requirement',

@@ -25,6 +25,8 @@
 //   · 把 SQLite 的 `escalateSnapshotLost` 的 `errorSummary` 改成别的字符串 ⇒ SQLite lane 红；
 //   · 把 PG 的 `escalateUnsafeContinuation` 的 `errorSummary` 改成别的字符串 ⇒ PostgreSQL lane 红。
 //     后两条证明本条确实有预言力，不是「因为都没跑到所以都绿」。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -39,8 +41,7 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
@@ -102,10 +103,7 @@ interface SeedOptions {
   }[]
 }
 
-async function seedFixture(
-  db: ProviderNeutralDatabase,
-  options: SeedOptions = {},
-): Promise<Fixture> {
+async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promise<Fixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc359-w9-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -118,6 +116,7 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
+  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
   // 同一条用例可能建两个任务（跨任务那格），用户只该插一次。
   const existing = await db
     .select({ id: users.id })
@@ -125,7 +124,7 @@ async function seedFixture(
     .where(eq(users.id, USER_ID))
     .limit(1)
   if (existing.length === 0) {
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id: USER_ID,
       username: USER_ID,
       displayName: USER_ID,
@@ -137,11 +136,13 @@ async function seedFixture(
   }
   const definition = options.definition ?? DEFINITION
   const workflowId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'w9', definition: JSON.stringify(definition) })
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'w9',
+    definition: JSON.stringify(definition),
+  })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'w9',
     workflowId,
@@ -164,7 +165,7 @@ async function seedFixture(
   for (const run of seededRuns) {
     const id = ulid()
     if (nodeRunId === '') nodeRunId = id
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id,
       taskId,
       nodeId: run.nodeId,
@@ -193,7 +194,8 @@ async function seedFixture(
 }
 
 /** `<节点>#<第几次尝试>:<状态>` 的有序拼串——比 id 稳，两侧可直接对拍。 */
-async function runShape(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function runShape(db: PersistenceDb, taskId: string): Promise<string> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ nodeId: nodeRuns.nodeId, status: nodeRuns.status, retryIndex: nodeRuns.retryIndex })
     .from(nodeRuns)
@@ -241,6 +243,7 @@ describeEachProvider('RFC-359 W9 —— retry 撞上已丢的 pre_snapshot', (ha
           : null
       code = typeof value === 'string' ? value : `no-code:${String(error)}`
     }
+    const { tasks } = tablesOf(harness.db)
     const after = (
       await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
     )[0]
@@ -279,6 +282,7 @@ describeEachProvider('RFC-359 W9 —— retry 的级联与尝试铸造', (harnes
       cascade: true,
     })
 
+    const { nodeRuns } = tablesOf(harness.db)
     const rows = await harness.db
       .select({
         nodeId: nodeRuns.nodeId,
@@ -354,6 +358,7 @@ describeEachProvider('RFC-359 W9 —— retry 的不级联 / 帧继承 / 任务�
       nodeRunId: fixture.nodeRunId,
       cascade: true,
     })
+    const { nodeRuns } = tablesOf(harness.db)
     const minted = (
       await harness.db
         .select({
@@ -381,6 +386,7 @@ describeEachProvider('RFC-359 W9 —— retry 的不级联 / 帧继承 / 任务�
       status: 'failed',
       runs: [{ nodeId: 'doc', status: 'failed' }],
     })
+    const { tasks } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({ errorSummary: 'boom', errorMessage: 'detail', failedNodeId: 'doc' })
@@ -432,6 +438,7 @@ describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS'
       status: 'done',
       runs: [{ nodeId: 'doc', status: 'done' }],
     })
+    const { tasks } = tablesOf(harness.db)
     const before = (
       await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
     )[0]
@@ -496,6 +503,7 @@ describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS'
           : null
       code = typeof value === 'string' ? value : `no-code:${String(error)}`
     }
+    const { tasks } = tablesOf(harness.db)
     const mine = (
       await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
     )[0]
@@ -570,6 +578,7 @@ describeEachProvider('RFC-359 W9 —— retry 级联的 kind 矩阵', (harness) 
         nodeRunId: fixture.nodeRunId,
         cascade: true,
       })
+      const { nodeRuns } = tablesOf(harness.db)
       const minted = (
         await harness.db
           .select({ nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
@@ -621,6 +630,7 @@ describeEachProvider('RFC-359 W9 —— 被点的 wrapper 自己的取消行是�
         nodeRunId: fixture.nodeRunId,
         cascade: true,
       })
+      const { nodeRuns } = tablesOf(harness.db)
       const rows = await harness.db
         .select({
           nodeId: nodeRuns.nodeId,
@@ -673,6 +683,7 @@ describeEachProvider('RFC-359 W9 —— 级联取消撞上已终态的子任务'
       runs: [{ nodeId: 'doc', status: 'done' }],
     })
     fixtures.push(child)
+    const { tasks, nodeRuns } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({ parentTaskId: parent.taskId, parentNodeRunId: parent.nodeRunId })

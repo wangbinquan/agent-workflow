@@ -19,6 +19,9 @@
 // 全量的索引对账（SQLite 的具名索引 PG 必须一条不少）在
 // `rfc359-w6-t26-postgresql-plan-audit.test.ts`；这里锁的是 0180 这一批的逐条存在性。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -27,8 +30,7 @@ import { join, resolve } from 'node:path'
 
 import { Database } from 'bun:sqlite'
 import { createInMemoryDb, instrumentSlowStatements, openDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -42,12 +44,11 @@ interface QueryPlanRow {
 }
 
 function indexNames(db: ReturnType<typeof createInMemoryDb>, table: string): IndexListRow[] {
-  return db.all<IndexListRow>(sql.raw(`PRAGMA index_list('${table}')`))
+  return rawRows<IndexListRow>(db, sql.raw(`PRAGMA index_list('${table}')`), { partial: 'int' })
 }
 
 function plan(db: ReturnType<typeof createInMemoryDb>, query: string): string {
-  return db
-    .all<QueryPlanRow>(sql.raw(`EXPLAIN QUERY PLAN ${query}`))
+  return rawRows<QueryPlanRow>(db, sql.raw(`EXPLAIN QUERY PLAN ${query}`))
     .map((row) => row.detail)
     .join('\n')
 }
@@ -96,13 +97,18 @@ async function listIndexes(
   harness: ProviderHarness,
   table: string,
 ): Promise<{ name: string; partial: boolean }[]> {
-  const db: ProviderNeutralDatabase = harness.db
+  const db: PersistenceDb = harness.db
   if (harness.capabilities.provider === 'sqlite') {
     return (
-      await db.all<{ name: string; partial: number }>(sql.raw(`PRAGMA index_list('${table}')`))
+      await rawRows<{ name: string; partial: number }>(
+        db,
+        sql.raw(`PRAGMA index_list('${table}')`),
+        { partial: 'int' },
+      )
     ).map((row) => ({ name: row.name, partial: row.partial === 1 }))
   }
-  const rows = await db.all<{ indexname: string; indexdef: string }>(
+  const rows = await rawRows<{ indexname: string; indexdef: string }>(
+    db,
     sql.raw(
       `select indexname, indexdef from pg_indexes ` +
         `where schemaname = 'agent_workflow' and tablename = '${table}'`,
@@ -191,10 +197,12 @@ describe('migration 0180 — RFC-311 index batch', () => {
 
   test('maintenance_state exists as a bare KV table', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await db.run(
+    await rawExec(
+      db,
       sql`INSERT INTO maintenance_state (key, value, updated_at) VALUES ('probe', 'v1', 1)`,
     )
-    const rows = await db.all<{ value: string }>(
+    const rows = await rawRows<{ value: string }>(
+      db,
       sql`SELECT value FROM maintenance_state WHERE key = 'probe'`,
     )
     expect(rows[0]?.value).toBe('v1')
@@ -230,7 +238,8 @@ describe('migration 0180 — RFC-311 index batch', () => {
   test('backfill statements in 0180 aggregate branch_started_at over each subtree', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = 1_788_278_400_000
-    await db.insert(users).values({
+    const { users, workflows, tasks } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
       displayName: 'U1',
@@ -238,7 +247,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
       createdAt: now,
       updatedAt: now,
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: 'wf1',
       name: 'wf',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -280,7 +289,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
           statement.startsWith('UPDATE `tasks` SET `branch_started_at`'),
       )
     expect(statements.length).toBe(3)
-    for (const statement of statements) db.run(sql.raw(statement))
+    for (const statement of statements) rawExec(db, sql.raw(statement))
 
     const got = await db
       .select({ id: tasks.id, branchStartedAt: tasks.branchStartedAt })

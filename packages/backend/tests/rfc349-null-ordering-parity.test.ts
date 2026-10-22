@@ -25,9 +25,7 @@ import { join, resolve } from 'node:path'
 import { is } from 'drizzle-orm'
 import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 
-import * as schema from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-
+import { nativeQueryFixture } from './helpers/nativeQueryFixture'
 import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
 
 const srcRoot = resolve(import.meta.dir, '..', 'src')
@@ -81,9 +79,8 @@ interface NullableColumn {
 
 function nullableColumnsByTableExport(): Map<string, Record<string, NullableColumn>> {
   const tables = new Map<string, Record<string, NullableColumn>>()
-  const restore = selectDatabaseSchemaProvider('sqlite')
-  try {
-    for (const [exportName, value] of Object.entries(schema)) {
+  {
+    for (const [exportName, value] of Object.entries(nativeQueryFixture('sqlite').tables)) {
       if (typeof value !== 'object' || value === null || !is(value, SQLiteTable)) continue
       const columns: Record<string, NullableColumn> = {}
       for (const [property, candidate] of Object.entries(value)) {
@@ -94,8 +91,6 @@ function nullableColumnsByTableExport(): Map<string, Record<string, NullableColu
       }
       tables.set(exportName, columns)
     }
-  } finally {
-    restore()
   }
   return tables
 }
@@ -148,7 +143,7 @@ describe('RFC-349 NULL ordering is the same on both providers', () => {
       const relative = file.path
       const text = file.text
       for (const match of text.matchAll(
-        /\b(asc|desc)\(([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\)/gu,
+        /\b(asc|desc)\((?:tablesOf\([^)]*\)\.)?([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\)/gu,
       )) {
         const [, , table, property] = match
         const column = tables.get(table!)?.[property!]

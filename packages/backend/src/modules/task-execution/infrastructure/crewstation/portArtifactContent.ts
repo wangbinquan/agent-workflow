@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskArtifacts } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
@@ -17,7 +17,7 @@ import { HOSTED_TASK_ARTIFACT_OWNER, retainHostedTaskArtifactInTx } from './task
 import { sha256Hex } from '@/util/hash'
 
 export function createHostedPortArtifactContent(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly api: CrewStationBusinessExecution
   readonly objects: CrewStationObjectStorage
@@ -31,14 +31,16 @@ export function createHostedPortArtifactContent(input: {
   /** `open` resumes a paused parent: platform file reads need it running. */
   readonly workspace: { open(taskId: string): Promise<{ readonly businessTaskId: string } | null> }
 }): PortArtifactContentEffects {
-  const find = async (reference: string) =>
-    (
+  const find = async (reference: string) => {
+    const { hostedTaskArtifacts } = tablesOf(input.db)
+    return (
       await input.db
         .select()
         .from(hostedTaskArtifacts)
         .where(eq(hostedTaskArtifacts.reference, reference))
         .limit(1)
     )[0]
+  }
   const readSource = async (
     source: PortArtifactWorkspaceFile,
     limit?: number,

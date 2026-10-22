@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import type {
   AgentCatalogModule,
@@ -51,7 +51,7 @@ export interface ClassicCatalogCompositionDependencies extends Omit<
   SkillCatalogCompositionDependencies,
   'db' | 'appHome' | 'restoreMembership'
 > {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly restoreMembership: SkillRestoreMembershipPort
   readonly runtimeProfiles: AgentRuntimeProfileLookup

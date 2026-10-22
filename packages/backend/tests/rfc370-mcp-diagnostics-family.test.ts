@@ -1,13 +1,14 @@
 // RFC-370: ordinary diagnostics use one selected prototype family and opaque
 // execution identities. (RFC-370 v2 P1 retired the root-completeness AST pins that
 // reconstructed the pre-RFC-370 daemon roots through inverse transforms.)
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { Mcp } from '@agent-workflow/shared'
 import { buildActor, SYSTEM_USER_ID } from '@/auth/actor'
-import { mcps, runtimes, mcpRuntimeTestSessions, mcpRuntimeTestTurns } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
@@ -229,14 +230,15 @@ class PortableDiagnostics implements McpDiagnosticsEffects {
   }
 }
 
-async function fixture(
-  db: ProviderNeutralDatabase,
-  protocol: McpDiagnosticRuntime['protocol'] = 'opencode',
-) {
-  await db
-    .insert(runtimes)
-    .values({ id: 'portable-runtime', name: 'portable', protocol, enabled: true })
-  await db.insert(mcps).values({
+async function fixture(db: PersistenceDb, protocol: McpDiagnosticRuntime['protocol'] = 'opencode') {
+  const { runtimes, mcps } = tablesOf(db)
+  await insertOne(db, runtimes, {
+    id: 'portable-runtime',
+    name: 'portable',
+    protocol,
+    enabled: true,
+  })
+  await insertOne(db, mcps, {
     id: 'portable-mcp',
     name: 'portable',
     description: '',
@@ -331,6 +333,7 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
       error = new Error('selected target unavailable')
     h.effects.failResolution = error
     await expect(h.app.create(actor, h.mcp, request(h.mcp))).rejects.toBe(error)
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(harness.db)
     expect(await harness.db.select().from(mcpRuntimeTestSessions)).toEqual([])
     expect(await harness.db.select().from(mcpRuntimeTestTurns)).toEqual([])
     expect(h.effects.calls.some((call) => call.startsWith('capture:'))).toBe(false)
@@ -637,6 +640,7 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
         }),
       ).toBe(true)
       expect(order).toEqual(['id', 'pid', 'clock', 'recover'])
+      const { mcpRuntimeTestTurns } = tablesOf(harness.db)
       expect(
         await harness.db
           .select()

@@ -29,13 +29,13 @@
 // ② **窗口内不写**——节流本身。
 // ③ **跨窗口恢复写**——别把节流写成"只写一次"。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { AUTH_LAST_USED_WRITE_INTERVAL_MS } from '@/auth/application/authRuntime'
-import { userPats } from '@/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_800_000_000_000
@@ -57,13 +57,15 @@ describeEachProvider(
         now: NOW + 1,
         expiresAt: NOW + 10_000_000,
       })
-      const lastUsed = async () =>
-        (
+      const lastUsed = async () => {
+        const { userPats } = tablesOf(harness.db)
+        return (
           await harness.db
             .select({ lastUsedAt: userPats.lastUsedAt })
             .from(userPats)
             .where(eq(userPats.id, pat.meta.id))
         )[0]!.lastUsedAt
+      }
       return { auth, pat, lastUsed }
     }
 

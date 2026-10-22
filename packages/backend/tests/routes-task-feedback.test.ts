@@ -4,24 +4,25 @@
 // Covers: visibility gate (RFC-285 B1: invisible ≡ missing, both 404), valid POST → 201 + distill job created,
 // invalid body → 422, permission gating.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { memoryDistillJobs, tasks, taskCollaborators, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { TaskFeedback } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   daemonToken: string
   adminToken: string
@@ -56,7 +57,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const outsiderToken = (await createSession({ db, userId: outsider.id })).token
 
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -65,7 +67,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId: wfId,
@@ -80,7 +82,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     startedAt: Date.now(),
     ownerUserId: owner.id,
   })
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId,
     userId: owner.id,
     role: 'owner',
@@ -128,6 +130,7 @@ describeEachProviderHttpApplication(
       expect(j.feedback.bodyMd).toBe('always confirm migration safety') // trim
       expect(j.feedback.authorUserId).toBeTruthy()
       expect(j.distillJobId).toBeTruthy()
+      const { memoryDistillJobs } = tablesOf(h.db)
       const jobs = await h.db.select().from(memoryDistillJobs)
       expect(jobs.length).toBe(1)
       expect(jobs[0]!.debounceKey).toBe(`${h.taskId}:feedback`)

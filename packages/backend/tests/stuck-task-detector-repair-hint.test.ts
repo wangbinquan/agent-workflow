@@ -8,22 +8,23 @@
 //   - S4 has no repairHint (task-level only)
 //   - missing candidate → no repairHint key (not even `undefined`)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const HOUR_MS = 3_600_000
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     status: 'pending' | 'running' | 'awaiting_review' | 'awaiting_human'
     nodes: WorkflowNode[]
@@ -38,8 +39,9 @@ async function seedTask(
     nodes: opts.nodes,
     edges: [],
   }
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -56,13 +58,14 @@ async function seedTask(
 }
 
 async function addRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   status: 'awaiting_review' | 'awaiting_human' | 'done' | 'interrupted' | 'failed' | 'canceled',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,

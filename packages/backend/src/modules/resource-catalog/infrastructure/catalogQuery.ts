@@ -1,11 +1,12 @@
 // RFC-359 W4-B2 —— 目录摘要查询（分页 / 搜索 / 可见性）：一份实现，两个 provider 共用。
 // 此前 sqlite / postgresql 两份只差客户端类型与搜索谓词的方言写法；SQLite 侧另有三个无消费者的便捷函数一并删除。
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ResourceCatalogSummaryReadPort,
   ResourceCatalogSummaryReadQuery,
@@ -39,7 +40,7 @@ function afterCondition(
 }
 
 function catalogWhere(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   kind: CatalogSelectorKind,
   columns: CatalogColumns,
@@ -47,25 +48,26 @@ function catalogWhere(
 ): SQL<unknown> | undefined {
   const visibility = visibleRowsCondition(db, actor, kind, columns)
   const normalizedSearch = query.search?.trim()
+  const engine = engineOf(db)
   const matching =
     normalizedSearch === undefined || normalizedSearch === ''
       ? undefined
       : or(
-          // `instr` 在 PostgreSQL 基线里有同名 shim（strpos），两个方言同一句（RFC-357 已用同法）。
-          sql`instr(lower(${columns.name}), lower(${normalizedSearch})) > 0`,
-          sql`instr(lower(COALESCE(${columns.description}, '')), lower(${normalizedSearch})) > 0`,
+          sql`${engine.instr(sql`lower(${columns.name})`, sql`lower(${normalizedSearch})`)} > 0`,
+          sql`${engine.instr(sql`lower(COALESCE(${columns.description}, ''))`, sql`lower(${normalizedSearch})`)} > 0`,
         )
   return and(visibility, matching, afterCondition(columns, query.after))
 }
 
 async function listKind(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   kind: CatalogSelectorKind,
   query: ResourceCatalogSummaryReadQuery,
 ): Promise<ResourceSummary[]> {
   switch (kind) {
     case 'agent': {
+      const { agents } = tablesOf(db)
       const rows = await db
         .select({
           id: agents.id,
@@ -91,6 +93,7 @@ async function listKind(
       }))
     }
     case 'skill': {
+      const { skills } = tablesOf(db)
       const rows = await db
         .select({
           id: skills.id,
@@ -123,6 +126,7 @@ async function listKind(
       }))
     }
     case 'mcp': {
+      const { mcps } = tablesOf(db)
       const rows = await db
         .select()
         .from(mcps)
@@ -143,6 +147,7 @@ async function listKind(
       })
     }
     case 'plugin': {
+      const { plugins } = tablesOf(db)
       const rows = await db
         .select()
         .from(plugins)
@@ -163,6 +168,7 @@ async function listKind(
       }))
     }
     case 'workflow': {
+      const { workflows } = tablesOf(db)
       const rows = await db
         .select({
           id: workflows.id,
@@ -187,6 +193,7 @@ async function listKind(
       }))
     }
     case 'workgroup': {
+      const { workgroups } = tablesOf(db)
       const rows = await db
         .select({
           id: workgroups.id,
@@ -214,7 +221,7 @@ async function listKind(
 }
 
 export function createResourceCatalogSummaryReadPort(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ResourceCatalogSummaryReadPort {
   const port: ResourceCatalogSummaryReadPort = {
     listKind: (actor, kind, query) => listKind(db, actor, kind, query),
@@ -228,7 +235,7 @@ export interface ResourceCatalogQueryDependencies {
 
 /** 精确 public ResourceCatalogQuery 合同的工厂（两个 provider 共用）。 */
 export function createResourceCatalogQuery(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   dependencies: ResourceCatalogQueryDependencies,
 ): ResourceCatalogQuery {
   return createResourceCatalogQueryApplication({

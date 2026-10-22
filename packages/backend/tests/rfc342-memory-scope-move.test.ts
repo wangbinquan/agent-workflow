@@ -4,21 +4,14 @@
 // These tests lock the command boundary, old+new scope authorization, durable
 // event atomicity, mutation races, and the eventual prompt-injection audience.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { MemoryWsMessage } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  cachedRepos,
-  memories,
-  memoryScopeMoveEvents,
-  repoGroups,
-  resourceGrants,
-  workflows,
-} from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import type {
   CommandContext,
@@ -39,7 +32,7 @@ import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthor
 const NOW = 1_789_747_212_066
 
 function moveMemory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   contexts: ReturnType<typeof composeIdentityAccess>['contexts'],
   context: CommandContext,
   id: string,
@@ -63,7 +56,7 @@ function captureBroadcasts(): { messages: MemoryWsMessage[]; stop: () => void } 
 }
 
 describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let contexts: ReturnType<typeof composeIdentityAccess>['contexts']
   let ownerId = ''
   let otherOwnerId = ''
@@ -101,7 +94,8 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
     foreignWorkflowId = ulid()
     repoId = ulid()
     repoGroupId = ulid()
-    await db.insert(agents).values({
+    const { agents, workflows, cachedRepos, repoGroups, resourceGrants } = tablesOf(db)
+    await insertOne(db, agents, {
       id: agentId,
       name: `rfc342-agent-${agentId.slice(-6)}`,
       description: '',
@@ -137,7 +131,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
         updatedAt: NOW,
       },
     ])
-    await db.insert(cachedRepos).values({
+    await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: repoId.slice(-8).toLowerCase(),
       urlRedacted: 'https://example.invalid/org/repo.git',
@@ -146,7 +140,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
       lastFetchedAt: NOW,
       createdAt: NOW,
     })
-    await db.insert(repoGroups).values({
+    await insertOne(db, repoGroups, {
       id: repoGroupId,
       name: `rfc342-group-${repoGroupId.slice(-6)}`,
       description: '',
@@ -224,6 +218,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
       moved: true,
       memory: { scopeType: 'workflow', scopeId: workflowId, version: memory.version + 1 },
     })
+    const { memoryScopeMoveEvents } = tablesOf(db)
     const events = await db
       .select()
       .from(memoryScopeMoveEvents)
@@ -280,6 +275,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
         version: memory.version,
       })
     }
+    const { memoryScopeMoveEvents } = tablesOf(db)
     expect(await db.select().from(memoryScopeMoveEvents)).toEqual([])
   })
 
@@ -362,6 +358,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
       }),
     ).rejects.toThrow(expect.objectContaining({ code: 'memory-move-status-forbidden' }))
 
+    const { memories } = tablesOf(db)
     await db.update(memories).set({ status: 'archived' }).where(eq(memories.id, approved.id))
     await expect(
       moveMemory(db, contexts, contextFor(ownerId), approved.id, {
@@ -382,6 +379,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
     })
     capture.stop()
     expect(result).toMatchObject({ moved: false, memory: { version: memory.version } })
+    const { memoryScopeMoveEvents } = tablesOf(db)
     expect(await db.select().from(memoryScopeMoveEvents)).toEqual([])
     expect(capture.messages.some((message) => message.type === 'memory.updated')).toBe(false)
   })
@@ -402,6 +400,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
         },
         {
           afterMoveAuthorizationInTransaction: async (tx) => {
+            const { workflows } = tablesOf(tx)
             await tx.delete(workflows).where(eq(workflows.id, workflowId))
           },
         },
@@ -409,6 +408,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
     ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
     capture.stop()
 
+    const { workflows, memoryScopeMoveEvents } = tablesOf(db)
     expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(1)
     expect((await memoryCatalogOf(db).queries.getById(memory.id))?.memory).toMatchObject({
       scopeType: 'agent',
@@ -434,6 +434,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
         },
         {
           afterMoveAuthorizationInTransaction: async (tx) => {
+            const { resourceGrants } = tablesOf(tx)
             await tx
               .delete(resourceGrants)
               .where(
@@ -448,6 +449,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
       ),
     ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
 
+    const { resourceGrants, memoryScopeMoveEvents } = tablesOf(db)
     const grants = await db
       .select()
       .from(resourceGrants)
@@ -477,6 +479,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
         },
         {
           afterMoveAuthorizationInTransaction: async (tx) => {
+            const { memories } = tablesOf(tx)
             await tx.update(memories).set({ version: 99 }).where(eq(memories.id, raced.id))
           },
         },
@@ -512,6 +515,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
       scopeId: agentId,
       version: faulted.version,
     })
+    const { memoryScopeMoveEvents } = tablesOf(db)
     expect(await db.select().from(memoryScopeMoveEvents)).toEqual([])
     expect(capture.messages.some((message) => message.type === 'memory.updated')).toBe(false)
   })
@@ -531,6 +535,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
         scopeId: workflowId,
       }),
     ).rejects.toThrow('untrusted-operation-context')
+    const { memoryScopeMoveEvents } = tablesOf(db)
     expect(await db.select().from(memoryScopeMoveEvents)).toEqual([])
   })
 

@@ -2,22 +2,15 @@
 // （仓库组图版本核对走统一事务 + 能力矩阵 advisory lock，聚合索引提示与凭据擦除后的存储回收走能力矩阵）、
 // 事件响应规则存储、自定义事件源存储（发布事务末尾的 CAS）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  memories,
-  repoGroupNodes,
-  scheduledTasks,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCustomEventSourceStore } from '@/modules/event-center/infrastructure/customEventSourceStore'
 import { createEventResponseRuleStore } from '@/modules/event-center/infrastructure/eventResponseRuleStore'
 import type { CustomEventSourceDraft } from '@/modules/event-center/domain/customEventSource'
@@ -31,9 +24,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_b6a_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -45,9 +39,10 @@ async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
   return id
 }
 
-async function seedCachedRepo(db: ProviderNeutralDatabase): Promise<string> {
+async function seedCachedRepo(db: PersistenceDb): Promise<string> {
   const id = `cr_${ulid()}`
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id,
     urlHash: `h_${id}`,
     urlRedacted: `https://example.invalid/${id}.git`,
@@ -60,13 +55,14 @@ async function seedCachedRepo(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   owner: string,
-  extra: Partial<typeof tasks.$inferInsert> = {},
+  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -74,7 +70,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -220,6 +216,7 @@ describeEachProvider('RFC-359 W4-B6a —— 工作区维护与仓库工作区存
 
     // 删除缓存仓：引用它的节点被摘掉，仓库行消失。
     await store.deleteCachedRepoAndDetachGroups(repoB)
+    const { repoGroupNodes, scheduledTasks, cachedRepos, memories } = tablesOf(db)
     const detached = (
       await db.select().from(repoGroupNodes).where(eq(repoGroupNodes.groupId, a.id))
     )[0]
@@ -228,7 +225,7 @@ describeEachProvider('RFC-359 W4-B6a —— 工作区维护与仓库工作区存
 
     // 凭据封存变更在一笔事务里落到缓存仓与定时任务。
     const scheduleId = `sched_${ulid()}`
-    await db.insert(scheduledTasks).values({
+    await insertOne(db, scheduledTasks, {
       id: scheduleId,
       name: 'nightly',
       ownerUserId: owner,
@@ -256,7 +253,7 @@ describeEachProvider('RFC-359 W4-B6a —— 工作区维护与仓库工作区存
 
     // 删组：归档 repo_group 记忆、摘掉子组引用、停用定时任务。
     const memoryId = `m_${ulid()}`
-    await db.insert(memories).values({
+    await insertOne(db, memories, {
       id: memoryId,
       scopeType: 'repo_group',
       scopeId: a.id,

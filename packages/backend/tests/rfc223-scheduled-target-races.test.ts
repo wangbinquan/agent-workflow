@@ -8,14 +8,15 @@
 // leaves the scheduled row absent/unchanged, so neither serial order can
 // create an orphan.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents, scheduledTasks, workflows, workgroups } from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
@@ -52,7 +53,7 @@ function actorFor(id = 'u-owner'): Actor {
   })
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, ownerId: string) {
+async function seedWorkflow(db: PersistenceDb, ownerId: string) {
   return createWorkflow(
     db,
     {
@@ -64,7 +65,7 @@ async function seedWorkflow(db: ProviderNeutralDatabase, ownerId: string) {
   )
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, actor: Actor) {
+async function seedAgent(db: PersistenceDb, actor: Actor) {
   await seedTestDefaultOpencodeRuntime(db)
   return createAgent(
     db,
@@ -73,9 +74,10 @@ async function seedAgent(db: ProviderNeutralDatabase, actor: Actor) {
   )
 }
 
-async function seedWorkgroup(db: ProviderNeutralDatabase, ownerId: string) {
+async function seedWorkgroup(db: PersistenceDb, ownerId: string) {
   const id = ulid()
-  await db.insert(workgroups).values({
+  const { workgroups } = tablesOf(db)
+  await insertOne(db, workgroups, {
     id,
     name: `wg-${id.toLowerCase()}`,
     mode: 'free_collab',
@@ -113,7 +115,7 @@ function workgroupPayload(workgroupId: string) {
 }
 
 describeEachProvider('RFC-223 scheduled create target/delete transaction order', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let actor: Actor
 
   beforeEach(() => {
@@ -146,6 +148,7 @@ describeEachProvider('RFC-223 scheduled create target/delete transaction order',
         },
       ),
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
+    const { scheduledTasks, workflows } = tablesOf(db)
     expect(await db.select().from(scheduledTasks)).toEqual([])
     expect(await db.select().from(workflows).where(eq(workflows.id, workflow.id))).toEqual([])
   })
@@ -170,6 +173,7 @@ describeEachProvider('RFC-223 scheduled create target/delete transaction order',
         },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
+    const { scheduledTasks, agents } = tablesOf(db)
     expect(await db.select().from(scheduledTasks)).toEqual([])
     expect(await db.select().from(agents).where(eq(agents.id, agent.id))).toEqual([])
   })
@@ -199,13 +203,14 @@ describeEachProvider('RFC-223 scheduled create target/delete transaction order',
         },
       ),
     ).rejects.toMatchObject({ code: 'workgroup-not-found' })
+    const { scheduledTasks, workgroups } = tablesOf(db)
     expect(await db.select().from(scheduledTasks)).toEqual([])
     expect(await db.select().from(workgroups).where(eq(workgroups.id, group.id))).toEqual([])
   })
 })
 
 describeEachProvider('RFC-223 scheduled update final target identity/ACL fence', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let actor: Actor
 
   beforeEach(() => {
@@ -214,6 +219,7 @@ describeEachProvider('RFC-223 scheduled update final target identity/ACL fence',
   })
 
   async function storedName(id: string): Promise<string> {
+    const { scheduledTasks } = tablesOf(db)
     return (
       await db
         .select({ name: scheduledTasks.name })
@@ -244,6 +250,7 @@ describeEachProvider('RFC-223 scheduled update final target identity/ACL fence',
         {
           actor,
           beforeWriteTx: async () => {
+            const { workflows } = tablesOf(db)
             await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, workflow.id))
           },
         },
@@ -274,6 +281,7 @@ describeEachProvider('RFC-223 scheduled update final target identity/ACL fence',
         {
           actor,
           beforeWriteTx: async () => {
+            const { agents } = tablesOf(db)
             await db
               .update(agents)
               .set({ ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 })
@@ -307,6 +315,7 @@ describeEachProvider('RFC-223 scheduled update final target identity/ACL fence',
         {
           actor,
           beforeWriteTx: async () => {
+            const { workgroups } = tablesOf(db)
             await db
               .update(workgroups)
               .set({ ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 })

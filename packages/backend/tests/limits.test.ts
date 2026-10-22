@@ -1,23 +1,24 @@
 // P-4-04: per-task duration + token limit enforcement.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { enforceLimits } from '../src/services/limits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   cleanup: () => void
 }
 
-function buildHarness(db: ProviderNeutralDatabase): Harness {
+function buildHarness(db: PersistenceDb): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-limits-'))
   return {
     db,
@@ -27,19 +28,20 @@ function buildHarness(db: ProviderNeutralDatabase): Harness {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
-  overrides: Partial<typeof tasks.$inferInsert>,
+  db: PersistenceDb,
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -87,6 +89,7 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
     })
     const r = await enforceLimits(h.db, Date.now())
     expect(r.canceled).toEqual([taskId])
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')
     expect(t?.errorSummary).toBe('task-time-limit-exceeded')
@@ -97,14 +100,16 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
     const taskId = await seedTask(h.db, { maxDurationMs: 60_000, startedAt })
     const r = await enforceLimits(h.db)
     expect(r.canceled).toEqual([])
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('running')
   })
 
   test('cancels task when total tokens exceed maxTotalTokens', async () => {
     const taskId = await seedTask(h.db, { maxTotalTokens: 100 })
+    const { nodeRuns, tasks } = tablesOf(h.db)
     // Two node_runs with 60 and 80 tokens → total 140 > 100.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'a',
@@ -114,7 +119,7 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
       startedAt: Date.now(),
       tokTotal: 60,
     })
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'b',
@@ -133,7 +138,8 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
 
   test('maxTotalTokens=0 disables the token cap', async () => {
     const taskId = await seedTask(h.db, { maxTotalTokens: 0 })
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'a',

@@ -20,6 +20,8 @@
 //   拓扑序派发）落地时：fixer prompt 应包含 AUDIT-FINDING-SENTINEL，层 1/3
 //   断言按旁注翻转，层 2 的 error 规则届时放开。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -27,9 +29,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import {
@@ -46,7 +47,7 @@ const ulid = monotonicFactory()
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('test-s05-fanout-chain')
 
-const nodePersistence = (db: ProviderNeutralDatabase) => new DrizzleNodeExecutionPersistence(db)
+const nodePersistence = (db: PersistenceDb) => new DrizzleNodeExecutionPersistence(db)
 
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
@@ -58,10 +59,11 @@ afterAll(() => resetBroadcastersForTests())
 //  "上游产出【只】存在于 child 行 → 端口整体缺失"场景。）
 // ---------------------------------------------------------------------------
 
-async function seedBareTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedBareTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_s05_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 's05',
     description: '',
@@ -69,7 +71,7 @@ async function seedBareTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 's05',
     workflowId: wfId,
@@ -87,7 +89,7 @@ async function seedBareTask(db: ProviderNeutralDatabase): Promise<string> {
 
 // id 用显式字典序字符串（'01...'），与 baseline 测试同法，排序确定。
 async function seedRunWithOutput(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   fields: {
@@ -100,7 +102,8 @@ async function seedRunWithOutput(
   },
   outputs: Record<string, string>,
 ): Promise<string> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: fields.id,
     taskId,
     nodeId,
@@ -111,7 +114,7 @@ async function seedRunWithOutput(
     shardKey: fields.shardKey ?? null,
   })
   for (const [portName, content] of Object.entries(outputs)) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: fields.id, portName, content })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: fields.id, portName, content })
   }
   return fields.id
 }
@@ -130,8 +133,9 @@ describeEachProvider(
     test('upstream output existing ONLY on shard child rows → target port key entirely absent, consumed empty', async () => {
       const db = harness.db
       const taskId = await seedBareTask(db)
+      const { nodeRuns } = tablesOf(db)
       // fanout wrapper 行（child 行的 parent）。
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: '01WRAP',
         taskId,
         nodeId: 'fan',
@@ -318,7 +322,7 @@ describe('S-5 layer 2 — RFC-094 validator guardrails (flipped from the pre-fix
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -341,8 +345,9 @@ function buildHarness(provider: ProviderHarness): Harness {
   }
 }
 
-async function seedAgentRow(db: ProviderNeutralDatabase, name: string): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgentRow(db: PersistenceDb, name: string): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -363,14 +368,15 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-s05',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 's05-task',
     id: taskId,
     workflowId,
@@ -468,6 +474,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     // —— 静默成功的全套外观：任务 done、wrapper done、B 的 shard 行 done。
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
@@ -540,6 +547,7 @@ function registerProviderCases1(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
+    const { tasks } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
 

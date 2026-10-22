@@ -5,18 +5,11 @@
 // 起来。现在决定 / 评论 / 选择跑在 `DatabaseSession` 上，node_run 状态 CAS、任务成员判定、
 // 正文读取、互斥作用域各只剩一份实现。场景对照 SQLite 黄金锁 `review-decision-full-asserts.test.ts`。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
-import {
-  collaborationGateOperations,
-  committedEvents,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   addReviewComment,
   deleteReviewComment,
@@ -41,16 +34,25 @@ const actor = { user: { id: REVIEW_OWNER } } as Parameters<
   ReviewDecisionCommandPort['submit']
 >[0]['actor']
 
-const runById = async (db: ProviderNeutralDatabase, id: string) =>
-  (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
-const docById = async (db: ProviderNeutralDatabase, id: string) =>
-  (await db.select().from(docVersions).where(eq(docVersions.id, id)))[0]!
-const outputsOf = (db: ProviderNeutralDatabase, runId: string) =>
-  db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, runId))
-const commentsOf = (db: ProviderNeutralDatabase, docVersionId: string) =>
-  db.select().from(reviewComments).where(eq(reviewComments.docVersionId, docVersionId))
-const decisionOps = (db: ProviderNeutralDatabase, taskId: string) =>
-  db
+const runById = async (db: PersistenceDb, id: string) => {
+  const { nodeRuns } = tablesOf(db)
+  return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+}
+const docById = async (db: PersistenceDb, id: string) => {
+  const { docVersions } = tablesOf(db)
+  return (await db.select().from(docVersions).where(eq(docVersions.id, id)))[0]!
+}
+const outputsOf = (db: PersistenceDb, runId: string) => {
+  const { nodeRunOutputs } = tablesOf(db)
+  return db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, runId))
+}
+const commentsOf = (db: PersistenceDb, docVersionId: string) => {
+  const { reviewComments } = tablesOf(db)
+  return db.select().from(reviewComments).where(eq(reviewComments.docVersionId, docVersionId))
+}
+const decisionOps = (db: PersistenceDb, taskId: string) => {
+  const { collaborationGateOperations } = tablesOf(db)
+  return db
     .select()
     .from(collaborationGateOperations)
     .where(
@@ -60,8 +62,10 @@ const decisionOps = (db: ProviderNeutralDatabase, taskId: string) =>
         eq(collaborationGateOperations.operationKind, 'decide'),
       ),
     )
-const reviewEvents = (db: ProviderNeutralDatabase, reviewRunId: string, type: string) =>
-  db
+}
+const reviewEvents = (db: PersistenceDb, reviewRunId: string, type: string) => {
+  const { committedEvents } = tablesOf(db)
+  return db
     .select()
     .from(committedEvents)
     .where(
@@ -71,8 +75,11 @@ const reviewEvents = (db: ProviderNeutralDatabase, reviewRunId: string, type: st
         eq(committedEvents.aggregateId, reviewRunId),
       ),
     )
-const taskRuns = (db: ProviderNeutralDatabase, taskId: string) =>
-  db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+}
+const taskRuns = (db: PersistenceDb, taskId: string) => {
+  const { nodeRuns } = tablesOf(db)
+  return db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+}
 
 describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）', (harness) => {
   let round: ReviewRound | undefined

@@ -1,6 +1,8 @@
 // RFC-359 P0-9: legacy mission -> action launcher -> real TaskEngine child ->
 // persisted output -> original terminal observer -> attempt settlement.
 // A no-change action settles here; this is not a completed mission delivery.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   WORKFLOW_SCHEMA_VERSION,
@@ -23,20 +25,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  cachedRepos,
-  developmentActionRuns,
-  developmentAgentAttempts,
-  developmentWakeHints,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -77,7 +66,7 @@ import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecu
 const CHILD = resolve(import.meta.dir, 'fixtures', 'mock-opencode-legacy-mission.ts')
 
 async function publishLegacyConfiguration(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   userId: string,
   executor:
     | { kind: 'agent'; agentRef: string }
@@ -233,7 +222,20 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         const repositoryId = ulid()
         const scriptId = ulid()
         const now = Date.now()
-        await db.insert(users).values({
+        const {
+          users,
+          cachedRepos,
+          agents,
+          workflows,
+          developmentAgentAttempts,
+          tasks,
+          developmentWakeHints,
+          nodeRuns,
+          nodeRunOutputs,
+          developmentActionRuns,
+          taskExecutionIntents,
+        } = tablesOf(db)
+        await insertOne(db, users, {
           id: userId,
           username: `legacy-${userId}`,
           displayName: 'Legacy Mission Fixture',
@@ -244,7 +246,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           createdAt: now,
           updatedAt: now,
         })
-        await db.insert(cachedRepos).values({
+        await insertOne(db, cachedRepos, {
           id: repositoryId,
           urlHash: repositoryId,
           localPath: repoPath,
@@ -252,7 +254,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           lastFetchedAt: now,
           createdAt: now,
         })
-        await db.insert(agents).values({
+        await insertOne(db, agents, {
           id: agentId,
           name: 'legacy-mission-agent',
           description: 'Real legacy child fixture',
@@ -282,7 +284,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           ],
           edges: [],
         })
-        await db.insert(workflows).values({
+        await insertOne(db, workflows, {
           id: scriptId,
           name: 'legacy-mission-script',
           definition,
@@ -567,6 +569,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         writeFileSync(releasePath, 'teardown release\n')
         try {
           if (execution !== undefined && launchers !== undefined) {
+            const { tasks } = tablesOf(db)
             const launchedTasks = await db.select({ id: tasks.id }).from(tasks)
             for (const task of launchedTasks) {
               if (execution.isActive(task.id)) await launchers[`${kind}Launcher`].cancel(task.id)

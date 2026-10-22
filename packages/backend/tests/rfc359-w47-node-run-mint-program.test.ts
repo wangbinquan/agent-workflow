@@ -285,9 +285,19 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
     },
   }
   const ports: Record<string, unknown> = {
-    nodeRuns,
-    nodeRunSeqAllocations,
-    tasks,
+    tablesOf(handle: unknown) {
+      expect(handle).toBe(tx)
+      return { nodeRuns, nodeRunSeqAllocations, tasks }
+    },
+    first(query: { get(): unknown }) {
+      return query.get()
+    },
+    insertOne(handle: typeof tx, table: unknown, values: unknown) {
+      expect(handle).toBe(tx)
+      const statement = handle.insert(table).values(values)
+      if (!('run' in statement)) throw new Error('expected the plain node-run insert')
+      return statement.run()
+    },
     transactionStep,
     driveAsyncProgram,
     driveSyncProgram,

@@ -6,6 +6,9 @@
 // FOR UPDATE，SQLite 独占事务下 no-op）；案件搜索的大小写不敏感与通配符转义走能力矩阵；nullable 列的 ORDER BY 走能力
 // 矩阵的 NULL 排序（SQLite 的 NULL 最小语义，PG 显式 nulls first）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   and,
   asc,
@@ -26,32 +29,8 @@ import {
 import { EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS } from '@agent-workflow/shared'
 import { z } from 'zod'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  affectedRows,
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import {
-  employeeAttentionBindings,
-  employeeCaseEventOrigins,
-  employeeCaseInbox,
-  employeeCaseMembers,
-  employeeCaseMeteringReceipts,
-  employeeCases,
-  employeeChannelResults,
-  employeeChannels,
-  employeeContextLinks,
-  employeeContextRecords,
-  employeeContextRevisions,
-  employeeExternalContextBindings,
-  employeeInputUploads,
-  employeeInvocations,
-  employeeOsOutbox,
-  employeeReactionArtifacts,
-  employeeReactionDispatch,
-  employeeReactionRounds,
-} from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   AttentionBindingRecord,
@@ -77,7 +56,7 @@ import { reactionArtifactRef, sanitizeReactionText } from '../domain/reactionArt
 import { reactionExecutionPlanSchema } from '../domain/runtimeModel'
 
 async function enqueueCaseLifecycleEventTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     readonly caseId: string
     readonly employeeId: string
@@ -89,6 +68,7 @@ async function enqueueCaseLifecycleEventTx(
   },
 ): Promise<void> {
   const observation = employeeCaseLifecycleObservation(input)
+  const { employeeOsOutbox } = tablesOf(tx)
   await tx
     .insert(employeeOsOutbox)
     .values({
@@ -104,10 +84,9 @@ async function enqueueCaseLifecycleEventTx(
       updatedAt: input.occurredAt,
     })
     .onConflictDoNothing({ target: employeeOsOutbox.dedupeKey })
-    .run()
 }
 
-function caseRecord(row: typeof employeeCases.$inferSelect): EmployeeCaseRecord {
+function caseRecord(row: PersistenceTables['employeeCases']['$inferSelect']): EmployeeCaseRecord {
   return {
     id: row.id,
     name: row.name,
@@ -134,7 +113,9 @@ function caseRecord(row: typeof employeeCases.$inferSelect): EmployeeCaseRecord 
   }
 }
 
-function contextRecord(row: typeof employeeContextRecords.$inferSelect): EmployeeContextRecord {
+function contextRecord(
+  row: PersistenceTables['employeeContextRecords']['$inferSelect'],
+): EmployeeContextRecord {
   return {
     id: row.id,
     caseId: row.caseId,
@@ -150,7 +131,7 @@ function contextRecord(row: typeof employeeContextRecords.$inferSelect): Employe
 }
 
 function attentionRecord(
-  row: typeof employeeAttentionBindings.$inferSelect,
+  row: PersistenceTables['employeeAttentionBindings']['$inferSelect'],
 ): AttentionBindingRecord {
   return {
     id: row.id,
@@ -167,7 +148,7 @@ function attentionRecord(
   }
 }
 
-function inboxRecord(row: typeof employeeCaseInbox.$inferSelect): CaseInboxRecord {
+function inboxRecord(row: PersistenceTables['employeeCaseInbox']['$inferSelect']): CaseInboxRecord {
   return {
     id: row.id,
     caseId: row.caseId,
@@ -188,7 +169,9 @@ function inboxRecord(row: typeof employeeCaseInbox.$inferSelect): CaseInboxRecor
   }
 }
 
-function roundRecord(row: typeof employeeReactionRounds.$inferSelect): ReactionRoundRecord {
+function roundRecord(
+  row: PersistenceTables['employeeReactionRounds']['$inferSelect'],
+): ReactionRoundRecord {
   return {
     id: row.id,
     caseId: row.caseId,
@@ -247,7 +230,9 @@ function parseJsonOrNull(text: string): unknown {
   }
 }
 
-function outboxRecord(row: typeof employeeOsOutbox.$inferSelect): EmployeeOutboxRecord {
+function outboxRecord(
+  row: PersistenceTables['employeeOsOutbox']['$inferSelect'],
+): EmployeeOutboxRecord {
   // `claimOutbox` 不会选中遗留的 `execution-launch` 行（它们只由 `adoptLegacyReactionLaunches`
   // 收编）；万一读到，说明判据漂了，直接报出来而不是交给一个不认识它的执行臂。
   if (row.kind === LEGACY_EXECUTION_LAUNCH_KIND) {
@@ -263,7 +248,9 @@ function outboxRecord(row: typeof employeeOsOutbox.$inferSelect): EmployeeOutbox
   }
 }
 
-function dispatchRecord(row: typeof employeeReactionDispatch.$inferSelect): ReactionDispatchRecord {
+function dispatchRecord(
+  row: PersistenceTables['employeeReactionDispatch']['$inferSelect'],
+): ReactionDispatchRecord {
   return {
     roundRef: row.roundRef,
     caseId: row.caseId,
@@ -285,7 +272,9 @@ const CLOSE_REASON = {
   obsolete: 'superseded',
 } as const
 
-function invocationRecord(row: typeof employeeInvocations.$inferSelect): EmployeeInvocationRecord {
+function invocationRecord(
+  row: PersistenceTables['employeeInvocations']['$inferSelect'],
+): EmployeeInvocationRecord {
   return {
     id: row.id,
     idempotencyKey: row.idempotencyKey,
@@ -307,7 +296,9 @@ function invocationRecord(row: typeof employeeInvocations.$inferSelect): Employe
   }
 }
 
-function channelRecord(row: typeof employeeChannels.$inferSelect): EmployeeChannelRecord {
+function channelRecord(
+  row: PersistenceTables['employeeChannels']['$inferSelect'],
+): EmployeeChannelRecord {
   return {
     id: row.id,
     invocationId: row.invocationId,
@@ -322,7 +313,7 @@ function channelRecord(row: typeof employeeChannels.$inferSelect): EmployeeChann
 }
 
 function channelResultRecord(
-  row: typeof employeeChannelResults.$inferSelect,
+  row: PersistenceTables['employeeChannelResults']['$inferSelect'],
 ): EmployeeChannelResultRecord {
   return {
     id: row.id,
@@ -340,13 +331,11 @@ export interface RuntimePersistenceOptions {
    * RFC-368 —— TaskExecution 的 admission 参与者工厂，按事务句柄取用（`InTx` 定式）。
    * 由组合根注入；缺席时 `admitReactionDispatch` 抛错，结算也不收口 claim（旧装配路径）。
    */
-  readonly reactionAdmission?: (
-    tx: ProviderNeutralDatabase,
-  ) => ReactionExecutionAdmissionParticipantV1
+  readonly reactionAdmission?: (tx: PersistenceDb) => ReactionExecutionAdmissionParticipantV1
 }
 
 export function createRuntimePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: RuntimePersistenceOptions = {},
 ): RuntimeCasePersistence {
   const session = databaseSessionFor(db)
@@ -356,11 +345,13 @@ export function createRuntimePersistence(
     async createCase(input) {
       await session.transaction(async (tx) => {
         for (const claim of input.uploadClaims) {
-          const upload = await tx
-            .select()
-            .from(employeeInputUploads)
-            .where(eq(employeeInputUploads.id, claim.uploadRef))
-            .get()
+          const { employeeInputUploads } = tablesOf(tx)
+          const upload = await first(
+            tx
+              .select()
+              .from(employeeInputUploads)
+              .where(eq(employeeInputUploads.id, claim.uploadRef)),
+          )
           if (
             upload === undefined ||
             upload.actorUserId !== claim.actorUserId ||
@@ -387,7 +378,6 @@ export function createRuntimePersistence(
                 eq(employeeInputUploads.state, 'pending'),
               ),
             )
-            .run()
           if (affectedRows(claimed) !== 1) {
             throw new ConflictError(
               'employee-upload-claim-conflict',
@@ -395,59 +385,58 @@ export function createRuntimePersistence(
             )
           }
         }
-        await tx
-          .insert(employeeCases)
-          .values({
-            id: input.caseRecord.id,
-            name: input.caseRecord.name,
-            employeeId: input.caseRecord.employeeRef.id,
-            employeeRevision: input.caseRecord.employeeRef.revision,
-            typeId: input.caseRecord.typeRef.typeId,
-            typeRevision: input.caseRecord.typeRef.revision,
-            primaryContextId: input.caseRecord.primaryContextId,
-            executionPolicyRevision: input.caseRecord.executionPolicyRevision,
-            maxDurationMs: input.caseRecord.maxDurationMs,
-            consumedDurationMs: input.caseRecord.consumedDurationMs,
-            maxTotalTokens: input.caseRecord.maxTotalTokens,
-            consumedTotalTokens: input.caseRecord.consumedTotalTokens,
-            ownerUserId: input.caseRecord.ownerUserId,
-            launchOrigin: input.caseRecord.launchOrigin,
-            state: input.caseRecord.state,
-            terminalKind: input.caseRecord.terminalKind,
-            blockReason: input.caseRecord.blockReason,
-            currentWorkItemRef: input.caseRecord.currentWorkItemRef,
-            activeRoundId: input.caseRecord.activeRoundId,
-            revision: input.caseRecord.revision,
-            writerGeneration: input.caseRecord.writerGeneration,
-            createdAt: input.caseRecord.createdAt,
-            updatedAt: input.caseRecord.updatedAt,
-            terminalAt: input.caseRecord.terminalAt,
-          })
-          .run()
+        const {
+          employeeCases,
+          employeeCaseMembers,
+          employeeCaseEventOrigins,
+          employeeContextRecords,
+          employeeContextRevisions,
+          employeeExternalContextBindings,
+        } = tablesOf(tx)
+        await insertOne(tx, employeeCases, {
+          id: input.caseRecord.id,
+          name: input.caseRecord.name,
+          employeeId: input.caseRecord.employeeRef.id,
+          employeeRevision: input.caseRecord.employeeRef.revision,
+          typeId: input.caseRecord.typeRef.typeId,
+          typeRevision: input.caseRecord.typeRef.revision,
+          primaryContextId: input.caseRecord.primaryContextId,
+          executionPolicyRevision: input.caseRecord.executionPolicyRevision,
+          maxDurationMs: input.caseRecord.maxDurationMs,
+          consumedDurationMs: input.caseRecord.consumedDurationMs,
+          maxTotalTokens: input.caseRecord.maxTotalTokens,
+          consumedTotalTokens: input.caseRecord.consumedTotalTokens,
+          ownerUserId: input.caseRecord.ownerUserId,
+          launchOrigin: input.caseRecord.launchOrigin,
+          state: input.caseRecord.state,
+          terminalKind: input.caseRecord.terminalKind,
+          blockReason: input.caseRecord.blockReason,
+          currentWorkItemRef: input.caseRecord.currentWorkItemRef,
+          activeRoundId: input.caseRecord.activeRoundId,
+          revision: input.caseRecord.revision,
+          writerGeneration: input.caseRecord.writerGeneration,
+          createdAt: input.caseRecord.createdAt,
+          updatedAt: input.caseRecord.updatedAt,
+          terminalAt: input.caseRecord.terminalAt,
+        })
         if (input.initialMembers.length > 0) {
-          await tx
-            .insert(employeeCaseMembers)
-            .values(
-              input.initialMembers.map((member) => ({
-                caseId: input.caseRecord.id,
-                userId: member.userId,
-                role: member.role,
-                addedBy: member.addedBy,
-                addedAt: member.addedAt,
-              })),
-            )
-            .run()
+          await tx.insert(employeeCaseMembers).values(
+            input.initialMembers.map((member) => ({
+              caseId: input.caseRecord.id,
+              userId: member.userId,
+              role: member.role,
+              addedBy: member.addedBy,
+              addedAt: member.addedAt,
+            })),
+          )
         }
         if (input.eventOrigin !== null) {
-          await tx
-            .insert(employeeCaseEventOrigins)
-            .values({
-              caseId: input.caseRecord.id,
-              eventSubscriptionId: input.eventOrigin.eventSubscriptionId,
-              eventDeliveryId: input.eventOrigin.eventDeliveryId,
-              createdAt: input.caseRecord.createdAt,
-            })
-            .run()
+          await insertOne(tx, employeeCaseEventOrigins, {
+            caseId: input.caseRecord.id,
+            eventSubscriptionId: input.eventOrigin.eventSubscriptionId,
+            eventDeliveryId: input.eventOrigin.eventDeliveryId,
+            createdAt: input.caseRecord.createdAt,
+          })
         }
         await enqueueCaseLifecycleEventTx(tx, {
           caseId: input.caseRecord.id,
@@ -458,58 +447,47 @@ export function createRuntimePersistence(
           terminalKind: input.caseRecord.terminalKind,
           occurredAt: input.caseRecord.createdAt,
         })
-        await tx
-          .insert(employeeContextRecords)
-          .values({
-            id: input.primaryContext.id,
-            caseId: input.primaryContext.caseId,
-            typeId: input.primaryContext.typeId,
-            schemaVersion: input.primaryContext.schemaVersion,
-            currentRevision: input.primaryContext.revision,
-            lifecycleState: input.primaryContext.lifecycleState,
-            stateJson: input.primaryContext.stateJson,
-            artifactRefsJson: JSON.stringify(input.primaryContext.artifactRefs),
-            createdAt: input.primaryContext.createdAt,
-            updatedAt: input.primaryContext.updatedAt,
-          })
-          .run()
-        await tx
-          .insert(employeeContextRevisions)
-          .values({
-            contextId: input.primaryContext.id,
-            revision: input.primaryContext.revision,
-            stateJson: input.primaryContext.stateJson,
-            artifactRefsJson: JSON.stringify(input.primaryContext.artifactRefs),
-            contentDigest: input.contextDigest,
-            createdAt: input.primaryContext.createdAt,
-          })
-          .run()
-        await tx
-          .insert(employeeExternalContextBindings)
-          .values({
-            subjectType: input.externalSubject.typeId,
-            subjectRef: input.externalSubject.subjectRef,
-            caseId: input.caseRecord.id,
-            contextId: input.primaryContext.id,
-            bindingRevision: 1,
-            updatedAt: input.caseRecord.createdAt,
-          })
-          .run()
+        await insertOne(tx, employeeContextRecords, {
+          id: input.primaryContext.id,
+          caseId: input.primaryContext.caseId,
+          typeId: input.primaryContext.typeId,
+          schemaVersion: input.primaryContext.schemaVersion,
+          currentRevision: input.primaryContext.revision,
+          lifecycleState: input.primaryContext.lifecycleState,
+          stateJson: input.primaryContext.stateJson,
+          artifactRefsJson: JSON.stringify(input.primaryContext.artifactRefs),
+          createdAt: input.primaryContext.createdAt,
+          updatedAt: input.primaryContext.updatedAt,
+        })
+        await insertOne(tx, employeeContextRevisions, {
+          contextId: input.primaryContext.id,
+          revision: input.primaryContext.revision,
+          stateJson: input.primaryContext.stateJson,
+          artifactRefsJson: JSON.stringify(input.primaryContext.artifactRefs),
+          contentDigest: input.contextDigest,
+          createdAt: input.primaryContext.createdAt,
+        })
+        await insertOne(tx, employeeExternalContextBindings, {
+          subjectType: input.externalSubject.typeId,
+          subjectRef: input.externalSubject.subjectRef,
+          caseId: input.caseRecord.id,
+          contextId: input.primaryContext.id,
+          bindingRevision: 1,
+          updatedAt: input.caseRecord.createdAt,
+        })
       })
     },
 
     async getCase(id) {
-      const row = await db.select().from(employeeCases).where(eq(employeeCases.id, id)).get()
+      const { employeeCases } = tablesOf(db)
+      const row = await first(db.select().from(employeeCases).where(eq(employeeCases.id, id)))
       return row === undefined ? null : caseRecord(row)
     },
 
     async listCaseMembers(caseId) {
+      const { employeeCaseMembers } = tablesOf(db)
       return (
-        await db
-          .select()
-          .from(employeeCaseMembers)
-          .where(eq(employeeCaseMembers.caseId, caseId))
-          .all()
+        await db.select().from(employeeCaseMembers).where(eq(employeeCaseMembers.caseId, caseId))
       ).map((row) => ({
         caseId: row.caseId,
         userId: row.userId,
@@ -520,11 +498,15 @@ export function createRuntimePersistence(
     },
 
     async getCaseMemberRole(caseId, userId) {
-      const row = await db
-        .select({ role: employeeCaseMembers.role })
-        .from(employeeCaseMembers)
-        .where(and(eq(employeeCaseMembers.caseId, caseId), eq(employeeCaseMembers.userId, userId)))
-        .get()
+      const { employeeCaseMembers } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ role: employeeCaseMembers.role })
+          .from(employeeCaseMembers)
+          .where(
+            and(eq(employeeCaseMembers.caseId, caseId), eq(employeeCaseMembers.userId, userId)),
+          ),
+      )
       return row === undefined ? null : row.role
     },
 
@@ -541,12 +523,11 @@ export function createRuntimePersistence(
             'employee case metering must contain nonnegative safe integers',
           )
         }
+        const { employeeCases, employeeCaseMeteringReceipts } = tablesOf(tx)
         await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, input.caseId)
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, input.caseId))
-          .get()
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, input.caseId)),
+        )
         if (current === undefined) {
           throw new NotFoundError(
             'employee-case-not-found',
@@ -564,7 +545,6 @@ export function createRuntimePersistence(
             createdAt: input.now,
           })
           .onConflictDoNothing({ target: employeeCaseMeteringReceipts.sourceRef })
-          .run()
         const applied = affectedRows(inserted) === 1
         if (applied) {
           const consumedDurationMs = current.consumedDurationMs + input.durationMs
@@ -587,13 +567,10 @@ export function createRuntimePersistence(
               updatedAt: input.now,
             })
             .where(eq(employeeCases.id, input.caseId))
-            .run()
         }
-        const updated = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, input.caseId))
-          .get()
+        const updated = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, input.caseId)),
+        )
         if (updated === undefined) throw new Error('employee case disappeared while metering')
         return { applied, caseRecord: caseRecord(updated) }
       })
@@ -601,12 +578,14 @@ export function createRuntimePersistence(
 
     async replaceCaseMembers(input) {
       return await session.transaction(async (tx) => {
+        const { employeeCases, employeeCaseMembers } = tablesOf(tx)
         await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, input.caseId)
-        const current = await tx
-          .select({ id: employeeCases.id, ownerUserId: employeeCases.ownerUserId })
-          .from(employeeCases)
-          .where(eq(employeeCases.id, input.caseId))
-          .get()
+        const current = await first(
+          tx
+            .select({ id: employeeCases.id, ownerUserId: employeeCases.ownerUserId })
+            .from(employeeCases)
+            .where(eq(employeeCases.id, input.caseId)),
+        )
         if (current === undefined) {
           throw new NotFoundError(
             'employee-case-not-found',
@@ -617,7 +596,6 @@ export function createRuntimePersistence(
           .select({ userId: employeeCaseMembers.userId })
           .from(employeeCaseMembers)
           .where(eq(employeeCaseMembers.caseId, input.caseId))
-          .all()
         if (current.ownerUserId !== input.ownerUserId) {
           // 只改归属，不动 revision：revision 是运行时状态机的 CAS 位，策略升级预览
           // token 等都按它对账；owner 转移不是一次状态变迁。
@@ -625,25 +603,18 @@ export function createRuntimePersistence(
             .update(employeeCases)
             .set({ ownerUserId: input.ownerUserId, updatedAt: input.now })
             .where(eq(employeeCases.id, input.caseId))
-            .run()
         }
-        await tx
-          .delete(employeeCaseMembers)
-          .where(eq(employeeCaseMembers.caseId, input.caseId))
-          .run()
+        await tx.delete(employeeCaseMembers).where(eq(employeeCaseMembers.caseId, input.caseId))
         if (input.members.length > 0) {
-          await tx
-            .insert(employeeCaseMembers)
-            .values(
-              input.members.map((member) => ({
-                caseId: input.caseId,
-                userId: member.userId,
-                role: member.role,
-                addedBy: input.addedBy,
-                addedAt: input.now,
-              })),
-            )
-            .run()
+          await tx.insert(employeeCaseMembers).values(
+            input.members.map((member) => ({
+              caseId: input.caseId,
+              userId: member.userId,
+              role: member.role,
+              addedBy: input.addedBy,
+              addedAt: input.now,
+            })),
+          )
         }
         return {
           previousOwnerUserId: current.ownerUserId,
@@ -653,16 +624,19 @@ export function createRuntimePersistence(
     },
 
     async findCaseByEventDelivery(eventDeliveryId) {
-      const row = await db
-        .select({ case: employeeCases })
-        .from(employeeCaseEventOrigins)
-        .innerJoin(employeeCases, eq(employeeCases.id, employeeCaseEventOrigins.caseId))
-        .where(eq(employeeCaseEventOrigins.eventDeliveryId, eventDeliveryId))
-        .get()
+      const { employeeCases, employeeCaseEventOrigins } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ case: employeeCases })
+          .from(employeeCaseEventOrigins)
+          .innerJoin(employeeCases, eq(employeeCases.id, employeeCaseEventOrigins.caseId))
+          .where(eq(employeeCaseEventOrigins.eventDeliveryId, eventDeliveryId)),
+      )
       return row === undefined ? null : caseRecord(row.case)
     },
 
     async listCases(employeeId, state) {
+      const { employeeCases } = tablesOf(db)
       const conditions = [
         ...(employeeId === undefined ? [] : [eq(employeeCases.employeeId, employeeId)]),
         ...(state === undefined
@@ -675,11 +649,11 @@ export function createRuntimePersistence(
           .from(employeeCases)
           .where(conditions.length === 0 ? undefined : and(...conditions))
           .orderBy(desc(employeeCases.updatedAt), desc(employeeCases.id))
-          .all()
       ).map(caseRecord)
     },
 
     async listTerminalOutcomeGroups() {
+      const { employeeCases } = tablesOf(db)
       const rows = await db
         .select({
           employeeId: employeeCases.employeeId,
@@ -691,7 +665,6 @@ export function createRuntimePersistence(
         .groupBy(employeeCases.employeeId, employeeCases.terminalKind)
         .orderBy(asc(employeeCases.employeeId), engine.ascNullsFirst(employeeCases.terminalKind))
         .limit(maxEmployeeOutcomeGroups + 1)
-        .all()
       if (rows.length > maxEmployeeOutcomeGroups) {
         throw new Error('employee-outcome-group-limit-exceeded')
       }
@@ -708,6 +681,7 @@ export function createRuntimePersistence(
       // `owner_user_id IS NULL` 也成立，否则无主案例的成员在「与我共享」里看不到它。
       const membershipCondition = (): SQL | null => {
         if (input.membership === undefined) return null
+        const { employeeCases, employeeCaseMembers } = tablesOf(db)
         const memberOf = inArray(
           employeeCases.id,
           db
@@ -728,17 +702,21 @@ export function createRuntimePersistence(
       }
       const conditions: SQL[] = []
       if (input.employeeId !== undefined) {
+        const { employeeCases } = tablesOf(db)
         conditions.push(eq(employeeCases.employeeId, input.employeeId))
       }
       if (input.ownerUserId !== undefined) {
+        const { employeeCases } = tablesOf(db)
         conditions.push(eq(employeeCases.ownerUserId, input.ownerUserId))
       }
       const membership = membershipCondition()
       if (membership !== null) conditions.push(membership)
       if (input.launchOrigin !== undefined) {
+        const { employeeCases } = tablesOf(db)
         conditions.push(eq(employeeCases.launchOrigin, input.launchOrigin))
       }
       if (input.states !== undefined) {
+        const { employeeCases } = tablesOf(db)
         conditions.push(
           input.states.length === 0 ? sql`0 = 1` : inArray(employeeCases.state, [...input.states]),
         )
@@ -747,6 +725,7 @@ export function createRuntimePersistence(
         const wantsDone = input.terminalCatalogStatuses.includes('done')
         const wantsCanceled = input.terminalCatalogStatuses.includes('canceled')
         if (wantsDone !== wantsCanceled) {
+          const { employeeCases } = tablesOf(db)
           conditions.push(
             wantsCanceled
               ? or(
@@ -764,18 +743,23 @@ export function createRuntimePersistence(
                 )!,
           )
         } else if (!wantsDone) {
+          const { employeeCases } = tablesOf(db)
           conditions.push(ne(employeeCases.state, 'terminal'))
         }
       }
       if (input.view === 'active') {
+        const { employeeCases } = tablesOf(db)
         conditions.push(inArray(employeeCases.state, ['active', 'waiting']))
       } else if (input.view === 'attention') {
+        const { employeeCases } = tablesOf(db)
         conditions.push(eq(employeeCases.state, 'blocked'))
       } else if (input.view === 'finished') {
+        const { employeeCases } = tablesOf(db)
         conditions.push(eq(employeeCases.state, 'terminal'))
       }
       if (input.q !== undefined) {
         const { pattern, escape } = engine.likeEscape(input.q)
+        const { employeeCases, employeeContextRecords } = tablesOf(db)
         conditions.push(
           or(
             engine.likeCaseInsensitive(employeeCases.name, pattern, escape),
@@ -787,6 +771,7 @@ export function createRuntimePersistence(
         )
       }
       if (input.cursor !== null) {
+        const { employeeCases } = tablesOf(db)
         conditions.push(
           or(
             lt(employeeCases.updatedAt, input.cursor.updatedAt),
@@ -797,6 +782,7 @@ export function createRuntimePersistence(
           )!,
         )
       }
+      const { employeeCases, employeeContextRecords } = tablesOf(db)
       const rows = await db
         .select({ case: employeeCases })
         .from(employeeCases)
@@ -807,7 +793,6 @@ export function createRuntimePersistence(
         .where(conditions.length === 0 ? undefined : and(...conditions))
         .orderBy(desc(employeeCases.updatedAt), desc(employeeCases.id))
         .limit(input.limit + 1)
-        .all()
       const facetConditions: SQL[] = []
       if (input.employeeId !== undefined) {
         facetConditions.push(eq(employeeCases.employeeId, input.employeeId))
@@ -822,17 +807,18 @@ export function createRuntimePersistence(
       }
       const facetBase = facetConditions.length === 0 ? undefined : and(...facetConditions)
       const countWhere = async (stateWhere?: SQL) => {
-        const row = await db
-          .select({ value: count() })
-          .from(employeeCases)
-          .where(
-            facetBase === undefined
-              ? stateWhere
-              : stateWhere === undefined
-                ? facetBase
-                : and(facetBase, stateWhere),
-          )
-          .get()
+        const row = await first(
+          db
+            .select({ value: count() })
+            .from(employeeCases)
+            .where(
+              facetBase === undefined
+                ? stateWhere
+                : stateWhere === undefined
+                  ? facetBase
+                  : and(facetBase, stateWhere),
+            ),
+        )
         return Number(row?.value ?? 0)
       }
       const [all, active, attention, finished] = await Promise.all([
@@ -854,43 +840,46 @@ export function createRuntimePersistence(
     },
 
     async findCaseByExternalSubject(subjectType, subjectRef) {
-      const row = await db
-        .select({ case: employeeCases })
-        .from(employeeExternalContextBindings)
-        .innerJoin(employeeCases, eq(employeeCases.id, employeeExternalContextBindings.caseId))
-        .where(
-          and(
-            eq(employeeExternalContextBindings.subjectType, subjectType),
-            eq(employeeExternalContextBindings.subjectRef, subjectRef),
+      const { employeeCases, employeeExternalContextBindings } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ case: employeeCases })
+          .from(employeeExternalContextBindings)
+          .innerJoin(employeeCases, eq(employeeCases.id, employeeExternalContextBindings.caseId))
+          .where(
+            and(
+              eq(employeeExternalContextBindings.subjectType, subjectType),
+              eq(employeeExternalContextBindings.subjectRef, subjectRef),
+            ),
           ),
-        )
-        .get()
+      )
       return row === undefined ? null : caseRecord(row.case)
     },
 
     async listContexts(caseId) {
+      const { employeeContextRecords } = tablesOf(db)
       return (
         await db
           .select()
           .from(employeeContextRecords)
           .where(eq(employeeContextRecords.caseId, caseId))
           .orderBy(asc(employeeContextRecords.createdAt), asc(employeeContextRecords.id))
-          .all()
       ).map(contextRecord)
     },
 
     async listAttention(caseId) {
+      const { employeeAttentionBindings } = tablesOf(db)
       return (
         await db
           .select()
           .from(employeeAttentionBindings)
           .where(eq(employeeAttentionBindings.caseId, caseId))
           .orderBy(asc(employeeAttentionBindings.createdAt), asc(employeeAttentionBindings.id))
-          .all()
       ).map(attentionRecord)
     },
 
     async listInbox(caseId) {
+      const { employeeCaseInbox } = tablesOf(db)
       return (
         await db
           .select()
@@ -901,50 +890,51 @@ export function createRuntimePersistence(
             asc(employeeCaseInbox.occurredAt),
             asc(employeeCaseInbox.eventId),
           )
-          .all()
       ).map(inboxRecord)
     },
 
     async listRounds(caseId) {
+      const { employeeReactionRounds } = tablesOf(db)
       return (
         await db
           .select()
           .from(employeeReactionRounds)
           .where(eq(employeeReactionRounds.caseId, caseId))
           .orderBy(desc(employeeReactionRounds.createdAt), desc(employeeReactionRounds.id))
-          .all()
       ).map(roundRecord)
     },
 
     async listRunningRounds() {
+      const { employeeReactionRounds } = tablesOf(db)
       return (
         await db
           .select()
           .from(employeeReactionRounds)
           .where(eq(employeeReactionRounds.state, 'running'))
           .orderBy(asc(employeeReactionRounds.updatedAt), asc(employeeReactionRounds.id))
-          .all()
       ).map(roundRecord)
     },
 
     async listInvocationsForRound(roundId) {
+      const { employeeInvocations } = tablesOf(db)
       return (
         await db
           .select()
           .from(employeeInvocations)
           .where(eq(employeeInvocations.parentRoundId, roundId))
           .orderBy(asc(employeeInvocations.createdAt), asc(employeeInvocations.id))
-          .all()
       ).map(invocationRecord)
     },
 
     async createInvocation(record) {
       return await session.transaction(async (tx) => {
-        const existing = await tx
-          .select()
-          .from(employeeInvocations)
-          .where(eq(employeeInvocations.idempotencyKey, record.idempotencyKey))
-          .get()
+        const { employeeInvocations } = tablesOf(tx)
+        const existing = await first(
+          tx
+            .select()
+            .from(employeeInvocations)
+            .where(eq(employeeInvocations.idempotencyKey, record.idempotencyKey)),
+        )
         if (existing !== undefined) {
           if (
             existing.parentRoundId !== record.parentRoundId ||
@@ -959,48 +949,48 @@ export function createRuntimePersistence(
           }
           return invocationRecord(existing)
         }
-        await tx
-          .insert(employeeInvocations)
-          .values({
-            id: record.id,
-            idempotencyKey: record.idempotencyKey,
-            parentCaseId: record.parentCaseId,
-            parentRoundId: record.parentRoundId,
-            targetEmployeeId: record.targetEmployeeRef.id,
-            targetEmployeeRevision: record.targetEmployeeRef.revision,
-            targetWorkScopeRefJson: record.targetWorkScopeRefJson,
-            inputEnvelopeRef: record.inputEnvelopeRef,
-            inputDigest: record.inputDigest,
-            completionContractRefJson: record.completionContractRefJson,
-            deadlineAt: record.deadlineAt,
-            childCaseId: record.childCaseId,
-            state: record.state,
-            createdAt: record.createdAt,
-            updatedAt: record.updatedAt,
-          })
-          .run()
+        await insertOne(tx, employeeInvocations, {
+          id: record.id,
+          idempotencyKey: record.idempotencyKey,
+          parentCaseId: record.parentCaseId,
+          parentRoundId: record.parentRoundId,
+          targetEmployeeId: record.targetEmployeeRef.id,
+          targetEmployeeRevision: record.targetEmployeeRef.revision,
+          targetWorkScopeRefJson: record.targetWorkScopeRefJson,
+          inputEnvelopeRef: record.inputEnvelopeRef,
+          inputDigest: record.inputDigest,
+          completionContractRefJson: record.completionContractRefJson,
+          deadlineAt: record.deadlineAt,
+          childCaseId: record.childCaseId,
+          state: record.state,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+        })
         return record
       })
     },
 
     async acceptInvocation(input) {
       return await session.transaction(async (tx) => {
-        const invocation = await tx
-          .select()
-          .from(employeeInvocations)
-          .where(eq(employeeInvocations.id, input.invocationId))
-          .get()
+        const { employeeInvocations, employeeChannels } = tablesOf(tx)
+        const invocation = await first(
+          tx
+            .select()
+            .from(employeeInvocations)
+            .where(eq(employeeInvocations.id, input.invocationId)),
+        )
         if (invocation === undefined) {
           throw new NotFoundError(
             'employee-invocation-not-found',
             `employee invocation not found: ${input.invocationId}`,
           )
         }
-        const existing = await tx
-          .select()
-          .from(employeeChannels)
-          .where(eq(employeeChannels.invocationId, input.invocationId))
-          .get()
+        const existing = await first(
+          tx
+            .select()
+            .from(employeeChannels)
+            .where(eq(employeeChannels.invocationId, input.invocationId)),
+        )
         if (existing !== undefined) {
           if (existing.childCaseId !== input.childCaseId) {
             throw new ConflictError(
@@ -1010,39 +1000,35 @@ export function createRuntimePersistence(
           }
           return channelRecord(existing)
         }
-        await tx
-          .insert(employeeChannels)
-          .values({
-            id: input.channel.id,
-            invocationId: input.channel.invocationId,
-            parentCaseId: input.channel.parentCaseId,
-            childCaseId: input.channel.childCaseId,
-            correlationRef: input.channel.correlationRef,
-            resultContractRefJson: input.channel.resultContractRefJson,
-            state: input.channel.state,
-            createdAt: input.channel.createdAt,
-            updatedAt: input.channel.updatedAt,
-          })
-          .run()
+        await insertOne(tx, employeeChannels, {
+          id: input.channel.id,
+          invocationId: input.channel.invocationId,
+          parentCaseId: input.channel.parentCaseId,
+          childCaseId: input.channel.childCaseId,
+          correlationRef: input.channel.correlationRef,
+          resultContractRefJson: input.channel.resultContractRefJson,
+          state: input.channel.state,
+          createdAt: input.channel.createdAt,
+          updatedAt: input.channel.updatedAt,
+        })
         await tx
           .update(employeeInvocations)
           .set({ childCaseId: input.childCaseId, state: 'waiting', updatedAt: input.now })
           .where(eq(employeeInvocations.id, input.invocationId))
-          .run()
         return input.channel
       })
     },
 
     async getChannelByInvocation(invocationId) {
-      const row = await db
-        .select()
-        .from(employeeChannels)
-        .where(eq(employeeChannels.invocationId, invocationId))
-        .get()
+      const { employeeChannels } = tablesOf(db)
+      const row = await first(
+        db.select().from(employeeChannels).where(eq(employeeChannels.invocationId, invocationId)),
+      )
       return row === undefined ? null : channelRecord(row)
     },
 
     async listChannels(caseId) {
+      const { employeeChannels } = tablesOf(db)
       return (
         await db
           .select()
@@ -1051,22 +1037,22 @@ export function createRuntimePersistence(
             or(eq(employeeChannels.parentCaseId, caseId), eq(employeeChannels.childCaseId, caseId)),
           )
           .orderBy(asc(employeeChannels.createdAt), asc(employeeChannels.id))
-          .all()
       ).map(channelRecord)
     },
 
     async listChannelResults(channelId) {
+      const { employeeChannelResults } = tablesOf(db)
       return (
         await db
           .select()
           .from(employeeChannelResults)
           .where(eq(employeeChannelResults.channelId, channelId))
           .orderBy(asc(employeeChannelResults.createdAt), asc(employeeChannelResults.id))
-          .all()
       ).map(channelResultRecord)
     },
 
     async listOpenChannelsWithTerminalChild(limit) {
+      const { employeeChannels, employeeCases, employeeChannelResults } = tablesOf(db)
       return (
         await db
           .select({ channel: employeeChannels, child: employeeCases })
@@ -1086,11 +1072,11 @@ export function createRuntimePersistence(
           )
           .orderBy(engine.ascNullsFirst(employeeCases.terminalAt), asc(employeeChannels.id))
           .limit(limit)
-          .all()
       ).map((row) => ({ channel: channelRecord(row.channel), childCase: caseRecord(row.child) }))
     },
 
     async listExpiredOpenChannels(now, limit) {
+      const { employeeChannels, employeeInvocations, employeeCases } = tablesOf(db)
       return (
         await db
           .select({
@@ -1104,7 +1090,6 @@ export function createRuntimePersistence(
           .where(and(eq(employeeChannels.state, 'open'), lte(employeeInvocations.deadlineAt, now)))
           .orderBy(asc(employeeInvocations.deadlineAt), asc(employeeChannels.id))
           .limit(limit)
-          .all()
       ).map((row) => ({
         channel: channelRecord(row.channel),
         invocation: invocationRecord(row.invocation),
@@ -1114,6 +1099,7 @@ export function createRuntimePersistence(
 
     async settleChannelResult(input) {
       await session.transaction(async (tx) => {
+        const { employeeChannelResults, employeeChannels, employeeInvocations } = tablesOf(tx)
         await tx
           .insert(employeeChannelResults)
           .values({
@@ -1126,12 +1112,9 @@ export function createRuntimePersistence(
             createdAt: input.result.createdAt,
           })
           .onConflictDoNothing()
-          .run()
-        const channel = await tx
-          .select()
-          .from(employeeChannels)
-          .where(eq(employeeChannels.id, input.result.channelId))
-          .get()
+        const channel = await first(
+          tx.select().from(employeeChannels).where(eq(employeeChannels.id, input.result.channelId)),
+        )
         if (channel === undefined) {
           throw new NotFoundError(
             'employee-channel-not-found',
@@ -1142,22 +1125,20 @@ export function createRuntimePersistence(
           .update(employeeChannels)
           .set({ state: input.channelState, updatedAt: input.now })
           .where(eq(employeeChannels.id, channel.id))
-          .run()
         await tx
           .update(employeeInvocations)
           .set({ state: input.channelState, updatedAt: input.now })
           .where(eq(employeeInvocations.id, channel.invocationId))
-          .run()
       })
     },
 
     async detachOpenChannelsForRound(roundId, now) {
       await session.transaction(async (tx) => {
+        const { employeeInvocations, employeeChannels } = tablesOf(tx)
         const invocations = await tx
           .select({ id: employeeInvocations.id })
           .from(employeeInvocations)
           .where(eq(employeeInvocations.parentRoundId, roundId))
-          .all()
         for (const invocation of invocations) {
           await tx
             .update(employeeInvocations)
@@ -1168,7 +1149,6 @@ export function createRuntimePersistence(
                 inArray(employeeInvocations.state, ['requested', 'accepted', 'waiting']),
               ),
             )
-            .run()
           await tx
             .update(employeeChannels)
             .set({ state: 'detached', updatedAt: now })
@@ -1178,34 +1158,35 @@ export function createRuntimePersistence(
                 eq(employeeChannels.state, 'open'),
               ),
             )
-            .run()
         }
       })
     },
 
     async claimOutbox(input) {
-      const candidate = await db
-        .select()
-        .from(employeeOsOutbox)
-        .where(
-          and(
-            or(
-              eq(employeeOsOutbox.state, 'pending'),
-              and(
-                eq(employeeOsOutbox.state, 'claimed'),
-                or(
-                  isNull(employeeOsOutbox.claimExpiresAt),
-                  lte(employeeOsOutbox.claimExpiresAt, input.now),
+      const { employeeOsOutbox } = tablesOf(db)
+      const candidate = await first(
+        db
+          .select()
+          .from(employeeOsOutbox)
+          .where(
+            and(
+              or(
+                eq(employeeOsOutbox.state, 'pending'),
+                and(
+                  eq(employeeOsOutbox.state, 'claimed'),
+                  or(
+                    isNull(employeeOsOutbox.claimExpiresAt),
+                    lte(employeeOsOutbox.claimExpiresAt, input.now),
+                  ),
                 ),
               ),
+              lte(employeeOsOutbox.nextAttemptAt, input.now),
+              // RFC-368：遗留的 `execution-launch` 行只由派发臂的一次性收编处理。
+              ne(employeeOsOutbox.kind, LEGACY_EXECUTION_LAUNCH_KIND),
             ),
-            lte(employeeOsOutbox.nextAttemptAt, input.now),
-            // RFC-368：遗留的 `execution-launch` 行只由派发臂的一次性收编处理。
-            ne(employeeOsOutbox.kind, LEGACY_EXECUTION_LAUNCH_KIND),
-          ),
-        )
-        .orderBy(asc(employeeOsOutbox.createdAt), asc(employeeOsOutbox.id))
-        .get()
+          )
+          .orderBy(asc(employeeOsOutbox.createdAt), asc(employeeOsOutbox.id)),
+      )
       if (candidate === undefined) return null
       const claimed = affectedRows(
         await db
@@ -1223,8 +1204,7 @@ export function createRuntimePersistence(
               eq(employeeOsOutbox.attemptCount, candidate.attemptCount),
               inArray(employeeOsOutbox.state, ['pending', 'claimed']),
             ),
-          )
-          .run(),
+          ),
       )
       if (claimed !== 1) return null
       return outboxRecord({
@@ -1238,6 +1218,7 @@ export function createRuntimePersistence(
     },
 
     async completeOutbox(id, workerId, now) {
+      const { employeeOsOutbox } = tablesOf(db)
       const result = await db
         .update(employeeOsOutbox)
         .set({
@@ -1254,11 +1235,11 @@ export function createRuntimePersistence(
             eq(employeeOsOutbox.claimedBy, workerId),
           ),
         )
-        .run()
       if (affectedRows(result) !== 1) throw new Error(`lost outbox claim: ${id}`)
     },
 
     async retryOutbox(input) {
+      const { employeeOsOutbox } = tablesOf(db)
       const result = await db
         .update(employeeOsOutbox)
         .set({
@@ -1276,11 +1257,11 @@ export function createRuntimePersistence(
             eq(employeeOsOutbox.claimedBy, input.workerId),
           ),
         )
-        .run()
       if (affectedRows(result) !== 1) throw new Error(`lost outbox claim: ${input.id}`)
     },
 
     async activateAttention(bindingId, subscriptionId, now) {
+      const { employeeAttentionBindings } = tablesOf(db)
       const result = await db
         .update(employeeAttentionBindings)
         .set({ eventSubscriptionId: subscriptionId, state: 'active', updatedAt: now })
@@ -1290,13 +1271,13 @@ export function createRuntimePersistence(
             inArray(employeeAttentionBindings.state, ['desired', 'active']),
           ),
         )
-        .run()
       if (affectedRows(result) !== 1) {
         throw new NotFoundError('employee-attention-not-found', `attention not found: ${bindingId}`)
       }
     },
 
     async cancelAttention(bindingId, now) {
+      const { employeeAttentionBindings } = tablesOf(db)
       await db
         .update(employeeAttentionBindings)
         .set({ eventSubscriptionId: null, state: 'cancelled', updatedAt: now })
@@ -1306,22 +1287,21 @@ export function createRuntimePersistence(
             eq(employeeAttentionBindings.state, 'cancel-requested'),
           ),
         )
-        .run()
     },
 
     async acceptDelivery(caseId, id, delivery, priority, now) {
       return await session.transaction(async (tx) => {
-        const existing = await tx
-          .select({ id: employeeCaseInbox.id })
-          .from(employeeCaseInbox)
-          .where(eq(employeeCaseInbox.deliveryId, delivery.deliveryId))
-          .get()
+        const { employeeCaseInbox, employeeCases } = tablesOf(tx)
+        const existing = await first(
+          tx
+            .select({ id: employeeCaseInbox.id })
+            .from(employeeCaseInbox)
+            .where(eq(employeeCaseInbox.deliveryId, delivery.deliveryId)),
+        )
         if (existing !== undefined) return false
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, caseId))
-          .get()
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)),
+        )
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
         }
@@ -1339,50 +1319,51 @@ export function createRuntimePersistence(
                 eq(employeeCaseInbox.state, 'pending'),
               ),
             )
-            .run()
         }
-        await tx
-          .insert(employeeCaseInbox)
-          .values({
-            id,
-            caseId,
-            deliveryId: delivery.deliveryId,
-            eventId: delivery.eventId,
-            eventTypeId: delivery.eventTypeRef.id,
-            eventTypeRevision: delivery.eventTypeRef.revision,
-            sourceId: delivery.sourceRef.id,
-            sourceRevision: delivery.sourceRef.revision,
-            subjectType: delivery.subject.typeId,
-            subjectRef: delivery.subject.subjectRef,
-            deliveryClass: delivery.deliveryClass,
-            priority,
-            occurredAt: delivery.occurredAt,
-            summary: delivery.summary,
-            payloadArtifactRef: delivery.payloadArtifactRef,
-            state: current.state === 'terminal' ? 'obsolete' : 'pending',
-            acceptedAt: now,
-            ...(current.state === 'terminal' ? { settledAt: now } : {}),
-          })
-          .run()
+        await insertOne(tx, employeeCaseInbox, {
+          id,
+          caseId,
+          deliveryId: delivery.deliveryId,
+          eventId: delivery.eventId,
+          eventTypeId: delivery.eventTypeRef.id,
+          eventTypeRevision: delivery.eventTypeRef.revision,
+          sourceId: delivery.sourceRef.id,
+          sourceRevision: delivery.sourceRef.revision,
+          subjectType: delivery.subject.typeId,
+          subjectRef: delivery.subject.subjectRef,
+          deliveryClass: delivery.deliveryClass,
+          priority,
+          occurredAt: delivery.occurredAt,
+          summary: delivery.summary,
+          payloadArtifactRef: delivery.payloadArtifactRef,
+          state: current.state === 'terminal' ? 'obsolete' : 'pending',
+          acceptedAt: now,
+          ...(current.state === 'terminal' ? { settledAt: now } : {}),
+        })
         return true
       })
     },
 
     async markInbox(inboxId, state, now) {
+      const { employeeCaseInbox } = tablesOf(db)
       await db
         .update(employeeCaseInbox)
         .set({ state, settledAt: now })
         .where(and(eq(employeeCaseInbox.id, inboxId), eq(employeeCaseInbox.state, 'pending')))
-        .run()
     },
 
     async createRound(input) {
       return await session.transaction(async (tx) => {
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, input.round.caseId))
-          .get()
+        const {
+          employeeCases,
+          employeeCaseInbox,
+          employeeReactionRounds,
+          employeeOsOutbox,
+          employeeReactionDispatch,
+        } = tablesOf(tx)
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, input.round.caseId)),
+        )
         if (
           current === undefined ||
           current.revision !== input.expectedCaseRevision ||
@@ -1394,49 +1375,43 @@ export function createRuntimePersistence(
         const inbox =
           input.inboxId === null
             ? null
-            : await tx
-                .select()
-                .from(employeeCaseInbox)
-                .where(eq(employeeCaseInbox.id, input.inboxId))
-                .get()
+            : await first(
+                tx.select().from(employeeCaseInbox).where(eq(employeeCaseInbox.id, input.inboxId)),
+              )
         if (
           input.inboxId !== null &&
           (inbox === null || inbox === undefined || inbox.state !== 'pending')
         ) {
           return false
         }
-        await tx
-          .insert(employeeReactionRounds)
-          .values({
-            id: input.round.id,
-            caseId: input.round.caseId,
-            caseRevision: input.round.caseRevision,
-            inboxId: input.round.inboxId,
-            employeeId: input.round.employeeRef.id,
-            employeeRevision: input.round.employeeRef.revision,
-            ruleId: input.round.ruleId,
-            workItemRef: input.round.workItemRef,
-            workContractId: input.round.workContractRef.contractId,
-            workContractVersion: input.round.workContractRef.version,
-            toolId: input.round.toolRef?.id ?? null,
-            toolRevision: input.round.toolRef?.revision ?? null,
-            executionPolicyRevision: input.round.executionPolicyRevision,
-            inputContextRefsJson: input.round.inputContextRefsJson,
-            planJson: JSON.stringify(input.plan),
-            state: 'planned',
-            executionRef: null,
-            outputJson: null,
-            attemptOrdinal: 0,
-            createdAt: input.round.createdAt,
-            updatedAt: input.round.updatedAt,
-          })
-          .run()
+        await insertOne(tx, employeeReactionRounds, {
+          id: input.round.id,
+          caseId: input.round.caseId,
+          caseRevision: input.round.caseRevision,
+          inboxId: input.round.inboxId,
+          employeeId: input.round.employeeRef.id,
+          employeeRevision: input.round.employeeRef.revision,
+          ruleId: input.round.ruleId,
+          workItemRef: input.round.workItemRef,
+          workContractId: input.round.workContractRef.contractId,
+          workContractVersion: input.round.workContractRef.version,
+          toolId: input.round.toolRef?.id ?? null,
+          toolRevision: input.round.toolRef?.revision ?? null,
+          executionPolicyRevision: input.round.executionPolicyRevision,
+          inputContextRefsJson: input.round.inputContextRefsJson,
+          planJson: JSON.stringify(input.plan),
+          state: 'planned',
+          executionRef: null,
+          outputJson: null,
+          attemptOrdinal: 0,
+          createdAt: input.round.createdAt,
+          updatedAt: input.round.updatedAt,
+        })
         if (inbox !== null && inbox !== undefined) {
           await tx
             .update(employeeCaseInbox)
             .set({ state: 'claimed', roundId: input.round.id })
             .where(eq(employeeCaseInbox.id, inbox.id))
-            .run()
         }
         await tx
           .update(employeeCases)
@@ -1452,52 +1427,51 @@ export function createRuntimePersistence(
               eq(employeeCases.revision, input.expectedCaseRevision),
             ),
           )
-          .run()
         if (input.launchOutbox !== null) {
-          await tx
-            .insert(employeeOsOutbox)
-            .values({
-              id: input.launchOutbox.id,
-              caseId: input.launchOutbox.caseId,
-              kind: input.launchOutbox.kind,
-              payloadJson: input.launchOutbox.payloadJson,
-              dedupeKey: input.launchOutbox.dedupeKey,
-              state: 'pending',
-              attemptCount: 0,
-              nextAttemptAt: input.round.createdAt,
-              createdAt: input.round.createdAt,
-              updatedAt: input.round.createdAt,
-            })
-            .run()
+          await insertOne(tx, employeeOsOutbox, {
+            id: input.launchOutbox.id,
+            caseId: input.launchOutbox.caseId,
+            kind: input.launchOutbox.kind,
+            payloadJson: input.launchOutbox.payloadJson,
+            dedupeKey: input.launchOutbox.dedupeKey,
+            state: 'pending',
+            attemptCount: 0,
+            nextAttemptAt: input.round.createdAt,
+            createdAt: input.round.createdAt,
+            updatedAt: input.round.createdAt,
+          })
         }
         if (input.reactionDispatch !== undefined && input.reactionDispatch !== null) {
-          await tx
-            .insert(employeeReactionDispatch)
-            .values({
-              roundRef: input.round.id,
-              caseId: input.round.caseId,
-              nextAttemptAt: input.reactionDispatch.nextAttemptAt,
-              createdAt: input.round.createdAt,
-              updatedAt: input.round.createdAt,
-            })
-            .run()
+          await insertOne(tx, employeeReactionDispatch, {
+            roundRef: input.round.id,
+            caseId: input.round.caseId,
+            nextAttemptAt: input.reactionDispatch.nextAttemptAt,
+            createdAt: input.round.createdAt,
+            updatedAt: input.round.createdAt,
+          })
         }
         return true
       })
     },
 
     async markRoundRunning(roundId, executionRef, now) {
+      const { employeeReactionRounds } = tablesOf(db)
       await db
         .update(employeeReactionRounds)
         .set({ state: 'running', executionRef, updatedAt: now })
         .where(
           and(eq(employeeReactionRounds.id, roundId), eq(employeeReactionRounds.state, 'planned')),
         )
-        .run()
     },
 
     async adoptLegacyReactionLaunches(input) {
       return await session.transaction(async (tx) => {
+        const {
+          employeeOsOutbox,
+          employeeReactionRounds,
+          employeeReactionArtifacts,
+          employeeReactionDispatch,
+        } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(employeeOsOutbox)
@@ -1507,17 +1481,17 @@ export function createRuntimePersistence(
               inArray(employeeOsOutbox.state, ['pending', 'claimed']),
             ),
           )
-          .all()
         for (const row of rows) {
           const payload = legacyExecutionLaunchPayloadSchema.safeParse(
             parseJsonOrNull(row.payloadJson),
           )
           const round = payload.success
-            ? await tx
-                .select()
-                .from(employeeReactionRounds)
-                .where(eq(employeeReactionRounds.id, payload.data.roundId))
-                .get()
+            ? await first(
+                tx
+                  .select()
+                  .from(employeeReactionRounds)
+                  .where(eq(employeeReactionRounds.id, payload.data.roundId)),
+              )
             : undefined
           if (payload.success && round !== undefined && round.state === 'planned') {
             const previousError = payload.data.attempt.previousError
@@ -1540,7 +1514,6 @@ export function createRuntimePersistence(
                   createdAt: input.now,
                 })
                 .onConflictDoNothing({ target: employeeReactionArtifacts.digest })
-                .run()
               retryFeedbackRef = reactionArtifactRef('retry-feedback', text.digest)
             }
             await tx
@@ -1551,7 +1524,6 @@ export function createRuntimePersistence(
                 updatedAt: input.now,
               })
               .where(eq(employeeReactionRounds.id, round.id))
-              .run()
             await tx
               .insert(employeeReactionDispatch)
               .values({
@@ -1565,38 +1537,39 @@ export function createRuntimePersistence(
                 updatedAt: input.now,
               })
               .onConflictDoNothing({ target: employeeReactionDispatch.roundRef })
-              .run()
           }
           // 行本身删掉：round 已不在 planned（结算过了）或 payload 读不懂的，也没有派发的意义了。
-          await tx.delete(employeeOsOutbox).where(eq(employeeOsOutbox.id, row.id)).run()
+          await tx.delete(employeeOsOutbox).where(eq(employeeOsOutbox.id, row.id))
         }
         return rows.length
       })
     },
 
     async claimReactionDispatch(input) {
-      const candidate = await db
-        .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
-        .from(employeeReactionDispatch)
-        .innerJoin(
-          employeeReactionRounds,
-          eq(employeeReactionRounds.id, employeeReactionDispatch.roundRef),
-        )
-        .where(
-          and(
-            eq(employeeReactionRounds.state, 'planned'),
-            lte(employeeReactionDispatch.nextAttemptAt, input.now),
-            or(
-              isNull(employeeReactionDispatch.dispatchLeaseExpiresAt),
-              lte(employeeReactionDispatch.dispatchLeaseExpiresAt, input.now),
+      const { employeeReactionDispatch, employeeReactionRounds } = tablesOf(db)
+      const candidate = await first(
+        db
+          .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
+          .from(employeeReactionDispatch)
+          .innerJoin(
+            employeeReactionRounds,
+            eq(employeeReactionRounds.id, employeeReactionDispatch.roundRef),
+          )
+          .where(
+            and(
+              eq(employeeReactionRounds.state, 'planned'),
+              lte(employeeReactionDispatch.nextAttemptAt, input.now),
+              or(
+                isNull(employeeReactionDispatch.dispatchLeaseExpiresAt),
+                lte(employeeReactionDispatch.dispatchLeaseExpiresAt, input.now),
+              ),
             ),
+          )
+          .orderBy(
+            asc(employeeReactionDispatch.nextAttemptAt),
+            asc(employeeReactionDispatch.roundRef),
           ),
-        )
-        .orderBy(
-          asc(employeeReactionDispatch.nextAttemptAt),
-          asc(employeeReactionDispatch.roundRef),
-        )
-        .get()
+      )
       if (candidate === undefined) return null
       const leaseExpiresAt = input.now + input.leaseMs
       // CAS：尝试次数没变且租约仍可领——两个 worker 同时选中同一行时只有一个能改到。
@@ -1618,8 +1591,7 @@ export function createRuntimePersistence(
                 lte(employeeReactionDispatch.dispatchLeaseExpiresAt, input.now),
               ),
             ),
-          )
-          .run(),
+          ),
       )
       if (claimed !== 1) return null
       return {
@@ -1640,15 +1612,17 @@ export function createRuntimePersistence(
         throw new Error('reaction admission participant is not wired into runtime persistence')
       }
       return await session.transaction(async (tx) => {
-        const row = await tx
-          .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
-          .from(employeeReactionDispatch)
-          .innerJoin(
-            employeeReactionRounds,
-            eq(employeeReactionRounds.id, employeeReactionDispatch.roundRef),
-          )
-          .where(eq(employeeReactionDispatch.roundRef, input.roundId))
-          .get()
+        const { employeeReactionDispatch, employeeReactionRounds } = tablesOf(tx)
+        const row = await first(
+          tx
+            .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
+            .from(employeeReactionDispatch)
+            .innerJoin(
+              employeeReactionRounds,
+              eq(employeeReactionRounds.id, employeeReactionDispatch.roundRef),
+            )
+            .where(eq(employeeReactionDispatch.roundRef, input.roundId)),
+        )
         if (
           row === undefined ||
           row.round.state !== 'planned' ||
@@ -1685,7 +1659,6 @@ export function createRuntimePersistence(
               eq(employeeReactionDispatch.claimEpoch, previous),
             ),
           )
-          .run()
         // 执行身份在事务内就写下（design §4.1）：「任务已建、ref 未写回」这一格因此不存在。
         await tx
           .update(employeeReactionRounds)
@@ -1696,13 +1669,13 @@ export function createRuntimePersistence(
               eq(employeeReactionRounds.state, 'planned'),
             ),
           )
-          .run()
         return receipt
       })
     },
 
     async retryReactionDispatch(input) {
       await session.transaction(async (tx) => {
+        const { employeeReactionDispatch, employeeReactionRounds } = tablesOf(tx)
         const released = affectedRows(
           await tx
             .update(employeeReactionDispatch)
@@ -1719,8 +1692,7 @@ export function createRuntimePersistence(
                 eq(employeeReactionDispatch.roundRef, input.roundId),
                 eq(employeeReactionDispatch.dispatchClaimedBy, input.workerId),
               ),
-            )
-            .run(),
+            ),
         )
         if (released !== 1) {
           throw new ConflictError(
@@ -1737,17 +1709,18 @@ export function createRuntimePersistence(
               eq(employeeReactionRounds.state, 'planned'),
             ),
           )
-          .run()
       })
     },
 
     async retryRound(input) {
       await session.transaction(async (tx) => {
-        const round = await tx
-          .select()
-          .from(employeeReactionRounds)
-          .where(eq(employeeReactionRounds.id, input.roundId))
-          .get()
+        const { employeeReactionRounds, employeeReactionDispatch } = tablesOf(tx)
+        const round = await first(
+          tx
+            .select()
+            .from(employeeReactionRounds)
+            .where(eq(employeeReactionRounds.id, input.roundId)),
+        )
         if (
           round === undefined ||
           round.state !== 'running' ||
@@ -1776,7 +1749,6 @@ export function createRuntimePersistence(
               eq(employeeReactionRounds.executionRef, input.expectedExecutionRef),
             ),
           )
-          .run()
         const reset = {
           nextAttemptAt: input.nextAttemptAt,
           dispatchAttempts: 0,
@@ -1791,31 +1763,40 @@ export function createRuntimePersistence(
           await tx
             .update(employeeReactionDispatch)
             .set(reset)
-            .where(eq(employeeReactionDispatch.roundRef, input.roundId))
-            .run(),
+            .where(eq(employeeReactionDispatch.roundRef, input.roundId)),
         )
         // 切换前由旧路径启动的 round 没有派发行：这里补建，epoch 从 0 起（它从没 admission 过）。
         if (updated === 0) {
-          await tx
-            .insert(employeeReactionDispatch)
-            .values({
-              roundRef: input.roundId,
-              caseId: round.caseId,
-              ...reset,
-              createdAt: input.now,
-            })
-            .run()
+          await insertOne(tx, employeeReactionDispatch, {
+            roundRef: input.roundId,
+            caseId: round.caseId,
+            ...reset,
+            createdAt: input.now,
+          })
         }
       })
     },
 
     async settleRound(input) {
       await session.transaction(async (tx) => {
-        const round = await tx
-          .select()
-          .from(employeeReactionRounds)
-          .where(eq(employeeReactionRounds.id, input.roundId))
-          .get()
+        const {
+          employeeReactionRounds,
+          employeeCases,
+          employeeContextRecords,
+          employeeContextRevisions,
+          employeeExternalContextBindings,
+          employeeContextLinks,
+          employeeAttentionBindings,
+          employeeOsOutbox,
+          employeeReactionDispatch,
+          employeeCaseInbox,
+        } = tablesOf(tx)
+        const round = await first(
+          tx
+            .select()
+            .from(employeeReactionRounds)
+            .where(eq(employeeReactionRounds.id, input.roundId)),
+        )
         if (round === undefined) {
           throw new NotFoundError(
             'employee-reaction-round-not-found',
@@ -1823,11 +1804,9 @@ export function createRuntimePersistence(
           )
         }
         if (['completed', 'failed', 'obsolete'].includes(round.state)) return
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, round.caseId))
-          .get()
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, round.caseId)),
+        )
         if (current === undefined || current.activeRoundId !== round.id) {
           throw new ConflictError(
             'employee-reaction-round-stale',
@@ -1836,11 +1815,12 @@ export function createRuntimePersistence(
         }
 
         for (const mutation of input.contextMutations ?? []) {
-          const existing = await tx
-            .select()
-            .from(employeeContextRecords)
-            .where(eq(employeeContextRecords.id, mutation.context.id))
-            .get()
+          const existing = await first(
+            tx
+              .select()
+              .from(employeeContextRecords)
+              .where(eq(employeeContextRecords.id, mutation.context.id)),
+          )
           if (mutation.expectedRevision === null) {
             if (existing !== undefined) {
               throw new ConflictError(
@@ -1848,21 +1828,18 @@ export function createRuntimePersistence(
                 `context already exists: ${mutation.context.id}`,
               )
             }
-            await tx
-              .insert(employeeContextRecords)
-              .values({
-                id: mutation.context.id,
-                caseId: mutation.context.caseId,
-                typeId: mutation.context.typeId,
-                schemaVersion: mutation.context.schemaVersion,
-                currentRevision: mutation.context.revision,
-                lifecycleState: mutation.context.lifecycleState,
-                stateJson: mutation.context.stateJson,
-                artifactRefsJson: JSON.stringify(mutation.context.artifactRefs),
-                createdAt: mutation.context.createdAt,
-                updatedAt: mutation.context.updatedAt,
-              })
-              .run()
+            await insertOne(tx, employeeContextRecords, {
+              id: mutation.context.id,
+              caseId: mutation.context.caseId,
+              typeId: mutation.context.typeId,
+              schemaVersion: mutation.context.schemaVersion,
+              currentRevision: mutation.context.revision,
+              lifecycleState: mutation.context.lifecycleState,
+              stateJson: mutation.context.stateJson,
+              artifactRefsJson: JSON.stringify(mutation.context.artifactRefs),
+              createdAt: mutation.context.createdAt,
+              updatedAt: mutation.context.updatedAt,
+            })
           } else {
             if (
               existing === undefined ||
@@ -1890,30 +1867,27 @@ export function createRuntimePersistence(
                   eq(employeeContextRecords.currentRevision, mutation.expectedRevision),
                 ),
               )
-              .run()
           }
-          await tx
-            .insert(employeeContextRevisions)
-            .values({
-              contextId: mutation.context.id,
-              revision: mutation.context.revision,
-              stateJson: mutation.context.stateJson,
-              artifactRefsJson: JSON.stringify(mutation.context.artifactRefs),
-              contentDigest: mutation.contentDigest,
-              createdAt: input.now,
-            })
-            .run()
+          await insertOne(tx, employeeContextRevisions, {
+            contextId: mutation.context.id,
+            revision: mutation.context.revision,
+            stateJson: mutation.context.stateJson,
+            artifactRefsJson: JSON.stringify(mutation.context.artifactRefs),
+            contentDigest: mutation.contentDigest,
+            createdAt: input.now,
+          })
           for (const subject of mutation.externalSubjects) {
-            const binding = await tx
-              .select()
-              .from(employeeExternalContextBindings)
-              .where(
-                and(
-                  eq(employeeExternalContextBindings.subjectType, subject.typeId),
-                  eq(employeeExternalContextBindings.subjectRef, subject.subjectRef),
+            const binding = await first(
+              tx
+                .select()
+                .from(employeeExternalContextBindings)
+                .where(
+                  and(
+                    eq(employeeExternalContextBindings.subjectType, subject.typeId),
+                    eq(employeeExternalContextBindings.subjectRef, subject.subjectRef),
+                  ),
                 ),
-              )
-              .get()
+            )
             if (
               binding !== undefined &&
               (binding.caseId !== round.caseId || binding.contextId !== mutation.context.id)
@@ -1943,7 +1917,6 @@ export function createRuntimePersistence(
                   updatedAt: input.now,
                 },
               })
-              .run()
           }
         }
 
@@ -1959,34 +1932,31 @@ export function createRuntimePersistence(
               createdAt: input.now,
             })
             .onConflictDoNothing()
-            .run()
         }
 
         for (const desired of input.attentionUpserts ?? []) {
-          const existing = await tx
-            .select()
-            .from(employeeAttentionBindings)
-            .where(eq(employeeAttentionBindings.id, desired.binding.id))
-            .get()
+          const existing = await first(
+            tx
+              .select()
+              .from(employeeAttentionBindings)
+              .where(eq(employeeAttentionBindings.id, desired.binding.id)),
+          )
           if (existing === undefined) {
-            await tx
-              .insert(employeeAttentionBindings)
-              .values({
-                id: desired.binding.id,
-                caseId: desired.binding.caseId,
-                contextId: desired.binding.contextId,
-                contextRevision: desired.binding.contextRevision,
-                eventTypeId: desired.binding.eventTypeRef.id,
-                eventTypeRevision: desired.binding.eventTypeRef.revision,
-                subjectType: desired.binding.subject.typeId,
-                subjectRef: desired.binding.subject.subjectRef,
-                desiredIdentityKey: desired.binding.desiredIdentityKey,
-                eventSubscriptionId: desired.binding.eventSubscriptionId,
-                state: desired.binding.state,
-                createdAt: desired.binding.createdAt,
-                updatedAt: desired.binding.updatedAt,
-              })
-              .run()
+            await insertOne(tx, employeeAttentionBindings, {
+              id: desired.binding.id,
+              caseId: desired.binding.caseId,
+              contextId: desired.binding.contextId,
+              contextRevision: desired.binding.contextRevision,
+              eventTypeId: desired.binding.eventTypeRef.id,
+              eventTypeRevision: desired.binding.eventTypeRef.revision,
+              subjectType: desired.binding.subject.typeId,
+              subjectRef: desired.binding.subject.subjectRef,
+              desiredIdentityKey: desired.binding.desiredIdentityKey,
+              eventSubscriptionId: desired.binding.eventSubscriptionId,
+              state: desired.binding.state,
+              createdAt: desired.binding.createdAt,
+              updatedAt: desired.binding.updatedAt,
+            })
           } else {
             await tx
               .update(employeeAttentionBindings)
@@ -1997,7 +1967,6 @@ export function createRuntimePersistence(
                 updatedAt: input.now,
               })
               .where(eq(employeeAttentionBindings.id, desired.binding.id))
-              .run()
           }
           if (desired.subscribeOutbox !== null) {
             await tx
@@ -2015,7 +1984,6 @@ export function createRuntimePersistence(
                 updatedAt: input.now,
               })
               .onConflictDoNothing({ target: employeeOsOutbox.dedupeKey })
-              .run()
           }
         }
 
@@ -2027,7 +1995,6 @@ export function createRuntimePersistence(
               updatedAt: input.now,
             })
             .where(eq(employeeAttentionBindings.id, cancellation.bindingId))
-            .run()
           if (cancellation.unsubscribeOutbox !== null) {
             await tx
               .insert(employeeOsOutbox)
@@ -2044,7 +2011,6 @@ export function createRuntimePersistence(
                 updatedAt: input.now + 1,
               })
               .onConflictDoNothing({ target: employeeOsOutbox.dedupeKey })
-              .run()
           }
         }
 
@@ -2057,16 +2023,16 @@ export function createRuntimePersistence(
             settledAt: input.now,
           })
           .where(eq(employeeReactionRounds.id, round.id))
-          .run()
         // RFC-368 T13 —— admission 收口与结算同事务。集中在这里而不是散到各个结算入口：
         // 四个 `settleRound` 调用点 + obsolete 全部经过这一处，不会漏掉任何一个而让 admission
         // 行永久停在 admitted/launched。从没 admission 过（epoch 0）的 round 不用收口。
         if (options.reactionAdmission !== undefined) {
-          const dispatch = await tx
-            .select()
-            .from(employeeReactionDispatch)
-            .where(eq(employeeReactionDispatch.roundRef, round.id))
-            .get()
+          const dispatch = await first(
+            tx
+              .select()
+              .from(employeeReactionDispatch)
+              .where(eq(employeeReactionDispatch.roundRef, round.id)),
+          )
           if (dispatch !== undefined && dispatch.claimEpoch > 0) {
             await options.reactionAdmission(tx).closeClaim({
               reaction: { roundRef: round.id },
@@ -2083,7 +2049,6 @@ export function createRuntimePersistence(
               settledAt: input.now,
             })
             .where(eq(employeeCaseInbox.id, round.inboxId))
-            .run()
         }
         const nextState =
           input.nextCaseState ?? (input.state === 'failed' ? 'blocked' : current.state)
@@ -2121,7 +2086,6 @@ export function createRuntimePersistence(
             updatedAt: input.now,
           })
           .where(and(eq(employeeCases.id, current.id), eq(employeeCases.activeRoundId, round.id)))
-          .run()
         if (nextState !== current.state) {
           await enqueueCaseLifecycleEventTx(tx, {
             caseId: current.id,
@@ -2138,16 +2102,15 @@ export function createRuntimePersistence(
 
     async blockCase(caseId, reason, now) {
       await session.transaction(async (tx) => {
+        const { employeeCases } = tablesOf(tx)
         // 读—改—写：`state` 判据与 `revision + 1` 都由这次读决定，而 UPDATE 的 where 里没有它们。
         // 不先锁住案件行，PG 的 READ COMMITTED 下一次并发 `terminateCase` 会整个被盖掉——
         // 「终止」已经回了 200，案件却带着 terminalKind 变回可 resume 的 blocked
         // （tests/rfc359-w8-t28-lost-update.test.ts L1）。
         await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, caseId)
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, caseId))
-          .get()
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)),
+        )
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
         }
@@ -2161,7 +2124,6 @@ export function createRuntimePersistence(
             updatedAt: now,
           })
           .where(eq(employeeCases.id, caseId))
-          .run()
         await enqueueCaseLifecycleEventTx(tx, {
           caseId,
           employeeId: current.employeeId,
@@ -2176,11 +2138,10 @@ export function createRuntimePersistence(
 
     async resumeCase(caseId, now) {
       return await session.transaction(async (tx) => {
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, caseId))
-          .get()
+        const { employeeCases } = tablesOf(tx)
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)),
+        )
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
         }
@@ -2212,7 +2173,6 @@ export function createRuntimePersistence(
               isNull(employeeCases.activeRoundId),
             ),
           )
-          .run()
         await enqueueCaseLifecycleEventTx(tx, {
           caseId,
           employeeId: current.employeeId,
@@ -2222,11 +2182,9 @@ export function createRuntimePersistence(
           terminalKind: null,
           occurredAt: now,
         })
-        const updated = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, caseId))
-          .get()
+        const updated = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)),
+        )
         if (updated === undefined) throw new Error('case vanished after resume transition')
         return caseRecord(updated)
       })
@@ -2234,16 +2192,21 @@ export function createRuntimePersistence(
 
     async terminateCase(caseId, terminalKind, now) {
       return await session.transaction(async (tx) => {
+        const {
+          employeeCases,
+          employeeInvocations,
+          employeeChannels,
+          employeeAttentionBindings,
+          employeeOsOutbox,
+        } = tablesOf(tx)
         // 同 blockCase：`state !== 'terminal'` 的判据、`revision + 1` 与 `writerGeneration + 1`
         // 都由这次读决定。两笔并发终止若都读到 active，后落地的那笔会把 terminalKind 换掉，而
         // 生命周期事件的 id / dedupeKey 由 (caseId, revision) 决定 ⇒ 后一条被去重丢掉，
         // 事件流与案件详情从此说两种终止原因（tests/rfc359-w8-t28-lost-update.test.ts L2）。
         await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, caseId)
-        const current = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, caseId))
-          .get()
+        const current = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)),
+        )
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
         }
@@ -2260,7 +2223,6 @@ export function createRuntimePersistence(
               terminalAt: now,
             })
             .where(eq(employeeCases.id, caseId))
-            .run()
           await enqueueCaseLifecycleEventTx(tx, {
             caseId,
             employeeId: current.employeeId,
@@ -2274,7 +2236,6 @@ export function createRuntimePersistence(
             .select({ id: employeeInvocations.id })
             .from(employeeInvocations)
             .where(eq(employeeInvocations.parentCaseId, caseId))
-            .all()
           for (const invocation of outbound) {
             await tx
               .update(employeeInvocations)
@@ -2285,7 +2246,6 @@ export function createRuntimePersistence(
                   inArray(employeeInvocations.state, ['requested', 'accepted', 'waiting']),
                 ),
               )
-              .run()
             await tx
               .update(employeeChannels)
               .set({ state: 'detached', updatedAt: now })
@@ -2295,7 +2255,6 @@ export function createRuntimePersistence(
                   eq(employeeChannels.state, 'open'),
                 ),
               )
-              .run()
           }
           const bindings = await tx
             .select()
@@ -2306,7 +2265,6 @@ export function createRuntimePersistence(
                 inArray(employeeAttentionBindings.state, ['desired', 'active']),
               ),
             )
-            .all()
           for (const binding of bindings) {
             await tx
               .update(employeeAttentionBindings)
@@ -2315,7 +2273,6 @@ export function createRuntimePersistence(
                 updatedAt: now,
               })
               .where(eq(employeeAttentionBindings.id, binding.id))
-              .run()
             if (binding.eventSubscriptionId !== null) {
               await tx
                 .insert(employeeOsOutbox)
@@ -2335,26 +2292,22 @@ export function createRuntimePersistence(
                   updatedAt: now,
                 })
                 .onConflictDoNothing({ target: employeeOsOutbox.dedupeKey })
-                .run()
             }
           }
         }
-        const updated = await tx
-          .select()
-          .from(employeeCases)
-          .where(eq(employeeCases.id, caseId))
-          .get()
+        const updated = await first(
+          tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)),
+        )
         if (updated === undefined) throw new Error('case vanished after terminal transition')
         return caseRecord(updated)
       })
     },
 
     async upgradePolicy(input) {
-      const current = await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, input.caseId))
-        .get()
+      const { employeeCases } = tablesOf(db)
+      const current = await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, input.caseId)),
+      )
       if (
         current === undefined ||
         current.revision !== input.expectedRevision ||
@@ -2377,13 +2330,10 @@ export function createRuntimePersistence(
             isNull(employeeCases.activeRoundId),
           ),
         )
-        .run()
       if (affectedRows(result) !== 1) return null
-      const updated = await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, input.caseId))
-        .get()
+      const updated = await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, input.caseId)),
+      )
       return updated === undefined ? null : caseRecord(updated)
     },
   }

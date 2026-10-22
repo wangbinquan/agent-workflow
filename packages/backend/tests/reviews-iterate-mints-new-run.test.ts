@@ -9,6 +9,7 @@
 // If this goes red, services/review.ts:submitReviewDecision iterate/reject
 // branch is out of lock-step with RFC-011 design §3.1.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -20,7 +21,6 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
@@ -184,13 +184,14 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
     },
   )
 
+  const { nodeRuns } = tablesOf(db)
   const reviewRuns = await db
     .select()
     .from(nodeRuns)
@@ -239,11 +240,13 @@ async function seedDesignerPreSnapshot(h: Harness): Promise<string> {
   const rows = await fetchDesignerTopRuns(h)
   const target = rows[rows.length - 1]
   if (target === undefined) throw new Error('no designer node_run to seed')
+  const { nodeRuns } = tablesOf(h.db)
   await h.db.update(nodeRuns).set({ preSnapshot: sha }).where(eq(nodeRuns.id, target.id))
   return sha
 }
 
 async function fetchDesignerTopRuns(h: Harness) {
+  const { nodeRuns } = tablesOf(h.db)
   const rows = await h.db
     .select()
     .from(nodeRuns)
@@ -357,6 +360,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     expect(after[1]!.status).toBe('pending')
     expect(after[1]!.retryIndex).toBe(1)
 
+    const { nodeRuns } = tablesOf(h.db)
     // Sibling review row (rev_2) should be reset back to awaiting_review by
     // cascadeSiblingReviews so the upstream re-run invalidates its content.
     const rev2 = await h.db

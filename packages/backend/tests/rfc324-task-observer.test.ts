@@ -15,12 +15,13 @@
 // 红→绿对：把 `requireTaskMember` 的 `hasActingMembership` 换回 `hasMembership`，
 // 「observer 不能回答评审」那条立刻绿转红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import {
   canViewTask,
@@ -43,7 +44,7 @@ function actorFor(id: string): Actor {
 }
 
 describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let owner = ''
   let collaborator = ''
   let observer = ''
@@ -52,8 +53,9 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
 
   async function seedTask(ownerUserId: string): Promise<void> {
     const wfId = `wf-${taskId}`
-    await db.insert(workflows).values({ id: wfId, name: wfId, description: '', definition: '{}' })
-    await db.insert(tasks).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, { id: wfId, name: wfId, description: '', definition: '{}' })
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'rfc324-observer-fixture',
       workflowId: wfId,
@@ -96,6 +98,7 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
     observer = await mk('observer')
     stranger = await mk('stranger')
     await seedTask(owner)
+    const { taskCollaborators } = tablesOf(db)
     await db.insert(taskCollaborators).values([
       { taskId, userId: owner, role: 'owner', addedBy: owner, addedAt: NOW },
       { taskId, userId: collaborator, role: 'collaborator', addedBy: owner, addedAt: NOW },
@@ -185,6 +188,7 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
         { userId: observer, role: 'observer' },
       ],
     })
+    const { taskCollaborators } = tablesOf(db)
     const rows = await db.select().from(taskCollaborators)
     const forObserver = rows.filter((r) => r.userId === observer)
     expect(forObserver.length, '(task,user,role) 是主键，两档并存会让判据变成掷骰子').toBe(1)

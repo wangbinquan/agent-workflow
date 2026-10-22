@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull, inArray } from 'drizzle-orm'
-import { taskWorkspacePreparations } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError } from '@/util/errors'
 import type {
   WorkspacePreparationJournal,
@@ -17,11 +17,10 @@ const next: Readonly<Record<WorkspacePreparationState, readonly WorkspacePrepara
 }
 
 /** Admission passes its existing live transaction; this journal never inserts a Task. */
-export function createWorkspacePreparationJournal(
-  db: ProviderNeutralDatabase,
-): WorkspacePreparationJournal {
+export function createWorkspacePreparationJournal(db: PersistenceDb): WorkspacePreparationJournal {
   return {
     async read(id) {
+      const { taskWorkspacePreparations } = tablesOf(db)
       return (
         (
           await db
@@ -32,6 +31,7 @@ export function createWorkspacePreparationJournal(
       )
     },
     async forTask(taskId) {
+      const { taskWorkspacePreparations } = tablesOf(db)
       return (
         (
           await db
@@ -42,6 +42,7 @@ export function createWorkspacePreparationJournal(
       )
     },
     async bindTask(input) {
+      const { taskWorkspacePreparations } = tablesOf(db)
       const rows = await db
         .update(taskWorkspacePreparations)
         .set({
@@ -64,6 +65,7 @@ export function createWorkspacePreparationJournal(
     },
     async adoptOwner(input) {
       if (input.ownerFence < input.previousFence) return null
+      const { taskWorkspacePreparations } = tablesOf(db)
       const rows = await db
         .update(taskWorkspacePreparations)
         .set({
@@ -88,6 +90,7 @@ export function createWorkspacePreparationJournal(
       return rows[0] ?? null
     },
     async replaceOperation(input) {
+      const { taskWorkspacePreparations } = tablesOf(db)
       const rows = await db
         .update(taskWorkspacePreparations)
         .set({
@@ -111,6 +114,7 @@ export function createWorkspacePreparationJournal(
     },
     async prepare(input) {
       const { now, ...identity } = input
+      const { taskWorkspacePreparations } = tablesOf(db)
       await db
         .insert(taskWorkspacePreparations)
         .values({ ...identity, createdAt: now, updatedAt: now })
@@ -135,6 +139,7 @@ export function createWorkspacePreparationJournal(
       return row
     },
     async checkpointUploadPlan(input) {
+      const { taskWorkspacePreparations } = tablesOf(db)
       const current = (
         await db
           .select()
@@ -174,6 +179,7 @@ export function createWorkspacePreparationJournal(
       return rows[0] ?? null
     },
     async completeUploads(input) {
+      const { taskWorkspacePreparations } = tablesOf(db)
       const current = (
         await db
           .select()
@@ -236,6 +242,7 @@ export function createWorkspacePreparationJournal(
           'workspace-preparation-facts-immutable',
           'workspace preparation facts cannot be replaced',
         )
+      const { taskWorkspacePreparations } = tablesOf(db)
       const rows = await db
         .update(taskWorkspacePreparations)
         .set({

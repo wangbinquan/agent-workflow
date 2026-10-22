@@ -9,6 +9,9 @@
 // real diff/manifest/incorporated⊆selected reconcile + the atomic apply
 // (skill version bump + memory fuse) + OCC).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite, queryRows, first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
   existsSync,
@@ -31,15 +34,6 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  docVersions,
-  fusions,
-  memories,
-  nodeRuns,
-  skills,
-  skillVersions,
-  tasks,
-} from '../src/db/schema'
 import {
   approveFusion,
   cancelFusion,
@@ -219,7 +213,7 @@ async function build(): Promise<H> {
         db,
         appHome,
         schedulerDriver,
-        binaryOverride: binaryOverride,
+        binaryOverride,
         defaultRuntime: VALID_OPENCODE_RUNTIME,
         workspaces: createFileFusionWorkspaceEffects({
           appHome,
@@ -240,35 +234,37 @@ async function build(): Promise<H> {
 
 function approvedGlobalMemory(db: DbClient, title: string): string {
   const id = ulid()
-  db.insert(memories)
-    .values({
-      id,
-      scopeType: 'global',
-      scopeId: null,
-      title,
-      bodyMd: `body of ${title}`,
-      tags: '[]',
-      status: 'approved',
-      sourceKind: 'manual',
-      createdAt: Date.now(),
-      version: 1,
-    })
-    .run()
+  const { memories } = tablesOf(db)
+  insertOne(db, memories, {
+    id,
+    scopeType: 'global',
+    scopeId: null,
+    title,
+    bodyMd: `body of ${title}`,
+    tags: '[]',
+    status: 'approved',
+    sourceKind: 'manual',
+    createdAt: Date.now(),
+    version: 1,
+  })
   return id
 }
 
 function statusOf(db: DbClient, id: string): string {
+  const { memories } = tablesOf(db)
   return (
-    db.select().from(memories).where(eq(memories.id, id)).all() as Array<{ status: string }>
+    queryRows(db.select().from(memories).where(eq(memories.id, id))) as Array<{ status: string }>
   )[0]!.status
 }
 
 function skillIdOf(db: DbClient, name: string): string {
-  return db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)).get()!.id
+  const { skills } = tablesOf(db)
+  return first(db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)))!.id
 }
 
 function taskOriginOf(db: DbClient, taskId: string): string {
-  return db.select({ origin: tasks.launchOrigin }).from(tasks).where(eq(tasks.id, taskId)).get()!
+  const { tasks } = tablesOf(db)
+  return first(db.select({ origin: tasks.launchOrigin }).from(tasks).where(eq(tasks.id, taskId)))!
     .origin
 }
 
@@ -314,7 +310,8 @@ describe('createFusion preconditions', () => {
       frontmatterExtra: {},
     })
     const mem = approvedGlobalMemory(h.db, 'm')
-    h.db.update(memories).set({ status: 'archived' }).where(eq(memories.id, mem)).run()
+    const { memories } = tablesOf(h.db)
+    queryWrite(h.db.update(memories).set({ status: 'archived' }).where(eq(memories.id, mem)))
     let code: string | undefined
     try {
       await createFusion(
@@ -351,8 +348,9 @@ describe('createFusion preconditions', () => {
       ),
     ).rejects.toThrow(/injected seed failure/)
 
-    expect(h.db.select().from(tasks).all()).toHaveLength(0)
-    expect(h.db.select().from(fusions).all()).toHaveLength(0)
+    const { tasks, fusions } = tablesOf(h.db)
+    expect(queryRows(h.db.select().from(tasks))).toHaveLength(0)
+    expect(queryRows(h.db.select().from(fusions))).toHaveLength(0)
     expect(fusionWorkRoots(h.appHome)).toEqual([])
   })
 })
@@ -403,11 +401,13 @@ describe('launch → reconcile → approve', () => {
         changelog: 'Integrated 2-space rule.',
       }),
     )
-    h.db
-      .update(tasks)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(tasks.id, task!.id))
-      .run()
+    const { tasks } = tablesOf(h.db)
+    queryWrite(
+      h.db
+        .update(tasks)
+        .set({ status: 'done', finishedAt: Date.now() })
+        .where(eq(tasks.id, task!.id)),
+    )
 
     // Reconcile → awaiting_approval with the proposed diff + incorporated set.
     await reconcileFusion(h.deps, fusion.id)
@@ -458,11 +458,13 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [mem], skipped: [], changelog: 'x' }),
     )
-    h.db
-      .update(tasks)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(tasks.id, task!.id))
-      .run()
+    const { tasks } = tablesOf(h.db)
+    queryWrite(
+      h.db
+        .update(tasks)
+        .set({ status: 'done', finishedAt: Date.now() })
+        .where(eq(tasks.id, task!.id)),
+    )
     await reconcileFusion(h.deps, fusion.id)
 
     // A concurrent editor save bumps the skill (base was 1, now 2).
@@ -514,11 +516,13 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memA], skipped: [], changelog: 'x' }),
     )
-    h.db
-      .update(tasks)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(tasks.id, task!.id))
-      .run()
+    const { tasks } = tablesOf(h.db)
+    queryWrite(
+      h.db
+        .update(tasks)
+        .set({ status: 'done', finishedAt: Date.now() })
+        .where(eq(tasks.id, task!.id)),
+    )
     await reconcileFusion(h.deps, fusion.id)
     const f = await getFusion(h.deps, fusion.id)
     expect(f!.status).toBe('failed')
@@ -552,18 +556,21 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memId], skipped: [], changelog: 'x' }),
     )
-    h.db
-      .update(tasks)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(tasks.id, task!.id))
-      .run()
+    const { tasks } = tablesOf(h.db)
+    queryWrite(
+      h.db
+        .update(tasks)
+        .set({ status: 'done', finishedAt: Date.now() })
+        .where(eq(tasks.id, task!.id)),
+    )
     await reconcileFusion(h.deps, fusion.id)
     return fusion
   }
 
   function tokenOf(fusionId: string): string | null {
+    const { fusions } = tablesOf(h.db)
     return (
-      h.db.select().from(fusions).where(eq(fusions.id, fusionId)).all() as Array<{
+      queryRows(h.db.select().from(fusions).where(eq(fusions.id, fusionId))) as Array<{
         preconditionToken: string | null
       }>
     )[0]!.preconditionToken
@@ -597,8 +604,11 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await toAwaitingApproval('lint', mem)
+    const { fusions } = tablesOf(h.db)
     // Simulate a pre-upgrade fusion: no captured token.
-    h.db.update(fusions).set({ preconditionToken: null }).where(eq(fusions.id, fusion.id)).run()
+    queryWrite(
+      h.db.update(fusions).set({ preconditionToken: null }).where(eq(fusions.id, fusion.id)),
+    )
 
     await expect(approveFusion(h.deps, fusion.id, adminActor)).rejects.toThrow(
       /predates|precondition/i,
@@ -650,7 +660,8 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await toAwaitingApproval('lint', mem)
-    const taskCountBefore = h.db.select().from(tasks).all().length
+    const { tasks } = tablesOf(h.db)
+    const taskCountBefore = queryRows(h.db.select().from(tasks)).length
     const deps: FusionDeps = {
       ...h.deps,
       beforeStartTaskHandoff: ({ phase }) => {
@@ -661,7 +672,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       /injected reject pre-handoff failure/,
     )
 
-    expect(h.db.select().from(tasks).all()).toHaveLength(taskCountBefore)
+    expect(queryRows(h.db.select().from(tasks))).toHaveLength(taskCountBefore)
     expect(existsSync(pjoin(h.appHome, 'fusions', fusion.id, 'iter2', 'work'))).toBe(false)
     expect((await getFusion(h.deps, fusion.id))!.status).toBe('failed')
   })
@@ -771,7 +782,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       'utf8',
     )
     expect(adapter).toMatch(
-      /async function assertClaimSkill\(\s*tx: DatabaseTransaction,\s*row: FusionRow,\s*actor: Actor,?\s*\)/,
+      /async function assertClaimSkill\(\s*tx: PersistenceTx,\s*row: FusionRow,\s*actor: Actor,?\s*\)/,
     )
     expect(adapter).toMatch(
       /const access = resolveFusionSkillAccess\(actor, live, await grantInTx\(tx, actor, live\.id\)\)/,
@@ -811,8 +822,9 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await toAwaitingApproval('lint', mem)
+    const { fusions } = tablesOf(h.db)
     // Simulate an in-flight approve that has claimed 'applying'.
-    h.db.update(fusions).set({ status: 'applying' }).where(eq(fusions.id, fusion.id)).run()
+    queryWrite(h.db.update(fusions).set({ status: 'applying' }).where(eq(fusions.id, fusion.id)))
     await expect(cancelFusion(h.deps, fusion.id, adminActor)).rejects.toThrow(
       /cancelable|terminal/i,
     )
@@ -860,35 +872,35 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
     })
   })
 
-  function seedFusion(id: string, patch: Partial<typeof fusions.$inferInsert>): void {
-    h.db
-      .insert(fusions)
-      .values({
-        id,
-        skillId: skillIdOf(h.db, 'lint'),
-        skillName: 'lint',
-        baseSkillVersion: 1,
-        memoryIdsJson: '[]',
-        intent: '',
-        status: 'running',
-        iteration: 1,
-        currentTaskId: 'task-x',
-        ownerUserId: '__system__',
-        createdAt: Date.now(),
-        ...patch,
-      })
-      .run()
+  function seedFusion(
+    id: string,
+    patch: Partial<PersistenceTables['fusions']['$inferInsert']>,
+  ): void {
+    const { fusions } = tablesOf(h.db)
+    insertOne(h.db, fusions, {
+      id,
+      skillId: skillIdOf(h.db, 'lint'),
+      skillName: 'lint',
+      baseSkillVersion: 1,
+      memoryIdsJson: '[]',
+      intent: '',
+      status: 'running',
+      iteration: 1,
+      currentTaskId: 'task-x',
+      ownerUserId: '__system__',
+      createdAt: Date.now(),
+      ...patch,
+    })
   }
 
   // Read status DIRECTLY (getFusion lazily reconciles a running fusion whose task
   // is missing, which would mask what recoverFusionDecisions actually did).
   function rawStatus(id: string): string | undefined {
+    const { fusions } = tablesOf(h.db)
     return (
-      h.db
-        .select({ status: fusions.status })
-        .from(fusions)
-        .where(eq(fusions.id, id))
-        .all() as Array<{
+      queryRows(
+        h.db.select({ status: fusions.status }).from(fusions).where(eq(fusions.id, id)),
+      ) as Array<{
         status: string
       }>
     )[0]?.status
@@ -896,22 +908,21 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
 
   test("'applying' whose version already committed rolls FORWARD to done", async () => {
     seedFusion('fz-fwd', { status: 'applying', currentTaskId: null })
+    const { skills, skillVersions } = tablesOf(h.db)
     // A committed version carries this fusionId (proof the apply landed durably).
-    const lintId = h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')).get()!
-      .id
-    h.db
-      .insert(skillVersions)
-      .values({
-        id: ulid(),
-        skillId: lintId,
-        versionIndex: 7,
-        filesPath: `skills/${lintId}/versions/v7/files`,
-        source: 'fusion',
-        fusionId: 'fz-fwd',
-        authorUserId: '__system__',
-        createdAt: Date.now(),
-      })
-      .run()
+    const lintId = first(
+      h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')),
+    )!.id
+    insertOne(h.db, skillVersions, {
+      id: ulid(),
+      skillId: lintId,
+      versionIndex: 7,
+      filesPath: `skills/${lintId}/versions/v7/files`,
+      source: 'fusion',
+      fusionId: 'fz-fwd',
+      authorUserId: '__system__',
+      createdAt: Date.now(),
+    })
     const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward).toBe(1)
     expect(rawStatus('fz-fwd')).toBe('done')
@@ -921,19 +932,17 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
     seedFusion('fz-duplicate', { status: 'applying', currentTaskId: null })
     const lintId = skillIdOf(h.db, 'lint')
     for (const versionIndex of [7, 8]) {
-      h.db
-        .insert(skillVersions)
-        .values({
-          id: ulid(),
-          skillId: lintId,
-          versionIndex,
-          filesPath: `skills/${lintId}/versions/v${versionIndex}/files`,
-          source: 'fusion',
-          fusionId: 'fz-duplicate',
-          authorUserId: '__system__',
-          createdAt: Date.now(),
-        })
-        .run()
+      const { skillVersions } = tablesOf(h.db)
+      insertOne(h.db, skillVersions, {
+        id: ulid(),
+        skillId: lintId,
+        versionIndex,
+        filesPath: `skills/${lintId}/versions/v${versionIndex}/files`,
+        source: 'fusion',
+        fusionId: 'fz-duplicate',
+        authorUserId: '__system__',
+        createdAt: Date.now(),
+      })
     }
     const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward).toBe(0)
@@ -948,19 +957,17 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
       appliedSkillVersion: 6,
     })
     const lintId = skillIdOf(h.db, 'lint')
-    h.db
-      .insert(skillVersions)
-      .values({
-        id: ulid(),
-        skillId: lintId,
-        versionIndex: 7,
-        filesPath: `skills/${lintId}/versions/v7/files`,
-        source: 'fusion',
-        fusionId: 'fz-applied-mismatch',
-        authorUserId: '__system__',
-        createdAt: Date.now(),
-      })
-      .run()
+    const { skillVersions } = tablesOf(h.db)
+    insertOne(h.db, skillVersions, {
+      id: ulid(),
+      skillId: lintId,
+      versionIndex: 7,
+      filesPath: `skills/${lintId}/versions/v7/files`,
+      source: 'fusion',
+      fusionId: 'fz-applied-mismatch',
+      authorUserId: '__system__',
+      createdAt: Date.now(),
+    })
     const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward).toBe(0)
     expect(r.rolledBack).toBe(1)
@@ -1143,8 +1150,9 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     const taskId = fusion.currentTaskId!
     const reviewRunId = ulid()
     const docVersionId = ulid()
+    const { tasks, nodeRuns, docVersions, fusions } = tablesOf(h.db)
     await h.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'review-lock-gate',
@@ -1153,7 +1161,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       retryIndex: 0,
       reviewIteration: 0,
     })
-    await h.db.insert(docVersions).values({
+    await insertOne(h.db, docVersions, {
       id: docVersionId,
       taskId,
       reviewNodeId: 'review-lock-gate',
@@ -1200,22 +1208,24 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       // task coordinator. The legacy direct trySetTaskStatus bypass completed
       // here and makes this assertion fail.
       for (let attempt = 0; attempt < 100; attempt++) {
-        const status = h.db
-          .select({ status: fusions.status })
-          .from(fusions)
-          .where(eq(fusions.id, fusion.id))
-          .limit(1)
-          .all()[0]?.status
+        const status = queryRows(
+          h.db
+            .select({ status: fusions.status })
+            .from(fusions)
+            .where(eq(fusions.id, fusion.id))
+            .limit(1),
+        )[0]?.status
         if (status === 'canceled') break
         await Bun.sleep(1)
       }
       expect(
-        h.db
-          .select({ status: fusions.status })
-          .from(fusions)
-          .where(eq(fusions.id, fusion.id))
-          .limit(1)
-          .all()[0]?.status,
+        queryRows(
+          h.db
+            .select({ status: fusions.status })
+            .from(fusions)
+            .where(eq(fusions.id, fusion.id))
+            .limit(1),
+        )[0]?.status,
       ).toBe('canceled')
       await Bun.sleep(10)
       expect(settled).toBe(false)

@@ -5,12 +5,13 @@
 // resolveTaskRole precedence (D17: owner > user > admin) is locked too —
 // review/clarify attribution snapshots depend on it.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, resourceGrants, workflows } from '../src/db/schema'
 import {
   canGovernResource,
   requireResourceView,
@@ -35,12 +36,12 @@ function actorOfUser(id: string, role: 'admin' | 'user' | 'guest', patScopes?: s
 }
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   role: 'admin' | 'user' | 'guest',
 ): Promise<void> {
-  const { users } = await import('../src/db/schema')
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id}`,
     displayName: `U ${id.slice(-4)}`,
@@ -52,7 +53,7 @@ async function seedUser(
 }
 
 describeEachProvider('resourceAcl — visibility matrix', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   const ownerId = ulid()
   const grantedId = ulid()
   const strangerId = ulid()
@@ -74,18 +75,19 @@ describeEachProvider('resourceAcl — visibility matrix', (harness) => {
     }
     const privId = ulid()
     const pubId = ulid()
+    const { agents, resourceGrants } = tablesOf(db)
     await db.insert(agents).values([
       { id: privId, name: `priv-${privId}`, ownerUserId: ownerId, visibility: 'private' },
       { id: pubId, name: `pub-${pubId}`, ownerUserId: ownerId, visibility: 'public' },
     ])
-    await db.insert(resourceGrants).values({
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: privId,
       userId: grantedId,
       addedBy: ownerId,
       addedAt: Date.now(),
     })
-    await db.insert(resourceGrants).values({
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: privId,
       userId: guestId,
@@ -151,7 +153,8 @@ describeEachProvider('resourceAcl — visibility matrix', (harness) => {
   })
 
   test('grant is per resource type — an agent grant does not leak to a workflow with the same id', async () => {
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: privateAgent.id, // deliberately reuse the id across tables
       name: 'wf-同id',
       definition: '{}',

@@ -12,6 +12,8 @@
 //     narratives, so a regeneration never collides with an earlier one;
 //   - the hosted owner sweep releases the artifacts of deleted tasks only,
 //     against real task rows on both database providers.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,8 +26,7 @@ import {
   HOSTED_CODE_REVIEW_OWNER,
 } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
 import type { HostedCodeReviewPublications } from '@/modules/code-capability/infrastructure/crewstation/objectCodeReviewArtifacts'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 let home: string
@@ -196,14 +197,15 @@ describe('RFC-370 §10 V16 hosted code-review artifacts', () => {
   })
 })
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf-${taskId}`,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: `wf-${taskId}`,

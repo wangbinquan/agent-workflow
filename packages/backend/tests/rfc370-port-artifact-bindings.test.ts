@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the actual runner, collaboration factory and provider HTTP roots await selected artifact ACKs.
@@ -14,8 +17,7 @@ import {
   WorkflowDefinitionSchema,
   type Agent,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { parseArchiveJson } from '@/modules/task-execution/public/queries'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
@@ -25,16 +27,17 @@ import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixtu
 import { held, callablePromise, MemoryPortArtifactContent } from './helpers/portArtifactContent'
 import { runNode } from './helpers/runner'
 
-async function fixture(db: ProviderNeutralDatabase) {
+async function fixture(db: PersistenceDb) {
   const taskId = freshTaskId(),
     root = mkdtempSync(join(tmpdir(), 'aw-port-binding-'))
   try {
     await seedTask(db, taskId)
     const worktreePath = join(root, 'wt')
     mkdirSync(worktreePath)
+    const { tasks, nodeRuns } = tablesOf(db)
     await db.update(tasks).set({ status: 'running', worktreePath }).where(eq(tasks.id, taskId))
     const nodeRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: nodeRunId,
       taskId,
       nodeId: DESIGNER,
@@ -97,7 +100,7 @@ const mockEnv = {
 }
 
 function invoke(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   h: Awaited<ReturnType<typeof fixture>>,
   content: Readonly<MemoryPortArtifactContent>,
 ) {
@@ -147,11 +150,12 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         }),
       ])
       expect(settled).toBe(false)
+      const { nodeRunOutputs, nodeRuns } = tablesOf(db)
       expect(
         await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.nodeRunId)),
       ).toEqual([])
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId)).get())?.status,
+        (await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))))?.status,
       ).toBe('running')
       expect(content.archives.size).toBe(0)
       ack.resolve(undefined)
@@ -179,7 +183,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         content.calls.indexOf('link:report.md'),
       )
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId)).get())?.tokInput,
+        (await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))))?.tokInput,
       ).toBe(100)
     } finally {
       ack.resolve(undefined)
@@ -235,11 +239,12 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
           })
           expect(result.failureCode).toBeUndefined()
           expect(result.errorMessage).not.toContain('runtime-spawn-failed')
+          const { nodeRunOutputs, nodeRuns } = tablesOf(db)
           expect(
             await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.nodeRunId)),
           ).toEqual([])
           expect(
-            await db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId)).get(),
+            await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))),
           ).toMatchObject({
             status: 'failed',
             exitCode: 0,
@@ -281,6 +286,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
     })
     const reviewNode = definition.nodes.find((node) => node.id === 'review')
     if (reviewNode === undefined) throw new Error('fixture review node missing')
+    const { tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
     await db
       .update(tasks)
       .set({ workflowSnapshot: JSON.stringify(definition) })
@@ -290,7 +296,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       v: 1,
       items: [{ path: 'repo/report.md', file: 'object:review-source', size: 28, truncated: false }],
     })
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: h.nodeRunId,
       portName: 'report',
       content: 'report.md',
@@ -348,7 +354,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
           .from(nodeRuns)
           .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'review'))),
       ).toEqual([])
-      expect((await db.select().from(tasks).where(eq(tasks.id, h.taskId)).get())?.status).toBe(
+      expect((await first(db.select().from(tasks).where(eq(tasks.id, h.taskId))))?.status).toBe(
         'running',
       )
       ack.resolve(undefined)
@@ -359,11 +365,12 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       expect(docs[0]!.sourceFilePath).toBe('report.md')
       expect(
         (
-          await db
-            .select()
-            .from(nodeRuns)
-            .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'review')))
-            .get()
+          await first(
+            db
+              .select()
+              .from(nodeRuns)
+              .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'review'))),
+          )
         )?.status,
       ).toBe('awaiting_review')
       expect(content.sources).toEqual([])
@@ -395,7 +402,8 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         ],
       })
     content.archives.set('object:download', bytes)
-    await db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: h.nodeRunId,
       portName: 'report',
       content: 'report.md',

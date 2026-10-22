@@ -1,14 +1,13 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos } from '@/db/schema'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 /**
  * Test-only adapter for fixtures whose "cached repository" is an intentionally
  * local, already-prepared Git directory. Production composition must use the
  * credential-aware fetch adapter from developmentDeliveryDeps.
  */
-export function staticCachedRepositoryPreparation(db: ProviderNeutralDatabase): {
+export function staticCachedRepositoryPreparation(db: PersistenceDb): {
   readonly prepare: (input: { readonly repositoryId: string }) => Promise<{
     readonly id: string
     readonly localPath: string
@@ -17,6 +16,7 @@ export function staticCachedRepositoryPreparation(db: ProviderNeutralDatabase): 
 } {
   return {
     async prepare(input) {
+      const { cachedRepos } = tablesOf(db)
       const row = (
         await db
           .select({

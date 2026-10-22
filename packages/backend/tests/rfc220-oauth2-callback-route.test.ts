@@ -12,6 +12,7 @@
 // stamp users.last_login_at, otherwise the user directory reports "Never
 // signed in" for accounts that have authenticated through SSO.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 
 import { eq } from 'drizzle-orm'
@@ -19,7 +20,7 @@ import type { SecretBox } from '../src/auth/secretBox'
 import { ne } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -28,8 +29,6 @@ import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { clearPendingFlows } from '../src/auth/oidc/flow'
 import { setOidcDefaultRole } from './helpers/auth/loginPolicy'
-import { userIdentities, userSessions, users } from '../src/db/schema'
-
 // Nothing listens here — discovery probes fail with an instant connection
 // refusal, keeping the suite offline and fast.
 const DEAD_ISSUER = 'http://127.0.0.1:1'
@@ -84,7 +83,7 @@ afterAll(() => idp.stop(true))
 const IDP = `http://127.0.0.1:${idp.port}`
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   providerId: string
   secretBox: SecretBox
@@ -192,6 +191,7 @@ describeEachProviderHttpApplication(
       const location = res.headers.get('location')!
       expect(location).toContain('#aw_session=')
 
+      const { userIdentities, users, userSessions } = tablesOf(h.db)
       // identity persisted under the CONFIGURED subject namespace
       const identities = await h.db.select().from(userIdentities)
       expect(identities.length).toBe(1)
@@ -251,6 +251,7 @@ describeEachProviderHttpApplication(
         `/api/auth/oidc/pure/callback?code=configured&state=${state}`,
       )
       expect(response.status).toBe(302)
+      const { userIdentities, users } = tablesOf(h.db)
       const identity = (await h.db.select().from(userIdentities))[0]!
       const created = await h.db.select().from(users).where(eq(users.id, identity.userId))
       expect(created[0]!.role).toBe('user')
@@ -272,6 +273,7 @@ describeEachProviderHttpApplication(
       expect(res.status).toBe(400)
       const html = await res.text()
       expect(html).toContain('configuration changed')
+      const { users, userIdentities } = tablesOf(h.db)
       // zero side effects: no user beyond the seeded __system__, no identity
       const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
       expect(humans.length).toBe(0)
@@ -287,6 +289,7 @@ describeEachProviderHttpApplication(
       const { state } = await startLogin(h)
       const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
       expect(res.status).toBe(302)
+      const { userIdentities } = tablesOf(h.db)
       const identities = await h.db.select().from(userIdentities)
       expect(identities.length).toBe(1)
       expect(identities[0]!.subject).toBe('77')

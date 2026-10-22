@@ -2,6 +2,7 @@
 // minting and lifecycle events commit atomically; native-session fencing and
 // git rollback complete before the replacement driver can touch a workspace.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   isSingleRootRepository,
   CANCELABLE_TASK_STATUSES,
@@ -20,13 +21,6 @@ import { shouldRebuildWorkspaceProfiles } from '../domain/executionIntent'
 import { ulid } from 'ulid'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 
-import {
-  nodeRuns,
-  runtimeSessionLeases as runtimeSessionLeaseRows,
-  taskExecutionIntents,
-  taskExecutionOwners,
-  tasks,
-} from '@/db/schema'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
@@ -60,7 +54,7 @@ import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleComm
 import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
 import { resolveTerminalWorkspacePruneDecision } from '@/platform/persistence/terminalWorkspacePrune'
 import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type {
   TaskDriveContext,
@@ -127,7 +121,7 @@ export interface ChildTaskLifecycleRuntimePorts {
 
 export interface ChildTaskLifecycleDependencies extends ChildTaskLifecycleRuntimePorts {
   readonly workspacePresence: WorkspacePresenceQueries
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly log: TaskExecutionTopologyLogger
@@ -161,7 +155,7 @@ export interface ChildTaskLifecycleDependencies extends ChildTaskLifecycleRuntim
  * PostgreSQL 那侧交 `executionModule.runtimeRegistry`。
  */
 export interface TaskCancelDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly stop: ProviderTaskExecutionModule['runtimeRegistry']
   readonly log: TaskExecutionTopologyLogger
@@ -180,7 +174,7 @@ export interface TaskCancelOptions {
 
 export interface TaskResumeDependencies {
   readonly workspacePresence: WorkspacePresenceQueries
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly log: TaskExecutionTopologyLogger
@@ -194,21 +188,22 @@ export interface TaskResumeDependencies {
  * It must perform database work only; serializable transactions can retry. */
 export interface DurableTaskResumeCommand {
   readonly intentId: string
-  assertCurrent(tx: ProviderNeutralDatabase): Promise<void>
-  admitted(tx: ProviderNeutralDatabase, intentId: string): Promise<void>
+  assertCurrent(tx: PersistenceDb): Promise<void>
+  admitted(tx: PersistenceDb, intentId: string): Promise<void>
 }
 
 export interface PreparedTaskResume {
   readonly taskId: string
   readonly intentId: string
-  readonly state: typeof taskExecutionIntents.$inferSelect.state
+  readonly state: PersistenceTables['taskExecutionIntents']['$inferSelect']['state']
 }
 
 async function readResumeIntent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   intentId: string,
 ): Promise<PreparedTaskResume | null> {
+  const { taskExecutionIntents } = tablesOf(db)
   const [row] = await db
     .select()
     .from(taskExecutionIntents)
@@ -249,7 +244,8 @@ function validateFrozenTrigger(task: ResumeTask): void {
   }
 }
 
-async function loadResumeTask(db: ProviderNeutralDatabase, taskId: string): Promise<ResumeTask> {
+async function loadResumeTask(db: PersistenceDb, taskId: string): Promise<ResumeTask> {
+  const { tasks } = tablesOf(db)
   const row = (
     await db
       .select({
@@ -291,6 +287,7 @@ async function assertResumeBusinessAdmission(
     )
   }
   if (task.parentTaskId !== null && task.parentNodeRunId !== null) {
+    const { nodeRuns } = tablesOf(dependencies.db)
     const parent = (
       await dependencies.db
         .select({ status: nodeRuns.status })
@@ -327,6 +324,7 @@ async function assertResumeAdmission(
 ): Promise<void> {
   await assertResumeBusinessAdmission(dependencies, task)
 
+  const { nodeRuns } = tablesOf(dependencies.db)
   const hasRepoPrepRow =
     (
       await dependencies.db
@@ -410,6 +408,7 @@ async function admitResume(
       if (previous) return { prepared: previous, eventRefs: [] }
     }
     await assertTaskOwnerlessTx(tx, task.id)
+    const { tasks } = tablesOf(tx)
     const changed = await tx
       .update(tasks)
       .set({
@@ -573,6 +572,7 @@ async function rollbackForResume(
   if (rollbackTarget === null) {
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
   }
+  const { nodeRuns, runtimeSessionLeases } = tablesOf(dependencies.db)
   const rows = await dependencies.db
     .select({
       id: nodeRuns.id,
@@ -599,12 +599,12 @@ async function rollbackForResume(
   // Held native sessions are fenced even when their run is not one of the
   // top-level rollback rows (for example a nested framework child).
   const held = await dependencies.db
-    .select({ nodeRunId: runtimeSessionLeaseRows.leaseNodeRunId })
-    .from(runtimeSessionLeaseRows)
+    .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
+    .from(runtimeSessionLeases)
     .where(
       and(
-        eq(runtimeSessionLeaseRows.taskId, input.taskId),
-        isNotNull(runtimeSessionLeaseRows.leaseNodeRunId),
+        eq(runtimeSessionLeases.taskId, input.taskId),
+        isNotNull(runtimeSessionLeases.leaseNodeRunId),
       ),
     )
   const heldIds = new Set(held.flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])))
@@ -708,6 +708,7 @@ export async function cancelTaskProjection(
   // 槽的覆盖面与另一侧**逐字对齐**：只包住准入与落库那一段；停运行时与级联子任务在槽外
   //（前者要等最多 5s，后者取的是子任务自己的槽）。
   const acquireMutationSlot = reserveTaskReviewMutationSlot(taskId)
+  const { tasks } = tablesOf(dependencies.db)
   // RFC-300 / RFC-359 AC-1（第 11 刀补的**第五样**）—— 终态工作区回收的认领。
   //
   // 退役那份走 `setTaskStatus` → `taskLifecycleWriteSequence`：那条写序列在同一笔 CAS 里盖上
@@ -772,6 +773,7 @@ export async function cancelTaskProjection(
 
   async function runCancelTransaction() {
     return await withSerializableTaskExecution(dependencies.db, async (tx) => {
+      const { tasks, taskExecutionOwners, nodeRuns } = tablesOf(tx)
       const task = (
         await tx
           .select({

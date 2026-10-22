@@ -1,5 +1,5 @@
 import type { WorkgroupTaskRoomClarifyParticipantInTx } from '@/modules/task-execution/public/commands'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createWorkgroupTaskRoomClarifyParticipantInTx } from '../infrastructure/workgroupTaskRoomClarifyParticipant'
 
 /**
@@ -7,7 +7,7 @@ import { createWorkgroupTaskRoomClarifyParticipantInTx } from '../infrastructure
  * 调用方（Resource Catalog 的任务房）持有事务，把它交给这里换一个只碰 Collaboration 表的参与者。
  */
 export interface WorkgroupTaskRoomClarifyParticipantFactory {
-  inTransaction(transaction: DatabaseTransaction): WorkgroupTaskRoomClarifyParticipantInTx
+  inTransaction(transaction: PersistenceTx): WorkgroupTaskRoomClarifyParticipantInTx
 }
 
 export function composeWorkgroupTaskRoomClarifyParticipantFactory(): WorkgroupTaskRoomClarifyParticipantFactory {

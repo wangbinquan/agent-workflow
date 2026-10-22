@@ -3,6 +3,8 @@
 // two edits from one base cannot share a successor revision, retries reconcile
 // by canonical bytes, and legacy physical storage heals exactly once.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   serializeWorkflowDefinitionStorageV1,
   type SaveWorkflowReceipt,
@@ -16,8 +18,7 @@ import { eq } from 'drizzle-orm'
 import { getTask } from '../src/services/task'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
 import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import {
@@ -75,7 +76,7 @@ function snapshot(
 }
 
 function save(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflow: WorkflowDetail,
   next: WorkflowDraftSnapshot,
   opts: {
@@ -116,6 +117,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
         definition: legacy,
       })
 
+      const { workflows } = tablesOf(db)
       const raw = (
         await db
           .select({ definition: workflows.definition })
@@ -211,7 +213,8 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
         nodes: [],
         edges: [],
       }
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id,
         name: 'legacy-heal',
         description: '',
@@ -282,6 +285,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
       { name: 'acl-fence', description: '', definition: EMPTY_DEFINITION },
       { ownerUserId: 'alice' },
     )
+    const { workflows } = tablesOf(db)
     await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, workflow.id))
 
     await expect(
@@ -340,7 +344,8 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
       { ownerUserId: 'alice' },
     )
     const secretAgentId = ulid()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id: secretAgentId,
       name: 'secret-agent',
       ownerUserId: 'carol',
@@ -383,6 +388,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     )
     const fence = () => ({ expectedVersion: 1, clientMutationId: ulid() })
 
+    const { workflows } = tablesOf(db)
     await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, workflow.id))
     await expect(deleteWorkflow(db, workflow.id, fence(), bob)).rejects.toMatchObject({
       code: 'workflow-not-found',
@@ -416,7 +422,8 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     resetBroadcastersForTests()
     const db = harness.db
     const alice = actorPrincipal('alice')
-    await db.insert(users).values({
+    const { users, tasks } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'carol',
       username: 'carol',
       email: 'carol@example.com',
@@ -451,7 +458,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     ).rejects.toMatchObject({ code: 'resource-operation-stale', status: 409 })
     expect(await getWorkflow(db, workflow.id)).not.toBeNull()
 
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: ulid(),
       name: 'delete-blocker',
       workflowId: workflow.id,
@@ -526,9 +533,10 @@ describeEachProvider(
   (harness) => {
     test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
       const db = harness.db
-      await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
+      await composeAgentLaunchResourceOperations({ db }).ensureHostWorkflow()
       await ensureWorkgroupHostWorkflow(db)
 
+      const { workflows } = tablesOf(db)
       const rows = await db
         .select({ id: workflows.id, definition: workflows.definition })
         .from(workflows)

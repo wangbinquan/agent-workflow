@@ -2,6 +2,7 @@
 // Statement.run().changes. Both original DB factories must expose only the
 // direct SQL row count without relaxing business affectedRows() predicates.
 
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
@@ -266,9 +267,13 @@ export function registerRfc370SqliteAffectedRowsCases(): void {
 
       test('Drizzle and the original affectedRows predicate see the direct count', () => {
         withDatabase(factory, (db, sqlite) => {
-          expect(affectedRows(db.run(sql`UPDATE _rfc370_rows SET value = 1 WHERE id = 1`))).toBe(1)
-          expect(affectedRows(db.run(sql`UPDATE _rfc370_rows SET value = 2`))).toBe(2)
-          expect(affectedRows(db.run(sql`UPDATE _rfc370_rows SET value = 3 WHERE id = 99`))).toBe(0)
+          expect(
+            affectedRows(rawExec(db, sql`UPDATE _rfc370_rows SET value = 1 WHERE id = 1`)),
+          ).toBe(1)
+          expect(affectedRows(rawExec(db, sql`UPDATE _rfc370_rows SET value = 2`))).toBe(2)
+          expect(
+            affectedRows(rawExec(db, sql`UPDATE _rfc370_rows SET value = 3 WHERE id = 99`)),
+          ).toBe(0)
           expect(effects(sqlite)).toEqual([
             ['update', 1],
             ['update', 1],

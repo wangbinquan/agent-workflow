@@ -1,4 +1,6 @@
 // RFC-387: fusion uses the session's drive and cancellation commands on both engines.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 import type {
   FusionEngineTaskLaunch,
@@ -10,15 +12,7 @@ import type {
 } from '@/modules/source-control/public/participants'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import {
-  taskCollaborators,
-  taskExecutionIntents,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { layoutBuiltinWorkflowSnapshotJson } from '@/services/task'
@@ -30,7 +24,7 @@ import { withSerializableTaskExecution } from './taskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 
 export interface FusionEngineTaskDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly coordinator: TaskDriveCoordinator
   readonly cancellation: TaskCancellationCommand
   readonly workspaces: FusionWorkspaceEffects
@@ -47,10 +41,11 @@ function taskSlotPath(taskId: string, workflowVersion: number): string {
 }
 
 async function validateCollaborators(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   command: FusionEngineTaskLaunch,
 ): Promise<readonly string[]> {
   const userIds = [...new Set([command.ownerUserId, ...(command.collaboratorUserIds ?? [])])]
+  const { users } = tablesOf(db)
   const active = await db
     .select({ id: users.id })
     .from(users)
@@ -71,6 +66,7 @@ async function insertFusionTask(
   command: FusionEngineTaskLaunch,
   workspace: FusionWorkspacePreparation,
 ): Promise<string> {
+  const { workflows } = tablesOf(dependencies.db)
   const workflowRows = await dependencies.db
     .select({
       id: workflows.id,
@@ -99,7 +95,8 @@ async function insertFusionTask(
       baseCommit: workspace.baseCommit,
       ownerRef: command.taskId,
     })
-    await tx.insert(tasks).values({
+    const { tasks, taskRepos, taskCollaborators, taskExecutionIntents } = tablesOf(tx)
+    await insertOne(tx, tasks, {
       id: command.taskId,
       name: command.name,
       workflowId: workflow.id,
@@ -124,7 +121,7 @@ async function insertFusionTask(
       executionLineageId: command.taskId,
       lineageSlotPathJson: slotPathJson,
     })
-    await tx.insert(taskRepos).values({
+    await insertOne(tx, taskRepos, {
       taskId: command.taskId,
       repoIndex: 0,
       repoPath: workspace.worktreePath,
@@ -149,7 +146,7 @@ async function insertFusionTask(
         addedAt: now,
       })),
     )
-    await tx.insert(taskExecutionIntents).values({
+    await insertOne(tx, taskExecutionIntents, {
       id: intentId,
       taskId: command.taskId,
       kind: 'launch',
@@ -190,6 +187,7 @@ export function createFusionEngineTaskOperations(
   dependencies: FusionEngineTaskDependencies,
 ): FusionEngineTaskOperations {
   async function loadTask(taskId: string) {
+    const { tasks } = tablesOf(dependencies.db)
     const rows = await dependencies.db
       .select({
         status: tasks.status,

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 
 import { openDb } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MaintenanceWorkerDatabaseInit,
   MaintenanceWorkerSupervisorOptions,
@@ -10,7 +10,7 @@ import type { ProviderDatabaseHarness } from './eachProvider'
 import { MIGRATIONS } from '../migration-freeze'
 
 export interface ProviderMaintenanceWorkerDatabase {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly databaseInit: MaintenanceWorkerDatabaseInit
   readonly workerFactory?: MaintenanceWorkerSupervisorOptions['workerFactory']
   dispose(): Promise<void>

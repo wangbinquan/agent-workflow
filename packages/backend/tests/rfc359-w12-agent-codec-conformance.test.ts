@@ -2,12 +2,14 @@
 // removing the duplicate projection. These cases ran against both old entry
 // points before extraction; database rows remain real on each selected provider.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import ts from 'typescript'
 import type { Agent } from '@agent-workflow/shared'
-import { agents } from '@/db/schema'
 import {
   agentFromPersistenceRow,
   type AgentPersistenceRow,
@@ -66,8 +68,9 @@ const decoders = [agentFromPersistenceRow, rowToAgent]
 describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
   async function persisted(patch: Partial<AgentPersistenceRow> = {}) {
     const row = { ...baseRow, ...patch }
-    await harness.db.insert(agents).values(row)
-    const loaded = await harness.db.select().from(agents).where(eq(agents.id, row.id)).get()
+    const { agents } = tablesOf(harness.db)
+    await insertOne(harness.db, agents, row)
+    const loaded = await first(harness.db.select().from(agents).where(eq(agents.id, row.id)))
     if (loaded === undefined) throw new Error('agent codec fixture row disappeared')
     expect(loaded).toEqual(row)
     return Object.freeze(loaded)
@@ -110,7 +113,8 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
       branchPorts: ['done'],
     }
     for (const decode of decoders) expect(decode(row)).toEqual(expected)
-    expect(await harness.db.select().from(agents).where(eq(agents.id, row.id)).get()).toEqual(row)
+    const { agents } = tablesOf(harness.db)
+    expect(await first(harness.db.select().from(agents).where(eq(agents.id, row.id)))).toEqual(row)
   })
 
   for (const runtime of [null, '', 'custom-runtime']) {

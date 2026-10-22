@@ -3,32 +3,23 @@
 //   端点（manage 权限、secret 一次性明文 + 掩码 hint、轮换、restrict 删除）；
 //   触发器（owner 制 404 同形、保存期三层校验、kind/endpoint 不可变、级联）；
 //   投递（manage 读、replay 三规则）。AC-14/15/16/17 的落点。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { eventuallyAtLeast } from './helpers/eventually'
-import {
-  webhookDeliveries,
-  webhookTriggerFires,
-  webhookTriggerStreams,
-  webhookTriggers,
-  workflows,
-} from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
 type User = { id: string; token: string }
 
-async function mkUser(
-  db: ProviderNeutralDatabase,
-  username: string,
-  role: 'admin' | 'user',
-): Promise<User> {
+async function mkUser(db: PersistenceDb, username: string, role: 'admin' | 'user'): Promise<User> {
   const u = await createUser(db, {
     username,
     displayName: username,
@@ -52,7 +43,8 @@ async function harness(scope: ProviderHttpApplicationScope) {
     },
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -355,15 +347,16 @@ describeEachProviderHttpApplication(
       })
       expect(ok.status).toBe(200)
       expect(((await ok.json()) as { maxConsecutiveFires: number }).maxConsecutiveFires).toBe(5)
+      const { webhookTriggerFires, webhookTriggerStreams } = tablesOf(h.db)
       // 级联：手工塞 fires/streams 后 DELETE
-      await h.db.insert(webhookTriggerFires).values({
+      await insertOne(h.db, webhookTriggerFires, {
         id: ulid(),
         deliveryId: 'd-x',
         triggerId: tid,
         streamKey: 's',
         outcome: 'launched',
       })
-      await h.db.insert(webhookTriggerStreams).values({
+      await insertOne(h.db, webhookTriggerStreams, {
         triggerId: tid,
         streamKey: 's',
         consecutiveFires: 2,
@@ -379,7 +372,8 @@ describeEachProviderHttpApplication(
       const h = await harness(scope)
       const ep = await createEndpoint(h.app, h.admin)
       const id = ulid()
-      await h.db.insert(webhookTriggers).values({
+      const { webhookTriggers } = tablesOf(h.db)
+      await insertOne(h.db, webhookTriggers, {
         id,
         name: '待修复旧触发器',
         endpointId: ep.id,
@@ -563,7 +557,8 @@ describeEachProviderHttpApplication(
         triggerBody(ep.id, h.workflowId),
       )
       const tid = ((await created.json()) as { id: string }).id
-      await h.db.insert(webhookTriggerStreams).values({
+      const { webhookTriggerStreams } = tablesOf(h.db)
+      await insertOne(h.db, webhookTriggerStreams, {
         triggerId: tid,
         streamKey: 'platform/api|mr:7',
         consecutiveFires: 3,
@@ -589,12 +584,13 @@ describeEachProviderHttpApplication(
   },
   (scope) => {
     async function seedDelivery(
-      db: ProviderNeutralDatabase,
+      db: PersistenceDb,
       endpointId: string,
-      overrides: Partial<typeof webhookDeliveries.$inferInsert> = {},
+      overrides: Partial<PersistenceTables['webhookDeliveries']['$inferInsert']> = {},
     ): Promise<string> {
       const id = ulid()
-      await db.insert(webhookDeliveries).values({
+      const { webhookDeliveries } = tablesOf(db)
+      await insertOne(db, webhookDeliveries, {
         id,
         endpointId,
         eventUuid: overrides.eventUuid ?? null,
@@ -665,6 +661,7 @@ describeEachProviderHttpApplication(
       expect(res.status).toBe(200)
       const body = (await res.json()) as { deliveryId: string; replayedFrom: string }
       expect(body.replayedFrom).toBe(good)
+      const { webhookDeliveries } = tablesOf(h.db)
       const newRow = (
         await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, body.deliveryId))
       )[0]

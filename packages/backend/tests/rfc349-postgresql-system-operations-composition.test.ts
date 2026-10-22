@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composePostgresqlSystemOperations } from '@/modules/system-operations/composition'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
@@ -39,7 +39,7 @@ describe('RFC-349 PostgreSQL System Operations composition', () => {
     const systemOperations = composePostgresqlSystemOperations({
       headContract: buildLogicalSchemaContract(),
       runtime,
-      db: {} as ProviderNeutralDatabase,
+      db: {} as PersistenceDb,
       databaseConfig,
       appHome,
       contract,
@@ -70,7 +70,7 @@ describe('RFC-349 PostgreSQL System Operations composition', () => {
           provider: 'postgresql',
           generationId: 'dbg_postgresql_composition_01',
         } as PostgresqlDatabaseRuntime,
-        db: {} as ProviderNeutralDatabase,
+        db: {} as PersistenceDb,
         databaseConfig: {
           provider: 'postgresql',
           urlEnv: 'COMPOSITION_DATABASE_URL',

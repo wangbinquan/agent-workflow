@@ -23,21 +23,12 @@
 // 每个用例都配一条**反向对照**（大小写以外真的不同的值必须插得进去），否则「两行都插不进」
 // 也能来自一条过宽的约束，绿得没有意义。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  intentSessions,
-  intentTurnEvents,
-  intentTurns,
-  repoGroupNodes,
-  repoGroups,
-  taskSpaceNodes,
-  tasks,
-  webhookMrLaunchGuards,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 /**
@@ -54,8 +45,9 @@ async function rejected(write: () => Promise<unknown>): Promise<boolean> {
   }
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(workflows).values({
+async function seedWorkflow(db: PersistenceDb, id: string): Promise<void> {
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: `wf-${id}`,
     description: '',
@@ -65,9 +57,10 @@ async function seedWorkflow(db: ProviderNeutralDatabase, id: string): Promise<vo
   })
 }
 
-async function seedTask(db: ProviderNeutralDatabase, id: string): Promise<void> {
+async function seedTask(db: PersistenceDb, id: string): Promise<void> {
   await seedWorkflow(db, `wf_for_${id}`)
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: 'w7-parity',
     workflowId: `wf_for_${id}`,
@@ -104,29 +97,31 @@ function launchGuardRow(id: string, fireId: string) {
 
 describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个引擎上都真的生效', (harness) => {
   test('repo_groups：组名大小写不敏感唯一——PG 上此前能建出同名仓库组', async () => {
-    await harness.db.insert(repoGroups).values(repoGroupRow('rg_alpha', 'Alpha'))
+    const { repoGroups } = tablesOf(harness.db)
+    await insertOne(harness.db, repoGroups, repoGroupRow('rg_alpha', 'Alpha'))
 
     expect(
-      await rejected(() =>
-        harness.db.insert(repoGroups).values(repoGroupRow('rg_alpha_2', 'alpha')),
-      ),
+      await rejected(() => {
+        return harness.db.insert(repoGroups).values(repoGroupRow('rg_alpha_2', 'alpha'))
+      }),
       '`idx_repo_groups_name_ci` 是 UNIQUE(lower(name))：只差大小写的组名必须被拒',
     ).toBe(true)
     expect(await harness.db.select({ id: repoGroups.id }).from(repoGroups)).toHaveLength(1)
 
     // 反向对照：真的不同的名字照常插得进去（约束没有宽到把一切都拒了）。
-    await harness.db.insert(repoGroups).values(repoGroupRow('rg_beta', 'Beta'))
+    await insertOne(harness.db, repoGroups, repoGroupRow('rg_beta', 'Beta'))
     expect(await harness.db.select({ id: repoGroups.id }).from(repoGroups)).toHaveLength(2)
   })
 
   test('repo_group_nodes：组内路径大小写不敏感唯一（主键是精确路径，抓不到这一类）', async () => {
-    await harness.db.insert(repoGroups).values(repoGroupRow('rg_nodes', 'nodes'))
-    await harness.db.insert(repoGroupNodes).values({ groupId: 'rg_nodes', path: 'Src' })
+    const { repoGroups, repoGroupNodes } = tablesOf(harness.db)
+    await insertOne(harness.db, repoGroups, repoGroupRow('rg_nodes', 'nodes'))
+    await insertOne(harness.db, repoGroupNodes, { groupId: 'rg_nodes', path: 'Src' })
 
     expect(
-      await rejected(() =>
-        harness.db.insert(repoGroupNodes).values({ groupId: 'rg_nodes', path: 'src' }),
-      ),
+      await rejected(() => {
+        return harness.db.insert(repoGroupNodes).values({ groupId: 'rg_nodes', path: 'src' })
+      }),
       '`idx_rgn_path_ci` 是 UNIQUE(group_id, lower(path))；PK(group_id, path) 认为 Src ≠ src，' +
         '所以这一类只有 CI 索引拦得住',
     ).toBe(true)
@@ -135,9 +130,9 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
     ).toHaveLength(1)
 
     // 反向对照：同组里另一个真实路径、以及另一个组里的同名路径都必须插得进去。
-    await harness.db.insert(repoGroupNodes).values({ groupId: 'rg_nodes', path: 'docs' })
-    await harness.db.insert(repoGroups).values(repoGroupRow('rg_nodes_2', 'nodes-2'))
-    await harness.db.insert(repoGroupNodes).values({ groupId: 'rg_nodes_2', path: 'Src' })
+    await insertOne(harness.db, repoGroupNodes, { groupId: 'rg_nodes', path: 'docs' })
+    await insertOne(harness.db, repoGroups, repoGroupRow('rg_nodes_2', 'nodes-2'))
+    await insertOne(harness.db, repoGroupNodes, { groupId: 'rg_nodes_2', path: 'Src' })
     expect(
       await harness.db.select({ path: repoGroupNodes.path }).from(repoGroupNodes),
     ).toHaveLength(3)
@@ -145,45 +140,48 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
 
   test('task_space_nodes：任务空间目录大小写不敏感唯一', async () => {
     await seedTask(harness.db, 't_space')
-    await harness.db.insert(taskSpaceNodes).values({ taskId: 't_space', nodePath: 'Repo/App' })
+    const { taskSpaceNodes } = tablesOf(harness.db)
+    await insertOne(harness.db, taskSpaceNodes, { taskId: 't_space', nodePath: 'Repo/App' })
 
     expect(
-      await rejected(() =>
-        harness.db.insert(taskSpaceNodes).values({ taskId: 't_space', nodePath: 'repo/app' }),
-      ),
+      await rejected(() => {
+        return harness.db.insert(taskSpaceNodes).values({ taskId: 't_space', nodePath: 'repo/app' })
+      }),
       '`idx_task_space_nodes_path_ci` 是 UNIQUE(task_id, lower(node_path))',
     ).toBe(true)
     expect(
       await harness.db.select({ nodePath: taskSpaceNodes.nodePath }).from(taskSpaceNodes),
     ).toHaveLength(1)
 
-    await harness.db.insert(taskSpaceNodes).values({ taskId: 't_space', nodePath: 'Repo/Lib' })
+    await insertOne(harness.db, taskSpaceNodes, { taskId: 't_space', nodePath: 'Repo/Lib' })
     expect(
       await harness.db.select({ nodePath: taskSpaceNodes.nodePath }).from(taskSpaceNodes),
     ).toHaveLength(2)
   })
 
   test('webhook_mr_launch_guards：一次 fire 只能预留一条 guard（迁移里的列级 UNIQUE）', async () => {
-    await harness.db.insert(webhookMrLaunchGuards).values(launchGuardRow('g_1', 'fire_1'))
+    const { webhookMrLaunchGuards } = tablesOf(harness.db)
+    await insertOne(harness.db, webhookMrLaunchGuards, launchGuardRow('g_1', 'fire_1'))
 
     expect(
-      await rejected(() =>
-        harness.db.insert(webhookMrLaunchGuards).values(launchGuardRow('g_2', 'fire_1')),
-      ),
+      await rejected(() => {
+        return harness.db.insert(webhookMrLaunchGuards).values(launchGuardRow('g_2', 'fire_1'))
+      }),
       '`fire_id text NOT NULL UNIQUE`：同一次 fire 重入必须撞唯一键，去重分支才走得到',
     ).toBe(true)
     expect(
       await harness.db.select({ id: webhookMrLaunchGuards.id }).from(webhookMrLaunchGuards),
     ).toHaveLength(1)
 
-    await harness.db.insert(webhookMrLaunchGuards).values(launchGuardRow('g_3', 'fire_2'))
+    await insertOne(harness.db, webhookMrLaunchGuards, launchGuardRow('g_3', 'fire_2'))
     expect(
       await harness.db.select({ id: webhookMrLaunchGuards.id }).from(webhookMrLaunchGuards),
     ).toHaveLength(2)
   })
 
   test('workflows：内建工作流重名闸是**部分**唯一索引——只管 builtin 行', async () => {
-    await harness.db.insert(workflows).values({
+    const { workflows } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
       id: 'wf_builtin_1',
       name: 'code-review',
       description: '',
@@ -194,8 +192,8 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
     })
 
     expect(
-      await rejected(() =>
-        harness.db.insert(workflows).values({
+      await rejected(() => {
+        return harness.db.insert(workflows).values({
           id: 'wf_builtin_2',
           name: 'code-review',
           description: '',
@@ -203,13 +201,13 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
           version: 1,
           builtin: true,
           schemaVersion: 4,
-        }),
-      ),
+        })
+      }),
       '`idx_workflows_builtin_name` = UNIQUE(name) WHERE builtin：第二条同名内建必须被拒',
     ).toBe(true)
 
     // 反向对照 ①：谓词之外的行不受管——用户自建的同名工作流照常允许（重名由导入对话框处理）。
-    await harness.db.insert(workflows).values({
+    await insertOne(harness.db, workflows, {
       id: 'wf_user',
       name: 'code-review',
       description: '',
@@ -219,7 +217,7 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
       schemaVersion: 4,
     })
     // 反向对照 ②：另一个名字的内建工作流照常允许。
-    await harness.db.insert(workflows).values({
+    await insertOne(harness.db, workflows, {
       id: 'wf_builtin_other',
       name: 'code-audit',
       description: '',
@@ -232,16 +230,17 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
   })
 
   test('intent_turn_events：部分唯一索引与全量唯一索引在两个引擎上等价（W5 账本判定的判据）', async () => {
+    const { intentSessions, intentTurns, intentTurnEvents } = tablesOf(harness.db)
     // 这两条唯一性 W7 **刻意没有抹平形态**：迁移写的是 `WHERE external_event_id IS NOT NULL`，
     // drizzle 写的是全量唯一索引。判定它们等价的依据是「两个引擎都把含 NULL 的行视作互不相同」
     // （PostgreSQL 的 NULLS DISTINCT 默认）。判据不能只写在注释里——这里把它跑出来。
-    await harness.db.insert(intentSessions).values({
+    await insertOne(harness.db, intentSessions, {
       id: 'is_w7',
       ownerUserId: 'u_w7',
       createdAt: 1,
       updatedAt: 1,
     })
-    await harness.db.insert(intentTurns).values({
+    await insertOne(harness.db, intentTurns, {
       id: 'it_w7',
       sessionId: 'is_w7',
       seq: 1,
@@ -261,13 +260,15 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
 
     // NULL 侧：同 (turn_id, source)、external_event_id 都为 NULL 的两行——两个引擎都必须放行。
     // 这正是谓词排除掉的那批行，也正是「部分 ≡ 全量」成立的原因。
-    await harness.db.insert(intentTurnEvents).values(event(1, null))
-    await harness.db.insert(intentTurnEvents).values(event(2, null))
+    await insertOne(harness.db, intentTurnEvents, event(1, null))
+    await insertOne(harness.db, intentTurnEvents, event(2, null))
 
     // 非 NULL 侧：同一个外部事件 id 重入必须被拒（去重真的生效）。
-    await harness.db.insert(intentTurnEvents).values(event(3, 'ext-1'))
+    await insertOne(harness.db, intentTurnEvents, event(3, 'ext-1'))
     expect(
-      await rejected(() => harness.db.insert(intentTurnEvents).values(event(4, 'ext-1'))),
+      await rejected(() => {
+        return harness.db.insert(intentTurnEvents).values(event(4, 'ext-1'))
+      }),
       'uniq_intent_turn_events_external 必须拦住同 (turn_id, source, external_event_id) 的重入',
     ).toBe(true)
 

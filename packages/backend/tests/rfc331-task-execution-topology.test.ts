@@ -3,12 +3,13 @@
 // Functionality only: these tests lock request shape, status/call-graph parity,
 // explicit fixture topology and the three dependency cuts.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
-import { tasks, workflows } from '../src/db/schema'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { SchedulerDriverPort } from '../src/modules/task-execution/public/commands'
 import { getCallTargets } from '../src/services/structuralDiff/callGraph/expandService'
@@ -215,7 +216,8 @@ describe('RFC-331 scheduler topology contract', () => {
 describeEachProvider('RFC-331 purpose-specific read models', (harness) => {
   test('status projection and legacy single-repo fallback preserve the old read shape', async () => {
     const db = harness.db
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: 'wf-rfc331',
       name: 'wf-rfc331',
       definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -223,7 +225,7 @@ describeEachProvider('RFC-331 purpose-specific read models', (harness) => {
       version: 1,
       schemaVersion: 3,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: 'task-rfc331',
       name: 'task-rfc331',
       workflowId: 'wf-rfc331',

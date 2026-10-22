@@ -5,10 +5,10 @@
 // `DatabaseSession` 上（`taskQuestionDispatch.ts`），`createTaskDagCollaborationOperations`
 // 两个 provider 共用。场景移植自 `rfc140-one-click-dispatch-all.test.ts`（SQLite 黄金锁，仍保留）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq, inArray } from 'drizzle-orm'
 
-import { nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { dispatchTaskQuestions } from '@/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
@@ -48,6 +48,7 @@ describeEachProvider('RFC-359 T1 —— 延迟提问自动派发（P0-7）', (ha
     expect((await entryById(db, designerIds[0]!))!.dispatchedAt).toBeNull()
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
 
+    const { nodeRuns, taskQuestions } = tablesOf(db)
     const pending = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.status === 'pending',
     )!
@@ -93,6 +94,7 @@ describeEachProvider('RFC-359 T1 —— 延迟提问自动派发（P0-7）', (ha
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
     await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
     await createTaskDagCollaborationOperations(db).autoDispatchDeferredQuestions(taskId)
     for (const id of designerIds) {

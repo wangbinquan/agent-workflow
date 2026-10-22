@@ -1,10 +1,11 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { developmentMissions, developmentMrClaims } from '@/db/schema'
 import { composeDigitalEmployeeWriterCutoverFor } from '@/modules/digital-employee/composition'
 
 // RFC-317 T41 / RFC-349 —— provider adapter owns the writer state and the
@@ -39,7 +40,8 @@ describeEachProvider('RFC-310 Digital Employee OS single-writer cutover', (harne
 
   test('existing Missions retain their claims until terminal and are never mechanically adopted', async () => {
     const db = harness.db
-    await db.insert(developmentMissions).values({
+    const { developmentMissions, developmentMrClaims } = tablesOf(db)
+    await insertOne(db, developmentMissions, {
       id: 'legacy-mission-1',
       status: 'running',
       repositoryId: 'repo-1',
@@ -48,7 +50,7 @@ describeEachProvider('RFC-310 Digital Employee OS single-writer cutover', (harne
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(developmentMrClaims).values({
+    await insertOne(db, developmentMrClaims, {
       id: 'legacy-claim-1',
       codeHostEndpointRef: 'endpoint-1',
       stableProjectRef: 'project-1',
@@ -97,6 +99,7 @@ describeEachProvider('RFC-310 Digital Employee OS single-writer cutover', (harne
 
   test('migration reporting stays bounded while preserving the exact drain total', async () => {
     const db = harness.db
+    const { developmentMissions } = tablesOf(db)
     await db.insert(developmentMissions).values(
       Array.from({ length: 101 }, (_, index) => ({
         id: `legacy-mission-${String(index).padStart(3, '0')}`,

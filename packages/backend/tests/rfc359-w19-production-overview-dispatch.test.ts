@@ -1,9 +1,10 @@
 // RFC-359 W19: the performance/test overview must select the PG daemon's owner
-// composition. The real client's provider is a Proxy getter, not an own member.
+// composition. RFC-395 I-b binds provider metadata to the native BunSQLDatabase.
 // This protocol probe throws before every SQL execution and returns no rows;
 // real database results and HTTP timing remain in the existing hosted suites.
 
 import { describe, expect, test } from 'bun:test'
+import { BunSQLDatabase } from 'drizzle-orm/bun-sql'
 import { buildActor } from '@/auth/actor'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createTaskOverviewQuery } from '@/modules/task-execution/composition/taskOverview'
@@ -83,8 +84,8 @@ describe('RFC-359 W19 overview provider dispatch', () => {
     try {
       expect(probe.db.$provider).toBe('postgresql')
       expect(Reflect.get(probe.db, '$provider')).toBe('postgresql')
-      expect('$provider' in probe.db).toBe(false)
-      expect(Reflect.get(probe.db, 'resultKind')).toBe('async')
+      expect('$provider' in probe.db).toBe(true)
+      expect(probe.db).toBeInstanceOf(BunSQLDatabase)
       expect(probe.statements).toEqual([])
     } finally {
       await probe.runtime.close()

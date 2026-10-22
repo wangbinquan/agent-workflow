@@ -52,6 +52,9 @@
 // If any of these go red, do NOT relax — re-read
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -59,8 +62,7 @@ import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacyCrossClarify } from './clarify-fixtures'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
@@ -73,7 +75,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // the answered round's questioner card to the graph designer node + a dispatch of that designer
 // entry; the retry_index / freshness bump this file locks is minted by the SAME buildFrontierMintPlan.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   intermediaryNodeRunId: string,
 ) {
@@ -200,10 +202,11 @@ function selfClarifyDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
+async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'fixture',
     description: '',
@@ -216,7 +219,7 @@ async function seedTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): P
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -233,27 +236,29 @@ async function seedTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): P
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<typeof nodeRuns.$inferInsert> = {},
+  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = fields.id ?? `nr_${nodeId}_${Math.random().toString(36).slice(2, 8)}`
   const now = Date.now()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -299,7 +304,8 @@ describeEachProvider(
         retryIndex: 9,
         preSnapshot: 'snap-designer-v0',
       })
-      await db.insert(nodeRunOutputs).values({
+      const { nodeRunOutputs, nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: designerV0,
         portName: 'docpath',
         content: 'docs/tank-battle-design.md',
@@ -318,7 +324,7 @@ describeEachProvider(
       // Prior session FH7895-equivalent (iteration=0 answered + consumed).
       // node_run for the cross-clarify node MUST exist before the session
       // row references it (FK).
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'cross1_iter0',
         taskId,
         nodeId: 'cross1',
@@ -448,6 +454,7 @@ describeEachProvider(
         actor,
       })
 
+      const { nodeRuns } = tablesOf(db)
       const rerunRows = await db
         .select()
         .from(nodeRuns)
@@ -482,7 +489,8 @@ describeEachProvider(
         retryIndex: 5,
         preSnapshot: 'snap-d-v1',
       })
-      await db.insert(nodeRunOutputs).values({
+      const { nodeRunOutputs, nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: designerV1,
         portName: 'docpath',
         content: 'docs/v1.md',

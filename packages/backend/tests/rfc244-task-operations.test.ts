@@ -1,20 +1,21 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TaskCatalogPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { parseTaskOperationsQuery } from '../src/modules/task-execution/infrastructure/taskListPage'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { createUser } from './helpers/userFixture'
 import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -25,6 +26,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seedBase(db: Db): Promise<void> {
   const now = 1_788_278_400_000
+  const { users, workflows } = tablesOf(db)
   await db.insert(users).values([
     {
       id: 'admin',
@@ -51,7 +53,7 @@ async function seedBase(db: Db): Promise<void> {
       updatedAt: now,
     },
   ])
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf-rfc244',
     name: 'Operations workflow',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -140,6 +142,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks } = tablesOf(db)
       await db.insert(tasks).values([
         task('root-old', 'alice', 'done', { startedAt: 100 }),
         task('mid', 'alice', 'done', { parentTaskId: 'root-old', startedAt: 200 }),
@@ -177,6 +180,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks } = tablesOf(db)
       await db.insert(tasks).values([
         task('private-parent', 'bob', 'done', { startedAt: 100 }),
         task('visible-child', 'alice', 'running', {
@@ -197,6 +201,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks } = tablesOf(db)
       await db
         .insert(tasks)
         .values([
@@ -228,6 +233,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks } = tablesOf(db)
       await db
         .insert(tasks)
         .values([
@@ -275,6 +281,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks } = tablesOf(db)
       await db
         .insert(tasks)
         .values([task('corrupt-json', 'alice', 'done', { workgroupConfigJson: '{broken' })])
@@ -286,13 +293,14 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks, taskCollaborators } = tablesOf(db)
       await db
         .insert(tasks)
         .values([
           task('owned-parent', 'admin'),
           task('shared-child', 'bob', 'running', { parentTaskId: 'owned-parent' }),
         ])
-      await db.insert(taskCollaborators).values({
+      await insertOne(db, taskCollaborators, {
         taskId: 'shared-child',
         userId: 'admin',
         role: 'collaborator',
@@ -314,6 +322,7 @@ describe('RFC-244 task operations query', () => {
       const task = createProviderTask()
       await seedBase(db)
       const forbidden = 'RFC244_FORBIDDEN_LARGE_JSON_SENTINEL'
+      const { tasks } = tablesOf(db)
       await db.insert(tasks).values([
         task('workflow-manual', 'alice', 'done', { startedAt: 100 }),
         task('agent-manual', 'alice', 'running', {
@@ -390,6 +399,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
+      const { tasks } = tablesOf(db)
       await db.insert(tasks).values([task('cycle-a', 'alice'), task('cycle-b', 'alice')])
       await db.update(tasks).set({ parentTaskId: 'cycle-b' }).where(eq(tasks.id, 'cycle-a'))
       await db.update(tasks).set({ parentTaskId: 'cycle-a' }).where(eq(tasks.id, 'cycle-b'))
@@ -422,12 +432,13 @@ describe('RFC-244 task operations query', () => {
           role: 'user',
           password: 'longEnoughPassword',
         })
-        await db.insert(workflows).values({
+        const { workflows, tasks } = tablesOf(db)
+        await insertOne(db, workflows, {
           id: 'wf-route-rfc244',
           name: 'Route workflow',
           definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
         })
-        await db.insert(tasks).values({
+        await insertOne(db, tasks, {
           ...task('route-task', owner.id),
           workflowId: 'wf-route-rfc244',
         })

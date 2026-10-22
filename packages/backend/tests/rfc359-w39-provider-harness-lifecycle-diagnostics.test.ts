@@ -115,11 +115,6 @@ function actualRegistration(options: harness.DescribeEachProviderOptions = {}) {
   const bindings = {
     process,
     resolvePostgresqlTestUrlEnv: () => 'AW_TEST_POSTGRESQL_URL',
-    currentDatabaseSchemaProvider: () => 'original-schema',
-    selectDatabaseSchemaProvider: () => {
-      calls.push('schema.restore')
-      return () => {}
-    },
     createPostgresqlHarnessDatabase: factory,
     // RFC-359 W8：harness 在 beforeAll 给本文件建一个自己的 PostgreSQL 库、afterAll 删掉
     // （`createPostgresqlFileDatabase`，把数据 / DDL 锁 / advisory lock 三样按库分开，见其头注）。
@@ -384,7 +379,6 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
       'factory.return',
       'runtime.close',
       'database.drop',
-      'schema.restore',
     ])
     expect(control.observerCreations).toBe(0)
     expect(control.diagnosticClock.timers).toEqual([])
@@ -412,7 +406,6 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
       'factory.return',
       'runtime.close',
       'database.drop',
-      'schema.restore',
     ])
     expect(control.observerCreations).toBe(0)
   })

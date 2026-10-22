@@ -1,4 +1,6 @@
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // RFC-188 — isolatedAgentRun 原语单测 + 装配单源锁。
 //
@@ -24,9 +26,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createIsoUnderLock,
   markMergeFailed,
@@ -73,17 +74,18 @@ function stubWriteSem(): { run<T>(fn: () => Promise<T>): Promise<T>; maxDepth: (
   }
 }
 
-async function seedTaskRow(db: ProviderNeutralDatabase, worktreePath: string): Promise<string> {
+async function seedTaskRow(db: PersistenceDb, worktreePath: string): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId,
@@ -103,13 +105,14 @@ function canonRepos(worktreePath: string): CanonRepo[] {
   return [{ repoPath: worktreePath, worktreePath, worktreeDirName: '', baseBranch: 'main' }]
 }
 
-function isolatedRunBinding(db: ProviderNeutralDatabase): IsolatedAgentRunBinding {
+function isolatedRunBinding(db: PersistenceDb): IsolatedAgentRunBinding {
   return Object.freeze({ persistence: createTaskExecutionPersistence(db) })
 }
 
-async function mintedRow(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function mintedRow(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'A',
@@ -155,6 +158,7 @@ describeEachProvider(
       })
       expect(settle.kind).toBe('merged')
       expect(readFileSync(join(repo, 'out.txt'), 'utf8')).toBe('from-agent\n')
+      const { nodeRuns } = tablesOf(db)
       const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
       expect(row?.mergeState).toBe('merged')
       // node tree 已持久化（isolating→pending-merge→merged 全链 CAS 走通）。
@@ -200,6 +204,7 @@ describeEachProvider(
           },
         })
         expect(sawConflicts).toBe(1)
+        const { nodeRuns } = tablesOf(db)
         const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
         if (resolved) {
           expect(settle.kind).toBe('merged')
@@ -238,6 +243,7 @@ describeEachProvider(
       writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'crash.txt'), 'survived\n')
       // 模拟 runner 成功后崩溃：pin 树、置 pending-merge、丢 iso 工作树。
       const nodeTree = await snapshotFullState(iso.repos[0]!.isoWorktreePath)
+      const { nodeRuns } = tablesOf(db)
       await db
         .update(nodeRuns)
         .set({ mergeState: 'pending-merge', isoNodeTree: nodeTree })
@@ -271,6 +277,7 @@ describeEachProvider('RFC-188 C — markMergeFailed try-variant', (harness) => {
     const taskId = await seedTaskRow(db, repo)
     const runId = await mintedRow(db, taskId)
     const binding = isolatedRunBinding(db)
+    const { nodeRuns } = tablesOf(db)
     await db.update(nodeRuns).set({ mergeState: 'pending-merge' }).where(eq(nodeRuns.id, runId))
     await markMergeFailed(binding, runId, 'boom')
     const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]

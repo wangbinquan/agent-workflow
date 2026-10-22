@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 // RFC-128 / RFC-349 — SQLite per-question answer seal primitive.
 //
@@ -38,13 +39,8 @@ import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify/service'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
@@ -73,7 +69,7 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 export interface SealRoundQuestionsArgs {
   questionSetKey?: string
   wholeRound?: boolean
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /** The clarify round's intermediary node_run id (= clarify_rounds.intermediaryNodeRunId
    *  = task_questions.originNodeRunId). Locates the round to seal into. */
   originNodeRunId: string
@@ -134,7 +130,7 @@ export interface SealRoundQuestionsArgs {
 
 export interface ClarifySealDecisionParticipantInTx {
   acceptTx(input: {
-    readonly tx: DatabaseTransaction
+    readonly tx: PersistenceTx
     readonly taskId: string
     readonly roundId: string
     readonly originNodeRunId: string
@@ -190,6 +186,7 @@ export async function sealRoundQuestions(
   args: SealRoundQuestionsArgs,
 ): Promise<SealRoundQuestionsResult> {
   const ts = (args.now ?? Date.now)()
+  const { clarifyRounds } = tablesOf(args.db)
   // RFC-128 §5.2.14 final-gate finding 2: sealRoundQuestions writes the round's answers/task_questions
   // and so MUST serialize on the SAME per-task QUESTION-WRITE lock B as the quick submit paths — else
   // a control-channel seal can commit a locked answer in the window where a concurrent quick submit
@@ -209,8 +206,10 @@ export async function sealRoundQuestions(
       // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发 seal / dispatch 靠任务聚合根行锁串行
       // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。round 缺失时不加锁，让下面抛 NotFound。
       if (taskIdRow !== undefined) {
+        const { tasks } = tablesOf(tx)
         await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskIdRow.taskId)
       }
+      const { clarifyRounds, tasks, taskQuestions, nodeRuns } = tablesOf(tx)
       // Re-read the round INSIDE the tx so a concurrent seal's committed answers/status are
       // observed (TOCTOU-free).
       const round = (
@@ -450,10 +449,10 @@ export async function sealRoundQuestions(
       // resumeTask runs — the designer reruns fire later via board dispatch (P3 借壳), held
       // meanwhile by the §18 designer park (directive='continue' written above). The CAS on
       // status='awaiting_human' makes it a safe no-op if the node already left that state.
-      // rfc053-allow-direct-status-write -- atomic clarify-node close on full seal (mirrors resume-clarify)
       // (RFC-136: flipNow — an answered round's node_run is already closed; the CAS would
       // no-op anyway, the gate just keeps the re-answer path free of flip side effects.)
       if (flipNow) {
+        // rfc053-allow-direct-status-write -- atomic clarify-node close on full seal (mirrors resume-clarify)
         await tx
           .update(nodeRuns)
           .set({ status: 'done', finishedAt: ts })

@@ -82,7 +82,7 @@ import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresq
 import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { RepositoryBackupPreparationParticipant } from '@/modules/source-control/public/participants'
 import {
@@ -344,7 +344,7 @@ export function composePostgresqlSystemOperations(deps: {
    * 客户端（`portableApplicationAssets.ts`）。runtime 仍然只负责真正按引擎分叉的那一半
    * ——逻辑快照 / 逻辑还原目标与 advisory lock。
    */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly backup?: AdminBackupCoordinatorPort
   readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
   readonly repositoryBackupPreparation: RepositoryBackupPreparationParticipant

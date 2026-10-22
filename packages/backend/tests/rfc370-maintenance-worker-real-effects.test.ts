@@ -1,4 +1,7 @@
 // RFC-370 CI: explicitly bind the real Worker to the current per-file PG environment.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
@@ -6,8 +9,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { resourceBundleApplies } from '@/db/schema'
-
 import type { MaintenanceWorkerEvent } from '@/platform/background/maintenanceProtocol'
 import {
   startMaintenanceWorkerSupervisor,
@@ -101,7 +102,8 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       let supervisor: MaintenanceWorkerSupervisor | undefined
       let failed: { readonly error: unknown } | undefined
       try {
-        await database.db.insert(resourceBundleApplies).values({
+        const { resourceBundleApplies } = tablesOf(database.db)
+        await insertOne(database.db, resourceBundleApplies, {
           id: journalId,
           scope: 'package',
           key: journalId,
@@ -160,11 +162,12 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         expect(await store.read(runId)).toMatchObject({ state: 'running', attempt: 1 })
         expect(
           (
-            await database.db
-              .select()
-              .from(resourceBundleApplies)
-              .where(eq(resourceBundleApplies.id, journalId))
-              .get()
+            await first(
+              database.db
+                .select()
+                .from(resourceBundleApplies)
+                .where(eq(resourceBundleApplies.id, journalId)),
+            )
           )?.state,
         ).toBe('prepared')
         expect(events.some((event) => event.type === 'completed')).toBe(false)
@@ -181,11 +184,12 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         expect(receipt.counters.failed).toBe(closeFailure ? 0 : 1)
         expect(
           (
-            await database.db
-              .select()
-              .from(resourceBundleApplies)
-              .where(eq(resourceBundleApplies.id, journalId))
-              .get()
+            await first(
+              database.db
+                .select()
+                .from(resourceBundleApplies)
+                .where(eq(resourceBundleApplies.id, journalId)),
+            )
           )?.state,
         ).toBe(closeFailure ? 'prepared' : 'failed')
         expect(await store.read(runId)).toMatchObject({ state: 'succeeded', attempt: 1 })

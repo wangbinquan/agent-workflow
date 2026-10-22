@@ -20,25 +20,27 @@
 // pair that used to bite: a done row WITH a port value plus a younger pending
 // row WITHOUT outputs in the same frame.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { readPortRowAtFrame } from '../src/modules/task-execution/composition/nodeMechanics'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 
 const TOP_FRAME = { containerRunId: null, iteration: 0 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf-rfc096-portread',
     definition: JSON.stringify({ $schema_version: 6, inputs: [], nodes: [], edges: [] }),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't-rfc096-portread',
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
@@ -61,14 +63,15 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 
 /** done row WITH a port value + younger pending row WITHOUT outputs, same frame. */
 async function seedDonePlusYoungerPending(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   portName: string,
   content: string,
 ): Promise<{ doneId: string; pendingId: string }> {
   const doneId = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: doneId,
     taskId,
     nodeId,
@@ -78,9 +81,9 @@ async function seedDonePlusYoungerPending(
     startedAt: Date.now() - 100,
     finishedAt: Date.now() - 50,
   })
-  await db.insert(nodeRunOutputs).values({ nodeRunId: doneId, portName, content })
+  await insertOne(db, nodeRunOutputs, { nodeRunId: doneId, portName, content })
   const pendingId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: pendingId,
     taskId,
     nodeId,
@@ -120,7 +123,8 @@ describeEachProvider(
     test('no done row at all reads as an empty value, never as the pending row', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: 'src',
@@ -144,7 +148,8 @@ describeEachProvider(
       const db = harness.db
       const taskId = await seedTask(db)
       const generationId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: generationId,
         taskId,
         nodeId: 'loop',
@@ -155,7 +160,7 @@ describeEachProvider(
         finishedAt: Date.now() - 200,
       })
       const insideId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: insideId,
         taskId,
         nodeId: 'src',
@@ -166,7 +171,7 @@ describeEachProvider(
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: insideId,
         portName: 'signal',
         content: 'round-1',

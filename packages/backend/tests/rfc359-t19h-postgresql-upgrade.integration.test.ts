@@ -2,6 +2,8 @@
 // rows with the original runner, then upgrade that live generation. PostgreSQL
 // is selected by the same default provider list as the shared harness; a missing
 // URL fails the selected case. The local SQLite case only checks the tiny source.
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -12,7 +14,6 @@ import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
 import { createDatabaseMigrationRunner } from '@/modules/system-operations/application/databaseMigrationRunner'
 import { createFileDatabaseMigrationArtifactStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore'
@@ -297,9 +298,9 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           for (const [path, digest] of chunks)
             expect(fileDigest(join(operationRoot, path))).toBe(digest)
           const client = prepared.runtime.openClient()
-          expect(await client.all<{ id: string; inputs: string }>(recoveredTasksQuery)).toEqual([
-            { id: 't19h-task', inputs: ' { "source" : "old", "empty": null } ' },
-          ])
+          expect(
+            await rawRows<{ id: string; inputs: string }>(client, recoveredTasksQuery),
+          ).toEqual([{ id: 't19h-task', inputs: ' { "source" : "old", "empty": null } ' }])
         } finally {
           await prepared.runtime.close()
         }
@@ -496,7 +497,6 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
       }
       const runtime = createPostgresqlDatabaseRuntime({ config, generationId })
       const pool = runtime.providerPool()
-      const restoreProvider = selectDatabaseSchemaProvider('sqlite')
       let target: Awaited<ReturnType<typeof openPostgresqlLogicalTarget>> | undefined
       try {
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
@@ -731,10 +731,8 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           try {
             await fixture.source.close()
           } finally {
-            try {
+            {
               await runtime.close()
-            } finally {
-              restoreProvider()
             }
           }
         }
@@ -768,12 +766,12 @@ function queryRuntime(answer: (query: string) => readonly Record<string, unknown
   const pool: PostgresqlPool = {
     unsafe: (query, parameters) => execute('pool', query, parameters),
     async reserve() {
-      return {
+      return withNativeTransactions({
         unsafe: (query, parameters) => execute('snapshot', query, parameters),
         release() {
           releases += 1
         },
-      }
+      })
     },
     async close() {},
   }
@@ -805,10 +803,9 @@ function queryRuntime(answer: (query: string) => readonly Record<string, unknown
 
 test('the interruption readback compiles through the actual PostgreSQL client without a network', async () => {
   const controlled = queryRuntime(() => [])
-  const restoreProvider = selectDatabaseSchemaProvider('postgresql')
   try {
     const client = createPostgresqlDatabaseClient(controlled.runtime)
-    expect(await client.all(recoveredTasksQuery)).toEqual([])
+    expect(await rawRows(client, recoveredTasksQuery)).toEqual([])
     expect(controlled.executions).toEqual([
       {
         scope: 'pool',
@@ -818,7 +815,6 @@ test('the interruption readback compiles through the actual PostgreSQL client wi
     ])
   } finally {
     await controlled.runtime.close()
-    restoreProvider()
   }
 })
 

@@ -22,21 +22,15 @@
 //   kills it). Retryable conflicts (DESIGNER_DEFERRABLE_CONFLICTS) keep the marker; anything
 //   else clears it (back to the manual board, never silent-spin).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
 import { eq, inArray } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  nodeRuns,
-  nodeRunOutputs,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { autoDispatchDeferredQuestions } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { stageTaskQuestion } from '../src/services/taskQuestions'
@@ -107,9 +101,10 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc140',
     description: '',
@@ -117,7 +112,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc140',
     workflowId: `wf_${taskId}`,
@@ -133,13 +128,14 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -149,13 +145,13 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
 
 async function seedCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   questions: ClarifyQuestion[],
   _opts: { scopesJson?: string | null } = {},
@@ -165,7 +161,8 @@ async function seedCrossRound(
   const roundId = ulid()
   const questionsJson = JSON.stringify(questions)
   const answersJson = JSON.stringify(questions.map((q) => ans(q.id)))
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: roundId,
     taskId,
     kind: 'cross',
@@ -186,14 +183,15 @@ async function seedCrossRound(
 
 /** self 轮（DESIGNER 自问）——混批测试的 clarify-answer cause 来源。 */
 async function seedSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ roundId: string; origin: string }> {
   const askingRunId = await seedRun(db, taskId, DESIGNER, { status: 'done' })
   const intRunId = await seedRun(db, taskId, CL, { status: 'done' })
   const roundId = ulid()
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: roundId,
     taskId,
     kind: 'self',
@@ -224,13 +222,10 @@ interface EntrySeed {
   stagedAt?: number | null
 }
 
-async function insertEntry(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  e: EntrySeed,
-): Promise<string> {
+async function insertEntry(db: PersistenceDb, taskId: string, e: EntrySeed): Promise<string> {
   const id = ulid()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -254,11 +249,15 @@ async function insertEntry(
   return id
 }
 
-const allEntries = (db: ProviderNeutralDatabase, taskId: string) =>
-  db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+const allEntries = (db: PersistenceDb, taskId: string) => {
+  const { taskQuestions } = tablesOf(db)
+  return db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+}
 
-const entryById = async (db: ProviderNeutralDatabase, id: string) =>
-  (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+const entryById = async (db: PersistenceDb, id: string) => {
+  const { taskQuestions } = tablesOf(db)
+  return (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+}
 
 // RFC-162: the W1 (symmetric collapse questioner→designer) describe blocks are RETIRED — collapse
 // is deleted (reassign now ADDS a designer handler, never collapses / flips scope). The surviving
@@ -273,7 +272,7 @@ beforeEach(() => resetBroadcastersForTests())
 /** 混批夹具：DESIGNER home 上 self（clarify-answer）+ designer（cross-clarify-answer）两类
  *  cause；self staged 更早 → aging 选 self 先发，designer 批被 defer。返回 defer 批 id。 */
 async function seedMixedBatch(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ selfIds: string[]; designerIds: string[] }> {
   await seedTask(db, taskId)
@@ -323,6 +322,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     await autoDispatchDeferredQuestions(db, taskId)
     expect((await entryById(db, designerIds[0]!))!.dispatchedAt).toBeNull()
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull() // retryable → kept
+    const { nodeRuns, taskQuestions } = tablesOf(db)
     // the continuation runs (its injection binds the self entries — bindTriggerRun, as the real
     // scheduler does) and finishes: done releases the in-flight gate (RFC-133/139).
     const pending = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
@@ -380,6 +380,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     // re-stage: back to the staging area — the marker must NOT resurrect.
     await stageTaskQuestion(db, designerIds[0]!, true, actor)
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).toBeNull()
+    const { nodeRuns, taskQuestions } = tablesOf(db)
     // the continuation binds its self entries (as the real scheduler injection does) and
     // finishes; then redispatch: only the still-marked sibling fires.
     const pending = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
@@ -401,6 +402,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
     await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
     await autoDispatchDeferredQuestions(db, taskId) // task-terminal — NOT in the retryable set
     for (const id of designerIds) {

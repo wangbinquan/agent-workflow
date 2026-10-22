@@ -1,14 +1,11 @@
 // Shared committed-event SQL and decision order; callers retain their transaction mechanism.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, queryWrite, queryRows, affectedRows } from '@/platform/persistence/queryHelpers'
 import { and, eq } from 'drizzle-orm'
 import { canonicalJson } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEventAggregateHeads,
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   transactionStep,
   type TransactionProgramStep,
@@ -33,12 +30,8 @@ import type {
   CommittedEventProducer,
 } from './types'
 
-type AppendProgramDatabase = Pick<ProviderNeutralDatabase, 'select' | 'insert' | 'update'>
+type AppendProgramDatabase = Pick<PersistenceDb, 'select' | 'insert' | 'update'>
 type AggregateLock = (key: string) => void | Promise<void>
-
-function changed(result: unknown): number {
-  return (result as { changes?: number }).changes ?? 0
-}
 
 export function* readCommittedEventCutoverProgram(
   tx: AppendProgramDatabase,
@@ -46,18 +39,20 @@ export function* readCommittedEventCutoverProgram(
   family: CommittedEventFamily,
 ): Generator<TransactionProgramStep, CommittedEventCutover, void> {
   assertProducerFamily(producer, family)
-  const row = yield* transactionStep(() =>
-    tx
-      .select()
-      .from(committedEventFamilyCutovers)
-      .where(
-        and(
-          eq(committedEventFamilyCutovers.producer, producer),
-          eq(committedEventFamilyCutovers.family, family),
+  const row = yield* transactionStep(() => {
+    const { committedEventFamilyCutovers } = tablesOf(tx)
+    return first(
+      tx
+        .select()
+        .from(committedEventFamilyCutovers)
+        .where(
+          and(
+            eq(committedEventFamilyCutovers.producer, producer),
+            eq(committedEventFamilyCutovers.family, family),
+          ),
         ),
-      )
-      .get(),
-  )
+    )
+  })
   if (row === undefined) {
     throw new Error(`committed event cutover is missing: ${producer}/${family}`)
   }
@@ -85,26 +80,28 @@ export function* changeCommittedEventCutoverProgram(
   ) {
     throw new Error('committed event cutover change requires time and durable ref')
   }
-  const result = yield* transactionStep(() =>
-    tx
-      .update(committedEventFamilyCutovers)
-      .set({
-        mode: input.mode,
-        epoch: input.expectedEpoch + 1,
-        changedAt: input.changedAt,
-        changeRef: input.changeRef,
-      })
-      .where(
-        and(
-          eq(committedEventFamilyCutovers.producer, input.producer),
-          eq(committedEventFamilyCutovers.family, input.family),
-          eq(committedEventFamilyCutovers.mode, input.expectedMode),
-          eq(committedEventFamilyCutovers.epoch, input.expectedEpoch),
+  const result = yield* transactionStep(() => {
+    const { committedEventFamilyCutovers } = tablesOf(tx)
+    return queryWrite(
+      tx
+        .update(committedEventFamilyCutovers)
+        .set({
+          mode: input.mode,
+          epoch: input.expectedEpoch + 1,
+          changedAt: input.changedAt,
+          changeRef: input.changeRef,
+        })
+        .where(
+          and(
+            eq(committedEventFamilyCutovers.producer, input.producer),
+            eq(committedEventFamilyCutovers.family, input.family),
+            eq(committedEventFamilyCutovers.mode, input.expectedMode),
+            eq(committedEventFamilyCutovers.epoch, input.expectedEpoch),
+          ),
         ),
-      )
-      .run(),
-  )
-  if (changed(result) !== 1) {
+    )
+  })
+  if (affectedRows(result) !== 1) {
     throw new Error(
       `committed event cutover changed concurrently: ${input.producer}/${input.family}`,
     )
@@ -120,16 +117,18 @@ function* sameConsumerManifestProgram(
   const expected = [...consumers]
     .map((consumer) => `${consumer.id}\u0000${consumer.deliveryClass}`)
     .sort()
-  const actual = (yield* transactionStep(() =>
-    tx
-      .select({
-        consumerId: committedEventDeliveries.consumerId,
-        deliveryClass: committedEventDeliveries.deliveryClass,
-      })
-      .from(committedEventDeliveries)
-      .where(eq(committedEventDeliveries.eventId, eventId))
-      .all(),
-  ))
+  const actual = (yield* transactionStep(() => {
+    const { committedEventDeliveries } = tablesOf(tx)
+    return queryRows(
+      tx
+        .select({
+          consumerId: committedEventDeliveries.consumerId,
+          deliveryClass: committedEventDeliveries.deliveryClass,
+        })
+        .from(committedEventDeliveries)
+        .where(eq(committedEventDeliveries.eventId, eventId)),
+    )
+  }))
     .map((consumer) => `${consumer.consumerId}\u0000${consumer.deliveryClass}`)
     .sort()
   return canonicalJson(expected) === canonicalJson(actual)
@@ -151,19 +150,21 @@ function* reserveAggregateSequenceProgram(
   // 同一聚合的两个并发 append 必须串行分配序号。SQLite 的 BEGIN IMMEDIATE 已独占；
   // PostgreSQL READ COMMITTED 下两个事务会各读到同一个 head 再各自 +1，所以先取事务级 advisory lock。
   yield* transactionStep(() => lockAggregate(aggregateSequenceLockKey(input)))
+  const { committedEventAggregateHeads } = tablesOf(tx)
   const where = and(
     eq(committedEventAggregateHeads.producer, input.producer),
     eq(committedEventAggregateHeads.family, input.family),
     eq(committedEventAggregateHeads.aggregateKind, input.aggregateKind),
     eq(committedEventAggregateHeads.aggregateId, input.aggregateId),
   )
-  const head = yield* transactionStep(() =>
-    tx
-      .select({ lastSeq: committedEventAggregateHeads.lastSeq })
-      .from(committedEventAggregateHeads)
-      .where(where)
-      .get(),
-  )
+  const head = yield* transactionStep(() => {
+    return first(
+      tx
+        .select({ lastSeq: committedEventAggregateHeads.lastSeq })
+        .from(committedEventAggregateHeads)
+        .where(where),
+    )
+  })
   const next = input.requested ?? (head?.lastSeq ?? 0) + 1
   if (head !== undefined && next <= head.lastSeq) {
     throw new Error(
@@ -171,27 +172,25 @@ function* reserveAggregateSequenceProgram(
     )
   }
   if (head === undefined) {
-    yield* transactionStep(() =>
-      tx
-        .insert(committedEventAggregateHeads)
-        .values({
-          producer: input.producer,
-          family: input.family,
-          aggregateKind: input.aggregateKind,
-          aggregateId: input.aggregateId,
-          lastSeq: next,
-          updatedAt: input.now,
-        })
-        .run(),
-    )
+    yield* transactionStep(() => {
+      return insertOne(tx, committedEventAggregateHeads, {
+        producer: input.producer,
+        family: input.family,
+        aggregateKind: input.aggregateKind,
+        aggregateId: input.aggregateId,
+        lastSeq: next,
+        updatedAt: input.now,
+      })
+    })
   } else {
-    yield* transactionStep(() =>
-      tx
-        .update(committedEventAggregateHeads)
-        .set({ lastSeq: next, updatedAt: input.now })
-        .where(where)
-        .run(),
-    )
+    yield* transactionStep(() => {
+      return queryWrite(
+        tx
+          .update(committedEventAggregateHeads)
+          .set({ lastSeq: next, updatedAt: input.now })
+          .where(where),
+      )
+    })
   }
   return next
 }
@@ -208,18 +207,20 @@ export function* appendCommittedEventProgram<TType extends string, TPayload>(
 ): Generator<TransactionProgramStep, AppendCommittedEventReceipt, void> {
   validateAppendInput(input as AppendCommittedEventInput<string, unknown>)
   const cutover = yield* readCommittedEventCutoverProgram(tx, input.producer, input.family)
-  const existing = yield* transactionStep(() =>
-    tx
-      .select()
-      .from(committedEvents)
-      .where(
-        and(
-          eq(committedEvents.eventGroupId, input.eventGroupId),
-          eq(committedEvents.eventGroupOrdinal, input.eventGroupOrdinal),
+  const existing = yield* transactionStep(() => {
+    const { committedEvents } = tablesOf(tx)
+    return first(
+      tx
+        .select()
+        .from(committedEvents)
+        .where(
+          and(
+            eq(committedEvents.eventGroupId, input.eventGroupId),
+            eq(committedEvents.eventGroupOrdinal, input.eventGroupOrdinal),
+          ),
         ),
-      )
-      .get(),
-  )
+    )
+  })
   if (existing !== undefined) {
     const eventId = input.eventId ?? existing.id
     const envelope: CommittedEventEnvelopeV1<TType, TPayload> = {
@@ -299,37 +300,35 @@ export function* appendCommittedEventProgram<TType extends string, TPayload>(
   const payloadJson = canonicalJson(envelope)
   const payloadDigest = sha256Hex(payloadJson)
   const deliveryMode = cutover.mode
-  yield* transactionStep(() =>
-    tx
-      .insert(committedEvents)
-      .values({
-        id: eventId,
-        eventGroupId: input.eventGroupId,
-        eventGroupOrdinal: input.eventGroupOrdinal,
-        producer: input.producer,
-        family: input.family,
-        eventType: input.type,
-        schemaVersion: 1,
-        aggregateKind: input.aggregate.kind,
-        aggregateId: input.aggregate.id,
-        aggregateSeq,
-        operationRef: input.operationRef,
-        correlationRef: input.correlationRef ?? null,
-        causationRef: input.causationRef ?? null,
-        occurredAt: input.occurredAt,
-        payloadJson,
-        payloadDigest,
-        deliveryMode,
-        producerEpoch: cutover.epoch,
-        createdAt: input.occurredAt,
-      })
-      .run(),
-  )
+  yield* transactionStep(() => {
+    const { committedEvents } = tablesOf(tx)
+    return insertOne(tx, committedEvents, {
+      id: eventId,
+      eventGroupId: input.eventGroupId,
+      eventGroupOrdinal: input.eventGroupOrdinal,
+      producer: input.producer,
+      family: input.family,
+      eventType: input.type,
+      schemaVersion: 1,
+      aggregateKind: input.aggregate.kind,
+      aggregateId: input.aggregate.id,
+      aggregateSeq,
+      operationRef: input.operationRef,
+      correlationRef: input.correlationRef ?? null,
+      causationRef: input.causationRef ?? null,
+      occurredAt: input.occurredAt,
+      payloadJson,
+      payloadDigest,
+      deliveryMode,
+      producerEpoch: cutover.epoch,
+      createdAt: input.occurredAt,
+    })
+  })
   if (input.consumers.length > 0) {
-    yield* transactionStep(() =>
-      tx
-        .insert(committedEventDeliveries)
-        .values(
+    yield* transactionStep(() => {
+      const { committedEventDeliveries } = tablesOf(tx)
+      return queryWrite(
+        tx.insert(committedEventDeliveries).values(
           input.consumers.map((consumer) => ({
             eventId,
             consumerId: consumer.id,
@@ -342,13 +341,14 @@ export function* appendCommittedEventProgram<TType extends string, TPayload>(
             createdAt: input.occurredAt,
             updatedAt: input.occurredAt,
           })),
-        )
-        .run(),
-    )
+        ),
+      )
+    })
   }
-  const inserted = yield* transactionStep(() =>
-    tx.select().from(committedEvents).where(eq(committedEvents.id, eventId)).get(),
-  )
+  const inserted = yield* transactionStep(() => {
+    const { committedEvents } = tablesOf(tx)
+    return first(tx.select().from(committedEvents).where(eq(committedEvents.id, eventId)))
+  })
   if (inserted === undefined) throw new Error(`committed event insert vanished: ${eventId}`)
   return { cutover, eventRef: eventRefFromRow(inserted) }
 }

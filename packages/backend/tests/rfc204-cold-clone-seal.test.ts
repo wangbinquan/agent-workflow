@@ -5,6 +5,8 @@
 // Mutation proof: drop the cold INSERT's urlEnc write and the first test goes
 // red; reintroduce a plaintext schema column and the physical-column assertion
 // goes red.
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, rawRows } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,7 +15,6 @@ import { pathToFileURL } from 'node:url'
 import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { cachedRepos } from '../src/db/schema'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { unsealRepoUrl } from '../src/services/repoCredentials'
@@ -56,13 +57,14 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
       { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
       { url },
     )
-    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)).get()
+    const { cachedRepos } = tablesOf(db)
+    const row = first(db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)))
     expect(row).toBeDefined()
     if (row === undefined) return
     // No plaintext credentialed URL sits in the DB.
     expect(
       (
-        db.all<{ name: string }>(sql`PRAGMA table_info(cached_repos)`) as Array<{
+        rawRows<{ name: string }>(db, sql`PRAGMA table_info(cached_repos)`) as Array<{
           name: string
         }>
       ).map((column) => column.name),
@@ -80,7 +82,8 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
       { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
       { url },
     )
-    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)).get()
+    const { cachedRepos } = tablesOf(db)
+    const row = first(db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)))
     expect(row).toBeDefined()
     if (row === undefined) return
     expect(row.urlEnc).toBeNull()

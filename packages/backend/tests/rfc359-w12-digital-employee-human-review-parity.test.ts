@@ -13,11 +13,12 @@
 //   ② **两侧 composition 都必须交出 `inspectHumanReview`**——这是那条分叉的源头，
 //      少了任何一侧，PG 上的闸门就又会退回推断。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecutionCore,
@@ -30,17 +31,18 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedExecution(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { readonly planPrompt: boolean },
 ): Promise<string> {
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
   })
   const taskId = `task_${ulid()}`
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -58,12 +60,9 @@ async function seedExecution(
   return taskId
 }
 
-async function seedReviewRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  status: string,
-): Promise<void> {
-  await db.insert(nodeRuns).values({
+async function seedReviewRun(db: PersistenceDb, taskId: string, status: string): Promise<void> {
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,

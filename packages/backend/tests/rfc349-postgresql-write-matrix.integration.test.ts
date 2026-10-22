@@ -25,12 +25,11 @@
 //
 // 每次插入都在事务里做完就回滚，数据库保持干净。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { describe, expect, test } from 'bun:test'
-import { getTableName, is } from 'drizzle-orm'
-import { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { getTableName } from 'drizzle-orm'
 
-import * as schema from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -96,8 +95,7 @@ interface FacadeColumn {
  */
 function minimalValues(facade: object): Record<string, unknown> {
   const values: Record<string, unknown> = {}
-  const restore = selectDatabaseSchemaProvider('sqlite')
-  try {
+  {
     for (const [property, candidate] of Object.entries(facade)) {
       const column = candidate as FacadeColumn
       if (typeof column?.name !== 'string' || column.notNull === undefined) continue
@@ -111,8 +109,6 @@ function minimalValues(facade: object): Record<string, unknown> {
       else if (column.dataType === 'buffer') values[property] = new Uint8Array([1])
       else values[property] = `probe-${column.name}`
     }
-  } finally {
-    restore()
   }
   return values
 }
@@ -120,8 +116,7 @@ function minimalValues(facade: object): Record<string, unknown> {
 /** Drizzle 属性名 -> contract 里那一列的 logical codec。 */
 function columnPropertyCodecs(facade: object): Map<string, string> {
   const contract = buildLogicalSchemaContract()
-  const restore = selectDatabaseSchemaProvider('sqlite')
-  try {
+  {
     const tableName = getTableName(facade as Parameters<typeof getTableName>[0])
     const columns = contract.tables.find(
       (candidate) => candidate.sourceTable === tableName,
@@ -135,21 +130,16 @@ function columnPropertyCodecs(facade: object): Map<string, string> {
       if (codec !== undefined) out.set(property, codec)
     }
     return out
-  } finally {
-    restore()
   }
 }
 
-function sqliteTableFacades(): Map<string, object> {
+function nativeTables(db: object): Map<string, object> {
   const facades = new Map<string, object>()
-  const restore = selectDatabaseSchemaProvider('sqlite')
-  try {
-    for (const value of Object.values(schema)) {
+  {
+    for (const value of Object.values(tablesOf(db))) {
       if (typeof value !== 'object' || value === null) continue
-      if (is(value, SQLiteTable)) facades.set(getTableName(value), value)
+      facades.set(getTableName(value), value)
     }
-  } finally {
-    restore()
   }
   return facades
 }
@@ -158,7 +148,6 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
   realTest(
     'no table is rejected for a reason that is about how its statement was rendered',
     async () => {
-      let restoreProvider: (() => void) | undefined
       const runtime = createPostgresqlDatabaseRuntime({
         config: {
           provider: 'postgresql',
@@ -189,9 +178,8 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
 
         // 进程级选择必须还原：CI 的 oracle 步骤把好几个测试文件跑在**同一个 bun 进程**里，
         // 留着 postgresql 投影会渗进后面的文件（跨文件污染在本仓有前科）。
-        restoreProvider = selectDatabaseSchemaProvider('postgresql')
         const db = createPostgresqlDatabaseClient(runtime)
-        const facades = sqliteTableFacades()
+        const facades = nativeTables(db)
         const contract = buildLogicalSchemaContract()
         const defects: string[] = []
         let inserted = 0
@@ -207,10 +195,11 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
           }
           try {
             await db.transaction(async (tx) => {
-              await tx
-                .insert(facade as Parameters<typeof db.insert>[0])
-                .values(minimalValues(facade) as never)
-                .run()
+              await insertOne(
+                tx,
+                facade as Parameters<typeof db.insert>[0],
+                minimalValues(facade) as never,
+              )
               const rows = (await tx
                 .select()
                 .from(facade as Parameters<typeof tx.select>[0] as never)
@@ -258,7 +247,6 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
         )
         expect(inserted, '一张表都没插进去 ⇒ 矩阵本身没跑起来').toBeGreaterThan(50)
       } finally {
-        restoreProvider?.()
         await runtime.close?.()
       }
     },

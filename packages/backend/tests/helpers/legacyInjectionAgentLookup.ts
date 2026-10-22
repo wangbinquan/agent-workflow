@@ -10,17 +10,18 @@
 //
 // 行为逐字不变：同一条 `select … from agents where id = ? limit 1` + 同一个行映射器。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents as agentRows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentDependencyLookup } from '@/services/agentDeps'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 
-export function legacyInjectionAgentLookup(db: ProviderNeutralDatabase): AgentDependencyLookup {
+export function legacyInjectionAgentLookup(db: PersistenceDb): AgentDependencyLookup {
   return Object.freeze({
     async get(id: string) {
-      const rows = await db.select().from(agentRows).where(eq(agentRows.id, id)).limit(1)
+      const { agents } = tablesOf(db)
+      const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)
       return rows[0] === undefined ? null : taskExecutionResourceDependencies.rowToAgent(rows[0])
     },
   })

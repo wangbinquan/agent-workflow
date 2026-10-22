@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { CreateWorkflow } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { RuntimeRegistryPersistence } from '../src/modules/runtime-management/application/ports/runtimeRegistry'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -48,7 +48,7 @@ const AGENT_FIELDS = {
   bodyMd: 'do it',
 }
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let pluginsDir = ''
 let runtimes: RuntimeRegistryPersistence
 

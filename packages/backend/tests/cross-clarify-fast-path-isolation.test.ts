@@ -14,13 +14,15 @@
 //   B's dispatch alone fires exactly one designer rerun; A contributes no designer entry
 //   to the batch.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -33,7 +35,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // RFC-162: a designer handler is created by an explicit reassign of the answered round's
 // questioner card to the graph designer node, then dispatched to mint the designer rerun.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -50,7 +52,7 @@ async function reassignThenDispatchDesigner(
 }
 
 async function seedTwoSource(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; def: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const nodes: WorkflowNode[] = [
@@ -89,7 +91,8 @@ async function seedTwoSource(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc-059-c4',
     description: '',
@@ -102,7 +105,7 @@ async function seedTwoSource(
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -119,16 +122,17 @@ async function seedTwoSource(
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr_d_1',
     taskId,
     nodeId: 'designer',
@@ -154,7 +158,7 @@ function mkQ(id: string, title: string): ClarifyQuestion {
 }
 
 async function spawnSession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   args: {
     questionerNodeId: string
@@ -163,7 +167,8 @@ async function spawnSession(
     questions: ClarifyQuestion[]
   },
 ): Promise<string> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: args.questionerRunId,
     taskId,
     nodeId: args.questionerNodeId,
@@ -224,6 +229,7 @@ describeEachProvider(
         actor,
       })
       expect(aResult.dispatch.reruns.some((r) => r.targetNodeId === 'designer')).toBe(false)
+      const { taskQuestions, nodeRuns } = tablesOf(db)
       const aEntries = await db
         .select()
         .from(taskQuestions)

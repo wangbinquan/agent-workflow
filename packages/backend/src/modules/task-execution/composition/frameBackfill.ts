@@ -1,6 +1,6 @@
 // RFC-354 T4 — composition of the one-shot frame backfill per database provider.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runFrameBackfill, type FrameBackfillReport } from '../application/frameBackfillJob'
 import { createFrameBackfillStore } from '../infrastructure/frameBackfillStore'
 
@@ -13,7 +13,7 @@ import { createFrameBackfillStore } from '../infrastructure/frameBackfillStore'
  * `provider === 'sqlite' ? {...} : {...}`（`main.ts` 里那条就是这么来的）。
  * 标签一去，那条分叉自然消失，不需要任何替代判据。
  */
-export type FrameBackfillDatabase = { readonly db: ProviderNeutralDatabase }
+export type FrameBackfillDatabase = { readonly db: PersistenceDb }
 
 export type { FrameBackfillReport }
 

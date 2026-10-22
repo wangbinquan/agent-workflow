@@ -10,7 +10,7 @@
 //   · **CAS 注入点**（`beforeStatusCas`）——生产从不传；只有锁「CAS 被别的生命周期写者持续
 //     挤掉时必须报 starved、而不是把失败当成功」的那条回归判据传；
 // RFC-388: live controllers use the execution module registry and its normal stop tickets.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/services/taskExecutionParticipants'
 import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
@@ -32,7 +32,7 @@ export interface CancelEngineOptions {
 
 /** 与退役的 `cancelTask(db, id, opts)` 同形：取消之后把任务行重读一遍还回来。 */
 export async function cancelViaEngine(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: CancelEngineOptions = {},
 ): Promise<Task> {

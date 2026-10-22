@@ -3,19 +3,12 @@
 // price version frozen by acceptance time, and every statistic aggregated on
 // demand over the visible scope (administrators: everything; others: the tasks
 // task-execution confirms plus their own task-less system calls).
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '@/auth/actor'
-import {
-  nodeRuns,
-  observationCallModels,
-  observationCalls,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRunObservation } from '@/modules/run-observability/composition/runObservation'
 import {
   SYSTEM_PAGE_SIZE,
@@ -55,7 +48,7 @@ const runtimes = {
   }),
 }
 
-function compose(db: ProviderNeutralDatabase, now: { value: number }) {
+function compose(db: PersistenceDb, now: { value: number }) {
   return composeRunObservation({
     db,
     tasks: createTaskObservationFacts(db),
@@ -65,7 +58,7 @@ function compose(db: ProviderNeutralDatabase, now: { value: number }) {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly id: string
     readonly owner: string
@@ -74,7 +67,8 @@ async function seedTask(
     readonly finishedAt?: number
   },
 ) {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: input.id,
     name: `task ${input.id}`,
     workflowId: 'wf',
@@ -96,9 +90,10 @@ async function seedTask(
   })
 }
 
-async function seedBase(db: ProviderNeutralDatabase) {
+async function seedBase(db: PersistenceDb) {
+  const { users, workflows, taskCollaborators, nodeRuns } = tablesOf(db)
   for (const id of ['u-admin', 'u-member', 'u-other'])
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id,
       username: id,
       displayName: id,
@@ -107,7 +102,7 @@ async function seedBase(db: ProviderNeutralDatabase) {
       createdAt: T0,
       updatedAt: T0,
     })
-  await db.insert(workflows).values({ id: 'wf', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf', name: 'wf', definition: '{}' })
   await seedTask(db, {
     id: 't-own',
     owner: 'u-member',
@@ -128,7 +123,7 @@ async function seedBase(db: ProviderNeutralDatabase) {
     startedAt: T0 + 4 * HOUR,
     status: 'running',
   })
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId: 't-collab',
     userId: 'u-member',
     role: 'collaborator',
@@ -139,9 +134,14 @@ async function seedBase(db: ProviderNeutralDatabase) {
     ['nr-own-1', 0],
     ['nr-own-2', 1],
   ] as const)
-    await db
-      .insert(nodeRuns)
-      .values({ id, taskId: 't-own', nodeId: 'plan', status: 'done', retryIndex, iteration: 0 })
+    await insertOne(db, nodeRuns, {
+      id,
+      taskId: 't-own',
+      nodeId: 'plan',
+      status: 'done',
+      retryIndex,
+      iteration: 0,
+    })
 }
 
 function call(id: string, overrides: Partial<CallObservationStart> = {}): CallObservationStart {
@@ -180,10 +180,17 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
     await seedBase(db)
     const now = { value: T0 + HOUR }
     const { calls } = compose(db, now)
-    const row = async (id: string) =>
-      (await db.select().from(observationCalls).where(eq(observationCalls.id, id)))[0]!
-    const models = async (id: string) =>
-      await db.select().from(observationCallModels).where(eq(observationCallModels.callId, id))
+    const row = async (id: string) => {
+      const { observationCalls } = tablesOf(db)
+      return (await db.select().from(observationCalls).where(eq(observationCalls.id, id)))[0]!
+    }
+    const models = async (id: string) => {
+      const { observationCallModels } = tablesOf(db)
+      return await db
+        .select()
+        .from(observationCallModels)
+        .where(eq(observationCallModels.callId, id))
+    }
 
     await calls.accept(call('c1', { nodeRunId: 'nr-own-1' }))
     expect(await row('c1')).toMatchObject({
@@ -319,6 +326,7 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
         endedAt: T0 + 20,
         usage: { state: 'complete', models: [million, model('unknown-model', 5, 0)] },
       })
+    const { observationCalls, observationCallModels } = tablesOf(db)
     const early = (
       await db.select().from(observationCalls).where(eq(observationCalls.id, 'p-early'))
     )[0]!
@@ -383,11 +391,12 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
     }
     await calls.accept(call('b-unpriced', { ...builtin, startedAt: T0 + 1 }))
     await calls.finish('b-unpriced', { status: 'done', endedAt: T0 + 2, usage })
+    const { observationCalls, observationCallModels } = tablesOf(db)
     expect(
       (await db.select().from(observationCalls).where(eq(observationCalls.id, 'b-unpriced')))[0],
     ).toMatchObject({ runtimeId: 'builtin:opencode', costState: 'unpriced' })
     // A call recorded before built-in keys existed joins the same line.
-    await db.insert(observationCalls).values({
+    await insertOne(db, observationCalls, {
       id: 'b-legacy',
       purpose: 'system',
       taskId: 't-own',
@@ -413,7 +422,7 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
       costState: 'unpriced',
       updatedAt: T0 + 4,
     })
-    await db.insert(observationCallModels).values({
+    await insertOne(db, observationCallModels, {
       callId: 'b-legacy',
       model: 'opencode-go/deepseek',
       inputTokens: 5,
@@ -503,6 +512,7 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
       await calls.accept(call(id))
       await calls.finish(id, { status, endedAt: T0 + 1, usage: complete })
     }
+    const { observationCalls } = tablesOf(db)
     const states = Object.fromEntries(
       (await db.select().from(observationCalls)).map((row) => [row.id, row.usageState]),
     )

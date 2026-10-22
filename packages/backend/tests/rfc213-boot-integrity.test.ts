@@ -11,6 +11,8 @@
 //     silently → the "should throw DbCorruptionError" case reds.
 //   - change db/integrity.ts to `{ readonly: false }` → the readonly source lock reds.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -20,8 +22,6 @@ import type { Database } from 'bun:sqlite'
 import { ulid } from 'ulid'
 import { openDb, DbCorruptionError, type DbClient } from '../src/db/client'
 import { quickCheckDbFile } from '../src/db/integrity'
-import { workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const tmps: string[] = []
@@ -42,7 +42,8 @@ function sqliteOf(db: DbClient): Database {
 async function seedManyPages(dbPath: string): Promise<number> {
   const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
   for (let i = 0; i < 120; i++) {
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: ulid(),
       name: `wf-${i}`,
       definition: JSON.stringify({

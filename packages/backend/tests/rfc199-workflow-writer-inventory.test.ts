@@ -8,6 +8,7 @@
 // may INSERT, but they share the canonical definition serializer. Tests and
 // migrations are intentionally outside this production-source inventory.
 
+import ts from 'typescript'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
@@ -121,6 +122,20 @@ function inventoryWorkflowWriters(): WorkflowWriterInventory {
     const file = relative(BACKEND_SRC, path).split(sep).join('/')
     const source = stripCommentLines(readFileSync(path, 'utf8'))
 
+    const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'insertOne' &&
+        node.arguments[1]?.getText(ast) === 'workflows'
+      ) {
+        increment(inventory.insert, file)
+        inventory.insertValueArgs.push({ file, valueArg: node.arguments[2]?.getText(ast) ?? null })
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(ast)
     const insert = /\.insert\s*\(\s*workflows\s*\)/g
     for (;;) {
       if (insert.exec(source) === null) break

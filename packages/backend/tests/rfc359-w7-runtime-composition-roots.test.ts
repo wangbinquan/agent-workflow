@@ -4,6 +4,8 @@
 // 这一批比前三批更靠近生产装配链：数字员工模块的启动屏障、资源包 apply 日志的收敛扫描、
 // 数字员工动作执行器的结果读取。共同点是它们都曾只有装配点那行字，工厂一次没跑过。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,8 +14,7 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
@@ -30,11 +31,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
 
-function asSqlite(db: ProviderNeutralDatabase): DbClient {
+function asSqlite(db: PersistenceDb): DbClient {
   return db as unknown as DbClient
 }
 
-function asPostgresql(db: ProviderNeutralDatabase): PostgresqlDatabaseClient {
+function asPostgresql(db: PersistenceDb): PostgresqlDatabaseClient {
   return db as unknown as PostgresqlDatabaseClient
 }
 
@@ -75,9 +76,10 @@ const executionContracts: ExecutionContractParticipant = {
   },
 }
 
-async function seedActor(db: ProviderNeutralDatabase): Promise<Actor> {
+async function seedActor(db: PersistenceDb): Promise<Actor> {
   const id = `u_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -93,14 +95,15 @@ async function seedActor(db: ProviderNeutralDatabase): Promise<Actor> {
   } as unknown as Actor
 }
 
-async function seedTerminalTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function seedTerminalTask(db: PersistenceDb, taskId: string): Promise<void> {
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `wf-${workflowId.slice(-6).toLowerCase()}`,
     definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,

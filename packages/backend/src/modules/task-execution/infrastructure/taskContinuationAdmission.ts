@@ -6,11 +6,14 @@
 // `DatabaseSession.transaction` 体内传 `tx`；同任务的并发准入由 CAS（active intent 检查 +
 // lineage 复核）与调用方的聚合根行锁共同保证。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { taskExecutionIntents, taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
-import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   SubmittedTaskExecutionIntent,
   SubmitTaskContinuationInput,
@@ -75,21 +78,23 @@ function encodedIntentPayload(payload: unknown): string {
 
 /** 已规范化请求的准入：修订号 / 维护占用 / 活跃 intent / lineage 四道判据后落一行 pending intent。 */
 export async function submitCanonicalTaskExecutionIntent(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: SubmitTaskExecutionIntentInput,
   intentId: string,
   now: number,
 ): Promise<SubmittedTaskExecutionIntent> {
   const { request } = input
-  const task = await tx
-    .select({
-      lifecycleEventRevision: tasks.lifecycleEventRevision,
-      executionLineageId: tasks.executionLineageId,
-      lineageSlotPathJson: tasks.lineageSlotPathJson,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, request.taskId))
-    .get()
+  const { tasks, taskExecutionIntents } = tablesOf(tx)
+  const task = await first(
+    tx
+      .select({
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, request.taskId)),
+  )
   if (task === undefined) {
     throw new TaskExecutionError(
       'task-continuation-stale',
@@ -155,27 +160,24 @@ export async function submitCanonicalTaskExecutionIntent(
     )
   }
   try {
-    await tx
-      .insert(taskExecutionIntents)
-      .values({
-        id: intentId,
-        taskId: request.taskId,
-        kind: request.kind,
-        state: 'pending',
-        source: request.source,
-        requestHash: hash,
-        payloadJson: encodedIntentPayload(request.payload),
-        executionLineageId: request.scope.executionLineageId,
-        continuationSlotKey: request.scope.continuationSlotKey,
-        slotPathJson: encodeLineageSlotPath(request.scope.slotPath),
-        operationGeneration: request.scope.operationGeneration,
-        replayAuthorizationId: input.replayAuthorizationId ?? null,
-        authorizationScopeJson: input.authorizationScopeJson ?? null,
-        expectedTaskRevision: request.expectedTaskRevision,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+    await insertOne(tx, taskExecutionIntents, {
+      id: intentId,
+      taskId: request.taskId,
+      kind: request.kind,
+      state: 'pending',
+      source: request.source,
+      requestHash: hash,
+      payloadJson: encodedIntentPayload(request.payload),
+      executionLineageId: request.scope.executionLineageId,
+      continuationSlotKey: request.scope.continuationSlotKey,
+      slotPathJson: encodeLineageSlotPath(request.scope.slotPath),
+      operationGeneration: request.scope.operationGeneration,
+      replayAuthorizationId: input.replayAuthorizationId ?? null,
+      authorizationScopeJson: input.authorizationScopeJson ?? null,
+      expectedTaskRevision: request.expectedTaskRevision,
+      createdAt: now,
+      updatedAt: now,
+    })
   } catch (error) {
     pendingIntentInsertConflict(engineOf(tx).uniqueViolationTarget, request.taskId, error)
   }
@@ -187,34 +189,37 @@ export async function submitCanonicalTaskExecutionIntent(
  * 决定绑定到新 intent 上。
  */
 export async function submitTaskContinuation(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: SubmitTaskContinuationInput,
 ): Promise<SubmittedTaskExecutionIntent> {
-  const task = await tx
-    .select({
-      lifecycleEventRevision: tasks.lifecycleEventRevision,
-      executionLineageId: tasks.executionLineageId,
-      lineageSlotPathJson: tasks.lineageSlotPathJson,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, input.taskId))
-    .get()
+  const { tasks, taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(tx)
+  const task = await first(
+    tx
+      .select({
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, input.taskId)),
+  )
   if (task === undefined) {
     throw new TaskExecutionError(
       'task-continuation-stale',
       `task '${input.taskId}' disappeared before continuation admission`,
     )
   }
-  const latest = await tx
-    .select({
-      continuationSlotKey: taskExecutionIntents.continuationSlotKey,
-      operationGeneration: taskExecutionIntents.operationGeneration,
-    })
-    .from(taskExecutionIntents)
-    .where(eq(taskExecutionIntents.taskId, input.taskId))
-    .orderBy(desc(taskExecutionIntents.createdAt), desc(taskExecutionIntents.id))
-    .limit(1)
-    .get()
+  const latest = await first(
+    tx
+      .select({
+        continuationSlotKey: taskExecutionIntents.continuationSlotKey,
+        operationGeneration: taskExecutionIntents.operationGeneration,
+      })
+      .from(taskExecutionIntents)
+      .where(eq(taskExecutionIntents.taskId, input.taskId))
+      .orderBy(desc(taskExecutionIntents.createdAt), desc(taskExecutionIntents.id))
+      .limit(1),
+  )
   const { executionLineageId, slotPath } = canonicalTaskLineageScope(input.taskId, task)
   const continuationSlotKey =
     latest?.continuationSlotKey ??

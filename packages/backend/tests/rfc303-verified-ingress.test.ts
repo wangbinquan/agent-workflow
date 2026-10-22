@@ -1,5 +1,7 @@
 // RFC-303 verified-ingress integration: delivery acceptance, exact-body fact
 // dedupe, stream revision, and control intent must commit as one SQLite fact.
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -65,7 +67,7 @@ function fixture(): { raw: Database; db: DbClient } {
   for (const statement of MIGRATION.split('--> statement-breakpoint')) {
     if (statement.trim() !== '') raw.exec(statement)
   }
-  return { raw, db: drizzle(raw) as unknown as DbClient }
+  return { raw, db: inheritDatabaseHandle(drizzle(raw), schemaFixtureDb()) as unknown as DbClient }
 }
 
 function event(overrides: Partial<CodeHostEvent> = {}): CodeHostEvent {

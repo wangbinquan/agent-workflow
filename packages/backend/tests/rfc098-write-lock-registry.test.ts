@@ -30,6 +30,8 @@
 //      pre-fix the single-track call was a silent no-op for multi-repo rows
 //      whose `preSnapshot` is NULL by design).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -37,9 +39,8 @@ import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, taskRepos, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { gcTaskWriteSem, getTaskWriteSem, taskWriteLockCount } from '../src/services/taskWriteLocks'
@@ -222,7 +223,7 @@ interface SeededClarify {
 }
 
 async function seedClarifyTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     worktreePath: string
     repoPath: string
@@ -235,7 +236,8 @@ async function seedClarifyTask(
   const def = selfClarifyDef()
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskRepos, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'fixture',
     description: '',
@@ -243,7 +245,7 @@ async function seedClarifyTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -271,7 +273,7 @@ async function seedClarifyTask(
     )
   }
   const agentRunId = `nr_agent_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: agentRunId,
     taskId,
     nodeId: 'agent_x',
@@ -374,6 +376,7 @@ describeEachProvider(
         expect(readFileSync(join(repo, 'src.txt'), 'utf-8')).toBe('pre-state\n')
         expect(existsSync(join(repo, 'writer-inflight.txt'))).toBe(false)
 
+        const { nodeRuns } = tablesOf(db)
         // And the answer still minted exactly one pending rerun (happy path
         // unbroken by the lock detour).
         const agentRows = await db
@@ -461,6 +464,7 @@ describeEachProvider(
         // states above would not hold).
         expect(existsSync(join(containerDir, '.git'))).toBe(false)
 
+        const { nodeRuns } = tablesOf(db)
         // Rerun minted — the multi-repo detour didn't break the answer flow.
         const agentRows = await db
           .select()

@@ -61,7 +61,7 @@ describe('RFC-349 collaboration route operations', () => {
       expect(factory).toContain(group)
     }
     expect(factory).toContain('createCollaborationRouteOperations')
-    expect(factory).toContain('ProviderNeutralDatabase')
+    expect(factory).toContain('PersistenceDb')
     expect(factory).not.toMatch(
       /\bPostgresqlDatabaseClient\b|\bDbClient\b|\$provider|'postgresql'|'sqlite'/,
     )

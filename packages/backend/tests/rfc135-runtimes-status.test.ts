@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { RuntimesStatusResponseSchema } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { applyConfigPatch } from '../src/config'
@@ -39,7 +39,7 @@ const TOKEN = 'a'.repeat(64)
 
 interface Harness {
   app: Hono
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   tmp: string
   configPath: string
   opencodeBin: string
@@ -314,7 +314,7 @@ describeEachProviderHttpApplication(
             })
           ).app,
         }
-        try {
+        {
           const hangBin = join(slow.tmp, 'hangs')
           // Include the test-process pid in the sleep operand so independently
           // isolated copies of this file never mistake one another's intentional
@@ -345,8 +345,6 @@ describeEachProviderHttpApplication(
           // probe kills the detached process group, so no marker process survives.
           const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', hangMarker] })
           expect(survivors.stdout.toString().trim()).toBe('')
-        } finally {
-          // `slow.tmp` 与 `h.tmp` 是同一个目录（只有注入值不同），交给 afterEach 统一删。
         }
       },
     )

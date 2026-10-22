@@ -6,6 +6,7 @@
 // number，于是同一段代码在两侧行为不同。这里统一 `Number()` 归一，并把「不是有限数」
 // 当缺陷抛——让它红在这一行，而不是流进 zod 报一个看不懂的形状错。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   FailureCode,
   TaskCatalogVisibility,
@@ -14,7 +15,6 @@ import type {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import { tasks } from '@/db/schema'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import {
   defaultTaskListRowRef,
@@ -126,13 +126,14 @@ async function loadAuthorizedChildCounts(
   catalogVisibility?: TaskCatalogVisibility,
 ): Promise<Map<string, number>> {
   if (parentIds.length === 0) return new Map()
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ parentTaskId: tasks.parentTaskId, id: tasks.id })
     .from(tasks)
     .where(
       and(
         inArray(tasks.parentTaskId, [...parentIds]),
-        taskListVisibilityCondition(db, defaultTaskListRowRef(), viewer),
+        taskListVisibilityCondition(db, defaultTaskListRowRef(db), viewer),
         catalogVisibility === undefined
           ? undefined
           : eq(tasks.catalogVisibility, catalogVisibility),

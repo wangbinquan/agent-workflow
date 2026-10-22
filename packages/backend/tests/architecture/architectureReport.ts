@@ -60,10 +60,8 @@ const EXACT_PUBLIC = new Set([
 const GOVERNED_EXTERNAL_SPECIFIERS = new Set(['drizzle-orm'])
 export const PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST = [
   'AbortSignal',
-  // RFC-359 W4-D28b：`ProviderNeutralDatabase` 的别名目标。名字里的 SQLite 是 drizzle 的历史
-  // 命名，它恰恰是**两个引擎共用**的那一层（`BaseSQLiteDatabase<'sync' | 'async', …>`），
-  // 随任务执行写事务网关（`withTaskExecutionWrite`）进入 public 面。
-  'BaseSQLiteDatabase',
+  // RFC-395 I-b：public 事务端口只引用窄查询面，不展开原生方言实现。
+  'PersistenceDb',
   'Blob',
   'Exclude',
   'Extract',
@@ -2638,7 +2636,7 @@ const CANONICAL_NODE_RUN_INSERT_FILES = new Set([
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
 ])
 
-function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertSite[] {
+export function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertSite[] {
   const out: NodeRunInsertSite[] = []
   for (const unit of backend) {
     const lines = unit.text.split('\n')
@@ -2646,11 +2644,12 @@ function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertS
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === 'insert' &&
-        node.arguments[0] !== undefined &&
-        ts.isIdentifier(node.arguments[0]) &&
-        node.arguments[0].text === 'nodeRuns'
+        ((ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === 'insert' &&
+          node.arguments[0]?.getText(unit.source) === 'nodeRuns') ||
+          (ts.isIdentifier(node.expression) &&
+            node.expression.text === 'insertOne' &&
+            node.arguments[1]?.getText(unit.source) === 'nodeRuns'))
       ) {
         const line = unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1
         const owner = enclosingTopLevelSymbol(unit, node)

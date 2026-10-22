@@ -6,20 +6,11 @@
 // 不开写事务——旧 SQLite 实现刻意用 deferred 事务而不是 BEGIN IMMEDIATE，就是不让一次快照读去抢 writer；READ
 // COMMITTED 的 PG 事务对多条 select 也不提供更强的一致性，两边都是逐语句快照，语义一致。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, count, eq, inArray, isNull, notInArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentApprovalSagas,
-  developmentMissionLinks,
-  developmentMissions,
-  developmentMrClaims,
-  employeeOsWriterState,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   DigitalEmployeeWriterCutoverPersistence,
   DigitalEmployeeWriterState,
@@ -29,7 +20,7 @@ import type {
 const SETTLED_APPROVAL_STATUSES = ['approved', 'rejected', 'expired', 'unavailable']
 
 function writerState(
-  row: typeof employeeOsWriterState.$inferSelect | undefined,
+  row: PersistenceTables['employeeOsWriterState']['$inferSelect'] | undefined,
 ): DigitalEmployeeWriterState {
   if (row === undefined) throw new Error('digital employee writer state is not initialized')
   return {
@@ -65,7 +56,8 @@ function reportFrom(
   }
 }
 
-async function readWriter(handle: ProviderNeutralDatabase): Promise<DigitalEmployeeWriterState> {
+async function readWriter(handle: PersistenceDb): Promise<DigitalEmployeeWriterState> {
+  const { employeeOsWriterState } = tablesOf(handle)
   const row = (
     await handle
       .select()
@@ -76,7 +68,8 @@ async function readWriter(handle: ProviderNeutralDatabase): Promise<DigitalEmplo
   return writerState(row)
 }
 
-async function countOpenLegacyMissions(handle: ProviderNeutralDatabase): Promise<number> {
+async function countOpenLegacyMissions(handle: PersistenceDb): Promise<number> {
+  const { developmentMissions } = tablesOf(handle)
   const row = (
     await handle
       .select({ value: count() })
@@ -87,11 +80,18 @@ async function countOpenLegacyMissions(handle: ProviderNeutralDatabase): Promise
 }
 
 export function createDigitalEmployeeWriterCutoverPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeWriterCutoverPersistence {
   const session = databaseSessionFor(db)
-  const lockWriter = (tx: DatabaseTransaction) =>
-    session.engine.lockAggregateRoot(tx, employeeOsWriterState, employeeOsWriterState.id, 'global')
+  const lockWriter = (tx: PersistenceTx) => {
+    const { employeeOsWriterState } = tablesOf(tx)
+    return session.engine.lockAggregateRoot(
+      tx,
+      employeeOsWriterState,
+      employeeOsWriterState.id,
+      'global',
+    )
+  }
   return {
     read: () => readWriter(db),
     async activate(input) {
@@ -106,6 +106,7 @@ export function createDigitalEmployeeWriterCutoverPersistence(
           legacyOpenMissionCount,
           updatedAt: input.now,
         }
+        const { employeeOsWriterState } = tablesOf(tx)
         await tx
           .update(employeeOsWriterState)
           .set(next)
@@ -124,6 +125,7 @@ export function createDigitalEmployeeWriterCutoverPersistence(
           legacyOpenMissionCount,
           updatedAt: now,
         }
+        const { employeeOsWriterState } = tablesOf(tx)
         await tx
           .update(employeeOsWriterState)
           .set({ mode: next.mode, legacyOpenMissionCount, updatedAt: now })
@@ -133,6 +135,12 @@ export function createDigitalEmployeeWriterCutoverPersistence(
     },
     async migrationSnapshot(limit) {
       const writer = await readWriter(db)
+      const {
+        developmentMissions,
+        developmentMrClaims,
+        developmentMissionLinks,
+        developmentApprovalSagas,
+      } = tablesOf(db)
       const sampled = await db
         .select({ id: developmentMissions.id, status: developmentMissions.status })
         .from(developmentMissions)

@@ -10,15 +10,16 @@
 // 两次 runTask 之间用 withEnv 换 MOCK_OPENCODE_CLARIFY_BODY 即可让下一轮问不同问题;最后一轮
 // 用 MOCK_OPENCODE_OUTPUTS 让 agent 产出 doc。self-clarify 多轮不涉 fanout(与协作者 4220+ 无关)。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   createProviderTaskExecutionTestTopology,
@@ -50,7 +51,7 @@ function ans(qid: string, idx: number, label: string) {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -97,6 +98,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 }
 
 async function selfEntryId(h: Harness, taskId: string, originNodeRunId: string): Promise<string> {
+  const { taskQuestions } = tablesOf(h.db)
   const rows = await h.db
     .select()
     .from(taskQuestions)
@@ -197,10 +199,13 @@ function registerProviderCases1(provider: ProviderHarness) {
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db
-      .insert(workflows)
-      .values({ id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-    await h.db.insert(tasks).values({
+    const { workflows, tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, workflows, {
+      id: workflowId,
+      name: 'wf',
+      definition: JSON.stringify(def),
+    })
+    await insertOne(h.db, tasks, {
       id: taskId,
       name: 't5',
       workflowId,

@@ -16,14 +16,14 @@
 // 同族教训见 `docs/dev-gotchas.md`：RFC-115 的 `defaultRuntime`、RFC-266 的
 // fan-out 上限都是同一形状——「设置页写入 + scheduler 消费 + 中间没人接线」。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { codeHostConnections } from '../src/db/schema'
 import {
   createCodeHostConnectionsService,
   resolveCodeHostConnectionsFromKeyFile,
@@ -37,7 +37,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 // 夹具刻意不带 glpat- / ghp_ 前缀（gitleaks 规则），同 connections 测试。
 const SECRET_TOKEN = 'aw-fixture-not-a-real-token-8100' // gitleaks:allow
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
@@ -157,7 +157,8 @@ describeEachProvider('code-host 凭据接线（双引擎）', (harness) => {
     test('code_host_connections 行存在时，表结构仍是每 provider 一行', async () => {
       const { key } = seededHome()
       await dbWithGitlabRow(key)
-      const rows = await db.select().from(codeHostConnections).all()
+      const { codeHostConnections } = tablesOf(db)
+      const rows = await db.select().from(codeHostConnections)
       expect(rows.length).toBe(1)
       expect(rows[0]!.provider).toBe('gitlab')
     })

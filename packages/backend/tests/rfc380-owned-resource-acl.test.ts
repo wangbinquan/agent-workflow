@@ -1,15 +1,10 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-380: every owned-type ACL PUT emits the same post-commit revalidation on both providers.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  capabilityTemplates,
-  actionTemplates,
-  verificationProfiles,
-  digitalEmployees,
-  automationPolicies,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createUser } from './helpers/userFixture'
 import { registerRevalidationTrigger, type RevocationReason } from '@/ws/revalidationHook'
 import { createSession } from './helpers/auth/sessionStore'
@@ -20,9 +15,10 @@ const resources = [
   {
     type: 'capability_template',
     base: '/api/capability-templates',
-    seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
+    seed: async (db: PersistenceDb, ownerUserId: string) => {
       const row = { id: ulid(), name: RESOURCE_NAME }
-      await db.insert(capabilityTemplates).values({
+      const { capabilityTemplates } = tablesOf(db)
+      await insertOne(db, capabilityTemplates, {
         ...row,
         description: 'acl matrix subject',
         capability: 'mr-review',
@@ -45,9 +41,10 @@ const resources = [
   {
     type: 'action_template',
     base: '/api/code/action-templates',
-    seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
+    seed: async (db: PersistenceDb, ownerUserId: string) => {
       const row = { id: ulid(), name: RESOURCE_NAME }
-      await db.insert(actionTemplates).values({
+      const { actionTemplates } = tablesOf(db)
+      await insertOne(db, actionTemplates, {
         ...row,
         capabilityId: 'acl-matrix-capability',
         draftJson: '{}',
@@ -63,9 +60,10 @@ const resources = [
   {
     type: 'verification_profile',
     base: '/api/code/verification-profiles',
-    seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
+    seed: async (db: PersistenceDb, ownerUserId: string) => {
       const row = { id: ulid(), name: RESOURCE_NAME }
-      await db.insert(verificationProfiles).values({
+      const { verificationProfiles } = tablesOf(db)
+      await insertOne(db, verificationProfiles, {
         ...row,
         draftJson: '{}',
         publishedRevision: null,
@@ -80,9 +78,10 @@ const resources = [
   {
     type: 'digital_employee',
     base: '/api/code/digital-employees',
-    seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
+    seed: async (db: PersistenceDb, ownerUserId: string) => {
       const row = { id: ulid(), name: RESOURCE_NAME }
-      await db.insert(digitalEmployees).values({
+      const { digitalEmployees } = tablesOf(db)
+      await insertOne(db, digitalEmployees, {
         ...row,
         draftJson: '{}',
         publishedRevision: null,
@@ -97,9 +96,10 @@ const resources = [
   {
     type: 'automation_policy',
     base: '/api/code/automation-policies',
-    seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
+    seed: async (db: PersistenceDb, ownerUserId: string) => {
       const row = { id: ulid(), name: RESOURCE_NAME }
-      await db.insert(automationPolicies).values({
+      const { automationPolicies } = tablesOf(db)
+      await insertOne(db, automationPolicies, {
         ...row,
         draftJson: '{}',
         publishedRevision: null,

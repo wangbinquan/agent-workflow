@@ -12,6 +12,8 @@
 // per-round single path (auto and manual never double-dispatch); RFC-125 single-path invariant
 // (flag never flipped); lock non-reentry; the P5-0 guard (RFC-132: lifted universally).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -21,19 +23,10 @@ import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { gitStashSnapshot, runGit } from '../src/util/git'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { expectDatabaseFailure } from './helpers/databaseFailure'
 import { dropAbortTrigger, installAbortTrigger } from './helpers/faultTrigger'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  nodeRuns,
-  taskExecutionIntents,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   autoDispatchClarifyRound,
   autoDispatchClarifyRoundWithDecision,
@@ -69,13 +62,14 @@ const CC = 'CC' // cross-clarify node
 const actor = { userId: 'u1', role: 'owner' as const }
 
 async function commitClarifyDecisionThenInterrupt(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   originNodeRunId: string
   answers: ReturnType<typeof ans>[]
   directive?: 'continue' | 'stop'
   idempotencyKey: string
 }): Promise<void> {
+  const { clarifyRounds, tasks } = tablesOf(input.db)
   const round = (
     await input.db
       .select({ id: clarifyRounds.id })
@@ -196,6 +190,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       gate: { kind: 'clarify', ref: `clarify:${intermediaryNodeRunId}` },
       replayed: false,
     })
+    const { tasks, clarifyRounds, taskExecutionIntents, nodeRuns } = tablesOf(db)
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: decided.receipt.taskRevision,
@@ -256,6 +251,13 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         idempotencyKey: command.decision.idempotencyKey,
       }),
     ).rejects.toThrow('rfc341-commit-edge-fault')
+    const {
+      collaborationGateOperations,
+      taskExecutionIntents,
+      clarifyRounds,
+      taskQuestions,
+      nodeRuns,
+    } = tablesOf(db)
     const operation = (
       await db
         .select()
@@ -333,6 +335,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         idempotencyKey: 'missing-durable-role',
       }),
     ).rejects.toThrow('rfc341-commit-edge-fault')
+    const { collaborationGateOperations, taskExecutionIntents, taskQuestions } = tablesOf(db)
     const operation = (
       await db
         .select()
@@ -379,6 +382,8 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { collaborationGateOperations, nodeRuns, tasks, clarifyRounds, taskExecutionIntents } =
+      tablesOf(db)
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
     const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
     // 注入「intent 写入必失败」的故障：两个引擎的 DDL 不同（SQLite 直接 RAISE(ABORT)，
@@ -423,13 +428,10 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
   })
 })
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  _deferred = true,
-): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string, _deferred = true): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -437,7 +439,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -453,13 +455,14 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; iteration?: number; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -474,7 +477,7 @@ async function seedRun(
 /** Seed a SEALABLE self round (awaiting_human, no answers yet) + the asking P run (the dispatch
  *  inherit target) + the clarify node_run. Mirrors the runner's createClarifyRound. */
 async function seedSealableSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ intermediaryNodeRunId: string; askingRunId: string }> {
@@ -496,7 +499,7 @@ async function seedSealableSelfRound(
 /** Seed a SEALABLE cross round (awaiting_human, no answers) + the questioner Q run + the cross
  *  node_run + the dual-written legacy cross_clarify_session. */
 async function seedSealableCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ crossNodeRunId: string; questionerRunId: string; roundId: string }> {
@@ -517,7 +520,8 @@ async function seedSealableCrossRound(
     directive: 'continue' as const,
     status: 'awaiting_human' as const,
   }
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     ...common,
     kind: 'cross',
     askingNodeId: Q,
@@ -529,16 +533,18 @@ async function seedSealableCrossRound(
   return { crossNodeRunId, questionerRunId, roundId }
 }
 
-function runRow(db: ProviderNeutralDatabase, id: string) {
+function runRow(db: PersistenceDb, id: string) {
+  const { nodeRuns } = tablesOf(db)
   return db.select().from(nodeRuns).where(eq(nodeRuns.id, id))
 }
-function entryRow(db: ProviderNeutralDatabase, id: string) {
+function entryRow(db: PersistenceDb, id: string) {
+  const { taskQuestions } = tablesOf(db)
   return db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
 }
 
 /** Insert a raw task_question entry (for the same-home park unit test). */
 async function insertEntry(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   e: {
     originNodeRunId: string
@@ -552,7 +558,8 @@ async function insertEntry(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -572,20 +579,22 @@ async function insertEntry(
   })
   return id
 }
-function roundByOrigin(db: ProviderNeutralDatabase, originNodeRunId: string) {
+function roundByOrigin(db: PersistenceDb, originNodeRunId: string) {
+  const { clarifyRounds } = tablesOf(db)
   return db
     .select()
     .from(clarifyRounds)
     .where(eq(clarifyRounds.intermediaryNodeRunId, originNodeRunId))
 }
-function entriesByOrigin(db: ProviderNeutralDatabase, originNodeRunId: string) {
+function entriesByOrigin(db: PersistenceDb, originNodeRunId: string) {
+  const { taskQuestions } = tablesOf(db)
   return db.select().from(taskQuestions).where(eq(taskQuestions.originNodeRunId, originNodeRunId))
 }
 
 let uninstallProjection = (): void => {}
 
 /** 在 harness 交出的那个库上装同步投影半区（RFC-359：库由 harness 给，这里只负责装 / 卸）。 */
-async function withProjection(db: ProviderNeutralDatabase): Promise<ProviderNeutralDatabase> {
+async function withProjection(db: PersistenceDb): Promise<PersistenceDb> {
   uninstallProjection = await installCommittedEventProjectionHarness(db)
   return db
 }
@@ -987,6 +996,7 @@ describeEachProvider(
       expect((caught as ConflictError).code).toBe('clarify-already-answered')
       // The control-channel entry stays UNDISPATCHED (awaiting explicit board dispatch).
       expect((await entryRow(db, selfEntryBefore.id))[0]?.dispatchedAt).toBeNull()
+      const { nodeRuns } = tablesOf(db)
       expect(
         (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
           (r) => r.rerunCause === 'clarify-answer',
@@ -1020,6 +1030,7 @@ describeEachProvider(
         (e) => e.roleKind === 'self',
       )!
       expect(selfEntry.dispatchedAt).not.toBeNull()
+      const { nodeRuns } = tablesOf(db)
       const rerunsBefore = (
         await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.rerunCause === 'clarify-answer').length
@@ -1087,6 +1098,7 @@ describeEachProvider(
       expect(selfEntries).toHaveLength(2)
       expect(selfEntries.every((e) => e.dispatchedAt !== null)).toBe(true)
       expect(res.dispatch.reruns).toHaveLength(1)
+      const { nodeRuns } = tablesOf(db)
       const clarifyReruns = (
         await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.rerunCause === 'clarify-answer')
@@ -1309,6 +1321,7 @@ describeEachProvider(
         const db = harness.db
         const taskId = `t_${ulid()}`
         await seedTask(db, taskId)
+        const { tasks, nodeRuns } = tablesOf(db)
         await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
         const { intermediaryNodeRunId: clarifyNodeRunId, askingRunId } =
           await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
@@ -1354,6 +1367,7 @@ describeEachProvider(
         const db = harness.db
         const taskId = `t_${ulid()}`
         await seedTask(db, taskId)
+        const { tasks, nodeRuns } = tablesOf(db)
         await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
         const { crossNodeRunId, questionerRunId } = await seedSealableCrossRound(db, taskId, [
           mkQ('q1', 't'),
@@ -1473,6 +1487,7 @@ describeEachProvider('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
@@ -1516,6 +1531,7 @@ describeEachProvider(
       const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
         mkQ('q1', 't'),
       ])
+      const { tasks } = tablesOf(db)
       // Corrupt the snapshot AFTER seeding (worktreePath stays '' so the rollback path is skipped and
       // only dispatchTaskQuestions' parseDefinition hits it → task-question-snapshot-unparseable).
       await db.update(tasks).set({ workflowSnapshot: 'not json{' }).where(eq(tasks.id, taskId))
@@ -1579,6 +1595,7 @@ describeEachProvider(
         const db = harness.db
         const taskId = `t_${ulid()}`
         await seedTask(db, taskId)
+        const { tasks, nodeRuns } = tablesOf(db)
         await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
         // A prior IN-FLIGHT dispatched self entry on home P (dispatched, trigger NULL = unconsumed) —
         // it OWNS the worktree; an unconditional rollback would rewrite the tree under its (pending) rerun.

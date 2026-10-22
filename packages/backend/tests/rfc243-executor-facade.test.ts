@@ -19,13 +19,14 @@
 //      (failed/interrupted included — the single-slot RFC-202 hook only fires
 //      for done|canceled); missing-row resolve; poll fallback catches a row
 //      deleted after registration; abort resolves 'aborted'.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
@@ -200,16 +201,17 @@ describe('RFC-359 AC-1 —— 启动参与者继承了门面的 ref/payload 一�
 // executionWatch
 // ---------------------------------------------------------------------------
 
-async function seedTask(db: ProviderNeutralDatabase, status: TaskStatus): Promise<string> {
+async function seedTask(db: PersistenceDb, status: TaskStatus): Promise<string> {
   const definition = { $schema_version: 4, inputs: [], nodes: [], edges: [] }
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `wf-${workflowId.slice(-6).toLowerCase()}`,
     definition: JSON.stringify(definition),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc243-watch',
     workflowId,
@@ -234,7 +236,7 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
     resetTaskTerminalWatchersForTests()
   })
 
-  const installExecutionWatchPump = (db: ProviderNeutralDatabase): void => {
+  const installExecutionWatchPump = (db: PersistenceDb): void => {
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onExecutionWatch(_db, taskId, status) {
         notifyTaskTerminal(taskId, status)
@@ -296,6 +298,7 @@ describeEachProvider('RFC-243 T5 — executionWatch', (harness) => {
     const taskId = await seedTask(db, 'running')
     const watching = watchTaskTerminal(db, taskId, { pollMs: 25 })
     await Bun.sleep(10)
+    const { tasks } = tablesOf(db)
     await db.delete(tasks).where(eq(tasks.id, taskId))
     expect(await watching).toEqual({ kind: 'missing' })
   })

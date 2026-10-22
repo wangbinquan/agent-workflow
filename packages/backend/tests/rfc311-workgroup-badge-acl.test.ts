@@ -7,18 +7,19 @@
 //
 // 这条锁的是最直接的用户后果:非成员的收件箱徽章不得因为别人的工作组任务而 +1。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
 import type { WorkgroupOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { composeTestWorkgroupTaskRoom, roomDocument } from './helpers/workgroupTaskRoom'
 
 const NOW = 1_788_278_400_000
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -51,6 +52,7 @@ const CONFIG = {
 }
 
 async function seed(db: Db): Promise<void> {
+  const { users, workflows, tasks, workgroupTaskState } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'bob', 'admin'].map((id) => ({
       id,
@@ -61,8 +63,8 @@ async function seed(db: Db): Promise<void> {
       updatedAt: NOW,
     })),
   )
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
-  await db.insert(tasks).values({
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, tasks, {
     id: 'wgtask',
     name: 'wg task',
     workflowId: 'wf1',
@@ -80,7 +82,7 @@ async function seed(db: Db): Promise<void> {
     workgroupId: 'wg1',
     workgroupConfigJson: JSON.stringify(CONFIG),
   })
-  await db.insert(workgroupTaskState).values({
+  await insertOne(db, workgroupTaskState, {
     taskId: 'wgtask',
     gateStatus: 'awaiting_confirmation',
     updatedAt: NOW,

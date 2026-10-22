@@ -24,9 +24,10 @@
 // （漏 `await` 时 SQLite 侧照样绿、只有 PG 才炸，所以 await 收在这个设施里、不留给调用方）。
 
 import { getTableColumns } from 'drizzle-orm'
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { Table } from 'drizzle-orm'
 
-import { engineOf, type DatabaseTransaction } from './databaseTransaction'
+import { engineOf } from './databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /**
  * 表宽。**必须走 dialect 无关的 `getTableColumns`**：`db/schema.ts` 的导出在进程级 schema 投影
@@ -34,7 +35,7 @@ import { engineOf, type DatabaseTransaction } from './databaseTransaction'
  * `InlineForeignKeys` 而抛 TypeError（2026-09-07 实撞：SQLite 单跑全绿，PG 侧四个用例当场炸——
  * 这正是「双引擎才抓得住」的一例）。
  */
-function columnCountOf(table: SQLiteTable): number {
+function columnCountOf(table: Table): number {
   return Object.keys(getTableColumns(table)).length
 }
 
@@ -47,8 +48,8 @@ function columnCountOf(table: SQLiteTable): number {
  * @returns 实际发出的批次数（= INSERT 语句条数），供性能守卫直接断言。
  */
 export async function insertInBatches<Row>(
-  tx: DatabaseTransaction,
-  table: SQLiteTable,
+  tx: PersistenceTx,
+  table: Table,
   rows: readonly Row[],
   write: (batch: readonly Row[]) => unknown,
 ): Promise<number> {

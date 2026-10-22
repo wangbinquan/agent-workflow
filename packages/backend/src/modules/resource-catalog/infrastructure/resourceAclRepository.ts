@@ -2,13 +2,13 @@
 // identity 行的 CAS（aclRevision）、grants 整体替换与 owner 侧的 after-write 钩子在同一个目录写事务原语里
 // （SERIALIZABLE：PG 抬升隔离级别并重试，SQLite 独占事务）。owner + name 撞库经引擎能力矩阵归类。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
-import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { ConflictError } from '@/util/errors'
 import type {
   ResourceCatalogAclMutationChange,
@@ -24,7 +24,7 @@ import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 export interface ResourceAclMutationLifecycle {
   afterWriteInTransaction?(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     change: ResourceCatalogAclMutationChange<AclResourceType>,
   ): Promise<void> | void
 }
@@ -33,7 +33,7 @@ export interface ResourceAclMutationLifecycle {
  * owner + name 唯一键撞库：先经能力矩阵判定是不是唯一冲突，再核对约束名（PG 带约束名；SQLite 的驱动错误
  * 只有一句 `UNIQUE constraint failed: <table>.<col>`，没有约束名——与此前 SQLite 侧的判据一致，视为撞库）。
  */
-export function isOwnerNameConstraintError(db: ProviderNeutralDatabase, error: unknown): boolean {
+export function isOwnerNameConstraintError(db: PersistenceDb, error: unknown): boolean {
   if (engineOf(db).classifyError(error) !== 'unique-violation') return false
   const constraint = postgresqlUniqueViolationConstraint(error)
   return (
@@ -44,11 +44,11 @@ export function isOwnerNameConstraintError(db: ProviderNeutralDatabase, error: u
 
 /** 目录自有类型：identity 行就在 ACL_TABLES 里，撞名判定与 CAS 写回都由本文件做。 */
 async function ownedIdentityForMutation(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   type: AclResourceType,
   resourceId: string,
 ): Promise<ResourceAclIdentityMutation | undefined> {
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(transaction, type)
   const current = (
     await transaction
       .select({
@@ -97,7 +97,7 @@ async function ownedIdentityForMutation(
  * 在同一个目录写事务里读 / 写自己那张表；grants / users 仍归目录。两条路径共用同一份决策与 grants 替换。
  */
 export function createResourceAclMutationPort(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   lifecycle: ResourceAclMutationLifecycle = {},
   identityPersistence?: ResourceAclIdentityPersistence,
 ): ResourceCatalogAclMutationPort<AclResourceType> {
@@ -116,6 +116,7 @@ export function createResourceAclMutationPort(
         if (identity === undefined) return undefined
         const current = identity.current
 
+        const { resourceGrants, users } = tablesOf(transaction)
         const grantRows = await transaction
           .select({ userId: resourceGrants.userId, level: resourceGrants.level })
           .from(resourceGrants)

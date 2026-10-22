@@ -1,7 +1,7 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { Mcp } from '@agent-workflow/shared'
 import { and, eq, isNull, like, ne } from 'drizzle-orm'
-import { agents, mcps } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
@@ -36,15 +36,24 @@ export interface McpTransactionLifecycle {
   deletePrepared(transaction: ResourceCatalogTransaction, mcpId: string): Promise<void>
 }
 
-const referenceSelect = {
-  id: agents.id,
-  name: agents.name,
-  raw: agents.mcp,
-  ownerUserId: agents.ownerUserId,
-  visibility: agents.visibility,
+const referenceSelect = (db: object) => {
+  const { agents } = tablesOf(db)
+  return {
+    id: agents.id,
+    name: agents.name,
+    raw: agents.mcp,
+    ownerUserId: agents.ownerUserId,
+    visibility: agents.visibility,
+  }
 }
 
-function ownerScopedNameWhere(ownerUserId: string | null, name: string, excludeId?: string) {
+function ownerScopedNameWhere(
+  db: object,
+  ownerUserId: string | null,
+  name: string,
+  excludeId?: string,
+) {
+  const { mcps } = tablesOf(db)
   const owner = ownerUserId === null ? isNull(mcps.ownerUserId) : eq(mcps.ownerUserId, ownerUserId)
   const identity = and(owner, eq(mcps.name, name))
   return excludeId === undefined ? identity : and(identity, ne(mcps.id, excludeId))
@@ -61,9 +70,10 @@ async function findAgentReferencesInTransaction(
   transaction: ResourceCatalogTransaction,
   mcpId: string,
 ): Promise<McpAgentReference[]> {
+  const { agents } = tablesOf(transaction)
   return collectMcpAgentReferences(
     await transaction
-      .select(referenceSelect)
+      .select(referenceSelect(transaction))
       .from(agents)
       .where(like(agents.mcp, `%"${mcpId}"%`)),
     mcpId,
@@ -84,7 +94,7 @@ function assertExpectedHash(mcp: Mcp, expectedConfigHash: string, action: string
  * 失效意图在同一笔事务里写下；owner + name 唯一冲突经能力矩阵 `uniqueViolationTarget` 映射回 `mcp-name-in-use`。
  */
 export function createMcpRepository(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly lifecycle: McpTransactionLifecycle
 }): McpRepositoryBundle {
   const engine = databaseSessionFor(input.db).engine
@@ -93,12 +103,14 @@ export function createMcpRepository(input: {
     return target !== undefined && /mcps[._](?:owner|name)/i.test(target)
   }
   async function get(id: string): Promise<Mcp | null> {
+    const { mcps } = tablesOf(input.db)
     const row = (await input.db.select().from(mcps).where(eq(mcps.id, id)).limit(1))[0]
     return row === undefined ? null : mcpFromPersistenceRow(row)
   }
 
   const repository: McpRepository = {
     async list(): Promise<Mcp[]> {
+      const { mcps } = tablesOf(input.db)
       return (await input.db.select().from(mcps)).map(mcpFromPersistenceRow)
     },
     get,
@@ -118,13 +130,16 @@ export function createMcpRepository(input: {
     },
     async update(mutation): Promise<Mcp> {
       return runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { mcps } = tablesOf(transaction)
         const row = (
           await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
         )[0]
         if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
         const current = mcpFromPersistenceRow(row)
         assertExpectedHash(current, mutation.expectedConfigHash, 'saving')
-        const set: Partial<typeof mcps.$inferInsert> = { updatedAt: mutation.set.updatedAt }
+        const set: Partial<PersistenceTables['mcps']['$inferInsert']> = {
+          updatedAt: mutation.set.updatedAt,
+        }
         if (mutation.set.description !== undefined) set.description = mutation.set.description
         if (mutation.set.enabled !== undefined) set.enabled = mutation.set.enabled
         if (mutation.set.config !== undefined) set.config = JSON.stringify(mutation.set.config)
@@ -146,6 +161,7 @@ export function createMcpRepository(input: {
     async rename(mutation): Promise<Mcp> {
       try {
         return await runResourceCatalogTransaction(input.db, async (transaction) => {
+          const { mcps } = tablesOf(transaction)
           const row = (
             await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
           )[0]
@@ -157,7 +173,12 @@ export function createMcpRepository(input: {
               .select({ id: mcps.id })
               .from(mcps)
               .where(
-                ownerScopedNameWhere(current.ownerUserId ?? null, mutation.newName, mutation.id),
+                ownerScopedNameWhere(
+                  transaction,
+                  current.ownerUserId ?? null,
+                  mutation.newName,
+                  mutation.id,
+                ),
               )
               .limit(1)
           )[0]
@@ -185,9 +206,10 @@ export function createMcpRepository(input: {
       }
     },
     async findAgentReferences(id): Promise<readonly McpAgentReference[]> {
+      const { agents } = tablesOf(input.db)
       return collectMcpAgentReferences(
         await input.db
-          .select(referenceSelect)
+          .select(referenceSelect(input.db))
           .from(agents)
           .where(like(agents.mcp, `%"${id}"%`)),
         id,
@@ -195,6 +217,7 @@ export function createMcpRepository(input: {
     },
     async delete(mutation): Promise<readonly McpAgentReference[]> {
       return runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { mcps } = tablesOf(transaction)
         const row = (
           await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
         )[0]

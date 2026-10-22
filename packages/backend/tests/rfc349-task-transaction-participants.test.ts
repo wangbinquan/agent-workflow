@@ -8,16 +8,18 @@
 // concurrent mints of one task abort each other under PostgreSQL SERIALIZABLE.
 // Supersession is derived on read; the mint's transaction holds only the insert.
 
-import { afterEach, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
+import { expect, test } from 'bun:test'
 
 import { eq, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { nodeRuns, taskCollaborators, tasks, users } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createTaskAuthorizationParticipantInTx } from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -30,12 +32,9 @@ import type {
 
 const TASK_ID = 'rfc349-task-auth'
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
-async function seedTask(db: ProviderNeutralDatabase) {
+async function seedTask(db: PersistenceDb) {
   const now = 1_000
+  const { users, tasks, taskCollaborators } = tablesOf(db)
   await db.insert(users).values(
     ['owner', 'member', 'observer', 'outsider'].map((id) => ({
       id,
@@ -46,8 +45,11 @@ async function seedTask(db: ProviderNeutralDatabase) {
     })),
   )
 
-  await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('workflow-1', 'wf', '{}')`)
-  await db.insert(tasks).values({
+  await rawExec(
+    db,
+    sql`INSERT INTO workflows (id, name, definition) VALUES ('workflow-1', 'wf', '{}')`,
+  )
+  await insertOne(db, tasks, {
     id: TASK_ID,
     name: 'task auth',
     workflowId: 'workflow-1',
@@ -126,7 +128,10 @@ function postgresqlFixture() {
       },
     })
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -173,6 +178,7 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
         status: 'awaiting_review',
         cause: 'initial',
       })
+      const { nodeRuns } = tablesOf(tx)
       await tx
         .update(nodeRuns)
         .set({ mergeState: 'pending-merge' })
@@ -187,6 +193,7 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
       })
     })
 
+    const { nodeRuns } = tablesOf(db)
     expect(
       await db
         .select({ id: nodeRuns.id, mergeState: nodeRuns.mergeState })

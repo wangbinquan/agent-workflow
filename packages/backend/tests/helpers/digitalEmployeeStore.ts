@@ -5,11 +5,11 @@
 // provider-中立持久化，于是在两个引擎上都能跑。publish 的 domain 校验（strict parse + 闭包检查 / policy
 // publish validator）与生产 configOperations 同一套；`lookup` 参数可省，省略时按生产路径从持久化预载。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { automationPolicyRevisions, digitalEmployeeRevisions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { loadEmployeePublishLookup } from '@/modules/development-automation/application/employeePublishLookup'
 import type { DevelopmentResourceIdentity } from '@/modules/development-automation/application/ports/developmentConfigPersistence'
 import {
@@ -39,7 +39,7 @@ interface RevisionContent {
 // ------------------------------------------------------------ employees
 
 export async function createDigitalEmployee(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly name: string; readonly ownerUserId: string | null; readonly draft: unknown },
 ): Promise<DevelopmentResourceIdentity> {
   // draft 阶段宽容（半成品可存），publish 才 strict parse + 闭包检查。
@@ -53,20 +53,20 @@ export async function createDigitalEmployee(
 }
 
 export async function getDigitalEmployee(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<DevelopmentResourceIdentity | null> {
   return await createDevelopmentConfigPersistence(db).employees.get(id)
 }
 
 export async function listDigitalEmployees(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<DevelopmentResourceIdentity[]> {
   return [...(await createDevelopmentConfigPersistence(db).employees.listActive())]
 }
 
 export async function reviseDigitalEmployeeDraft(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly id: string; readonly draft: unknown; readonly name?: string },
 ): Promise<void> {
   await createDevelopmentConfigPersistence(db).employees.revise({
@@ -78,7 +78,7 @@ export async function reviseDigitalEmployeeDraft(
 }
 
 export async function publishDigitalEmployee(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly id: string
     readonly publishedBy: string | null
@@ -119,10 +119,11 @@ export async function publishDigitalEmployee(
 }
 
 export async function getDigitalEmployeeRevision(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   revision: number,
 ): Promise<RevisionContent | null> {
+  const { digitalEmployeeRevisions } = tablesOf(db)
   const row = (
     await db
       .select({
@@ -141,17 +142,14 @@ export async function getDigitalEmployeeRevision(
   return row ?? null
 }
 
-export async function archiveDigitalEmployee(
-  db: ProviderNeutralDatabase,
-  id: string,
-): Promise<void> {
+export async function archiveDigitalEmployee(db: PersistenceDb, id: string): Promise<void> {
   await createDevelopmentConfigPersistence(db).employees.archive(id, Date.now())
 }
 
 // ------------------------------------------------------------- policies
 
 export async function createAutomationPolicy(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly name: string; readonly ownerUserId: string | null; readonly draft: unknown },
 ): Promise<DevelopmentResourceIdentity> {
   return await createDevelopmentConfigPersistence(db).policies.create({
@@ -164,14 +162,14 @@ export async function createAutomationPolicy(
 }
 
 export async function getAutomationPolicy(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<DevelopmentResourceIdentity | null> {
   return await createDevelopmentConfigPersistence(db).policies.get(id)
 }
 
 export async function reviseAutomationPolicyDraft(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly id: string; readonly draft: unknown; readonly name?: string },
 ): Promise<void> {
   await createDevelopmentConfigPersistence(db).policies.revise({
@@ -183,7 +181,7 @@ export async function reviseAutomationPolicyDraft(
 }
 
 export async function publishAutomationPolicy(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly id: string; readonly publishedBy: string | null },
 ): Promise<{ revision: number; contentDigest: string }> {
   const persistence = createDevelopmentConfigPersistence(db)
@@ -217,23 +215,21 @@ export async function publishAutomationPolicy(
 }
 
 export async function listAutomationPolicies(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<DevelopmentResourceIdentity[]> {
   return [...(await createDevelopmentConfigPersistence(db).policies.listActive())]
 }
 
-export async function archiveAutomationPolicy(
-  db: ProviderNeutralDatabase,
-  id: string,
-): Promise<void> {
+export async function archiveAutomationPolicy(db: PersistenceDb, id: string): Promise<void> {
   await createDevelopmentConfigPersistence(db).policies.archive(id, Date.now())
 }
 
 export async function getAutomationPolicyRevision(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   revision: number,
 ): Promise<RevisionContent | null> {
+  const { automationPolicyRevisions } = tablesOf(db)
   const row = (
     await db
       .select({

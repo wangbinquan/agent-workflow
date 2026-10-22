@@ -4,6 +4,8 @@
 // preview→commit 被“root 必须 local”硬拒。本文件刻意跨越真实边界，覆盖正常、
 // 劫持、篡改、并发漂移与坏行 fail-closed。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
 import { randomBytes } from 'node:crypto'
@@ -14,8 +16,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, mcps, runtimes, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { translateDecisions } from '../src/services/resourcePackage/commit'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
@@ -36,8 +37,9 @@ const actorOf = (id: string, permissions: readonly string[] = []): Actor =>
     permissions: new Set<string>(['resource-acl:private', ...permissions]),
   }) as unknown as Actor
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string): Promise<void> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -50,10 +52,11 @@ async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> 
 }
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { id: string; name: string; builtin: boolean; owner: string; version?: number },
 ): Promise<void> {
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: input.id,
     name: input.name,
     description: '',
@@ -78,7 +81,7 @@ async function codeOf(promise: Promise<unknown>): Promise<string | undefined> {
 
 interface MidExportWrite {
   /** 传给 `exportResourcePackage` 的句柄。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** 该表被读到的总次数——原判据「至少读了两回」就是拿它断言的。 */
   reads(): number
   /**
@@ -107,10 +110,10 @@ interface MidExportWrite {
  * 注入写走**这次读所在的那个句柄**：PG 上就是那笔事务的连接，写与读因此天然有序。
  */
 function dbWithMidExportWrite(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   table: unknown,
   nth: number,
-  mutate: (handle: ProviderNeutralDatabase) => Promise<void>,
+  mutate: (handle: PersistenceDb) => Promise<void>,
 ): MidExportWrite {
   let reads = 0
   let fired = 0
@@ -173,7 +176,7 @@ function dbWithMidExportWrite(
                 fired += 1
                 let started: Promise<void> | undefined
                 return deferExecution(next, () => {
-                  started ??= mutate(target as ProviderNeutralDatabase)
+                  started ??= mutate(target as PersistenceDb)
                   return started
                 })
               }
@@ -184,7 +187,7 @@ function dbWithMidExportWrite(
     })
 
   return Object.freeze({
-    db: wrapHandle(db as object) as unknown as ProviderNeutralDatabase,
+    db: wrapHandle(db as object) as unknown as PersistenceDb,
     reads: () => reads,
     fired: () => fired,
   })
@@ -198,8 +201,8 @@ function dbWithMidExportWrite(
 describeEachProvider(
   'RFC-271 资源包边界的真库跨层回归（双引擎）',
   (harness) => {
-    let source: ProviderNeutralDatabase
-    let target: ProviderNeutralDatabase
+    let source: PersistenceDb
+    let target: PersistenceDb
     beforeEach(() => {
       source = harness.database(0).db
       target = harness.database(1).db
@@ -263,6 +266,7 @@ describeEachProvider(
             name: 'aw-builtin-probe',
             action: 'reuse',
           })
+          const { workflows } = tablesOf(target)
           expect(
             await target.select().from(workflows).where(eq(workflows.name, 'aw-builtin-probe')),
           ).toHaveLength(2)
@@ -362,7 +366,8 @@ secrets: []
           await seedUser(source, 'u1')
           await seedUser(target, 'u1')
           for (const db of [source, target]) {
-            await db.insert(runtimes).values({
+            const { runtimes } = tablesOf(db)
+            await insertOne(db, runtimes, {
               id: ulid(),
               name: 'custom-runtime',
               protocol: 'opencode',
@@ -372,7 +377,7 @@ secrets: []
           const inputs = [
             { name: 'repository', kind: 'path<dir>', required: true, description: 'repo root' },
           ]
-          await source.insert(agents).values({
+          await insertOne(source, tablesOf(source).agents, {
             id: 'SOURCE_AGENT',
             name: 'typed-agent',
             description: '',
@@ -415,8 +420,8 @@ secrets: []
           const imported = (
             await target
               .select()
-              .from(agents)
-              .where(eq(agents.id, receipt.root?.resourceId ?? ''))
+              .from(tablesOf(target).agents)
+              .where(eq(tablesOf(target).agents.id, receipt.root?.resourceId ?? ''))
               .limit(1)
           )[0]
           expect(imported?.runtime).toBe('custom-runtime')
@@ -442,7 +447,9 @@ secrets: []
             version: 1,
           })
 
+          const { workflows } = tablesOf(db)
           const raced = dbWithMidExportWrite(db, workflows, 2, async (handle) => {
+            const { workflows } = tablesOf(handle)
             await handle
               .update(workflows)
               .set({ version: 2, updatedAt: 2 })
@@ -471,7 +478,8 @@ secrets: []
         const appHome = mkdtempSync(join(tmpdir(), 'rfc271-closure-fence-'))
         try {
           await seedUser(db, 'u1')
-          await db.insert(mcps).values({
+          const { mcps, agents } = tablesOf(db)
+          await insertOne(db, mcps, {
             id: 'M1',
             name: 'tools',
             description: '',
@@ -483,7 +491,7 @@ secrets: []
             createdAt: 1,
             updatedAt: 1,
           } as never)
-          await db.insert(agents).values({
+          await insertOne(db, agents, {
             id: 'A1',
             name: 'root',
             description: '',
@@ -503,6 +511,7 @@ secrets: []
           } as never)
 
           const raced = dbWithMidExportWrite(db, mcps, 2, async (handle) => {
+            const { mcps } = tablesOf(handle)
             await handle
               .update(mcps)
               .set({ config: JSON.stringify({ url: 'https://v2.test/mcp' }), updatedAt: 2 })

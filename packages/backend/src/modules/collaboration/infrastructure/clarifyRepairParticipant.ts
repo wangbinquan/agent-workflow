@@ -25,17 +25,16 @@
 // `setTaskStatus` 的生命周期 CAS 与 before/after 审计快照。合一只消掉了那份生产零调用方的重复实现，
 // **没有**消掉错位本身：下一步应让 `options-S3.ts` 改为消费本端口，否则 SQLite 侧会永远保留第二份实现。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 
-import { clarifyRounds } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ClarifyRepairParticipant } from '../application/ports/clarifyRepairParticipant'
 
-export function createClarifyRepairParticipant(
-  db: ProviderNeutralDatabase,
-): ClarifyRepairParticipant {
+export function createClarifyRepairParticipant(db: PersistenceDb): ClarifyRepairParticipant {
   return Object.freeze({
     async hasOpenForNodeRun(input: Parameters<ClarifyRepairParticipant['hasOpenForNodeRun']>[0]) {
+      const { clarifyRounds } = tablesOf(db)
       const row = (
         await db
           .select({ id: clarifyRounds.id })
@@ -55,6 +54,7 @@ export function createClarifyRepairParticipant(
     async latestClosedForNodeRun(
       input: Parameters<ClarifyRepairParticipant['latestClosedForNodeRun']>[0],
     ) {
+      const { clarifyRounds } = tablesOf(db)
       const row = (
         await db
           .select({ roundId: clarifyRounds.id, status: clarifyRounds.status })
@@ -76,6 +76,7 @@ export function createClarifyRepairParticipant(
       return { roundId: row.roundId, status: row.status }
     },
     async reopen(input: Parameters<ClarifyRepairParticipant['reopen']>[0]) {
+      const { clarifyRounds } = tablesOf(db)
       const changed = await db
         .update(clarifyRounds)
         .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })

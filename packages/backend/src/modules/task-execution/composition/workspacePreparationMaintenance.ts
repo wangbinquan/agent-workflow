@@ -1,10 +1,10 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   compensateScratchWorkspace,
   scratchAdmissionPrefix,
 } from '../infrastructure/scratchWorkspacePreparation'
 import { and, eq, isNull } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskWorkspacePreparations } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import {
@@ -18,7 +18,7 @@ const MIN_AGE_MS = 24 * 60 * 60 * 1000
 
 /** Runs inside the existing workspace orphan job. It never schedules new work. */
 export function composeWorkspacePreparationMaintenance(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   repositoryPreparation: TaskRepositoryPreparationBinding
   maintenance: WorkspaceMaintenanceCommand
@@ -32,6 +32,7 @@ export function composeWorkspacePreparationMaintenance(input: {
       const prefix = scratch
         ? scratchAdmissionPrefix(input.appHome)
         : preMaterializedAdmissionPrefix(input.appHome)
+      const { taskWorkspacePreparations } = tablesOf(input.db)
       const plans = (
         await input.db
           .select()

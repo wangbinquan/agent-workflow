@@ -1,11 +1,12 @@
 // RFC-303 durable worker locks: the first cancellation receipt remains the
 // audit truth across the fixed-point sweep, and unreaped ownership is never
 // reported as succeeded.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { webhookMrControlEffects, webhookMrControlTargets } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
 import { createMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
@@ -22,9 +23,10 @@ function guards(): MrLaunchGuardCoordinator {
   } as unknown as MrLaunchGuardCoordinator
 }
 
-async function fixture(db: ProviderNeutralDatabase, participant: TaskSourceTerminationParticipant) {
+async function fixture(db: PersistenceDb, participant: TaskSourceTerminationParticipant) {
   const now = Date.now()
-  await db.insert(webhookMrControlEffects).values({
+  const { webhookMrControlEffects } = tablesOf(db)
+  await insertOne(db, webhookMrControlEffects, {
     id: 'effect-1',
     deliveryId: 'delivery-1',
     endpointId: 'endpoint-1',
@@ -68,6 +70,7 @@ describeEachProvider('RFC-303 terminal control worker', (harness) => {
       },
     })
     expect(calls).toBe(2)
+    const { webhookMrControlTargets, webhookMrControlEffects } = tablesOf(db)
     expect(
       (
         await db
@@ -106,6 +109,7 @@ describeEachProvider('RFC-303 terminal control worker', (harness) => {
         ]
       },
     })
+    const { webhookMrControlEffects } = tablesOf(db)
     expect(
       (
         await db
@@ -119,7 +123,8 @@ describeEachProvider('RFC-303 terminal control worker', (harness) => {
   test('shutdown aborts launch owners and waits for the active effect attempt to settle', async () => {
     const db = harness.db
     const now = Date.now()
-    await db.insert(webhookMrControlEffects).values({
+    const { webhookMrControlEffects } = tablesOf(db)
+    await insertOne(db, webhookMrControlEffects, {
       id: 'effect-stop',
       deliveryId: 'delivery-stop',
       endpointId: 'endpoint-1',

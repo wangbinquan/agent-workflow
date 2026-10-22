@@ -6,6 +6,7 @@
 // the runtime in PR-B cannot persist cross-clarify sessions — investigate
 // before relaxing.
 
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
@@ -35,7 +36,8 @@ interface ColumnInfo {
 describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
   test('cross_clarify_sessions table exists with all expected columns', async () => {
     const db = createInMemoryDb(FROZEN)
-    const rows = (await db.all(
+    const rows = (await rawRows(
+      db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='cross_clarify_sessions'`,
     )) as SqlMaster[]
     expect(rows).toHaveLength(1)
@@ -65,7 +67,8 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
 
   test('FK to tasks + node_runs(2 — RFC-132 PR-F dropped the RFC-070 consumption-stamp FKs) with cascade delete', async () => {
     const db = createInMemoryDb(FROZEN)
-    const rows = (await db.all(
+    const rows = (await rawRows(
+      db,
       sql`SELECT sql FROM sqlite_master WHERE name='cross_clarify_sessions'`,
     )) as SqlMaster[]
     const ddl = (rows[0]!.sql ?? '').toLowerCase()
@@ -84,7 +87,8 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
 
   test('all 4 indexes exist', async () => {
     const db = createInMemoryDb(FROZEN)
-    const rows = (await db.all(
+    const rows = (await rawRows(
+      db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='cross_clarify_sessions'`,
     )) as { name: string }[]
     const names = new Set(rows.map((r) => r.name))
@@ -96,7 +100,7 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
 
   test('status column default is "awaiting_human"', async () => {
     const db = createInMemoryDb(FROZEN)
-    const cols = (await db.all(sql`PRAGMA table_info(cross_clarify_sessions)`)) as ColumnInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(cross_clarify_sessions)`)) as ColumnInfo[]
     const statusCol = cols.find((c) => c.name === 'status')
     expect(statusCol).toBeDefined()
     expect(String(statusCol?.dflt_value)).toContain('awaiting_human')
@@ -105,7 +109,7 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
 
   test('directive column is nullable (NULL while awaiting_human)', async () => {
     const db = createInMemoryDb(FROZEN)
-    const cols = (await db.all(sql`PRAGMA table_info(cross_clarify_sessions)`)) as ColumnInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(cross_clarify_sessions)`)) as ColumnInfo[]
     const directiveCol = cols.find((c) => c.name === 'directive')
     expect(directiveCol).toBeDefined()
     expect(directiveCol?.notnull).toBe(0)
@@ -120,14 +124,14 @@ describe('RFC-056 → RFC-064 — node_runs.cross_clarify_iteration column lifec
   // future revival of the two-counter design is caught loudly.
   test('after RFC-064 the column is absent from node_runs', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(node_runs)`)) as ColumnInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as ColumnInfo[]
     const col = cols.find((c) => c.name === 'cross_clarify_iteration')
     expect(col).toBeUndefined()
   })
 
   test('review_iteration / retry_index remain; both clarify counters are gone (RFC-074 PR-C)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(node_runs)`)) as ColumnInfo[]
+    const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as ColumnInfo[]
     const names = new Set(cols.map((c) => c.name))
     expect(names.has('cross_clarify_iteration')).toBe(false)
     // RFC-074 PR-C migration 0041 dropped clarify_iteration too — freshness is

@@ -6,6 +6,8 @@
 // （RFC-207 §3.7.2：预算 / 已问次数 / per-asker stop）归 collaboration 一份实现，legacy SQLite
 // 路径只是转发。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
@@ -13,15 +15,7 @@ import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { wgClarifyAskerKey, type WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
-import {
-  agents,
-  clarifyRounds,
-  nodeRuns,
-  tasks,
-  workgroupAssignments,
-  workgroupTaskState,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { setNodeClarifyDirective } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import {
@@ -57,13 +51,14 @@ const turnLog: WorkgroupTurnLogger = {
   child: () => turnLog,
 }
 
-async function seedWorkgroupTurnTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedWorkgroupTurnTask(db: PersistenceDb): Promise<string> {
   const taskId = freshTaskId()
   await seedTask(db, taskId)
   const leaderId = ulid()
   const workerId = ulid()
   const leaderName = `t7e-leader-${leaderId.toLowerCase()}`
   const workerName = `t7e-worker-${workerId.toLowerCase()}`
+  const { agents, tasks } = tablesOf(db)
   await db.insert(agents).values([
     { id: leaderId, name: leaderName, description: '', bodyMd: 'Coordinate the work.' },
     { id: workerId, name: workerName, description: '', bodyMd: 'Complete the assignment.' },
@@ -121,9 +116,10 @@ async function seedWorkgroupTurnTask(db: ProviderNeutralDatabase): Promise<strin
 }
 
 async function expectPersistedHostNonce(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   request: WorkgroupTurnHostRequest,
-): Promise<typeof nodeRuns.$inferSelect> {
+): Promise<PersistenceTables['nodeRuns']['$inferSelect']> {
+  const { nodeRuns } = tablesOf(db)
   const [run] = await db.select().from(nodeRuns).where(eq(nodeRuns.id, request.nodeRunId))
   expect(run).toBeDefined()
   if (run === undefined) throw new Error('turn driver did not persist its host run')
@@ -136,14 +132,15 @@ async function expectPersistedHostNonce(
 }
 
 async function seedSelfAsk(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   shardKey: string | null,
 ): Promise<void> {
   const askingRunId = await seedRun(db, taskId, nodeId, { status: 'awaiting_human' })
   const intRunId = await seedRun(db, taskId, CL, { status: 'awaiting_human' })
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -260,6 +257,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     expect(worker.workgroupProtocolBlock).toContain('<workflow-clarify>')
     expect(worker.workgroupProtocolBlock).toContain('"questions"')
     const run = await expectPersistedHostNonce(db, worker)
+    const { workgroupAssignments, workgroupTaskState, clarifyRounds } = tablesOf(db)
     const assignments = await db
       .select()
       .from(workgroupAssignments)
@@ -288,7 +286,8 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     const db = harness.db
     const taskId = await seedWorkgroupTurnTask(db)
     const assignmentId = ulid()
-    await db.insert(workgroupAssignments).values({
+    const { workgroupAssignments, nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, workgroupAssignments, {
       id: assignmentId,
       taskId,
       round: 1,
@@ -311,7 +310,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
         customText: '',
       },
     ])
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: roundId,
       taskId,
       kind: 'self',

@@ -9,21 +9,22 @@
 //
 // RFC-359 AC-6：整份套件跑双引擎——服务层收的是中立客户端，夹具因此不再自建 SQLite 内存库。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import {
   getTaskFileSymbols as getTaskFileSymbolsWithPort,
   type FileSymbolsQuery,
 } from '../src/services/codeIntel/fileSymbols'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const getTaskFileSymbols = (db: ProviderNeutralDatabase, taskId: string, query: FileSymbolsQuery) =>
+const getTaskFileSymbols = (db: PersistenceDb, taskId: string, query: FileSymbolsQuery) =>
   getTaskFileSymbolsWithPort(createCodeWorkspaceRead(db), taskId, query)
 
 const dirs: string[] = []
@@ -57,18 +58,19 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
 ): Promise<string> {
   const taskId = `01FS${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -209,6 +211,7 @@ describeEachProvider('getTaskFileSymbols — multi-repo wire keys (F-04)', (harn
       baseCommit: root.commit,
       repoCount: 2,
     })
+    const { taskRepos } = tablesOf(d)
     await d.insert(taskRepos).values([
       {
         taskId,

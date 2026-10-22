@@ -1,6 +1,6 @@
 // RFC-349 — runtime-management owns provider-selected realtime composition.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { createRealtimeChannelAccess } from './application/realtimeChannelAccess'
 import { DrizzleRealtimeStore } from './infrastructure/realtimeStore'
@@ -23,7 +23,7 @@ function composeRealtimeRuntime(input: {
  * 而 `DrizzleRealtimeStore` 本来就收中立客户端。收成一份（plan §5ds）。
  */
 export function composeRealtimeRuntimeFor(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly credentials: WebSocketAuthenticationParticipant
   readonly policy: RealtimeCompositionPolicy
 }): RealtimeRuntime {

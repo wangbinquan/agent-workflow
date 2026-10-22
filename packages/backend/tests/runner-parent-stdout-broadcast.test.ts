@@ -12,22 +12,23 @@
 // `node.status: done` are intentionally NOT asserted here — they're
 // implementation details that would over-constrain the test.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src/ws/broadcaster'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -54,9 +55,10 @@ function makeAgent(): Agent {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -64,7 +66,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId: wfId,
@@ -80,7 +82,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   return taskId
 }
 
-async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-parent-broadcast-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
@@ -123,7 +125,8 @@ describeEachProvider('runner parent-stdout live broadcast', (harness) => {
 
   test('stdoutPump emits at least one node.status:running ping per parent event burst', async () => {
     const nodeRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: nodeRunId,
       taskId: h.taskId,
       nodeId: 'n1',

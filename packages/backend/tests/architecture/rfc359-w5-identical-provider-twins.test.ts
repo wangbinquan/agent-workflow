@@ -8,7 +8,7 @@
 //     export function composePostgresqlX(input: { db: PostgresqlDatabaseClient; … }) { …同一段 body… }
 //
 // 两个函数体**逐字节相同**，唯一的差别是形参上那个 `db` 的声明类型——而它们转交给的下游本来就
-// 收 `ProviderNeutralDatabase`。这类东西通常是某次「先把名字占住、bootstrap 收敛后再删」留下的，
+// 收 `PersistenceDb`。这类东西通常是某次「先把名字占住、bootstrap 收敛后再删」留下的，
 // 而那句注释一挂就是几个波次没人回来收。
 //
 // 2026-09-13 这条判据第一次跑时扫出 **14 对**（plan §5ds），全部在同一天还清：八对直接指向已有的
@@ -114,7 +114,7 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
     // `createRecoveryAdministration`，退两个；剩下的
     // `create{Sqlite,Postgresql}TaskExecutionPersistence` 于是函数体逐字相同——正是本判据
     // 要挡的形状，改完第一版当场被它咬住。按它给的处方办：形参放宽到
-    // `ProviderNeutralDatabase`、收成一份 `createTaskExecutionPersistence`，十四个调用点
+    // `PersistenceDb`、收成一份 `createTaskExecutionPersistence`，十四个调用点
     // 改名，两个带品牌的名字也退出分母。
     expect(
       REAL_FUNCTIONS.length,
@@ -140,7 +140,7 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // （`createPostgresqlIdentityAccessRuntime` / `composePostgresqlDigitalEmployee`，
       // 体就是 `return 中立那份(input)`）。
       // RFC-359 AC-1（2026-09-16，plan §5gs）：91 → 90。`composeSqliteWebhookDispatchCore` 改名成中立的
-      // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `ProviderNeutralDatabase`，
+      // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `PersistenceDb`，
       // 前缀纯属历史（proposal.md AC-1 第三款的「命名债」）。**是改名不是删实现**，分母因此少一。
       // RFC-359 AC-1（2026-09-16，plan §5hi）：90 → 86。数字员工动作执行的三层同文件孪生合齐，
       // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /
@@ -187,7 +187,7 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
     expect(
       identicalTwins(REAL_FUNCTIONS),
       '有一对 provider 命名的函数，函数体**逐字节相同**——那不是两台机器，是同一台机器抄了两遍名字。' +
-        '把形参放宽到 `ProviderNeutralDatabase`、收成一份，两个装配根都装它。' +
+        '把形参放宽到 `PersistenceDb`、收成一份，两个装配根都装它。' +
         '（若函数体相同却确有机制差异，那说明差异根本没写在代码里，更该合。）',
     ).toEqual([])
   })

@@ -15,14 +15,15 @@
 // through the resolver, so a new failure mode here would break every task's
 // commit step.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import ts from 'typescript'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { skills } from '../src/db/schema'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { buildCommitAgent } from '../src/services/commitPush'
@@ -63,7 +64,7 @@ function mkAgent(overrides: Partial<Agent> = {}): Agent {
 describeEachProvider(
   'RFC-282 B2 — §7-7 skill gates are typed failures (node-level attribution)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
 
     beforeEach(() => {
       db = harness.db
@@ -72,7 +73,8 @@ describeEachProvider(
 
     test('quarantined managed skill → {kind:failed, skill-quarantined} (was a THROW → task-level)', async () => {
       const skillId = ulid()
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id: skillId,
         name: 'quarantined-skill',
         description: '',
@@ -98,7 +100,8 @@ describeEachProvider(
 
     test('non-canonical managed path → {kind:failed, skill-path-not-canonical} (was a THROW)', async () => {
       const skillId = ulid()
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id: skillId,
         name: 'legacy-path-skill',
         description: '',
@@ -122,7 +125,8 @@ describeEachProvider(
 
     test('the resolver no longer throws domain errors for these gates (typed-only surface)', async () => {
       const skillId = ulid()
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id: skillId,
         name: 'q2',
         description: '',

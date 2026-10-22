@@ -3,6 +3,8 @@
 // 会话 / PAT 解析）与 PG 侧此前只在真库上才看得到的行为（bootstrap 的唯一冲突映射）。末尾一条源码锁保证该族不再
 // 出现 provider 专属文件。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,8 +14,7 @@ import { ulid } from 'ulid'
 import { buildActor } from '@/auth/actor'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import { mapBootstrapConstraint } from '@/auth/infrastructure/authPersistence'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { oidcProviders, userIdentities, userPats, users, userSessions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000
@@ -27,9 +28,10 @@ async function rejection(promise: Promise<unknown>): Promise<unknown> {
   throw new Error('expected the promise to reject')
 }
 
-async function seedProvider(db: ProviderNeutralDatabase): Promise<string> {
+async function seedProvider(db: PersistenceDb): Promise<string> {
   const id = `provider_${ulid()}`
-  await db.insert(oidcProviders).values({
+  const { oidcProviders } = tablesOf(db)
+  await insertOne(db, oidcProviders, {
     id,
     slug: id,
     displayName: 'Corporate SSO',
@@ -106,8 +108,9 @@ describeEachProvider(
       ).toMatchObject({ code: 'bootstrap-already-complete' })
       expect(auth.provider).toBe(harness.capabilities.provider)
       // 预检之外的唯一冲突（并发 bootstrap 的 race）交给库的约束再映射：两个引擎的真实驱动错误走同一条正则。
-      const duplicate = (input: { readonly username: string; readonly email: string | null }) =>
-        rejection(
+      const duplicate = (input: { readonly username: string; readonly email: string | null }) => {
+        const { users } = tablesOf(harness.db)
+        return rejection(
           harness.db.insert(users).values({
             id: `u_d9_${ulid()}`,
             username: input.username,
@@ -119,6 +122,7 @@ describeEachProvider(
             updatedAt: NOW,
           }),
         )
+      }
       const sameUsername = await duplicate({ username, email: null })
       expect(
         mapBootstrapConstraint(harness.capabilities, sameUsername, { username, email: null }),
@@ -202,13 +206,15 @@ describeEachProvider(
         session: { userId: admin.id, expiresAt: NOW + 10 + TTL },
       })
       const sessionId = resolved!.session.id
-      const lastUsed = async () =>
-        (
+      const lastUsed = async () => {
+        const { userSessions } = tablesOf(harness.db)
+        return (
           await harness.db
             .select({ lastUsedAt: userSessions.lastUsedAt })
             .from(userSessions)
             .where(eq(userSessions.id, sessionId))
         )[0]!.lastUsedAt
+      }
       const touchedAt = await lastUsed()
       // 节流窗口内不再写 last_used_at；跨过窗口才写（单语句、带 revoked_at is null 谓词，不开事务）。
       await auth.lookupActiveSession(login.token, touchedAt + 1)
@@ -230,6 +236,7 @@ describeEachProvider(
         now: NOW + 30,
         ttlMs: 1_000,
       })
+      const { users } = tablesOf(harness.db)
       await harness.db.update(users).set({ status: 'disabled' }).where(eq(users.id, admin.id))
       expect(await auth.lookupActiveSession(disabledLogin.token, NOW + 31)).toBeNull()
       await auth.setPasswordLoginEnabled(true, NOW + 32)
@@ -264,6 +271,7 @@ describeEachProvider(
         scopes: ['tasks:execute'],
         patId: pat.meta.id,
       })
+      const { userPats, users, userIdentities } = tablesOf(harness.db)
       expect(
         (
           await harness.db
@@ -278,7 +286,7 @@ describeEachProvider(
       expect(await auth.lookupActivePat(pat.token, NOW + 4)).toBeNull()
 
       const invited = `u_d9_${ulid()}`
-      await harness.db.insert(users).values({
+      await insertOne(harness.db, users, {
         id: invited,
         username: invited,
         displayName: invited,
@@ -314,7 +322,7 @@ describeEachProvider(
         code: 'user-not-found',
       })
       const providerId = await seedProvider(harness.db)
-      await harness.db.insert(userIdentities).values({
+      await insertOne(harness.db, userIdentities, {
         id: ulid(),
         userId: invited,
         providerId,
@@ -344,7 +352,8 @@ describeEachProvider(
     test('PAT 调用审计：归属 / 快照脱敏 / 逆序列表 / 有界清扫在两个引擎上一致', async () => {
       const audit = createTokenCallAudit(harness.db)
       const userId = `u_d9_${ulid()}`
-      await harness.db.insert(users).values({
+      const { users } = tablesOf(harness.db)
+      await insertOne(harness.db, users, {
         id: userId,
         username: userId,
         displayName: userId,
@@ -439,6 +448,6 @@ test('源码锁：认证持久化与 PAT 审计不再有 provider 专属文件',
     expect(source).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update|SET TRANSACTION/i,
     )
-    expect(source).toContain('ProviderNeutralDatabase')
+    expect(source).toContain('PersistenceDb')
   }
 })

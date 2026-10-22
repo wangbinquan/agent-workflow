@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -5,13 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskDeletionContentEffects,
   TaskDeletionEffects,
@@ -257,13 +253,10 @@ test('native content adapter retains default directory operands and compound ide
   }
 })
 
-async function seed(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  parentTaskId?: string,
-): Promise<void> {
+async function seed(db: PersistenceDb, taskId: string, parentTaskId?: string): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf_' + taskId,
     name: 'rfc370-task-delete',
     description: '',
@@ -271,7 +264,7 @@ async function seed(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'wf_' + taskId,
@@ -288,7 +281,8 @@ async function seed(
     ...(parentTaskId === undefined ? {} : { parentTaskId }),
   })
 }
-async function claimState(db: ProviderNeutralDatabase, claimId: string) {
+async function claimState(db: PersistenceDb, claimId: string) {
+  const { taskExecutionMaintenanceClaims } = tablesOf(db)
   return (
     await db
       .select({ state: taskExecutionMaintenanceClaims.state })
@@ -296,7 +290,8 @@ async function claimState(db: ProviderNeutralDatabase, claimId: string) {
       .where(eq(taskExecutionMaintenanceClaims.id, claimId))
   )[0]?.state
 }
-async function exists(db: ProviderNeutralDatabase, taskId: string) {
+async function exists(db: PersistenceDb, taskId: string) {
+  const { tasks } = tablesOf(db)
   return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length > 0
 }
 const activity = Object.freeze({ isActive: () => false, awaitReleasedSettled: async () => {} })
@@ -330,6 +325,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
       'logical:logs/' + taskId,
       'logical:scratch/' + taskId,
     ])
+    const { taskExecutionMaintenanceMembers } = tablesOf(db)
     expect(
       (
         await db

@@ -14,6 +14,7 @@
 //      夹具全是可写假数据，于是设置页「删除退役运行时存储」按钮在真机上 100% EACCES
 //      500（2026-09-02 用户实撞：2866MB 的 store 一字节没删）。这条锁的就是它。
 
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
@@ -98,17 +99,18 @@ describe('RFC-311 T20 — reclaimable disk report and cleanup', () => {
       expect(first.dbFileBytes).toBeGreaterThan(0)
 
       // ③ freelist:先塞一张大表再删,页会进 freelist;VACUUM 之后归零。
-      db.run(sql.raw('CREATE TABLE t20_scratch (id INTEGER PRIMARY KEY, blob TEXT)'))
-      db.run(
+      rawExec(db, sql.raw('CREATE TABLE t20_scratch (id INTEGER PRIMARY KEY, blob TEXT)'))
+      rawExec(
+        db,
         sql.raw(
           `INSERT INTO t20_scratch (blob) SELECT hex(randomblob(400)) FROM
              (WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<4000) SELECT x FROM c)`,
         ),
       )
-      db.run(sql.raw('DROP TABLE t20_scratch'))
+      rawExec(db, sql.raw('DROP TABLE t20_scratch'))
       const afterDrop = reportDiskReclaimable(db, home)
       expect(afterDrop.dbFreelistBytes).toBeGreaterThan(0)
-      db.run(sql.raw('VACUUM'))
+      rawExec(db, sql.raw('VACUUM'))
       expect(reportDiskReclaimable(db, home).dbFreelistBytes).toBe(0)
 
       // ② 清理真的删,重复调用无害。

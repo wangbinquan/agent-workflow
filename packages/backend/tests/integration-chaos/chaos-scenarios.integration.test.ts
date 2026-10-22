@@ -23,7 +23,9 @@
 // Run locally:
 //   RUN_CHAOS=1 bun test packages/backend/tests/integration-chaos/
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,7 +35,6 @@ import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, openDb, type DbClient } from '../../src/db/client'
-import { nodeRuns, tasks, workflows } from '../../src/db/schema'
 import { reapOrphanRuns } from '../../src/services/orphans'
 import { taskRecoveryOperations } from '../helpers/taskRecoveryOperations'
 
@@ -55,7 +56,8 @@ async function seedRunningTask(db: DbClient, worktreePath: string): Promise<Seed
     edges: [],
     outputs: [],
   })
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'chaos-wf',
     definition: def,
@@ -63,7 +65,7 @@ async function seedRunningTask(db: DbClient, worktreePath: string): Promise<Seed
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'chaos-task',
     workflowId: wfId,
@@ -76,7 +78,7 @@ async function seedRunningTask(db: DbClient, worktreePath: string): Promise<Seed
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: `nr_${ulid()}`,
     taskId,
     nodeId: 'agent_1',
@@ -123,6 +125,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     expect(reapErr).toBeNull()
     expect(reapResult).not.toBeNull()
 
+    const { nodeRuns } = tablesOf(db)
     // Verify the running node_run was flipped to a terminal state.
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, seeded.taskId))
     expect(rows.length).toBe(1)
@@ -145,7 +148,8 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
 
     // 1. Open + write some data.
     const db1 = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    await db1.insert(workflows).values({
+    const { workflows } = tablesOf(db1)
+    await insertOne(db1, workflows, {
       id: 'pre-truncate-wf',
       name: 'pre',
       definition: '{}',
@@ -179,6 +183,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
       openErr = err
     }
     if (reopened !== null) {
+      const { workflows } = tablesOf(reopened)
       // If open succeeded, the pre-truncate row MUST still be readable.
       const rows = await reopened
         .select()
@@ -246,12 +251,6 @@ describe('RFC-054 W3-1 — chaos gate sanity', () => {
 
 // Cleanup any leftover state — chaos tests are designed to leave
 // nothing behind but defense in depth never hurts.
-beforeEach(() => {
-  // no-op; per-test mkdtemp is the isolation boundary
-})
-afterEach(() => {
-  // no-op; each test cleans its own scratch dir inline
-})
 
 // Force the `mkdirSync` import to be considered used in
 // non-`RUN_CHAOS=1` mode (eslint --max-warnings 0 catches unused).

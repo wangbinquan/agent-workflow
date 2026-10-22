@@ -1,3 +1,4 @@
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
@@ -22,7 +23,7 @@ interface QueryPlanRow {
 describe('migration 0128 — task operations indexes', () => {
   test('composite indexes replace their redundant single-column predecessors', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const indexes = db.all<IndexListRow>(sql`PRAGMA index_list(tasks)`).map((row) => row.name)
+    const indexes = rawRows<IndexListRow>(db, sql`PRAGMA index_list(tasks)`).map((row) => row.name)
 
     expect(indexes).toEqual(
       expect.arrayContaining([
@@ -44,36 +45,45 @@ describe('migration 0128 — task operations indexes', () => {
     ['idx_tasks_list_owner_started_id', ['owner_user_id', 'started_at', 'id']],
   ] as const)('%s has the intended keyset prefix', (indexName, columns) => {
     const db = createInMemoryDb(MIGRATIONS)
-    const info = db
-      .all<IndexInfoRow>(sql.raw(`PRAGMA index_info('${indexName}')`))
-      .sort((a, b) => a.seqno - b.seqno)
+    const info = rawRows<IndexInfoRow>(db, sql.raw(`PRAGMA index_info('${indexName}')`), {
+      seqno: 'int',
+    }).sort((a, b) => a.seqno - b.seqno)
     expect(info.map((row) => row.name)).toEqual([...columns])
   })
 
   test('representative status/parent/owner keyset plans use the composite indexes', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const plans = [
-      db.all<QueryPlanRow>(sql`
+      rawRows<QueryPlanRow>(
+        db,
+        sql`
         EXPLAIN QUERY PLAN
         SELECT id FROM tasks
         WHERE status = 'running'
         ORDER BY started_at DESC, id DESC
         LIMIT 50
-      `),
-      db.all<QueryPlanRow>(sql`
+      `,
+      ),
+      rawRows<QueryPlanRow>(
+        db,
+        sql`
         EXPLAIN QUERY PLAN
         SELECT id FROM tasks
         WHERE parent_task_id = 'parent'
         ORDER BY started_at DESC, id DESC
         LIMIT 50
-      `),
-      db.all<QueryPlanRow>(sql`
+      `,
+      ),
+      rawRows<QueryPlanRow>(
+        db,
+        sql`
         EXPLAIN QUERY PLAN
         SELECT id FROM tasks
         WHERE owner_user_id = 'owner'
         ORDER BY started_at DESC, id DESC
         LIMIT 50
-      `),
+      `,
+      ),
     ].map((rows) => rows.map((row) => row.detail).join('\n'))
 
     expect(plans[0]).toContain('idx_tasks_list_status_started_id')

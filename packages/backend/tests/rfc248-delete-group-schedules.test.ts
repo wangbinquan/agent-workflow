@@ -11,36 +11,36 @@
 // 另一条同等重要的语义：**已禁用**的计划不算引用。它本来就不会触发，拿它去
 // 阻塞删除只会让用户困惑（「我明明停了它」）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { repoGroups, scheduledTasks } from '../src/db/schema'
 import { RepoGroupHasReferencesError, deleteRepoGroup } from '../src/services/repoGroup'
 import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '../src/modules/source-control/composition'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let store: RepositoryWorkspaceStore
 
 async function seedGroup(name = 'g'): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(repoGroups)
-    .values({
-      id,
-      name,
-      description: '',
-      version: 1,
-      createdByUserId: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { repoGroups } = tablesOf(db)
+  await insertOne(db, repoGroups, {
+    id,
+    name,
+    description: '',
+    version: 1,
+    createdByUserId: null,
+    createdAt: now,
+    updatedAt: now,
+  })
   return id
 }
 
@@ -51,22 +51,20 @@ async function seedSchedule(opts: {
 }): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(scheduledTasks)
-    .values({
-      id,
-      name: opts.name,
-      ownerUserId: 'u1',
-      launchKind: 'workflow',
-      launchPayload: JSON.stringify(opts.payload),
-      scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 60_000, tz: 'UTC' }),
-      enabled: opts.enabled ?? true,
-      nextRunAt: (opts.enabled ?? true) ? now + 60_000 : null,
-      consecutiveFailures: 0,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { scheduledTasks } = tablesOf(db)
+  await insertOne(db, scheduledTasks, {
+    id,
+    name: opts.name,
+    ownerUserId: 'u1',
+    launchKind: 'workflow',
+    launchPayload: JSON.stringify(opts.payload),
+    scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 60_000, tz: 'UTC' }),
+    enabled: opts.enabled ?? true,
+    nextRunAt: (opts.enabled ?? true) ? now + 60_000 : null,
+    consecutiveFailures: 0,
+    createdAt: now,
+    updatedAt: now,
+  })
   return id
 }
 
@@ -91,8 +89,9 @@ describeEachProvider('RFC-248 #10 —— 删组 × 定时任务', (harness) => {
     expect(caught).toBeInstanceOf(RepoGroupHasReferencesError)
     expect(caught!.status).toBe(409)
     expect(caught!.referencingSchedules).toEqual([{ id: sid, name: '每天审计' }])
+    const { repoGroups } = tablesOf(db)
     // 组还在——拒绝必须是原子的，不能删一半。
-    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(1)
+    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid))).toHaveLength(1)
   })
 
   test('force=1 ⇒ 组被删，引用它的计划被**禁用**（不是删除）且带上原因', async () => {
@@ -104,9 +103,10 @@ describeEachProvider('RFC-248 #10 —— 删组 × 定时任务', (harness) => {
 
     const res = await deleteRepoGroup(store, gid, { force: true })
     expect(res.disabledSchedules).toBe(1)
-    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(0)
+    const { repoGroups, scheduledTasks } = tablesOf(db)
+    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid))).toHaveLength(0)
 
-    const row = await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, sid)).get()
+    const row = await first(db.select().from(scheduledTasks).where(eq(scheduledTasks.id, sid)))
     // 计划行仍在（用户可能只想换个组重新启用）。
     expect(row).toBeDefined()
     expect(row!.enabled).toBe(false)
@@ -124,7 +124,8 @@ describeEachProvider('RFC-248 #10 —— 删组 × 定时任务', (harness) => {
     })
     const res = await deleteRepoGroup(store, gid)
     expect(res.disabledSchedules).toBe(0)
-    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(0)
+    const { repoGroups } = tablesOf(db)
+    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid))).toHaveLength(0)
   })
 
   test('引用**别的**组的计划不受影响', async () => {
@@ -136,8 +137,9 @@ describeEachProvider('RFC-248 #10 —— 删组 × 定时任务', (harness) => {
     })
     const res = await deleteRepoGroup(store, mine)
     expect(res.disabledSchedules).toBe(0)
+    const { scheduledTasks } = tablesOf(db)
     expect(
-      (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, sid)).get())!.enabled,
+      (await first(db.select().from(scheduledTasks).where(eq(scheduledTasks.id, sid))))!.enabled,
     ).toBe(true)
   })
 
@@ -158,7 +160,8 @@ describeEachProvider('RFC-248 #10 —— 删组 × 定时任务', (harness) => {
     })
     const res = await deleteRepoGroup(store, gid)
     expect(res.disabledSchedules).toBe(0)
-    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(0)
+    const { repoGroups } = tablesOf(db)
+    expect(await db.select().from(repoGroups).where(eq(repoGroups.id, gid))).toHaveLength(0)
   })
 
   test('kind-enveloped payload（`{kind, body}`）里的 repoGroupId 同样被认出', async () => {

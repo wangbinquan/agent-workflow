@@ -23,7 +23,7 @@ export type { VerificationCommandEffectsFactory }
 // 跨 context import 其内部（rfc294 preflight 债务账本为空增长）。
 // Agent launcher / MR·pipeline collector 端口随 PR-5/PR-6/PR-7 注入。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 export { createDevelopmentDeliveryProvider } from './infrastructure/developmentDeliveryProvider'
 import { runMissionReconcile, type ReconcileOutcome } from './application/missionReconciler'
 import {
@@ -156,7 +156,7 @@ const PIPELINE_IMPORT_BUDGET = {
 export type DevelopmentAdmissionLookup = AdmissionLookup
 
 /** 一份装配，两个 provider 共用（RFC-359 W4-D12）。 */
-export function composeDevelopmentAdmissionLookup(db: ProviderNeutralDatabase): AdmissionLookup {
+export function composeDevelopmentAdmissionLookup(db: PersistenceDb): AdmissionLookup {
   return createAdmissionLookup(db)
 }
 
@@ -164,7 +164,7 @@ export const composePlaybookSaga = createPlaybookSagaPersistence
 
 /** Worker-bootstrap composition for the context-owned maintenance slice（一份装配，两个 provider 共用）. */
 export function composeDevelopmentAutomationMaintenanceCommands(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DevelopmentAutomationMaintenanceCommands {
   const uploads = createUploadMaintenancePersistence(db)
   const lookup = composeDevelopmentAdmissionLookup(db)
@@ -476,7 +476,7 @@ function composeDevelopmentAutomationFromPersistence(
 
 /** 一份装配，两个 provider 共用：每个持久化入口都已是中立实现（RFC-359 W4-D12）。 */
 export function composeDevelopmentAutomation(
-  deps: DevelopmentAutomationCompositionOptions & { readonly db: ProviderNeutralDatabase },
+  deps: DevelopmentAutomationCompositionOptions & { readonly db: PersistenceDb },
 ): DevelopmentAutomationModule {
   const repositories = createRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {

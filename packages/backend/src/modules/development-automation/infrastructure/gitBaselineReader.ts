@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   RepositoryBaselineEffects,
   RepositoryBaselineEffectsFactory,
@@ -8,8 +9,7 @@ import { createFileRepositoryBaselineEffectsFactory } from './local/fileReposito
 
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { BaselineFileReader, BaselineStat } from '../application/uploadPlan'
 import type { UploadBaselineContext } from '../application/commands/launchMission'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
@@ -114,9 +114,10 @@ export function createRepositoryBaselineResolverFromLocations(
 }
 
 /** repositoryId → cached_repos.localPath：一份实现，两个 provider 共用（RFC-359 W4-D12）。 */
-export function createRepositoryLocationRead(db: ProviderNeutralDatabase): RepositoryLocationRead {
+export function createRepositoryLocationRead(db: PersistenceDb): RepositoryLocationRead {
   return {
     async localPath(repositoryId) {
+      const { cachedRepos } = tablesOf(db)
       const row = (
         await db
           .select({ localPath: cachedRepos.localPath })
@@ -131,14 +132,14 @@ export function createRepositoryLocationRead(db: ProviderNeutralDatabase): Repos
 
 /** 直接吃数据库句柄的便捷工厂（focused 调用方 / 测试用）。 */
 export function resolveActionBaseline(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   factory?: RepositoryBaselineEffectsFactory,
 ) {
   return createActionBaselineResolver(createRepositoryLocationRead(db), factory)
 }
 
 export function createRepositoryBaselineResolver(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   factory?: RepositoryBaselineEffectsFactory,
 ) {
   return createRepositoryBaselineResolverFromLocations(createRepositoryLocationRead(db), factory)

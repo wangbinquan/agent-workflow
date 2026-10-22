@@ -8,7 +8,7 @@
 // 恢复执行的驱动端口默认是空操作：它按**部署形态**注入（单进程查工作树 + 内联驱动、多进程交给
 // daemon 的续跑 worker），行为断言归 bootstrap 侧的套件，房间自己的套件不该被它影响。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import type {
@@ -31,7 +31,7 @@ export interface TestWorkgroupTaskRoomOptions {
 }
 
 export function composeTestWorkgroupTaskRoom(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: TestWorkgroupTaskRoomOptions = {},
 ): WorkgroupTaskRoomModule {
   const broadcasts = options.broadcasts

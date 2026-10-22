@@ -2,13 +2,9 @@
 // Operations rows are touched; every other context normalizes through its own
 // participant. The snapshot carries the backed-up instance's execution lease
 // and its own still-building backup row: neither may become live state here.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, ne } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  hostedDatabaseBackups,
-  hostedExecutionControl,
-  hostedObjectPublications,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedStoredObject } from '@/platform/crewstation/objectStorage'
 import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
 import { HOSTED_BACKUP_OWNER, type HostedBackupSidecar } from './databaseBackupFormat'
@@ -21,7 +17,9 @@ export function createHostedSystemRestoreNormalization(input: {
   const { sidecar, object } = input
   return {
     name: 'system-operations',
-    async normalize(tx: ProviderNeutralDatabase, { now }) {
+    async normalize(tx: PersistenceDb, { now }) {
+      const { hostedExecutionControl, hostedDatabaseBackups, hostedObjectPublications } =
+        tablesOf(tx)
       // The restored database starts without execution authority.
       const control = await tx
         .update(hostedExecutionControl)

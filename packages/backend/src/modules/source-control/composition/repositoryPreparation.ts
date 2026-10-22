@@ -14,7 +14,7 @@ import type { PlannedSpaceLayout } from '../infrastructure/workspaceMaterializer
 import type { GitCommitIdentity, StartTask } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { decodeRepositoryLaunchRef } from '../domain/repositoryLaunchRef'
@@ -41,7 +41,7 @@ import type {
 
 /** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
 export function composeRepositoryPreparation(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   secretBox?: SecretBox | undefined
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
@@ -180,11 +180,7 @@ export function composeRepositoryPreparation(input: {
       if (source === null) throw new Error('repository-source-unavailable')
       return SealedRepositorySourceFactsSchema.parse(JSON.parse(source.factsJson)).cachedRepoId
     },
-    snapshot(request: {
-      transaction: ProviderNeutralDatabase
-      authority: RequestAuthority
-      now: number
-    }) {
+    snapshot(request: { transaction: PersistenceDb; authority: RequestAuthority; now: number }) {
       let active = true
       const scope = createRepositoryLaunchSnapshotInTx({
         ...request,
@@ -230,11 +226,7 @@ export function composeRepositoryPreparation(input: {
         },
       }
     },
-    async nextAttempt(request: {
-      transaction: ProviderNeutralDatabase
-      operationRef: string
-      now: number
-    }) {
+    async nextAttempt(request: { transaction: PersistenceDb; operationRef: string; now: number }) {
       const inTx = createRepositoryPreparationJournal(request.transaction)
       const previous = await inTx.operation(request.operationRef)
       if (previous === null) throw new Error('repository-preparation-not-found')

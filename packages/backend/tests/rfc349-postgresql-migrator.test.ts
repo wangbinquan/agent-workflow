@@ -1,6 +1,7 @@
 // RFC-349 T4 — schema admission is durable, idempotent and fail-closed. These
 // tests use the exact external-connection protocol without a SQLite fallback.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
@@ -52,7 +53,7 @@ function fixture(input: {
   let state = input.initial ?? 'empty'
   const sql: string[] = []
   let releases = 0
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(query) {
       sql.push(query)
       if (query.includes('pg_try_advisory_lock')) return result([{ acquired: input.lock ?? true }])
@@ -87,7 +88,7 @@ function fixture(input: {
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection

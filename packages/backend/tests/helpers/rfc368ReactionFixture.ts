@@ -2,15 +2,11 @@
 // 以及一台只装了新执行合同的 `DigitalEmployeeRuntimeService`（真 store、真 TE admission 日志、
 // 假执行 port）。只供 `tests/rfc368-*.test.ts` 使用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  employeeCases,
-  employeeReactionDispatch,
-  employeeReactionRounds,
-  reactionExecutionAdmissions,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ReactionArtifactPersistence } from '@/modules/digital-employee/application/ports/reactionArtifacts'
 import type { RuntimeCasePersistence } from '@/modules/digital-employee/application/ports/runtimeStore'
 import { DigitalEmployeeRuntimeService } from '@/modules/digital-employee/application/runtimeService'
@@ -66,7 +62,7 @@ export function reactionPlanJson(input: { readonly maxTotalTokens?: number | nul
 }
 
 export async function seedReaction(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly caseState?: 'active' | 'terminal'
     readonly terminalKind?: string | null
@@ -79,65 +75,57 @@ export async function seedReaction(
     readonly attemptOrdinal?: number
   } = {},
 ): Promise<void> {
-  await db
-    .insert(employeeCases)
-    .values({
-      id: REACTION_CASE,
-      name: REACTION_CASE,
-      employeeId: 'employee-1',
-      employeeRevision: 1,
-      typeId: 'fixture',
-      typeRevision: 1,
-      primaryContextId: 'context-1',
-      executionPolicyRevision: 1,
-      state: input.caseState ?? 'active',
-      terminalKind: input.terminalKind ?? null,
-      activeRoundId: REACTION_ROUND,
-      currentWorkItemRef: 'fixture-work',
-      ownerUserId: null,
-      maxTotalTokens: input.maxTotalTokens ?? null,
-      revision: 3,
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
-  await db
-    .insert(employeeReactionRounds)
-    .values({
-      id: REACTION_ROUND,
-      caseId: REACTION_CASE,
-      caseRevision: 2,
-      inboxId: null,
-      employeeId: 'employee-1',
-      employeeRevision: 1,
-      ruleId: 'fixture-rule',
-      workItemRef: 'fixture-work',
-      workContractId: 'fixture.contract',
-      workContractVersion: 1,
-      toolId: 'fixture-tool',
-      toolRevision: 1,
-      executionPolicyRevision: 1,
-      inputContextRefsJson: '[]',
-      planJson: reactionPlanJson({ maxTotalTokens: input.maxTotalTokens ?? null }),
-      state: input.roundState ?? 'planned',
-      executionRef: input.executionRef ?? null,
-      outputJson: null,
-      attemptOrdinal: input.attemptOrdinal ?? 0,
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  const { employeeCases, employeeReactionRounds, employeeReactionDispatch } = tablesOf(db)
+  await insertOne(db, employeeCases, {
+    id: REACTION_CASE,
+    name: REACTION_CASE,
+    employeeId: 'employee-1',
+    employeeRevision: 1,
+    typeId: 'fixture',
+    typeRevision: 1,
+    primaryContextId: 'context-1',
+    executionPolicyRevision: 1,
+    state: input.caseState ?? 'active',
+    terminalKind: input.terminalKind ?? null,
+    activeRoundId: REACTION_ROUND,
+    currentWorkItemRef: 'fixture-work',
+    ownerUserId: null,
+    maxTotalTokens: input.maxTotalTokens ?? null,
+    revision: 3,
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  await insertOne(db, employeeReactionRounds, {
+    id: REACTION_ROUND,
+    caseId: REACTION_CASE,
+    caseRevision: 2,
+    inboxId: null,
+    employeeId: 'employee-1',
+    employeeRevision: 1,
+    ruleId: 'fixture-rule',
+    workItemRef: 'fixture-work',
+    workContractId: 'fixture.contract',
+    workContractVersion: 1,
+    toolId: 'fixture-tool',
+    toolRevision: 1,
+    executionPolicyRevision: 1,
+    inputContextRefsJson: '[]',
+    planJson: reactionPlanJson({ maxTotalTokens: input.maxTotalTokens ?? null }),
+    state: input.roundState ?? 'planned',
+    executionRef: input.executionRef ?? null,
+    outputJson: null,
+    attemptOrdinal: input.attemptOrdinal ?? 0,
+    createdAt: 1,
+    updatedAt: 1,
+  })
   if (input.withDispatch === false) return
-  await db
-    .insert(employeeReactionDispatch)
-    .values({
-      roundRef: REACTION_ROUND,
-      caseId: REACTION_CASE,
-      nextAttemptAt: input.nextAttemptAt ?? 0,
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  await insertOne(db, employeeReactionDispatch, {
+    roundRef: REACTION_ROUND,
+    caseId: REACTION_CASE,
+    nextAttemptAt: input.nextAttemptAt ?? 0,
+    createdAt: 1,
+    updatedAt: 1,
+  })
 }
 
 export interface RecordedLaunch {
@@ -185,7 +173,7 @@ export function scriptedPort(): ScriptedPort {
 }
 
 export function reactionService(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly port: ReactionExecutionPortV1
     readonly now: () => number
@@ -244,24 +232,28 @@ export function reactionService(
   } as unknown as ConstructorParameters<typeof DigitalEmployeeRuntimeService>[0])
 }
 
-export async function reactionRows(db: ProviderNeutralDatabase) {
+export async function reactionRows(db: PersistenceDb) {
+  const {
+    employeeReactionRounds,
+    employeeReactionDispatch,
+    employeeCases,
+    reactionExecutionAdmissions,
+  } = tablesOf(db)
   const round = (
     await db
       .select()
       .from(employeeReactionRounds)
       .where(eq(employeeReactionRounds.id, REACTION_ROUND))
-      .all()
   )[0]!
   const dispatch = (
     await db
       .select()
       .from(employeeReactionDispatch)
       .where(eq(employeeReactionDispatch.roundRef, REACTION_ROUND))
-      .all()
   )[0]!
   const employeeCase = (
-    await db.select().from(employeeCases).where(eq(employeeCases.id, REACTION_CASE)).all()
+    await db.select().from(employeeCases).where(eq(employeeCases.id, REACTION_CASE))
   )[0]!
-  const admissions = await db.select().from(reactionExecutionAdmissions).all()
+  const admissions = await db.select().from(reactionExecutionAdmissions)
   return { round, dispatch, employeeCase, admissions }
 }

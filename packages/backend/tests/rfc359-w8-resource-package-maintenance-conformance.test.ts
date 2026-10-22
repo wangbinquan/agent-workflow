@@ -58,6 +58,8 @@
 // `{ failed: 0, rolledForward: 1 }` + `warnings: []`——即账本 13a 写的「回执缺失 / 与 journal
 // 错配也照样 roll-forward」。补上中立信封门之后两侧逐字相同。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -66,8 +68,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { plugins, resourceBundleApplies } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createResourcePackageApplyMaintenanceCommand,
   type ResourcePackageApplyArtifactRecoveryPort,
@@ -103,7 +104,7 @@ interface Warning {
 
 /** Journal 两引擎共用；artifact recovery 继续读取本引擎的工件格式。 */
 function portsFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   isolation: 'exclusive' | 'read-committed',
   paths: { readonly appHome: string; readonly pluginsDir: string },
 ): Ports {
@@ -202,7 +203,8 @@ async function insertJournal(
     readonly updatedAt?: number
   },
 ): Promise<void> {
-  await harness.db.insert(resourceBundleApplies).values({
+  const { resourceBundleApplies } = tablesOf(harness.db)
+  await insertOne(harness.db, resourceBundleApplies, {
     id: row.id,
     scope: 'package',
     key: `key-${row.id}`,
@@ -220,6 +222,7 @@ async function readJournal(
   harness: ProviderHarness,
   id: string,
 ): Promise<{ state: string; error: string | null; updatedAt: number } | undefined> {
+  const { resourceBundleApplies } = tablesOf(harness.db)
   const rows = await harness.db
     .select({
       state: resourceBundleApplies.state,
@@ -535,7 +538,8 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       mkdirSync(generationDirectory, { recursive: true })
       const cachedPath = join(generationDirectory, 'index.js')
       writeFileSync(cachedPath, 'export default {}')
-      await harness.db.insert(plugins).values({
+      const { plugins } = tablesOf(harness.db)
+      await insertOne(harness.db, plugins, {
         id: PLUGIN_ID,
         name: 'w8-plugin',
         spec: 'file:./w8-plugin',
@@ -651,7 +655,8 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       mkdirSync(generationDirectory, { recursive: true })
       const cachedPath = join(generationDirectory, 'index.js')
       writeFileSync(cachedPath, 'export default {}')
-      await harness.db.insert(plugins).values({
+      const { plugins } = tablesOf(harness.db)
+      await insertOne(harness.db, plugins, {
         id: PLUGIN_ID,
         name: 'w8-plugin',
         spec: 'file:./w8-plugin',

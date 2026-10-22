@@ -2,20 +2,11 @@
 // the neutral journal; the gate journal keeps receipts and stays the recovery
 // authority. Cleanup is an owner release settled by maintenance, and the
 // collaboration sweep releases the documents of tasks that no longer exist.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import {
-  agents,
-  collaborationGateArtifacts,
-  collaborationGateOperations,
-  docVersions,
-  hostedObjectPublications,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { joinMarkdownDocs } from '@agent-workflow/shared'
 import {
@@ -123,7 +114,8 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     })
     // The declaration precedes the put: an interrupted upload left only its facts.
     const key = hostedReviewPublicationKey(plan)
-    await harness.db.insert(hostedObjectPublications).values({
+    const { hostedObjectPublications } = tablesOf(harness.db)
+    await insertOne(harness.db, hostedObjectPublications, {
       id: hostedPublicationId(HOSTED_REVIEW_OWNER, key),
       owner: HOSTED_REVIEW_OWNER,
       logicalKey: key,
@@ -154,7 +146,16 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     const id = ulid()
     const appHome = `/unavailable/rfc370-review-${id}`
     const bodies = ['# First\n\nreview body', '# Second\n\n审阅正文']
-    await db.insert(agents).values({
+    const {
+      agents,
+      workflows,
+      tasks,
+      nodeRuns,
+      nodeRunOutputs,
+      docVersions,
+      collaborationGateArtifacts,
+    } = tablesOf(db)
+    await insertOne(db, agents, {
       id,
       name: id,
       description: '',
@@ -183,10 +184,14 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
         } as unknown as WorkflowNode,
       ],
     }
-    await db
-      .insert(workflows)
-      .values({ id, name: id, description: '', definition: JSON.stringify(definition), version: 1 })
-    await db.insert(tasks).values({
+    await insertOne(db, workflows, {
+      id,
+      name: id,
+      description: '',
+      definition: JSON.stringify(definition),
+      version: 1,
+    })
+    await insertOne(db, tasks, {
       id,
       name: id,
       workflowId: id,
@@ -203,7 +208,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
         { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
       ]),
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id,
       taskId: id,
       nodeId: 'source',
@@ -212,9 +217,11 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
       startedAt: 1,
       finishedAt: 2,
     })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: id, portName: 'docs', content: joinMarkdownDocs(bodies) })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: id,
+      portName: 'docs',
+      content: joinMarkdownDocs(bodies),
+    })
     const { journal } = setup(f)
     const first = composeCrewStationReviewArtifacts({
       db,
@@ -328,6 +335,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     await expect(
       selection.store.cleanupReviewArtifact({ ...artifact, state: 'consumed' }),
     ).rejects.toThrow('committed-artifact-cleanup-refused')
+    const { collaborationGateOperations } = tablesOf(harness.db)
     expect(await harness.db.select().from(collaborationGateOperations)).toHaveLength(0)
     await expect(selection.store.stageReviewArtifact(plan, 'changed')).rejects.toThrow(
       'changed after planning',
@@ -337,10 +345,17 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
   test('the collaboration sweep releases review documents of tasks without gate operations', async () => {
     const { journal, selection } = setup()
     const live = ulid()
-    await harness.db
-      .insert(workflows)
-      .values({ id: live, name: live, description: '', definition: '{}', version: 1 })
-    await harness.db.insert(tasks).values({
+    const { workflows, tasks, collaborationGateOperations, hostedObjectPublications } = tablesOf(
+      harness.db,
+    )
+    await insertOne(harness.db, workflows, {
+      id: live,
+      name: live,
+      description: '',
+      definition: '{}',
+      version: 1,
+    })
+    await insertOne(harness.db, tasks, {
       id: live,
       name: live,
       workflowId: live,
@@ -353,7 +368,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
       inputs: '{}',
       startedAt: 1,
     })
-    await harness.db.insert(collaborationGateOperations).values({
+    await insertOne(harness.db, collaborationGateOperations, {
       id: `op-${live}`,
       taskId: live,
       gateKind: 'review',

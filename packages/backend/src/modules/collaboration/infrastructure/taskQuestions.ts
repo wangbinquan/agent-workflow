@@ -17,19 +17,17 @@
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite, affectedRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { humanGateComposition } from '@/services/humanGateComposition'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import {
@@ -48,9 +46,9 @@ import {
 } from '@agent-workflow/shared'
 import { runIdsWithOutput } from './nodeRunOutputPresence'
 
-type ClarifyRoundRow = typeof clarifyRounds.$inferSelect
-type TaskQuestionRow = typeof taskQuestions.$inferSelect
-type NodeRunRow = typeof nodeRuns.$inferSelect
+type ClarifyRoundRow = PersistenceTables['clarifyRounds']['$inferSelect']
+type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
+type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
 
 export interface TaskQuestionDTO {
   id: string
@@ -128,7 +126,7 @@ function graphForRound(round: ClarifyRoundRow) {
 /** RFC-128 P2-1 — tx-aware core of {@link reconcileTaskQuestionsForRound}: upsert a
  *  round's desired handler entries onto the GIVEN transaction. Extracted so the
  *  per-question seal primitive (services/clarifySeal.ts) can reconcile INSIDE its own
- *  single atomic transaction (RFC-359: a `DatabaseTransaction`, both engines). Idempotent;
+ *  single atomic transaction (RFC-359: a `PersistenceTx`, both engines). Idempotent;
  *  preserves the manual overlay (override / confirmation / staged / sealed / audit) on
  *  existing rows.
  *
@@ -140,7 +138,7 @@ function graphForRound(round: ClarifyRoundRow) {
  *  UNCONDITIONAL (created lazily on first list / seal) and their `sealed_at` is stamped later by
  *  sealRoundQuestions. */
 export async function reconcileRoundEntriesTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   round: ClarifyRoundRow,
 ): Promise<void> {
   if (round.status === 'canceled' || round.status === 'abandoned') return
@@ -182,29 +180,31 @@ export async function reconcileRoundEntriesTx(
     createdAt: now,
     updatedAt: now,
   }))
-  await insertInBatches(tx, taskQuestions, rows, (batch) =>
-    tx
-      .insert(taskQuestions)
-      .values([...batch])
-      .onConflictDoUpdate({
-        target: [taskQuestions.originNodeRunId, taskQuestions.questionId, taskQuestions.roleKind],
-        // Only refresh the graph-derived snapshot; never touch the manual overlay.
-        // `excluded.*`（不是逐行字面量）：一条语句里每行要更新成**自己那行**的值。
-        set: {
-          defaultTargetNodeId: sql`excluded.${sql.identifier(taskQuestions.defaultTargetNodeId.name)}`,
-          questionTitle: sql`excluded.${sql.identifier(taskQuestions.questionTitle.name)}`,
-          updatedAt: sql`excluded.${sql.identifier(taskQuestions.updatedAt.name)}`,
-        },
-      })
-      .run(),
-  )
+  const { taskQuestions } = tablesOf(tx)
+  await insertInBatches(tx, taskQuestions, rows, (batch) => {
+    return queryWrite(
+      tx
+        .insert(taskQuestions)
+        .values([...batch])
+        .onConflictDoUpdate({
+          target: [taskQuestions.originNodeRunId, taskQuestions.questionId, taskQuestions.roleKind],
+          // Only refresh the graph-derived snapshot; never touch the manual overlay.
+          // `excluded.*`（不是逐行字面量）：一条语句里每行要更新成**自己那行**的值。
+          set: {
+            defaultTargetNodeId: sql`excluded.${sql.identifier(taskQuestions.defaultTargetNodeId.name)}`,
+            questionTitle: sql`excluded.${sql.identifier(taskQuestions.questionTitle.name)}`,
+            updatedAt: sql`excluded.${sql.identifier(taskQuestions.updatedAt.name)}`,
+          },
+        }),
+    )
+  })
 }
 
 /** One clarify_round → upsert its desired handler entries (idempotent; preserves
  *  override / confirmation / staged / sealed / audit on existing rows). Thin wrapper that
  *  runs {@link reconcileRoundEntriesTx} in its own atomic transaction. */
 export async function reconcileTaskQuestionsForRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   round: ClarifyRoundRow,
 ): Promise<void> {
   // RFC-126: terminal/aborted rounds produce NO board entries — skip before opening a tx.
@@ -219,9 +219,10 @@ export async function reconcileTaskQuestionsForRound(
  *  Empty for a round with no prior per-question seal → the quick channel stays byte-for-
  *  byte unchanged (golden-lock). */
 export async function loadSealedQuestionIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   originNodeRunId: string,
 ): Promise<Set<string>> {
+  const { taskQuestions } = tablesOf(db)
   const rows = await db
     .select({ questionId: taskQuestions.questionId, sealedAt: taskQuestions.sealedAt })
     .from(taskQuestions)
@@ -307,10 +308,11 @@ function resolveDispatchedEntryHandler(
  *  its derived phase. Optional filters: by source node (node badge / clarify page)
  *  and/or by phase (board column). */
 export async function listTaskQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { sourceNodeId?: string; phase?: TaskQuestionPhase } = {},
 ): Promise<TaskQuestionDTO[]> {
+  const { clarifyRounds, tasks, taskQuestions, nodeRuns } = tablesOf(db)
   // Reconcile before the terminal read-model filter so a task whose first board
   // read happens after completion still retains its historical audit ledger.
   const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -487,12 +489,13 @@ function summarizeAnswer(
  *  done+output); once consumed, a still-undispatched sibling re-parks the node so a later
  *  dispatch isn't stranded. Empty for any non-deferred task (golden-lock). */
 export async function loadUndispatchedDesignerTargets(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义（旧 flag 门移除）。
   const entries = await fetchDesignerParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
+  const { nodeRuns } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
     db,
@@ -506,9 +509,10 @@ export async function loadUndispatchedDesignerTargets(
  *  designer source AND the RFC-128 P5-D all-role {@link loadUndispatchedParkTargets} share ONE
  *  query (no drift). Caller applies the deferred-flag gate + the partition. */
 async function fetchDesignerParkEntries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<ParkTargetEntry[]> {
+  const { taskQuestions, clarifyRounds } = tablesOf(db)
   const clarifyDesigner = await db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
@@ -647,7 +651,7 @@ function partitionUndispatchedParkTargets(
 /** Does the task currently park on ≥1 undispatched designer entry? (Self-gated on
  *  the deferred flag — always false for non-deferred tasks.) */
 export async function hasUndispatchedDesignerQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<boolean> {
   return (await loadUndispatchedDesignerTargets(db, taskId)).size > 0
@@ -672,12 +676,13 @@ export async function hasUndispatchedDesignerQuestions(
  * {@link partitionUndispatchedParkTargets} (byte-for-byte the designer source's tail).
  */
 export async function loadUndispatchedSelfQuestionerTargets(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
   const entries = await fetchSelfQuestionerParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
+  const { nodeRuns } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
     db,
@@ -695,9 +700,10 @@ export async function loadUndispatchedSelfQuestionerTargets(
  *  entries, and this query excludes `confirmation='confirmed'`. So the superseded q1 drops out
  *  automatically (no starvation, no re-park duplicate). */
 async function fetchSelfQuestionerParkEntries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<ParkTargetEntry[]> {
+  const { taskQuestions } = tablesOf(db)
   return db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
@@ -739,7 +745,7 @@ async function fetchSelfQuestionerParkEntries(
  * The per-role helpers stay for direct callers/tests (RFC-132: every task takes this path).
  */
 export async function loadUndispatchedParkTargets(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
@@ -748,6 +754,7 @@ export async function loadUndispatchedParkTargets(
     ...(await fetchSelfQuestionerParkEntries(db, taskId)),
   ]
   if (entries.length === 0) return new Set()
+  const { nodeRuns } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
     db,
@@ -777,7 +784,8 @@ export interface TaskQuestionActor {
   role: string
 }
 
-async function loadEntry(db: ProviderNeutralDatabase, entryId: string): Promise<TaskQuestionRow> {
+async function loadEntry(db: PersistenceDb, entryId: string): Promise<TaskQuestionRow> {
+  const { taskQuestions } = tablesOf(db)
   const [e] = await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)).limit(1)
   if (!e)
     throw new NotFoundError(TASK_QUESTION_CONFLICT.notFound, `task question ${entryId} not found`)
@@ -786,13 +794,14 @@ async function loadEntry(db: ProviderNeutralDatabase, entryId: string): Promise<
 
 /** Derive one entry's current phase (loads its round + the task's runs). */
 async function deriveEntryPhase(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   entry: TaskQuestionRow,
 ): Promise<TaskQuestionPhase> {
   // RFC-120 §15 — manual question: no clarify round. Phase from the entry's OWN dispatch
   // state (content always answered; no human-answer step) — the SAME resolution the
   // read-side uses for manual rows.
   if (entry.sourceKind === 'manual') {
+    const { nodeRuns } = tablesOf(db)
     const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, entry.taskId))
     const outputRunIds = await runIdsWithOutput(
       db,
@@ -811,6 +820,7 @@ async function deriveEntryPhase(
       handlerRun,
     })
   }
+  const { clarifyRounds, nodeRuns } = tablesOf(db)
   const [round] = await db
     .select()
     .from(clarifyRounds)
@@ -843,10 +853,11 @@ async function deriveEntryPhase(
  *  always reruns its handler, so its target MUST have run (else it would park-but-never-
  *  dispatch). Shared so create / reassign / dispatch agree on "runnable". */
 export async function taskNodeHasRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
 ): Promise<boolean> {
+  const { nodeRuns } = tablesOf(db)
   return (
     (
       await db
@@ -859,10 +870,8 @@ export async function taskNodeHasRun(
 }
 
 /** Agent-kind node ids of the task's frozen workflow snapshot (reassign candidates). */
-async function agentNodeIdsForTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<Set<string>> {
+async function agentNodeIdsForTask(db: PersistenceDb, taskId: string): Promise<Set<string>> {
+  const { tasks } = tablesOf(db)
   const [t] = await db
     .select({ snapshot: tasks.workflowSnapshot })
     .from(tasks)
@@ -883,10 +892,8 @@ async function agentNodeIdsForTask(
 // dynamic_workflow task, an agent node coincidentally named '__wg_member__' is a plain single node
 // with no shard ambiguity, so the manual-target ban below must NOT apply. `isTurnEngineWorkgroupTask`
 // is the exact predicate (workgroupId set AND mode != dynamic_workflow).
-async function taskIsTurnEngineWorkgroup(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<boolean> {
+async function taskIsTurnEngineWorkgroup(db: PersistenceDb, taskId: string): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   const [t] = await db
     .select({ workgroupId: tasks.workgroupId, workgroupConfigJson: tasks.workgroupConfigJson })
     .from(tasks)
@@ -904,7 +911,7 @@ async function taskIsTurnEngineWorkgroup(
 // WG_MEMBER_NODE_ID import — workgroupLaunch pulls in task/workgroups/orchestrator services and
 // importing it here risks a module-init cycle; the rfc172 test source-locks the two to match.)
 async function assertManualTargetNotSharedMemberHost(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   target: string,
 ): Promise<void> {
@@ -918,7 +925,7 @@ async function assertManualTargetNotSharedMemberHost(
 
 /** Confirm (已处理待确认 → 完成). Only from awaiting_confirm; pure closure (D5). */
 export async function confirmTaskQuestion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   entryId: string,
   actor: TaskQuestionActor,
 ): Promise<void> {
@@ -932,6 +939,7 @@ export async function confirmTaskQuestion(
       `task question is '${phase}', not awaiting_confirm`,
     )
   }
+  const { taskQuestions } = tablesOf(db)
   await db
     .update(taskQuestions)
     .set({
@@ -964,7 +972,7 @@ export type ReassignTaskQuestionAction = 'added-designer' | 'removed-designer' |
  *  to the single default card). A MANUAL question (no asker) still MOVES via override. The only
  *  constraint is the target must be a workflow agent node (Codex F5). */
 export async function reassignTaskQuestion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   entryId: string,
   targetNodeId: string,
   actor: TaskQuestionActor,
@@ -1004,6 +1012,7 @@ export async function reassignTaskQuestion(
     // concurrent dispatch that won leaves this a 0-row no-op → reject (reopen's job post-dispatch).
     let updated = false
     await databaseSessionFor(db).transaction(async (tx) => {
+      const { taskQuestions } = tablesOf(tx)
       const stillOpen = await tx
         .select({ id: taskQuestions.id })
         .from(taskQuestions)
@@ -1039,6 +1048,7 @@ export async function reassignTaskQuestion(
       `cannot reassign a '${phase}' question`,
     )
   }
+  const { clarifyRounds } = tablesOf(db)
   const round = (
     await db
       .select()
@@ -1058,6 +1068,7 @@ export async function reassignTaskQuestion(
   if (targetNodeId === askingNodeId) {
     let dispatched = false
     await databaseSessionFor(db).transaction(async (tx) => {
+      const { taskQuestions } = tablesOf(tx)
       const existing = (
         await tx
           .select({ id: taskQuestions.id, dispatchedAt: taskQuestions.dispatchedAt })
@@ -1097,6 +1108,7 @@ export async function reassignTaskQuestion(
   let dispatched = false
   const now = Date.now()
   await databaseSessionFor(db).transaction(async (tx) => {
+    const { taskQuestions } = tablesOf(tx)
     const existing = (
       await tx
         .select()
@@ -1185,12 +1197,10 @@ export async function reassignTaskQuestion(
  *  Keyed on the seal MARKER (sealed_at / round status), NOT on answerSummary: a partial
  *  round leaves answerSummary independent of round.status (Codex design gate F3), so
  *  answerSummary is unreliable as a "has an answer" signal here. */
-async function isEntrySealed(
-  db: ProviderNeutralDatabase,
-  entry: TaskQuestionRow,
-): Promise<boolean> {
+async function isEntrySealed(db: PersistenceDb, entry: TaskQuestionRow): Promise<boolean> {
   if (entry.sourceKind === 'manual') return true
   if (entry.sealedAt !== null) return true
+  const { clarifyRounds } = tablesOf(db)
   const [round] = await db
     .select({ status: clarifyRounds.status })
     .from(clarifyRounds)
@@ -1207,7 +1217,7 @@ async function isEntrySealed(
  *  from a user-clicked batch dispatch's auto-split defer; ANY staging change kills it" — a
  *  re-staged entry is back in the暂存 state and must be batch-dispatched again. */
 export async function stageTaskQuestion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   entryId: string,
   staged: boolean,
   actor: TaskQuestionActor,
@@ -1225,6 +1235,7 @@ export async function stageTaskQuestion(
   }
   await getTaskQuestionWriteSem(entry.taskId).run(async () => {
     if (staged) {
+      const { taskQuestions } = tablesOf(db)
       // RFC-134 D10（Codex R2-F4 + R3-F7 + 实现 gate fold）——已下发行不可 stage：dispatch 后
       // 条目已「提交执行」，stage 只会留下脏戳。守卫是**单条条件
       // 更新**（语句级原子）+ 受影响行数判定——没有任何先查后改窗口：并发 dispatch 在同列上
@@ -1240,8 +1251,8 @@ export async function stageTaskQuestion(
           updatedAt: Date.now(),
         })
         .where(and(eq(taskQuestions.id, entryId), isNull(taskQuestions.dispatchedAt)))
-      const changes = (result as unknown as { changes?: number }).changes
-      if (typeof changes !== 'number' || changes !== 1) {
+      const changes = affectedRows(result)
+      if (changes !== 1) {
         throw new ConflictError(
           TASK_QUESTION_CONFLICT.alreadyDispatched,
           `cannot stage a dispatched question (dispatched_at is set) — it is already committed for execution`,
@@ -1249,6 +1260,7 @@ export async function stageTaskQuestion(
       }
       return
     }
+    const { taskQuestions } = tablesOf(db)
     // RFC-136（用户 2026-07-02「回答问题的按键又没了」）——unstage 按「题」级联：同
     // (originNodeRunId, questionId) 的全部未下发行一起移出待下发。用户在看板操作的心智单位
     // 是问题，而一个 cross 题有 questioner+designer 两行两张卡——只移一张会留下「半 staged」
@@ -1319,11 +1331,12 @@ export interface CreateManualTaskQuestionInput {
  *  recorded for audit ONLY — it NEVER enters an agent prompt (RFC-099 prompt-isolation; no
  *  prompt builder reads manual_created_by). */
 export async function createManualTaskQuestion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
 ): Promise<{ id: string }> {
+  const { tasks } = tablesOf(db)
   // RFC-120 §15 — task status (re-gate). RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有
   // 任务都是 deferred-dispatch，manual 恒可创建（旧 deferred-only 门移除）。
   const taskRow = (

@@ -1,8 +1,9 @@
 // RFC-383: former PostgreSQL wiring reproduced against both databases before the shared writer gates.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { developmentMissions, developmentWakeHints } from '@/db/schema'
 import { composeDigitalEmployeeWriterCutoverFor } from '@/modules/digital-employee/composition'
 import {
   sweepWakesWhileDraining,
@@ -154,7 +155,8 @@ describeEachProvider('RFC-383 writer gates and former wiring', (harness) => {
   for (const former of [true, false]) {
     test(`${former ? 'former PG' : 'shared gate'}: migration mode and drain total follow the next wake period`, async () => {
       const writerCutover = composeDigitalEmployeeWriterCutoverFor(harness.db)
-      await harness.db.insert(developmentMissions).values({
+      const { developmentMissions } = tablesOf(harness.db)
+      await insertOne(harness.db, developmentMissions, {
         id: 'drain',
         status: 'running',
         repositoryId: 'repo',
@@ -202,6 +204,7 @@ describeEachProvider('RFC-383 writer gates and former wiring', (harness) => {
       const successor = await fx.store.findByIdempotencyKey(`reopen:${missionId}`)
       expect(successor === null).toBe(!former)
       expect(collector.calls()).toBe(former ? 1 : 0)
+      const { developmentWakeHints } = tablesOf(harness.db)
       const hints = await harness.db
         .select()
         .from(developmentWakeHints)
@@ -274,7 +277,8 @@ describeEachProvider('RFC-383 writer gates and former wiring', (harness) => {
     }
     await recoverWhileDraining({ writerCutover, automation, log })
     expect(recoveries).toBe(0)
-    await harness.db.insert(developmentMissions).values({
+    const { developmentMissions } = tablesOf(harness.db)
+    await insertOne(harness.db, developmentMissions, {
       id: 'adopted',
       status: 'running',
       repositoryId: 'repo',

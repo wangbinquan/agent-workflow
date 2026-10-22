@@ -2,6 +2,8 @@
 // mutation share the same insert/CAS atoms. Preserve real package publication,
 // transaction rollback and the captured-row behavior established before merging.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
@@ -12,7 +14,6 @@ import ts from 'typescript'
 import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { plugins, resourceBundleApplies, users } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { PluginCreateRecord } from '@/modules/resource-catalog/application/plugins/ports'
@@ -138,7 +139,8 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
       },
       source: 'daemon',
     })
-    await harness.db.insert(users).values({ ...actor.user, createdAt: T0, updatedAt: T0 })
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, { ...actor.user, createdAt: T0, updatedAt: T0 })
     const context = {
       authority: new AuthorityClaimRegistry().mintLocalAuthority({
         userId: OWNER,
@@ -284,6 +286,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
       await f.apply(updateBytes, updatePreview.previewToken, updateDecision, f.compose()),
     ).toEqual(updatedReceipt)
     expect(await repository.list()).toHaveLength(1)
+    const { resourceBundleApplies } = tablesOf(harness.db)
     const journals = await harness.db.select().from(resourceBundleApplies)
     expect(journals).toHaveLength(2)
     expect(journals.map((row) => row.state)).toEqual(['committed', 'committed'])
@@ -315,6 +318,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
           },
         })
         expect(published).toMatchObject({ cachedPath: f.second, updatedAt: T0 + 3 })
+        const { plugins } = tablesOf(transaction)
         expect(await transaction.select().from(plugins)).toHaveLength(2)
         throw new Error('abort after plugin writes')
       }),
@@ -329,6 +333,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
     const f = await fixture()
     const repository = createPluginRepository({ db: harness.db }).repository
     const original = await repository.create(record('stale-plugin', f.first))
+    const { plugins } = tablesOf(harness.db)
     await harness.db
       .update(plugins)
       .set({ description: 'newer', updatedAt: T0 + 1 })
@@ -411,7 +416,8 @@ describeEachProvider('RFC-359 captured-row publication preserves the old contrac
   }
 
   async function fixture(input = prepared) {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'plugin-owner',
       username: 'plugin-owner',
       displayName: 'Plugin Owner',
@@ -425,6 +431,7 @@ describeEachProvider('RFC-359 captured-row publication preserves the old contrac
   }
 
   async function readRow(): Promise<PluginPersistenceRow> {
+    const { plugins } = tablesOf(harness.db)
     const [row] = await harness.db
       .select()
       .from(plugins)
@@ -458,6 +465,7 @@ describeEachProvider('RFC-359 captured-row publication preserves the old contrac
     { installedAt: prepared.now + 99 },
   ])('old captured-row publication rejects a changed non-clock field %p', async (newer) => {
     const original = await fixture()
+    const { plugins } = tablesOf(harness.db)
     await harness.db.update(plugins).set(newer).where(eq(plugins.id, prepared.id))
     await expect(
       harness.session.transaction((tx) => commitLegacyPluginPublishInTx(tx, original, publication)),
@@ -469,6 +477,7 @@ describeEachProvider('RFC-359 captured-row publication preserves the old contrac
 
   test('old captured-row publication keeps its missing-row error', async () => {
     const original = await fixture()
+    const { plugins } = tablesOf(harness.db)
     await harness.db.delete(plugins).where(eq(plugins.id, prepared.id))
     await expect(
       harness.session.transaction((tx) => commitLegacyPluginPublishInTx(tx, original, publication)),
@@ -491,6 +500,7 @@ describeEachProvider('RFC-359 captured-row publication preserves the old contrac
         throw new Error('abort legacy writes')
       }),
     ).rejects.toThrow('abort legacy writes')
+    const { plugins } = tablesOf(harness.db)
     expect(await harness.db.select().from(plugins)).toEqual([original])
   })
 
@@ -517,6 +527,7 @@ describeEachProvider('RFC-359 captured-row publication preserves the old contrac
       ...prepared,
       initialAcl: { ...prepared.initialAcl, ownerUserId: owners.originalOwner },
     })
+    const { plugins } = tablesOf(harness.db)
     await harness.db
       .update(plugins)
       .set({ ownerUserId: owners.newerOwner })
@@ -606,6 +617,12 @@ test('intent apply 侧的插件写点在返回前 await 到数据库落库', () 
       while (
         ts.isPropertyAccessExpression(outermost.parent) ||
         (ts.isCallExpression(outermost.parent) && outermost.parent.expression === outermost)
+      )
+        outermost = outermost.parent
+      if (
+        ts.isCallExpression(outermost.parent) &&
+        ts.isIdentifier(outermost.parent.expression) &&
+        outermost.parent.expression.text === 'first'
       )
         outermost = outermost.parent
       writes.push(node.expression.name.text)

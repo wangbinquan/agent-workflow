@@ -1,8 +1,8 @@
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { McpProbeErrorCode } from '@agent-workflow/shared'
-import type { mcpProbes } from '@/db/schema'
 import type { McpProbeRecord, McpProbeWrite } from '../public/types'
 
-export type McpProbePersistenceRow = typeof mcpProbes.$inferSelect
+export type McpProbePersistenceRow = PersistenceTables['mcpProbes']['$inferSelect']
 
 export function mcpProbeFromPersistence(
   row: McpProbePersistenceRow,

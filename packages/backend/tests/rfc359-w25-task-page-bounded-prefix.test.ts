@@ -1,13 +1,14 @@
 // RFC359 W25: real original SQL, original bindings, complete rows and snapshot.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql, SQL, StringChunk } from 'drizzle-orm'
 import { createInMemoryDb } from '@/db/client'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   createDatabaseTaskListPage,
@@ -141,8 +142,9 @@ function giantFamily(): FixtureRow[] {
       .map((row) => ({ ...row, startedAt: row.startedAt - 500 })),
   ]
 }
-async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
     displayName: 'W25 fixture',
@@ -151,7 +153,7 @@ async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): P
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'w25-workflow',
     name: 'W25 workflow',
     definition: '{ "fixture": true }',
@@ -160,7 +162,7 @@ async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): P
   })
   for (const row of rows) {
     const family = row.root === undefined ? row.id : row.root
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: row.name ?? 'match',
       workflowId: 'w25-workflow',
@@ -209,7 +211,7 @@ function withCursor(
 }
 async function compare(
   harness: ProviderHarness,
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   raw: TaskOperationsRawQuery,
 ): Promise<readonly Record<string, unknown>[]> {
   const query = fastFilteredRootQuery(
@@ -220,8 +222,8 @@ async function compare(
   )
   const recording = harness.recordStatements()
   try {
-    const expected = await db.all<Record<string, unknown>>(originalQuery(query))
-    const actual = await db.all<Record<string, unknown>>(query)
+    const expected = await rawRows<Record<string, unknown>>(db, originalQuery(query))
+    const actual = await rawRows<Record<string, unknown>>(db, query)
     expect(actual).toEqual(expected)
     expect(JSON.stringify(actual)).toBe(JSON.stringify(expected))
     expect(recording.statements).toHaveLength(2)
@@ -300,6 +302,7 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
   for (const fixture of cases)
     test(fixture.name, async () => {
       await seed(harness.db, fixture.rows)
+      const { tasks } = tablesOf(harness.db)
       const before = await harness.db.select().from(tasks).orderBy(tasks.id)
       await compare(harness, harness.db, fixture.raw)
       expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
@@ -312,6 +315,7 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
       ...independentRoots(12),
       { id: 'same-time-child', root: 'root-00', parent: 'root-00', startedAt: 1000 },
     ])
+    const { tasks } = tablesOf(harness.db)
     const before = await harness.db.select().from(tasks).orderBy(tasks.id)
     const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
     let cursor: string | undefined
@@ -330,11 +334,13 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
   })
   test('a transaction changes the selected path while rollback preserves all stored JSON', async () => {
     await seed(harness.db, independentRoots())
+    const { tasks } = tablesOf(harness.db)
     const before = await harness.db.select().from(tasks).orderBy(tasks.id)
     const original = await compare(harness, harness.db, RAW)
     const stop = new Error('rollback bounded root prefix')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx.update(tasks).set({ startedAt: 1000 }).where(eq(tasks.workflowId, 'w25-workflow'))
         const changed = await compare(harness, tx, RAW)
         expect(changed).not.toEqual(original)
@@ -379,10 +385,7 @@ test('the real PG compiler retains the original SQL and explains every additiona
     env: { RFC359_W25_PG_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const provider = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(provider)
-  const restore = selectDatabaseSchemaProvider('postgresql')
   try {
     for (const raw of [RAW, { ...RAW, q: 'percent%_' }, withCursor(RAW, 890, 'root-11')]) {
       const query = fastFilteredRootQuery(
@@ -393,7 +396,7 @@ test('the real PG compiler retains the original SQL and explains every additiona
       )
       const start = statements.length
       for (const item of [originalQuery(query), query])
-        await expect(db.all(item)).rejects.toBe(stop)
+        await expect(rawRows(db, item)).rejects.toBe(stop)
       expect(statements).toHaveLength(start + 2)
       const before = statements[start],
         after = statements[start + 1]
@@ -403,7 +406,6 @@ test('the real PG compiler retains the original SQL and explains every additiona
       expect(originalBindings(after.sql, after.values, raw)).toEqual(before.values)
     }
   } finally {
-    restore()
     await runtime.close()
   }
 })
@@ -438,18 +440,20 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
       parseTaskOperationsQuery(VIEWER, RAW, OPTIONS),
       OPTIONS.catalogVisibility,
     )
-    const expected = await db.all<Record<string, unknown>>(originalQuery(query))
+    const expected = await rawRows<Record<string, unknown>>(db, originalQuery(query))
     const recording = recordStatements(sqlite)
     try {
-      const actual = await db.all<Record<string, unknown>>(query)
+      const actual = await rawRows<Record<string, unknown>>(db, query)
       expect(actual).toEqual(expected)
       expect(JSON.stringify(actual)).toBe(JSON.stringify(expected))
       const statement = recording.statements[0]
       if (!statement) throw new Error('missing actual page SQL')
-      expect(() => db.all(poisonFullAggregate(query))).not.toThrow()
-      expect(() => db.all(poisonFullAggregate(originalQuery(query)))).toThrow('malformed JSON')
-      const plan = await db.all<{ id: number; parent: number; detail: string }>(
+      expect(() => rawRows(db, poisonFullAggregate(query))).not.toThrow()
+      expect(() => rawRows(db, poisonFullAggregate(originalQuery(query)))).toThrow('malformed JSON')
+      const plan = await rawRows<{ id: number; parent: number; detail: string }>(
+        db,
         sql`EXPLAIN QUERY PLAN ${query}`,
+        { id: 'int', parent: 'int' },
       )
       const physical = plan.find((row) => row.detail === 'MATERIALIZE physical_prefix')
       const matching = plan.find((row) => row.detail === 'MATERIALIZE root_prefix')
@@ -497,9 +501,9 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
         parseTaskOperationsQuery(VIEWER, deep, OPTIONS),
         OPTIONS.catalogVisibility,
       )
-      const deepExpected = await db.all<Record<string, unknown>>(originalQuery(deepQuery))
-      expect(await db.all<Record<string, unknown>>(deepQuery)).toEqual(deepExpected)
-      expect(() => db.all(poisonFullAggregate(deepQuery))).toThrow('malformed JSON')
+      const deepExpected = await rawRows<Record<string, unknown>>(db, originalQuery(deepQuery))
+      expect(await rawRows<Record<string, unknown>>(db, deepQuery)).toEqual(deepExpected)
+      expect(() => rawRows(db, poisonFullAggregate(deepQuery))).toThrow('malformed JSON')
     } finally {
       recording.stop()
     }

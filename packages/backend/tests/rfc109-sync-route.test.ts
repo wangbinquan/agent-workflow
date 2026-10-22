@@ -9,13 +9,14 @@
 //   - version TOCTOU (Codex F5) → 409
 //   - success → 200 + task flips pending
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -30,7 +31,7 @@ const DEF_B =
   '{"$schema_version":4,"inputs":[{"kind":"text","key":"k","label":"k"}],"nodes":[{"id":"n","kind":"input","inputKey":"k"}],"edges":[]}'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   bobToken: string
   carolToken: string
@@ -78,7 +79,8 @@ async function seedHarness(
   const daveToken = (await createSession({ db, userId: dave.id })).token
 
   const wfId = `wf-109-${seq}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: DEF_A,
@@ -88,7 +90,7 @@ async function seedHarness(
   })
   const taskId = `task-109-${seq}`
   const now = Date.now()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -120,12 +122,8 @@ async function postJson(app: Hono, token: string, path: string, body: unknown): 
     body: JSON.stringify(body),
   })
 }
-async function bump(
-  db: ProviderNeutralDatabase,
-  wfId: string,
-  def: string,
-  version: number,
-): Promise<void> {
+async function bump(db: PersistenceDb, wfId: string, def: string, version: number): Promise<void> {
+  const { workflows } = tablesOf(db)
   await db.update(workflows).set({ definition: def, version }).where(eq(workflows.id, wfId))
 }
 
@@ -192,6 +190,7 @@ describeEachProviderHttpApplication(
     })
 
     test('built-in workflow → syncable:false reason builtin-workflow (Codex F4: banner hidden)', async () => {
+      const { workflows } = tablesOf(h.db)
       await h.db.update(workflows).set({ builtin: true }).where(eq(workflows.id, h.wfId))
       await bump(h.db, h.wfId, DEF_B, 2)
       const r = await get(h.app, h.bobToken, `/api/tasks/${h.taskId}/workflow-sync-preview`)
@@ -245,6 +244,7 @@ describeEachProviderHttpApplication(
     })
 
     test('built-in workflow → 403 (RFC-104)', async () => {
+      const { workflows } = tablesOf(h.db)
       await h.db.update(workflows).set({ builtin: true }).where(eq(workflows.id, h.wfId))
       await bump(h.db, h.wfId, DEF_B, 2)
       const r = await postJson(h.app, h.bobToken, `/api/tasks/${h.taskId}/sync-workflow`, {

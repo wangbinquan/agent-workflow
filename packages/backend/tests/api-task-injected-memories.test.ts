@@ -6,79 +6,73 @@
 //   - Corrupted JSON in the column → field surfaces as null (no 5xx).
 //   - Empty-array payload distinct from NULL.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
+async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return { taskId }
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   json: string | null,
   nodeId = 'n',
 ): Promise<string> {
   const id = ulid()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId,
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'done',
-      injectedMemoriesJson: json,
-      startedAt: Date.now(),
-    })
-    .run()
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
+    id,
+    taskId,
+    nodeId,
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'done',
+    injectedMemoriesJson: json,
+    startedAt: Date.now(),
+  })
   return id
 }
 
 describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemories', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db
@@ -103,7 +97,7 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
       },
     ])
     await seedRun(db, taskId, payload)
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     expect(res.runs.length).toBe(1)
     const im = res.runs[0]!.injectedMemories
     expect(im).not.toBeNull()
@@ -117,21 +111,21 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
   test('A2: legacy row with NULL column surfaces as injectedMemories=null', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, null)
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A3: corrupted JSON in column degrades to null (no 5xx)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '{not-an-array')
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A4: empty-array payload surfaces as [] (distinct from null)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '[]')
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     expect(res.runs[0]!.injectedMemories).toEqual([])
   })
 })

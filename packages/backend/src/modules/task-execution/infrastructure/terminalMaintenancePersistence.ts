@@ -23,26 +23,14 @@
 // 认领行本身的 CAS 不在这里重写：事务内参与者 `terminalMaintenanceClaim.ts` 已经是中立的一份实现
 // （删除恢复 / 归档都挂在它上面），`transition` / `complete` 直接复用它，同一张状态转移表只此一份。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  taskExecutionOwners,
-  tasks,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   RecoverableTerminalMaintenanceClaim,
   TerminalMaintenanceStore,
@@ -72,7 +60,8 @@ function sha256(value: unknown): string {
  * 任务在执行账本上留下的全部行的摘要。认领时快照一次、认领落库前再比一次：中间只要有一条
  * effect / lineage 记录动过，认领就作废。
  */
-async function ledgerDigestTx(tx: DatabaseTransaction, taskId: string): Promise<string> {
+async function ledgerDigestTx(tx: PersistenceTx, taskId: string): Promise<string> {
+  const { taskExecutionEffects, taskExecutionLineageOperationRecords } = tablesOf(tx)
   const effects = await tx
     .select({
       id: taskExecutionEffects.id,
@@ -116,10 +105,8 @@ async function ledgerDigestTx(tx: DatabaseTransaction, taskId: string): Promise<
  * 任务的行被删掉之后，留存的账本是否还能解释它做过的每一次外部效果：
  * 不能有 open effect；每条已结算 effect 都要被留存的世代水位覆盖；outcome-unknown 还要有 replay 决策。
  */
-async function assertSettledLedgerCoverageTx(
-  tx: DatabaseTransaction,
-  taskId: string,
-): Promise<void> {
+async function assertSettledLedgerCoverageTx(tx: PersistenceTx, taskId: string): Promise<void> {
+  const { taskExecutionEffects, taskExecutionLineageOperationRecords } = tablesOf(tx)
   const effects = await tx
     .select()
     .from(taskExecutionEffects)
@@ -177,9 +164,17 @@ async function assertSettledLedgerCoverageTx(
 
 /** 成员任务在认领落库这一刻仍与快照一致，且执行面确实已经静止。 */
 async function assertMemberQuiescentTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   member: MaintenanceMemberSnapshot,
 ): Promise<void> {
+  const {
+    tasks,
+    taskExecutionOwners,
+    taskExecutionIntents,
+    taskExecutionEffectAttempts,
+    taskExecutionEffects,
+    taskExecutionEffectFences,
+  } = tablesOf(tx)
   const taskRows = await tx
     .select({
       status: tasks.status,
@@ -278,7 +273,7 @@ async function assertMemberQuiescentTx(
 }
 
 async function snapshotMembersTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   taskIds: readonly string[],
 ): Promise<readonly MaintenanceMemberSnapshot[]> {
   const uniqueIds = [...new Set(taskIds)].sort()
@@ -290,6 +285,7 @@ async function snapshotMembersTx(
   }
   const snapshots: MaintenanceMemberSnapshot[] = []
   for (const id of uniqueIds) {
+    const { tasks, taskExecutionOwners } = tablesOf(tx)
     const rows = await tx
       .select({
         revision: tasks.lifecycleEventRevision,
@@ -323,7 +319,7 @@ async function snapshotMembersTx(
 
 /** 破坏性终态维护（归档 / 删除 / 保留期清理 / workspace-GC）的认领与 CAS 边界。 */
 export class DrizzleTerminalMaintenancePersistence implements TerminalMaintenanceStore {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async snapshotMembers(taskIds: readonly string[]): Promise<readonly MaintenanceMemberSnapshot[]> {
     return await databaseSessionFor(this.db).serializable(
@@ -337,6 +333,7 @@ export class DrizzleTerminalMaintenancePersistence implements TerminalMaintenanc
    */
   async snapshotTree(rootTaskId: string): Promise<readonly MaintenanceMemberSnapshot[]> {
     return await databaseSessionFor(this.db).serializable(async (tx) => {
+      const { tasks } = tablesOf(tx)
       const roots = await tx
         .select({ id: tasks.id })
         .from(tasks)
@@ -386,34 +383,29 @@ export class DrizzleTerminalMaintenancePersistence implements TerminalMaintenanc
     try {
       await session.serializable(async (tx) => {
         for (const member of input.members) await assertMemberQuiescentTx(tx, member)
-        await tx
-          .insert(taskExecutionMaintenanceClaims)
-          .values({
-            id: claimId,
-            rootTaskId: input.rootTaskId,
-            operation: input.operation,
-            state: 'claimed',
-            memberSetDigest,
-            expectedTreeDigest,
-            revision: 1,
-            cleanupPlanJson: input.cleanupPlanJson,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .run()
-        await tx
-          .insert(taskExecutionMaintenanceMembers)
-          .values(
-            input.members.map((member) => ({
-              claimId,
-              taskId: member.taskId,
-              expectedTaskRevision: member.taskRevision,
-              expectedOwnerRevision: member.ownerRevision,
-              expectedTopologyRevision: member.topologyRevision,
-              expectedLedgerDigest: member.ledgerDigest,
-            })),
-          )
-          .run()
+        const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(tx)
+        await insertOne(tx, taskExecutionMaintenanceClaims, {
+          id: claimId,
+          rootTaskId: input.rootTaskId,
+          operation: input.operation,
+          state: 'claimed',
+          memberSetDigest,
+          expectedTreeDigest,
+          revision: 1,
+          cleanupPlanJson: input.cleanupPlanJson,
+          createdAt: now,
+          updatedAt: now,
+        })
+        await tx.insert(taskExecutionMaintenanceMembers).values(
+          input.members.map((member) => ({
+            claimId,
+            taskId: member.taskId,
+            expectedTaskRevision: member.taskRevision,
+            expectedOwnerRevision: member.ownerRevision,
+            expectedTopologyRevision: member.topologyRevision,
+            expectedLedgerDigest: member.ledgerDigest,
+          })),
+        )
       })
     } catch (error) {
       // 活动成员的偏唯一索引：同一任务已被另一个维护流程认领。两个引擎上都是一次**暂时**冲突，
@@ -459,6 +451,7 @@ export class DrizzleTerminalMaintenancePersistence implements TerminalMaintenanc
     readonly rootTaskId?: string
   }): Promise<readonly RecoverableTerminalMaintenanceClaim[]> {
     return await databaseSessionFor(this.db).serializable(async (tx) => {
+      const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(tx)
       const predicates = [
         inArray(taskExecutionMaintenanceClaims.state, [
           'claimed',

@@ -3,7 +3,7 @@ import type { WsCredentialWithExpiry } from '../../src/auth/session'
 import type { ActorSource } from '../../src/auth/actor'
 import { createAuthRuntimeFor } from '../../src/auth/composition'
 import type { DbClient } from '../../src/db/client'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ProviderApplicationBinding } from './eachProvider'
 import type { IdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import {
@@ -85,7 +85,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
 /**
  * RFC-359 AC-6 —— 按 provider 分派的实时运行时。WS 那一簇（11 个文件）的第一层拦路石。
  *
- * 底下本来就全是中立的：`DrizzleRealtimeStore` 的构造器收 `ProviderNeutralDatabase`，
+ * 底下本来就全是中立的：`DrizzleRealtimeStore` 的构造器收 `PersistenceDb`，
  * `composeRealtimeRuntimeFor` 与 `composeRealtimeRuntimeFor` 的函数体**逐字相同**
  * （差别只在导出包装声明的 `db` 类型），资源目录那边 `composeResourceCatalogFor` 本身就是
  * 导出的中立函数、根本不用分派。
@@ -100,7 +100,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
 export function composeTestProviderRealtimeRuntime(input: {
   readonly daemonToken?: string
   readonly binding: ProviderApplicationBinding
-  readonly neutralDb: ProviderNeutralDatabase
+  readonly neutralDb: PersistenceDb
   readonly identityAccess: IdentityAccessRuntime
   readonly repoImportOwnerUserId?: (batchId: string) => string | null
   readonly redactTaskEventPayload?: (payload: unknown, source: ActorSource) => unknown

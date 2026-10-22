@@ -15,7 +15,7 @@ import type {
 } from '../application/ports/providerResourceCatalogPersistence'
 import type { ResourceCatalogQuery } from '../public/queries'
 import { createResourceCatalogSummaryReadPort } from '../infrastructure/catalogQuery'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createResourceAclReadPort,
   createResourceCatalogAclIdentityReadPort,
@@ -66,7 +66,7 @@ export function composeProviderResourceCatalog(
  * 非自有类型（development_adapter / employee_*）仍由各 owner 的 identity persistence 经 composition/resourceAcl.ts 承担。
  */
 export function composeResourceCatalogFor(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly lifecycle?: ResourceAclMutationLifecycle
 }): ProviderResourceCatalogComposition {
   return composeProviderResourceCatalog(

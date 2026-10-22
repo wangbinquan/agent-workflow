@@ -3,13 +3,14 @@
 // Returns currently-open lifecycle_alerts for a task in detected_at ASC
 // order. Empty when no alerts. 401 without bearer.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
-import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -19,17 +20,18 @@ afterEach(() => {
 })
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   lineage?: (id: string) => { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<string> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -80,9 +82,10 @@ describe('GET /api/tasks/:id/alerts', () => {
     test('returns open alerts in detected_at ASC order', async () => {
       const { db, app } = await buildApp()
       const taskId = await seedTask(db)
+      const { lifecycleAlerts } = tablesOf(db)
       // Three alerts (two open + one resolved) with intentionally
       // out-of-order detected_at so we can lock ordering.
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: 'a-newer',
         taskId,
         rule: 'S4',
@@ -91,7 +94,7 @@ describe('GET /api/tasks/:id/alerts', () => {
         detectedAt: 2000,
         resolvedAt: null,
       })
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: 'a-older',
         taskId,
         rule: 'R1',
@@ -100,7 +103,7 @@ describe('GET /api/tasks/:id/alerts', () => {
         detectedAt: 1000,
         resolvedAt: null,
       })
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: 'a-resolved',
         taskId,
         rule: 'S1',
@@ -126,7 +129,8 @@ describe('GET /api/tasks/:id/alerts', () => {
     test('malformed detail JSON degrades gracefully', async () => {
       const { db, app } = await buildApp()
       const taskId = await seedTask(db)
-      await db.insert(lifecycleAlerts).values({
+      const { lifecycleAlerts } = tablesOf(db)
+      await insertOne(db, lifecycleAlerts, {
         id: 'a-bad',
         taskId,
         rule: 'R1',
@@ -146,7 +150,7 @@ describe('GET /api/tasks/:id/alerts', () => {
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedTaskForCase: typeof seedTask,
   ) => void,
 ): void {

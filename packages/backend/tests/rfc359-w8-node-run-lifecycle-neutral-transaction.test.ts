@@ -21,12 +21,13 @@
 //    合一前后同一个错误码；消息文本从「mutation was fenced by a newer owner」变成
 //    「mutation was fenced」，全仓无断言依赖该文本。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionOwners, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
@@ -75,9 +76,10 @@ function continuation(taskId: string): CanonicalContinuationRequest {
   }
 }
 
-async function seedClaimedTask(db: ProviderNeutralDatabase, runStatus: 'pending' | 'done') {
+async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done') {
   const taskId = `w8nrl_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-w8-node-run-lifecycle',
     description: '',
@@ -85,7 +87,7 @@ async function seedClaimedTask(db: ProviderNeutralDatabase, runStatus: 'pending'
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -102,7 +104,7 @@ async function seedClaimedTask(db: ProviderNeutralDatabase, runStatus: 'pending'
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -123,7 +125,8 @@ async function seedClaimedTask(db: ProviderNeutralDatabase, runStatus: 'pending'
   return { taskId, runId, persistence, context }
 }
 
-async function statusOf(db: ProviderNeutralDatabase, runId: string): Promise<string | undefined> {
+async function statusOf(db: PersistenceDb, runId: string): Promise<string | undefined> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ status: nodeRuns.status })
     .from(nodeRuns)
@@ -132,10 +135,8 @@ async function statusOf(db: ProviderNeutralDatabase, runId: string): Promise<str
   return rows[0]?.status
 }
 
-async function ownerRevisionOf(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<number | undefined> {
+async function ownerRevisionOf(db: PersistenceDb, taskId: string): Promise<number | undefined> {
+  const { taskExecutionOwners } = tablesOf(db)
   const rows = await db
     .select({ revision: taskExecutionOwners.revision })
     .from(taskExecutionOwners)
@@ -145,7 +146,8 @@ async function ownerRevisionOf(
 }
 
 /** 把 owner 打成 `revoked`：token CAS 要求 `state='claimed'`，于是围栏必然不命中。 */
-async function revokeOwner(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function revokeOwner(db: PersistenceDb, taskId: string): Promise<void> {
+  const { taskExecutionOwners } = tablesOf(db)
   await db
     .update(taskExecutionOwners)
     .set({ state: 'revoked' })

@@ -8,7 +8,7 @@ import {
 import { composePortArtifactOperations } from './portArtifacts'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from './nodeRunPrompts'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import {
   createClarifyRepairParticipant,
@@ -180,7 +180,7 @@ function cancellationCommand(
 export interface TaskExecutionProviderRuntimeDependencies<
   C extends RouteCollaborationContext = RouteCollaborationContext,
 > {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly execution: TaskExecutionBinding
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
@@ -422,7 +422,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
  * 有一个稳定的取用点（此前的分派语义见 W3-T15-B）。
  */
 export function createTaskArchiveMaintenanceCommand(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   archive?: TaskArchiveContentBinding,
 ): TaskArchiveMaintenanceCommand {
   return createDrizzleTaskArchiveMaintenanceCommand(db, archive)

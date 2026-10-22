@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDeliveryPersistencePort } from '../application/ports/webhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 
@@ -11,7 +11,7 @@ export function composeWebhookDeliveryPersistence(
 
 /** RFC-359 W4-D2：两个 provider 装同一份中立实现。 */
 export function composeWebhookDeliveryPersistenceFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): WebhookDeliveryPersistencePort {
   return composeWebhookDeliveryPersistence(createWebhookDeliveryPersistence(db))
 }

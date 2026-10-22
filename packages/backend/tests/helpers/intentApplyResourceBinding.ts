@@ -1,5 +1,5 @@
 import type { Actor } from '../../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 
 /**
@@ -9,7 +9,7 @@ import { composeIdentityAccess } from '../../src/modules/identity-access/composi
  * 引擎合一后资源会话由 `composeIntentApplyOperations` 自己按 `db` + `appHome` 装配，
  * 调用方只需要把 authority 递进去。
  */
-export function intentApplyResourceBinding(db: ProviderNeutralDatabase, actor: Actor) {
+export function intentApplyResourceBinding(db: PersistenceDb, actor: Actor) {
   const identityAccess = composeIdentityAccess(db)
   const context = identityAccess.contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },

@@ -2,20 +2,13 @@
 // digital-employee 参与者）合一，两个引擎各跑一遍：写事务里加载已授权快照、私有资源对外人 404、CAS 认领、
 // 成功 / 失败记账与自动停用、ACL 原子替换与修订冲突、数字员工快照（归档 / 外人 → 404）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  employeeTypePackages,
-  scheduledTasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ScheduledTaskCreateRecord } from '@/modules/integration/application/ports/scheduledTaskPersistence'
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { createScheduledTaskPersistence } from '@/modules/integration/infrastructure/scheduledTaskPersistence'
@@ -27,8 +20,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<Actor> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string): Promise<Actor> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -69,6 +63,7 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
     const db = harness.db
     const owner = await seedUser(db, 'u_d1_owner')
     const stranger = await seedUser(db, 'u_d1_stranger')
+    const { workflows, scheduledTasks } = tablesOf(db)
     await db.insert(workflows).values([
       {
         id: 'wf-pub',
@@ -294,7 +289,9 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
       db,
       composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     )
-    await db.insert(agents).values({
+    const { agents, employeeTypePackages, employeeDefinitions, employeeDefinitionRevisions } =
+      tablesOf(db)
+    await insertOne(db, agents, {
       id: 'agent-d1',
       name: 'agent-d1',
       description: 'private agent',
@@ -326,7 +323,7 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
       ]),
     ).rejects.toBeInstanceOf(NotFoundError)
 
-    await db.insert(employeeTypePackages).values({
+    await insertOne(db, employeeTypePackages, {
       typeId: 'type-d1',
       revision: 1,
       descriptorJson: JSON.stringify({
@@ -339,7 +336,7 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
       state: 'published',
       registeredAt: NOW,
     })
-    await db.insert(employeeDefinitions).values({
+    await insertOne(db, employeeDefinitions, {
       id: 'emp-d1',
       name: 'employee',
       typeId: 'type-d1',
@@ -351,7 +348,7 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(employeeDefinitionRevisions).values({
+    await insertOne(db, employeeDefinitionRevisions, {
       employeeId: 'emp-d1',
       revision: 1,
       contentJson: '{"schemaVersion":1}',

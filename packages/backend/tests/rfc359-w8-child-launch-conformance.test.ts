@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
@@ -50,17 +52,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  taskCollaborators,
-  taskExecutionIntents,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -217,8 +209,9 @@ interface SeedOverrides {
   readonly parentTriggerContextJson?: string
 }
 
-async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<void> {
+  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER_ID,
     username: 'owner',
     displayName: 'Owner',
@@ -226,7 +219,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: CHILD_WORKFLOW_ID,
     name: 'child-workflow',
     definition: JSON.stringify(LATEST_DEFINITION),
@@ -238,7 +231,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
     { id: PARENT_TASK_ID, status: overrides.parentStatus ?? ('running' as const) },
     ...extraParents,
   ]) {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: parent.id,
       name: parent.id,
       workflowId: CHILD_WORKFLOW_ID,
@@ -280,7 +273,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
       ]),
     })
   }
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: PARENT_RUN_ID,
     taskId: parentRunTaskId,
     nodeId: 'call-node',
@@ -447,7 +440,8 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
   }
 }
 
-async function childExists(db: ProviderNeutralDatabase): Promise<boolean> {
+async function childExists(db: PersistenceDb): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ id: tasks.id })
     .from(tasks)
@@ -502,7 +496,8 @@ function comparableRows(rows: readonly Record<string, unknown>[]): unknown[] {
 }
 
 /** 子任务那一行 + PG 铸造机显式写的每一张卫星表。少写一张也要红。 */
-async function childRows(db: ProviderNeutralDatabase): Promise<Record<string, unknown>> {
+async function childRows(db: PersistenceDb): Promise<Record<string, unknown>> {
+  const { tasks, taskRepos, taskSpaceNodes, taskCollaborators, taskExecutionIntents } = tablesOf(db)
   const [task, repos, spaceNodes, collaborators, intents] = await Promise.all([
     db.select().from(tasks).where(eq(tasks.id, CHILD_TASK_ID)),
     db.select().from(taskRepos).where(eq(taskRepos.taskId, CHILD_TASK_ID)),
@@ -533,8 +528,9 @@ async function childRows(db: ProviderNeutralDatabase): Promise<Record<string, un
  * 把 `state` 也拉进拒绝清单能让判据变绿，但那会把「有一侧真的不收尾」这类缺陷一起盖掉；
  * 等到终态再比才是既诚实又能比的那一种。
  */
-async function settledChildRows(db: ProviderNeutralDatabase): Promise<Record<string, unknown>> {
+async function settledChildRows(db: PersistenceDb): Promise<Record<string, unknown>> {
   for (let attempt = 0; attempt < 200; attempt += 1) {
+    const { taskExecutionIntents } = tablesOf(db)
     const rows = await db
       .select({ state: taskExecutionIntents.state })
       .from(taskExecutionIntents)
@@ -600,6 +596,7 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
       parentTriggerContextJson: JSON.stringify(PARENT_STORED_TRIGGER_CONTEXT),
     })
     expect(await launchError(harness, { triggerContext: RUNTIME_TRIGGER_CONTEXT })).toBeNull()
+    const { tasks } = tablesOf(harness.db)
     const row = (
       await harness.db
         .select({ triggerContextJson: tasks.triggerContextJson })
@@ -618,6 +615,7 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
   // 两侧共有的准入：父任务不存在。
   test('a missing parent task is rejected on both engines', async () => {
     await seed(harness.db)
+    const { nodeRuns, tasks } = tablesOf(harness.db)
     await harness.db.delete(nodeRuns).where(eq(nodeRuns.id, PARENT_RUN_ID))
     await harness.db.delete(tasks).where(eq(tasks.id, PARENT_TASK_ID))
     expect(await launchError(harness)).toBe('parent-task-not-found')
@@ -642,6 +640,7 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
   // 静默兜底（`legacy-call:` 占位 + operationGeneration 归零）并照铸子任务。
   test('a missing parent node_run is rejected on both engines', async () => {
     await seed(harness.db)
+    const { nodeRuns } = tablesOf(harness.db)
     await harness.db.delete(nodeRuns).where(eq(nodeRuns.id, PARENT_RUN_ID))
     expect(await launchError(harness)).toBe('parent-node-run-not-found')
     expect(await childExists(harness.db)).toBe(false)

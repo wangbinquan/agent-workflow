@@ -32,29 +32,14 @@
 //
 // See design/test-guard-audit-2026-07-21 Top-5 (B5-ACL-cluster) / 逃逸机制③.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  actionTemplates,
-  agents,
-  automationPolicies,
-  capabilityTemplates,
-  developmentAdapterDefinitions,
-  digitalEmployees,
-  employeeDefinitions,
-  employeeJobTemplates,
-  employeeToolRegistrations,
-  mcps,
-  plugins,
-  skills,
-  verificationProfiles,
-  workflows,
-  workgroups,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ACL_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { allRouteMeta } from '../src/routes/registry'
 import {
@@ -72,7 +57,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string } // owner (ordinary account)
   /** RFC-304 — a department-layer owner, for resources an ordinary user cannot create. */
@@ -149,7 +134,7 @@ interface ResourceCase {
    * user cannot create one, so an ordinary-user owner is an unreachable state.
    */
   ownerActor?: 'alice' | 'dept'
-  seed: (db: ProviderNeutralDatabase, ownerUserId: string) => Promise<{ id: string; name: string }>
+  seed: (db: PersistenceDb, ownerUserId: string) => Promise<{ id: string; name: string }>
 }
 
 const now = 1_700_000_000_000
@@ -162,7 +147,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         ...row,
         description: 'acl matrix subject',
         outputs: JSON.stringify(['answer']),
@@ -179,7 +165,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         ...row,
         description: 'acl matrix subject',
         managedPath: `skills/${KEY}/files/`,
@@ -196,7 +183,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(mcps).values({
+      const { mcps } = tablesOf(db)
+      await insertOne(db, mcps, {
         ...row,
         description: 'acl matrix subject',
         type: 'local',
@@ -215,7 +203,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(plugins).values({
+      const { plugins } = tablesOf(db)
+      await insertOne(db, plugins, {
         ...row,
         description: 'acl matrix subject',
         spec: 'fake-plugin@0.0.1',
@@ -238,7 +227,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         ...row,
         description: 'acl matrix subject',
         definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
@@ -265,7 +255,8 @@ const CASES: ResourceCase[] = [
     ownerActor: 'dept',
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(capabilityTemplates).values({
+      const { capabilityTemplates } = tablesOf(db)
+      await insertOne(db, capabilityTemplates, {
         ...row,
         description: 'acl matrix subject',
         capability: 'mr-review',
@@ -292,7 +283,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(workgroups).values({
+      const { workgroups } = tablesOf(db)
+      await insertOne(db, workgroups, {
         ...row,
         description: 'acl matrix subject',
         mode: 'free_collab',
@@ -316,7 +308,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(actionTemplates).values({
+      const { actionTemplates } = tablesOf(db)
+      await insertOne(db, actionTemplates, {
         ...row,
         capabilityId: 'acl-matrix-capability',
         draftJson: '{}',
@@ -336,7 +329,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(verificationProfiles).values({
+      const { verificationProfiles } = tablesOf(db)
+      await insertOne(db, verificationProfiles, {
         ...row,
         draftJson: '{}',
         publishedRevision: null,
@@ -355,7 +349,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(digitalEmployees).values({
+      const { digitalEmployees } = tablesOf(db)
+      await insertOne(db, digitalEmployees, {
         ...row,
         draftJson: '{}',
         publishedRevision: null,
@@ -374,7 +369,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(automationPolicies).values({
+      const { automationPolicies } = tablesOf(db)
+      await insertOne(db, automationPolicies, {
         ...row,
         draftJson: '{}',
         publishedRevision: null,
@@ -395,7 +391,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(employeeDefinitions).values({
+      const { employeeDefinitions } = tablesOf(db)
+      await insertOne(db, employeeDefinitions, {
         ...row,
         typeId: 'acl-matrix-type',
         typeRevision: 1,
@@ -417,7 +414,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(employeeToolRegistrations).values({
+      const { employeeToolRegistrations } = tablesOf(db)
+      await insertOne(db, employeeToolRegistrations, {
         ...row,
         typeId: 'acl-matrix-type',
         typeRevision: 1,
@@ -441,7 +439,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(employeeJobTemplates).values({
+      const { employeeJobTemplates } = tablesOf(db)
+      await insertOne(db, employeeJobTemplates, {
         ...row,
         typeId: 'acl-matrix-type',
         typeRevision: 1,
@@ -463,7 +462,8 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      await db.insert(developmentAdapterDefinitions).values({
+      const { developmentAdapterDefinitions } = tablesOf(db)
+      await insertOne(db, developmentAdapterDefinitions, {
         ...row,
         purpose: 'requirement-source',
         draftJson: '{}',

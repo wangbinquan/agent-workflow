@@ -6,16 +6,17 @@
 // per-connection visibility cache) restores delivery. Memory frames follow
 // the scoped resource (D12).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderWebSocketApplication,
   type ProviderWebSocketScope,
 } from './helpers/providerWebSocketScope'
-import { agents, memories, resourceGrants, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import {
   MEMORY_CHANNEL,
@@ -36,7 +37,7 @@ const SCOPE_OPTIONS = {
 } as const
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   url: string
   httpUrl: string
   aliceToken: string
@@ -170,7 +171,8 @@ describeEachProviderWebSocketApplication(
       resetBroadcastersForTests()
       h = await buildHarness(scope)
       privateWfId = ulid()
-      await h.db.insert(workflows).values({
+      const { workflows } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: privateWfId,
         name: 'private-flow',
         definition: '{}',
@@ -212,6 +214,7 @@ describeEachProviderWebSocketApplication(
           fireUpdated()
           // 2. grant lands + acl.updated busts the cached entry.
           setTimeout(() => {
+            const { resourceGrants } = tablesOf(h.db)
             void h.db
               .insert(resourceGrants)
               .values({
@@ -238,7 +241,8 @@ describeEachProviderWebSocketApplication(
     })
 
     test('cold owner and grantee receive an exact private delete frame while a stranger learns nothing', async () => {
-      await h.db.insert(resourceGrants).values({
+      const { resourceGrants, workflows } = tablesOf(h.db)
+      await insertOne(h.db, resourceGrants, {
         resourceType: 'workflow',
         resourceId: privateWfId,
         userId: h.carolId,
@@ -247,7 +251,7 @@ describeEachProviderWebSocketApplication(
       })
       // RFC-359 AC-20 因果屏障用：一个陌生人**有权**看见的公共工作流。
       const publicWfId = ulid()
-      await h.db.insert(workflows).values({
+      await insertOne(h.db, workflows, {
         id: publicWfId,
         name: 'public-barrier-flow',
         definition: '{}',
@@ -308,6 +312,7 @@ describeEachProviderWebSocketApplication(
     })
 
     test('cold public viewers receive workflow.deleted without serializing its audience context', async () => {
+      const { workflows } = tablesOf(h.db)
       await h.db
         .update(workflows)
         .set({ visibility: 'public' })
@@ -357,7 +362,8 @@ describeEachProviderWebSocketApplication(
       resetBroadcastersForTests()
       h = await buildHarness(scope)
       privateAgentId = ulid()
-      await h.db.insert(agents).values({
+      const { agents, memories } = tablesOf(h.db)
+      await insertOne(h.db, agents, {
         id: privateAgentId,
         name: `priv-${privateAgentId}`,
         ownerUserId: h.aliceId,

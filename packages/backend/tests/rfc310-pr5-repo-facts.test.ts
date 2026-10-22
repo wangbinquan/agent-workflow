@@ -8,6 +8,8 @@
 // ④reconciler 端到端：collect-repository-facts arm 用真 collector 后，规则
 // 从 indeterminate 走到 implement。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeAll, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +17,6 @@ import { join } from 'node:path'
 
 import { createRepositoryFactsCollector } from '../src/modules/development-automation/infrastructure/repositoryFactsCollector'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
-import { cachedRepos } from '../src/db/schema'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
@@ -61,7 +62,8 @@ beforeAll(() => {
 describeEachProvider('rfc310 pr5 T53 — repository facts collector', (harness) => {
   test('detects languages, build systems, maven module catalog and contributor docs', async () => {
     const fx = await buildPr3Fixture({ db: harness.db })
-    await fx.db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(fx.db)
+    await insertOne(fx.db, cachedRepos, {
       id: 'repo-1',
       urlHash: 't53aaaa1',
       localPath: repoPath,
@@ -103,7 +105,8 @@ describeEachProvider('rfc310 pr5 T53 — repository facts collector', (harness) 
     // 自己的 clone，不能污染共享 repoPath（否则先跑会让 beforeAll 的 headSha 过期）。
     const workRepo = join(mkdtempSync(join(tmpdir(), 'rfc310-t53-mut-')), 'work')
     git(mkdtempSync(join(tmpdir(), 'rfc310-t53-cwd-')), 'clone', '-q', repoPath, workRepo)
-    await fx.db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(fx.db)
+    await insertOne(fx.db, cachedRepos, {
       id: 'repo-1',
       urlHash: 't53aaaa2',
       localPath: workRepo,
@@ -138,7 +141,8 @@ describeEachProvider('rfc310 pr5 T53 — repository facts collector', (harness) 
 
   test('end to end: real collector unblocks the rules chain to implement', async () => {
     const fx = await buildPr3Fixture({ db: harness.db })
-    await fx.db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(fx.db)
+    await insertOne(fx.db, cachedRepos, {
       id: 'repo-1',
       urlHash: 't53aaaa3',
       localPath: repoPath,

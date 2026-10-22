@@ -1,11 +1,11 @@
 // RFC-359 W4-B4 —— 代码托管事件响应目录：一份实现，两个 provider 共用。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { CodeHostEventTypeSchema } from '@agent-workflow/shared'
 import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { webhookTriggers } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { matchTrigger } from '@/services/webhook/matching'
 import { parseTriggerRow } from '@/services/webhook/webhookDispatch'
 import type { CodeHostEventResponseDirectoryPort } from '../application/ports/codeHostEventResponse'
@@ -30,7 +30,9 @@ function selectorConfig(
   }
 }
 
-function definitionOf(row: typeof webhookTriggers.$inferSelect): CodeHostEventResponseDefinition {
+function definitionOf(
+  row: PersistenceTables['webhookTriggers']['$inferSelect'],
+): CodeHostEventResponseDefinition {
   const parsed = parseTriggerRow(row)
   const eventTypes = (() => {
     try {
@@ -58,15 +60,17 @@ function definitionOf(row: typeof webhookTriggers.$inferSelect): CodeHostEventRe
 }
 
 export function createCodeHostEventResponseDirectory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): CodeHostEventResponseDirectoryPort {
   return {
     async list() {
+      const { webhookTriggers } = tablesOf(db)
       const rows = await db.select().from(webhookTriggers).orderBy(asc(webhookTriggers.createdAt))
       return rows.map(definitionOf)
     },
     async matching(facts) {
       const event = codeHostSelectorEvent(facts)
+      const { webhookTriggers } = tablesOf(db)
       const rows = await db
         .select()
         .from(webhookTriggers)
@@ -79,6 +83,7 @@ export function createCodeHostEventResponseDirectory(
       })
     },
     async has(ruleId) {
+      const { webhookTriggers } = tablesOf(db)
       return (
         (
           await db

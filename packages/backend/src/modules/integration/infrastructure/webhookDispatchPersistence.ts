@@ -1,24 +1,18 @@
 // RFC-359 W4-B4 —— webhook 派发持久化：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookTriggerFires,
-  webhookTriggers,
-  webhookTriggerStreams,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDispatchPersistencePort } from '../application/ports/webhookDispatchPersistence'
 
 export function createWebhookDispatchPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): WebhookDispatchPersistencePort {
   return {
     async triggerEnabled(triggerId) {
+      const { webhookTriggers } = tablesOf(db)
       return (
         (
           await db
@@ -31,6 +25,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async migrateTriggerTemplate(input) {
+      const { webhookTriggers } = tablesOf(db)
       const changed = (
         await db
           .update(webhookTriggers)
@@ -61,7 +56,8 @@ export function createWebhookDispatchPersistence(
     },
 
     async recordFire(input) {
-      await db.insert(webhookTriggerFires).values({
+      const { webhookTriggerFires } = tablesOf(db)
+      await insertOne(db, webhookTriggerFires, {
         id: input.fireId,
         deliveryId: input.deliveryId,
         triggerId: input.triggerId,
@@ -75,6 +71,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async fireExists(deliveryId, triggerId) {
+      const { webhookTriggerFires } = tablesOf(db)
       return (
         (
           await db
@@ -92,6 +89,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async findTaskByOrigin(input) {
+      const { tasks } = tablesOf(db)
       const row = (
         await db
           .select({ id: tasks.id })
@@ -107,6 +105,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async getTrigger(triggerId) {
+      const { webhookTriggers } = tablesOf(db)
       return (
         (
           await db.select().from(webhookTriggers).where(eq(webhookTriggers.id, triggerId)).limit(1)
@@ -115,6 +114,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async getTriggerStream(triggerId, streamKey) {
+      const { webhookTriggerStreams } = tablesOf(db)
       return (
         (
           await db
@@ -135,6 +135,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async putTriggerStream(input) {
+      const { webhookTriggerStreams } = tablesOf(db)
       await db
         .insert(webhookTriggerStreams)
         .values({
@@ -153,6 +154,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async getDeliveryMrFact(deliveryId) {
+      const { webhookDeliveries } = tablesOf(db)
       return (
         (
           await db
@@ -169,6 +171,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async findLatestLaunchedTask(triggerId, streamKey) {
+      const { webhookTriggerFires, tasks } = tablesOf(db)
       const latest = (
         await db
           .select({ taskId: webhookTriggerFires.taskId })
@@ -196,6 +199,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async markTriggerLaunchFailed(triggerId, error, now) {
+      const { webhookTriggers } = tablesOf(db)
       await db
         .update(webhookTriggers)
         .set({
@@ -208,6 +212,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async markTriggerLaunched(input) {
+      const { webhookTriggers } = tablesOf(db)
       await db
         .update(webhookTriggers)
         .set({
@@ -222,6 +227,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async listEnabledTriggers(endpointId) {
+      const { webhookTriggers } = tablesOf(db)
       return await db
         .select()
         .from(webhookTriggers)
@@ -229,6 +235,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async deliveryControlEffectId(deliveryId) {
+      const { webhookDeliveries, webhookMrControlEffects } = tablesOf(db)
       const delivery = (
         await db
           .select({ replayedFromDeliveryId: webhookDeliveries.replayedFromDeliveryId })
@@ -249,6 +256,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async subscriptionEnvelope(deliveryId) {
+      const { webhookDeliveries, webhookEndpoints } = tablesOf(db)
       const delivery = (
         await db
           .select({

@@ -1,13 +1,13 @@
 // RFC-349 — execution-peripheral services consume closed provider operations;
 // only infrastructure adapters may own database mechanics.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { buildActor } from '@/auth/actor'
-import { workflows } from '@/db/schema'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 
@@ -61,7 +61,7 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
 // 唯一的断言是「某条 SQL 里出现过 `"agent_workflow"."workflows"`」——它证明不了行真的写进去了、
 // 更证明不了写两次是幂等的。这正是本 RFC 要根除的「一个好一个不好」。
 //
-// 两个 composer 的 `db` 形参本来就是 `ProviderNeutralDatabase`，所以合一**零生产改动**：
+// 两个 composer 的 `db` 形参本来就是 `PersistenceDb`，所以合一**零生产改动**：
 // 两个引擎各跑一遍同一组断言（真库、读回行、幂等、外部依赖注入）。
 // 丢掉的只有那条 SQL 文本断言——净赚：真 PG 上跑通是对「投影带 schema 限定名」强得多的证明
 // （写错当场报错，而假池照单全收）。同 §5gd 对 `rfc349-websocket-provider` 的处置。
@@ -99,6 +99,7 @@ describeEachProvider('RFC-349 execution-peripheral adapters（双引擎真库）
     await agentLaunch.ensureHostWorkflow()
     await agentLaunch.ensureHostWorkflow()
 
+    const { workflows } = tablesOf(db)
     const hosts = await db
       .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
       .from(workflows)

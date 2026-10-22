@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D15 —— resource-catalog 的 Workflow 聚合：异步仓库 / 语义层 / 校验与 D15 准入成为唯一实现，SQLite 装配
 // 也切到这一份。同一段断言在两个引擎上各跑一遍：创建 / 读 / 列表 / 复制命名、update 的 already-current 与 committed
@@ -12,10 +14,9 @@ import { CreateWorkflowSchema, type WorkflowDefinition } from '@agent-workflow/s
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 
-import { users, workflows } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { skillVersionAbs } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
@@ -32,12 +33,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 const T0 = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   role: 'admin' | 'user' = 'user',
 ): Promise<DirectAuthenticatedAuthority> {
   const id = ulid()
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -78,7 +80,7 @@ function calling(workflowName: string): WorkflowDefinition {
   }).definition
 }
 
-function repositoryFor(db: ProviderNeutralDatabase, events: string[] = []) {
+function repositoryFor(db: PersistenceDb, events: string[] = []) {
   const catalog = composeResourceCatalogFor({ db })
   const semantics = createWorkflowPersistenceSemantics({
     authorization: catalog.authorization,
@@ -198,6 +200,7 @@ describeEachProvider('RFC-359 W4-D15 —— Workflow 仓库', (harness) => {
       description: '',
       definition: definition(),
     })
+    const { workflows } = tablesOf(harness.db)
     // 模拟 slug 规则之前写入的历史名字：绕过命令直接改行。
     await harness.db
       .update(workflows)

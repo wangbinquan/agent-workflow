@@ -7,12 +7,13 @@
 //   - updateTaskMembers: owner/admin-only writes, full-replace semantics,
 //     owner transfer keeps the previous owner as collaborator
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import {
   getTaskMembers,
@@ -36,7 +37,7 @@ function actorFor(id: string, role: 'admin' | 'user'): Actor {
 }
 
 describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let bob = ''
   let carol = ''
   let dave = ''
@@ -44,13 +45,14 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
 
   async function seedTask(id: string, ownerId: string) {
     const wfId = `wf-${id}`
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: wfId,
       name: `wf-${id}`,
       description: '',
       definition: '{}',
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 'fixture-task',
       id,
       workflowId: wfId,
@@ -121,6 +123,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
       collaboratorUserIds: [dave, bob], // owner in the list is deduped
       now: 1_000,
     })
+    const { taskCollaborators } = tablesOf(db)
     const collabs = await db
       .select()
       .from(taskCollaborators)
@@ -132,6 +135,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
 
   test('recordLaunchContext rejects disabled users', async () => {
     await seedTask('task-2', bob)
+    const { users } = tablesOf(db)
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, carol))
     await expect(
       recordLaunchContext(db, {
@@ -190,6 +194,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
     })
     expect(after.ownerUserId).toBe(carol)
     expect(after.members.map((m) => m.user.id).sort()).toEqual([bob, dave].sort())
+    const { tasks } = tablesOf(db)
     const taskRow = (await db.select().from(tasks).where(eq(tasks.id, 'task-4')))[0]!
     expect(taskRow.ownerUserId).toBe(carol)
     // membership flipped: bob is now role 'user'
@@ -285,6 +290,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
       collaboratorUserIds: [],
       now: 1_000,
     })
+    const { users } = tablesOf(db)
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, dave))
     const task = { id: 'task-6', ownerUserId: bob }
     await expect(

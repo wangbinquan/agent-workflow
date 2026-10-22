@@ -15,13 +15,14 @@
 // 红→绿对：把 `routes/agents.ts` 的 PUT 换回 `requireResourceGovern`，可编辑档那组
 // 立刻红；把 workflow 保存里的 `assertNameUnchangedForEditor` 删掉，改名那组立刻红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { agents, resourceGrants, workflows } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -38,7 +39,7 @@ interface Principal {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Principal
   reader: Principal
@@ -84,15 +85,21 @@ async function req(
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: 'agent' | 'workflow',
   resourceId: string,
   userId: string,
   level: ResourceGrantLevel,
 ): Promise<void> {
-  await db
-    .insert(resourceGrants)
-    .values({ resourceType: type, resourceId, userId, level, addedBy: 'seed', addedAt: NOW })
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
+    resourceType: type,
+    resourceId,
+    userId,
+    level,
+    addedBy: 'seed',
+    addedAt: NOW,
+  })
 }
 
 async function codeOf(res: Response): Promise<string> {
@@ -101,9 +108,10 @@ async function codeOf(res: Response): Promise<string> {
 
 // ── agent ───────────────────────────────────────────────────────────────────
 
-async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name: `rfc324-agent-${id.slice(-6)}`,
     description: 'seeded',
@@ -117,9 +125,10 @@ async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Prom
 }
 
 async function agentRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<{ description: string; name: string }> {
+  const { agents } = tablesOf(db)
   const rows = await db.select().from(agents).where(eq(agents.id, id))
   const row = rows[0]
   expect(row, '种子 agent 必须存在，否则本用例零预言力').toBeDefined()
@@ -239,9 +248,10 @@ describeEachProviderHttpApplication(
 
 const WF_DEFINITION = { $schema_version: 2, inputs: [], nodes: [], edges: [] }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedWorkflow(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: `rfc324-wf-${id.slice(-6)}`,
     description: 'seeded',
@@ -257,9 +267,10 @@ async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): P
 }
 
 async function workflowRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<{ name: string; description: string; version: number }> {
+  const { workflows } = tablesOf(db)
   const rows = await db.select().from(workflows).where(eq(workflows.id, id))
   const row = rows[0]
   expect(row, '种子 workflow 必须存在，否则本用例零预言力').toBeDefined()

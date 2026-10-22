@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { EventCenterCodeHostDeliveryDispatcher } from '@/services/webhook/dispatcherTypes'
 import {
   createCodeHostEventDeliveryAdapter,
@@ -16,7 +16,7 @@ export {
 
 /** RFC-359 AC-1（plan §5gc）—— 同上，两个 provider 唯一的一份，走 `…WithPersistence` 那层。 */
 export function createCodeHostWebhookRoutingDirectory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   continuation?: CodeHostEventContinuationPort,
 ) {
   return createCodeHostWebhookRoutingDirectoryWithPersistence(
@@ -39,7 +39,7 @@ export function createCodeHostWebhookRoutingDirectoryWithPersistence(
  * 现在这一份也改走那层：一处实现、一个名字。
  */
 export function createCodeHostWebhookDeliveryConsumer(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   dispatcher: EventCenterCodeHostDeliveryDispatcher,
   continuation?: CodeHostEventContinuationPort,
 ) {

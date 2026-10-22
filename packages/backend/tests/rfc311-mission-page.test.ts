@@ -11,6 +11,8 @@
 //   3. 断点是**行值比较**：同一 `created_at` 上的多行不能重复也不能漏（RFC-311
 //      在 10 万任务库上实测过展开式断点会让 SQLite 走 TEMP B-TREE 全排序）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -19,8 +21,7 @@ import { join } from 'node:path'
 
 import { taskMatchesListView } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { developmentMissions, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   listMissionSummaries,
   listMissionSummariesPage,
@@ -34,8 +35,9 @@ import {
 const TOKEN = 'a'.repeat(64)
 const T0 = 1_700_000_000_000
 
-async function seed(db: ProviderNeutralDatabase, count: number): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, count: number): Promise<void> {
+  const { users, developmentMissions } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -44,7 +46,7 @@ async function seed(db: ProviderNeutralDatabase, count: number): Promise<void> {
     updatedAt: T0,
   })
   for (let i = 0; i < count; i += 1) {
-    await db.insert(developmentMissions).values({
+    await insertOne(db, developmentMissions, {
       id: `m${String(i).padStart(3, '0')}`,
       revision: 1,
       status: 'active',
@@ -62,8 +64,9 @@ async function seed(db: ProviderNeutralDatabase, count: number): Promise<void> {
 }
 
 /** 状态/文本都铺开的种子——否则过滤组合大半命中空集，对拍等于没跑。 */
-async function seedVaried(db: ProviderNeutralDatabase, count: number): Promise<void> {
-  await db.insert(users).values({
+async function seedVaried(db: PersistenceDb, count: number): Promise<void> {
+  const { users, developmentMissions } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -87,7 +90,7 @@ async function seedVaried(db: ProviderNeutralDatabase, count: number): Promise<v
     'failed',
   ]
   for (let i = 0; i < count; i += 1) {
-    await db.insert(developmentMissions).values({
+    await insertOne(db, developmentMissions, {
       id: `m${String(i).padStart(3, '0')}`,
       revision: 1,
       status: statuses[i % statuses.length]!,
@@ -105,7 +108,7 @@ async function seedVaried(db: ProviderNeutralDatabase, count: number): Promise<v
   }
 }
 
-async function pageAll(db: ProviderNeutralDatabase, limit: number): Promise<string[]> {
+async function pageAll(db: PersistenceDb, limit: number): Promise<string[]> {
   const ids: string[] = []
   let cursor = undefined as undefined | { createdAt: number; id: string }
   for (let guard = 0; guard < 100; guard += 1) {

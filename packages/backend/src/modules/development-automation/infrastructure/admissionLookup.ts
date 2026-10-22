@@ -4,18 +4,15 @@
 // RFC-359 W4-B5：一份实现，两个 provider 共用（以 PG 版为底——自带查询，不再借道 SQLite 的
 // assignment / employee store 同步助手）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  automationPolicyRevisions,
-  digitalEmployeeRevisions,
-  repositoryEmployeeAssignments,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AdmissionAssignmentView, AdmissionLookup } from '../application/ports/admissionLookup'
 
 /** 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。 */
-function assignmentFields() {
+function assignmentFields(db: object) {
+  const { repositoryEmployeeAssignments } = tablesOf(db)
   return {
     scopeKind: repositoryEmployeeAssignments.scopeKind,
     employeeId: repositoryEmployeeAssignments.employeeId,
@@ -29,13 +26,14 @@ function assignmentFields() {
 }
 
 async function findAssignment(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scopeKind: AdmissionAssignmentView['scopeKind'],
   scopeRef: string | null,
 ): Promise<AdmissionAssignmentView | null> {
+  const { repositoryEmployeeAssignments } = tablesOf(db)
   const row = (
     await db
-      .select(assignmentFields())
+      .select(assignmentFields(db))
       .from(repositoryEmployeeAssignments)
       .where(
         and(
@@ -54,7 +52,7 @@ function revisionContent(row: { readonly contentJson: string } | undefined): unk
   return row === undefined ? null : (JSON.parse(row.contentJson) as unknown)
 }
 
-export function createAdmissionLookup(db: ProviderNeutralDatabase): AdmissionLookup {
+export function createAdmissionLookup(db: PersistenceDb): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const repository = await findAssignment(db, 'repository', scope.repositoryId)
@@ -66,6 +64,7 @@ export function createAdmissionLookup(db: ProviderNeutralDatabase): AdmissionLoo
       return await findAssignment(db, 'global-default', null)
     },
     async getEmployeeRevisionContent(id, revision) {
+      const { digitalEmployeeRevisions } = tablesOf(db)
       return revisionContent(
         (
           await db
@@ -82,6 +81,7 @@ export function createAdmissionLookup(db: ProviderNeutralDatabase): AdmissionLoo
       )
     },
     async getPolicyRevisionContent(id, revision) {
+      const { automationPolicyRevisions } = tablesOf(db)
       return revisionContent(
         (
           await db

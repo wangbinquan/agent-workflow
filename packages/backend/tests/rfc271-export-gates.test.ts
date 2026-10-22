@@ -12,14 +12,15 @@
 // 覆盖验收条款：AC-2b（同名重复门）/ AC-7b / AC-7c / AC-7d（反向锁） / AC-8（特权节点按轴判定） / AC-3（闭包完整：工作流→代理/子工作流/工作组，代理→技能+MCP+插件+dependsOn）/ AC-4（闭包去重去环）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, mcps, workflows } from '../src/db/schema'
 import {
   assertNoDuplicateNames,
   assertPrivilegedNodesExportable,
@@ -41,76 +42,70 @@ const defn = (nodes: unknown[]): WorkflowDefinition =>
   ({ $schema_version: 4, inputs: [], nodes, edges: [] }) as unknown as WorkflowDefinition
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   owner: string,
   name: string,
   extra: Record<string, unknown> = {},
 ): Promise<string> {
   const id = ulid()
-  await db
-    .insert(agents)
-    .values({
-      id,
-      name,
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      dependsOn: '[]',
-      mcp: '[]',
-      plugins: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      ownerUserId: owner,
-      visibility: 'private',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      ...extra,
-    } as never)
-    .run()
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
+    id,
+    name,
+    description: '',
+    outputs: '[]',
+    permission: '{}',
+    skills: '[]',
+    dependsOn: '[]',
+    mcp: '[]',
+    plugins: '[]',
+    frontmatterExtra: '{}',
+    bodyMd: '',
+    ownerUserId: owner,
+    visibility: 'private',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...extra,
+  } as never)
   return id
 }
 
-async function seedMcp(db: ProviderNeutralDatabase, owner: string, name: string): Promise<string> {
+async function seedMcp(db: PersistenceDb, owner: string, name: string): Promise<string> {
   const id = ulid()
-  await db
-    .insert(mcps)
-    .values({
-      id,
-      name,
-      description: '',
-      type: 'remote',
-      config: JSON.stringify({ url: 'https://x.test/mcp' }),
-      enabled: true,
-      ownerUserId: owner,
-      visibility: 'private',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    } as never)
-    .run()
+  const { mcps } = tablesOf(db)
+  await insertOne(db, mcps, {
+    id,
+    name,
+    description: '',
+    type: 'remote',
+    config: JSON.stringify({ url: 'https://x.test/mcp' }),
+    enabled: true,
+    ownerUserId: owner,
+    visibility: 'private',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as never)
   return id
 }
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   owner: string,
   name: string,
   definition: WorkflowDefinition,
 ): Promise<string> {
   const id = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id,
-      name,
-      description: '',
-      definition: JSON.stringify(definition),
-      ownerUserId: owner,
-      visibility: 'private',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    } as never)
-    .run()
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id,
+    name,
+    description: '',
+    definition: JSON.stringify(definition),
+    ownerUserId: owner,
+    visibility: 'private',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as never)
   return id
 }
 
@@ -205,7 +200,8 @@ describeEachProvider('① 行级可见性（含传递）', (harness) => {
   test('别人的 public 资源可见 ⇒ 可以导出（可见即有读权限）', async () => {
     const db = harness.db
     const mcp = await seedMcp(db, 'u-other', 'shared')
-    await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp)).run()
+    const { mcps } = tablesOf(db)
+    await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp))
     const agent = await seedAgent(db, 'u1', 'auditor', { mcp: JSON.stringify([mcp]) })
     const closure = await walkExportClosure(db, actorOf('u1'), { type: 'agent', id: agent })
     expect(closure.resources.some((r) => r.id === mcp)).toBe(true)

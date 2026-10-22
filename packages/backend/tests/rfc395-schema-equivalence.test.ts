@@ -51,7 +51,7 @@ describe('RFC-395 I-a explicit schema equivalence', () => {
       Object.fromEntries(
         persistenceSchema.contributions.map((entry) => [
           entry.owner,
-          entry.tables.map((table) => table.id),
+          entry.tables.map((table): string => table.id),
         ]),
       ),
     ).toEqual(owners)
@@ -69,7 +69,9 @@ describe('RFC-395 I-a explicit schema equivalence', () => {
     expect(compilePostgresqlPlan(persistenceSchema)).toEqual(buildPostgresqlSchemaPlan(contract))
   })
   test('both materialized Drizzle column sets agree with their v2 provider projections', () => {
-    const definitions = new Map(persistenceSchema.tables.map((table) => [table.id, table]))
+    const definitions = new Map<string, (typeof persistenceSchema.tables)[number]>(
+      persistenceSchema.tables.map((table) => [table.id, table]),
+    )
     expect([...definitions.keys()].sort()).toEqual(contract.tables.map((table) => table.id).sort())
     for (const table of contract.tables) {
       const definition = definitions.get(table.id)!

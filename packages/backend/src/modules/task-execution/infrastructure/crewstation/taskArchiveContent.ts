@@ -6,10 +6,11 @@
 // object, never copied; only work-volume files are uploaded. A directory rename
 // rewrites index rows only. Removing entries releases their parts; physical
 // unpin is deferred to maintenance behind the backup release horizon.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { eq, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskArchiveEntries } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectPublicationRequest,
   HostedObjectPublications,
@@ -35,7 +36,7 @@ const Part = z
   })
   .strict()
 type Part = z.infer<typeof Part>
-type Row = typeof hostedTaskArchiveEntries.$inferSelect
+type Row = PersistenceTables['hostedTaskArchiveEntries']['$inferSelect']
 const partsOf = (row: Row): Part[] => z.array(Part).parse(JSON.parse(row.partsJson))
 
 export interface HostedArchiveFile {
@@ -82,7 +83,7 @@ const partOf = (key: string, object: HostedObjectReceipt): Part => ({
 })
 
 export function createHostedTaskArchiveContent(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
@@ -96,7 +97,7 @@ export function createHostedTaskArchiveContent(input: {
 }): TaskArchiveContentBinding & { readText(reference: string): Promise<string> } {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
-  const write = <T>(operation: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> => {
+  const write = <T>(operation: (tx: PersistenceDb) => Promise<T>): Promise<T> => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
@@ -107,22 +108,27 @@ export function createHostedTaskArchiveContent(input: {
   // case on SQLite only); `substr` counts characters, so lengths are code points.
   const below = (reference: string) => {
     const parent = `${reference}/`
+    const { hostedTaskArchiveEntries } = tablesOf(input.db)
     return or(
       eq(hostedTaskArchiveEntries.path, reference),
       sql`substr(${hostedTaskArchiveEntries.path}, 1, ${[...parent].length}) = ${parent}`,
     )!
   }
-  const rowsBelow = (reference: string, db: ProviderNeutralDatabase = input.db) =>
-    db.select().from(hostedTaskArchiveEntries).where(below(reference))
-  const find = async (reference: string, db: ProviderNeutralDatabase = input.db) =>
-    (
+  const rowsBelow = (reference: string, db: PersistenceDb = input.db) => {
+    const { hostedTaskArchiveEntries } = tablesOf(db)
+    return db.select().from(hostedTaskArchiveEntries).where(below(reference))
+  }
+  const find = async (reference: string, db: PersistenceDb = input.db) => {
+    const { hostedTaskArchiveEntries } = tablesOf(db)
+    return (
       await db
         .select()
         .from(hostedTaskArchiveEntries)
         .where(eq(hostedTaskArchiveEntries.path, reference))
         .limit(1)
     )[0]
-  const releaseParts = async (tx: ProviderNeutralDatabase, rows: readonly Row[]) => {
+  }
+  const releaseParts = async (tx: PersistenceDb, rows: readonly Row[]) => {
     const keys = rows.flatMap((row) => partsOf(row).map((part) => part.key))
     if (keys.length > 0) await input.publications.release({ owner: HOSTED_ARCHIVE_OWNER, keys }, tx)
   }
@@ -144,6 +150,7 @@ export function createHostedTaskArchiveContent(input: {
             partsJson: JSON.stringify(parts),
             updatedAt: now(),
           }
+          const { hostedTaskArchiveEntries } = tablesOf(tx)
           await tx
             .insert(hostedTaskArchiveEntries)
             .values({ path: reference, createdAt: now(), ...values })
@@ -178,6 +185,7 @@ export function createHostedTaskArchiveContent(input: {
       if (!recursive && rows.some((row) => row.path !== reference))
         throw new Error('hosted-archive-directory-not-empty')
       await releaseParts(tx, rows)
+      const { hostedTaskArchiveEntries } = tablesOf(tx)
       await tx.delete(hostedTaskArchiveEntries).where(below(reference))
     })
   }
@@ -190,6 +198,7 @@ export function createHostedTaskArchiveContent(input: {
         if (current.kind !== 'directory') throw new Error('hosted-archive-not-directory')
         return
       }
+      const { hostedTaskArchiveEntries } = tablesOf(tx)
       await tx
         .insert(hostedTaskArchiveEntries)
         .values({
@@ -227,7 +236,8 @@ export function createHostedTaskArchiveContent(input: {
       async commit(tx, receipts) {
         if ((await rowsBelow(to, tx)).length > 0)
           throw new Error('hosted-archive-destination-exists')
-        await tx.insert(hostedTaskArchiveEntries).values({
+        const { hostedTaskArchiveEntries } = tablesOf(tx)
+        await insertOne(tx, hostedTaskArchiveEntries, {
           path: to,
           kind: 'directory',
           partsJson: '[]',
@@ -235,7 +245,7 @@ export function createHostedTaskArchiveContent(input: {
           updatedAt: now(),
         })
         for (let index = 0; index < files.length; index++)
-          await tx.insert(hostedTaskArchiveEntries).values({
+          await insertOne(tx, hostedTaskArchiveEntries, {
             path: `${to}/${files[index]!.path}`,
             kind: 'file',
             partsJson: JSON.stringify([partOf(requests[index]!.key, receipts[index]!)]),
@@ -263,10 +273,13 @@ export function createHostedTaskArchiveContent(input: {
       )
         throw new Error('hosted-archive-manifest-missing')
       if ((await rowsBelow(to, tx)).length > 0) throw new Error('hosted-archive-destination-exists')
+      const { hostedTaskArchiveEntries } = tablesOf(tx)
       for (const row of rows)
-        await tx
-          .insert(hostedTaskArchiveEntries)
-          .values({ ...row, path: to + row.path.slice(from.length), updatedAt: now() })
+        await insertOne(tx, hostedTaskArchiveEntries, {
+          ...row,
+          path: to + row.path.slice(from.length),
+          updatedAt: now(),
+        })
       await tx.delete(hostedTaskArchiveEntries).where(below(from))
     })
   }

@@ -1,13 +1,13 @@
 // RFC-359 W7：持久化实现只有一份（`infrastructure/resourceLimitPersistence.ts`），
 // 两个 provider 的具名装配函数在这里只做绑定 —— 差的仅是客户端来源与 cancelTask 的取法。
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import type { ResourceLimitOperations } from '../application/ports/resourceLimitPersistence'
 import { DrizzleResourceLimitPersistence } from '../infrastructure/resourceLimitPersistence'
 
 /** Compatibility composition for SQLite callers not yet assembled at bootstrap. */
 export function composeLegacySqliteResourceLimitOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ResourceLimitOperations {
   const operations: ResourceLimitOperations = {
     persistence: new DrizzleResourceLimitPersistence(db),
@@ -20,7 +20,7 @@ export function composeLegacySqliteResourceLimitOperations(
 }
 
 export function composeResourceLimitOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** Required Task Execution command; no provider fallback is fabricated here. */
   readonly cancelTask: ResourceLimitOperations['cancelTask']
 }): ResourceLimitOperations {

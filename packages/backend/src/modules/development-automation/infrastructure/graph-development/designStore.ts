@@ -1,12 +1,7 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentDesigns as designs,
-  developmentDesignRevisions as revisions,
-  developmentDesignProposals as records,
-  developmentDesignBaselines as bases,
-  developmentDesignLinks as links,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError } from '@/util/errors'
 import type { GraphDesignStore, GraphStoredLink } from '../../application/ports/graphDesignStore'
@@ -14,62 +9,97 @@ import type { GraphDesignStore, GraphStoredLink } from '../../application/ports/
 const conflict = (code: string) => new ConflictError(code, code)
 
 /** The same compare-and-swap transactions execute on SQLite and PostgreSQL. */
-export function createGraphDesignStore(db: ProviderNeutralDatabase): GraphDesignStore {
+export function createGraphDesignStore(db: PersistenceDb): GraphDesignStore {
   const session = databaseSessionFor(db)
-  const find: GraphDesignStore['find'] = async (id) =>
-    (await db.select().from(designs).where(eq(designs.id, id)).limit(1))[0] ?? null
-  const findByCase: GraphDesignStore['findByCase'] = async (caseId) =>
-    (await db.select().from(designs).where(eq(designs.caseId, caseId)).limit(1))[0] ?? null
-  const record: GraphDesignStore['record'] = async (id, recordId) =>
-    (
-      await db
-        .select()
-        .from(records)
-        .where(and(eq(records.designId, id), eq(records.id, recordId)))
-        .limit(1)
-    )[0] ?? null
+  const find: GraphDesignStore['find'] = async (id) => {
+    const { developmentDesigns } = tablesOf(db)
+    return (
+      (
+        await db.select().from(developmentDesigns).where(eq(developmentDesigns.id, id)).limit(1)
+      )[0] ?? null
+    )
+  }
+  const findByCase: GraphDesignStore['findByCase'] = async (caseId) => {
+    const { developmentDesigns } = tablesOf(db)
+    return (
+      (
+        await db
+          .select()
+          .from(developmentDesigns)
+          .where(eq(developmentDesigns.caseId, caseId))
+          .limit(1)
+      )[0] ?? null
+    )
+  }
+  const record: GraphDesignStore['record'] = async (id, recordId) => {
+    const { developmentDesignProposals } = tablesOf(db)
+    return (
+      (
+        await db
+          .select()
+          .from(developmentDesignProposals)
+          .where(
+            and(
+              eq(developmentDesignProposals.designId, id),
+              eq(developmentDesignProposals.id, recordId),
+            ),
+          )
+          .limit(1)
+      )[0] ?? null
+    )
+  }
   return {
     find,
     findByCase,
     record,
     async create(identity, revision) {
       await session.transaction(async (tx) => {
+        const { developmentDesigns, developmentDesignRevisions } = tablesOf(tx)
         const inserted = await tx
-          .insert(designs)
+          .insert(developmentDesigns)
           .values(identity)
           .onConflictDoNothing()
-          .returning({ id: designs.id })
-        if (inserted.length) await tx.insert(revisions).values(revision)
+          .returning({ id: developmentDesigns.id })
+        if (inserted.length) await insertOne(tx, developmentDesignRevisions, revision)
       })
       const value = await findByCase(identity.caseId)
       if (!value) throw conflict('graph-design-create-conflict')
       return value
     },
     async revision(id, revision) {
+      const { developmentDesignRevisions } = tablesOf(db)
       return (
         (
           await db
             .select()
-            .from(revisions)
-            .where(and(eq(revisions.designId, id), eq(revisions.revision, revision)))
+            .from(developmentDesignRevisions)
+            .where(
+              and(
+                eq(developmentDesignRevisions.designId, id),
+                eq(developmentDesignRevisions.revision, revision),
+              ),
+            )
             .limit(1)
         )[0] ?? null
       )
     },
     async revisions(id) {
+      const { developmentDesignRevisions } = tablesOf(db)
       return await db
         .select()
-        .from(revisions)
-        .where(eq(revisions.designId, id))
-        .orderBy(asc(revisions.revision))
+        .from(developmentDesignRevisions)
+        .where(eq(developmentDesignRevisions.designId, id))
+        .orderBy(asc(developmentDesignRevisions.revision))
     },
     async commit(input) {
       return await session.transaction(async (tx) => {
         const next = input.revision
         const receiptId = `change:${next.requestId}`
+        const { developmentDesignProposals, developmentDesigns, developmentDesignRevisions } =
+          tablesOf(tx)
         // Claim before changing the pointer; ON CONFLICT serializes identical concurrent requests.
         const claimed = await tx
-          .insert(records)
+          .insert(developmentDesignProposals)
           .values({
             designId: next.designId,
             id: receiptId,
@@ -82,13 +112,18 @@ export function createGraphDesignStore(db: ProviderNeutralDatabase): GraphDesign
             updatedAt: next.createdAt,
           })
           .onConflictDoNothing()
-          .returning({ id: records.id })
+          .returning({ id: developmentDesignProposals.id })
         if (!claimed.length) {
           const previous = (
             await tx
               .select()
-              .from(records)
-              .where(and(eq(records.designId, next.designId), eq(records.id, receiptId)))
+              .from(developmentDesignProposals)
+              .where(
+                and(
+                  eq(developmentDesignProposals.designId, next.designId),
+                  eq(developmentDesignProposals.id, receiptId),
+                ),
+              )
               .limit(1)
           )[0]
           if (!previous || previous.requestDigest !== input.requestDigest)
@@ -96,9 +131,12 @@ export function createGraphDesignStore(db: ProviderNeutralDatabase): GraphDesign
           const original = (
             await tx
               .select()
-              .from(revisions)
+              .from(developmentDesignRevisions)
               .where(
-                and(eq(revisions.designId, next.designId), eq(revisions.requestId, next.requestId)),
+                and(
+                  eq(developmentDesignRevisions.designId, next.designId),
+                  eq(developmentDesignRevisions.requestId, next.requestId),
+                ),
               )
               .limit(1)
           )[0]
@@ -108,38 +146,49 @@ export function createGraphDesignStore(db: ProviderNeutralDatabase): GraphDesign
         if (next.revision !== input.expectedRevision + 1)
           throw conflict('graph-invalid-next-revision')
         const changed = await tx
-          .update(designs)
+          .update(developmentDesigns)
           .set({ revision: next.revision, updatedAt: next.createdAt })
-          .where(and(eq(designs.id, next.designId), eq(designs.revision, input.expectedRevision)))
-          .returning({ id: designs.id })
+          .where(
+            and(
+              eq(developmentDesigns.id, next.designId),
+              eq(developmentDesigns.revision, input.expectedRevision),
+            ),
+          )
+          .returning({ id: developmentDesigns.id })
         if (changed.length !== 1) throw conflict('graph-design-revision-conflict')
-        await tx.insert(revisions).values(next)
+        await insertOne(tx, developmentDesignRevisions, next)
         return next
       })
     },
     async presentation(input) {
+      const { developmentDesigns } = tablesOf(db)
       const updated = await db
-        .update(designs)
+        .update(developmentDesigns)
         .set({
           presentationJson: input.json,
           presentationRevision: input.expectedRevision + 1,
           updatedAt: input.now,
         })
         .where(
-          and(eq(designs.id, input.id), eq(designs.presentationRevision, input.expectedRevision)),
+          and(
+            eq(developmentDesigns.id, input.id),
+            eq(developmentDesigns.presentationRevision, input.expectedRevision),
+          ),
         )
-        .returning({ id: designs.id })
+        .returning({ id: developmentDesigns.id })
       if (updated.length !== 1) throw conflict('graph-presentation-revision-conflict')
     },
     async records(id) {
+      const { developmentDesignProposals } = tablesOf(db)
       return await db
         .select()
-        .from(records)
-        .where(eq(records.designId, id))
-        .orderBy(asc(records.createdAt), asc(records.id))
+        .from(developmentDesignProposals)
+        .where(eq(developmentDesignProposals.designId, id))
+        .orderBy(asc(developmentDesignProposals.createdAt), asc(developmentDesignProposals.id))
     },
     async insertRecord(value) {
-      await db.insert(records).values(value).onConflictDoNothing()
+      const { developmentDesignProposals } = tablesOf(db)
+      await db.insert(developmentDesignProposals).values(value).onConflictDoNothing()
       const stored = await record(value.designId, value.id)
       if (!stored || stored.requestDigest !== value.requestDigest || stored.kind !== value.kind)
         throw conflict('graph-request-reused-with-different-input')
@@ -147,8 +196,9 @@ export function createGraphDesignStore(db: ProviderNeutralDatabase): GraphDesign
     },
     async updateRecord(value, expectedVersion) {
       if (value.version !== expectedVersion + 1) throw conflict('graph-invalid-record-version')
+      const { developmentDesignProposals } = tablesOf(db)
       const updated = await db
-        .update(records)
+        .update(developmentDesignProposals)
         .set({
           status: value.status,
           version: value.version,
@@ -157,65 +207,98 @@ export function createGraphDesignStore(db: ProviderNeutralDatabase): GraphDesign
         })
         .where(
           and(
-            eq(records.designId, value.designId),
-            eq(records.id, value.id),
-            eq(records.version, expectedVersion),
-            eq(records.requestDigest, value.requestDigest),
+            eq(developmentDesignProposals.designId, value.designId),
+            eq(developmentDesignProposals.id, value.id),
+            eq(developmentDesignProposals.version, expectedVersion),
+            eq(developmentDesignProposals.requestDigest, value.requestDigest),
           ),
         )
-        .returning({ id: records.id })
+        .returning({ id: developmentDesignProposals.id })
       if (updated.length !== 1) throw conflict('graph-record-revision-conflict')
     },
     async interruptRunningActions(now) {
+      const { developmentDesignProposals } = tablesOf(db)
       await db
-        .update(records)
-        .set({ status: 'interrupted', version: sql`${records.version} + 1`, updatedAt: now })
-        .where(and(eq(records.kind, 'action'), eq(records.status, 'running')))
+        .update(developmentDesignProposals)
+        .set({
+          status: 'interrupted',
+          version: sql`${developmentDesignProposals.version} + 1`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(developmentDesignProposals.kind, 'action'),
+            eq(developmentDesignProposals.status, 'running'),
+          ),
+        )
     },
     async basis(id, basisId) {
+      const { developmentDesignBaselines } = tablesOf(db)
       return (
         (
           await db
             .select()
-            .from(bases)
-            .where(and(eq(bases.designId, id), eq(bases.id, basisId)))
+            .from(developmentDesignBaselines)
+            .where(
+              and(
+                eq(developmentDesignBaselines.designId, id),
+                eq(developmentDesignBaselines.id, basisId),
+              ),
+            )
             .limit(1)
         )[0] ?? null
       )
     },
     async bases(id) {
+      const { developmentDesignBaselines } = tablesOf(db)
       return await db
         .select()
-        .from(bases)
-        .where(eq(bases.designId, id))
-        .orderBy(asc(bases.createdAt), asc(bases.id))
+        .from(developmentDesignBaselines)
+        .where(eq(developmentDesignBaselines.designId, id))
+        .orderBy(asc(developmentDesignBaselines.createdAt), asc(developmentDesignBaselines.id))
     },
     async insertBasis(value) {
-      await db.insert(bases).values(value).onConflictDoNothing()
+      const { developmentDesignBaselines } = tablesOf(db)
+      await db.insert(developmentDesignBaselines).values(value).onConflictDoNothing()
       const stored = (
         await db
           .select()
-          .from(bases)
-          .where(and(eq(bases.designId, value.designId), eq(bases.id, value.id)))
+          .from(developmentDesignBaselines)
+          .where(
+            and(
+              eq(developmentDesignBaselines.designId, value.designId),
+              eq(developmentDesignBaselines.id, value.id),
+            ),
+          )
           .limit(1)
       )[0]
       if (!stored || stored.digest !== value.digest) throw conflict('graph-basis-identity-conflict')
       return stored
     },
     async links(id) {
+      const { developmentDesignLinks } = tablesOf(db)
       return (await db
         .select()
-        .from(links)
-        .where(eq(links.designId, id))
-        .orderBy(asc(links.createdAt), asc(links.id))) as GraphStoredLink[]
+        .from(developmentDesignLinks)
+        .where(eq(developmentDesignLinks.designId, id))
+        .orderBy(
+          asc(developmentDesignLinks.createdAt),
+          asc(developmentDesignLinks.id),
+        )) as GraphStoredLink[]
     },
     async insertLink(value) {
-      await db.insert(links).values(value).onConflictDoNothing()
+      const { developmentDesignLinks } = tablesOf(db)
+      await db.insert(developmentDesignLinks).values(value).onConflictDoNothing()
       const stored = (
         await db
           .select()
-          .from(links)
-          .where(and(eq(links.designId, value.designId), eq(links.id, value.id)))
+          .from(developmentDesignLinks)
+          .where(
+            and(
+              eq(developmentDesignLinks.designId, value.designId),
+              eq(developmentDesignLinks.id, value.id),
+            ),
+          )
           .limit(1)
       )[0]
       if (!stored || stored.kind !== value.kind || stored.payloadJson !== value.payloadJson)

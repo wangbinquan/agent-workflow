@@ -9,7 +9,7 @@
 // makes both cases deterministically red.
 
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   afterAll,
   afterEach,
@@ -262,7 +262,7 @@ function installRefreshDiagnostics(): RefreshDiagnostics {
   }
 }
 
-async function authenticatedFixture(__db: ProviderNeutralDatabase) {
+async function authenticatedFixture(__db: PersistenceDb) {
   const diagnostics = refreshDiagnostics()
   const root = mkdtempSync(join(tmpdir(), 'aw-private-refresh-'))
   const appHome = mkdtempSync(join(tmpdir(), 'aw-private-refresh-home-'))

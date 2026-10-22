@@ -18,6 +18,8 @@
 // 外加源码文本锁，兜住 scheduler runHostNode / workgroupRunner 三处接线（真实 runHostNode
 // 需 iso+git，单测难触，故文本锁兜底）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
   WG_PORT_ASSIGNMENTS,
@@ -32,9 +34,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import {
   renderWgProtocolBlock,
@@ -140,7 +141,7 @@ describe('RFC-184 — wgHostRolePorts', () => {
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -181,20 +182,21 @@ const LEADER_ENVELOPE =
   `<port name="wg_decision">{"action":"continue"}</port>\n` +
   '</workflow-output>'
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-wg-host-iso-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -216,9 +218,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -287,7 +290,8 @@ function runLeader(
   )
 }
 
-async function outputRows(db: ProviderNeutralDatabase, nodeRunId: string) {
+async function outputRows(db: PersistenceDb, nodeRunId: string) {
+  const { nodeRunOutputs } = tablesOf(db)
   return db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
 }
 

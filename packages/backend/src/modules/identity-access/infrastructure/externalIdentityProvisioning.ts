@@ -7,11 +7,12 @@
 // copied. The default role is the login policy's default for externally
 // admitted identities; the deployment's administrator subjects start as
 // administrators. Later role changes belong to the Users page.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Role } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { authLoginPolicy, externalIdentities, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   BufferedUserAccessTransaction,
@@ -43,28 +44,35 @@ export function externalIdentityUsername(issuer: string, subject: string): strin
 }
 
 export function createExternalIdentityProvisioning(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly id?: () => string
 }): ExternalIdentityProvisioning {
   const session = databaseSessionFor(input.db)
   const id = input.id ?? ulid
   const linked = async (
-    handle: ProviderNeutralDatabase,
+    handle: PersistenceDb,
     issuer: string,
     subject: string,
-  ): Promise<string | null> =>
-    (
-      await handle
-        .select({ userId: externalIdentities.userId })
-        .from(externalIdentities)
-        .where(and(eq(externalIdentities.issuer, issuer), eq(externalIdentities.subject, subject)))
-        .limit(1)
-    )[0]?.userId ?? null
+  ): Promise<string | null> => {
+    const { externalIdentities } = tablesOf(handle)
+    return (
+      (
+        await handle
+          .select({ userId: externalIdentities.userId })
+          .from(externalIdentities)
+          .where(
+            and(eq(externalIdentities.issuer, issuer), eq(externalIdentities.subject, subject)),
+          )
+          .limit(1)
+      )[0]?.userId ?? null
+    )
+  }
 
   const create = (sighting: ExternalIdentitySighting): Promise<string> =>
     session.serializable(async (tx) => {
       const existing = await linked(tx, sighting.issuer, sighting.subject)
       if (existing !== null) return existing
+      const { authLoginPolicy, users, externalIdentities } = tablesOf(tx)
       const policy = (
         await tx
           .select({ defaultRole: authLoginPolicy.oidcDefaultRole })
@@ -108,7 +116,7 @@ export function createExternalIdentityProvisioning(input: {
         audit: { id: id(), actorUserId: null, actorKind: 'system', operationId: id() },
       })
       await persistUserAccessOperations(tx, transaction.operations)
-      await tx.insert(externalIdentities).values({
+      await insertOne(tx, externalIdentities, {
         id: id(),
         issuer: sighting.issuer,
         subject: sighting.subject,

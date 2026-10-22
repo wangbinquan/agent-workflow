@@ -3,6 +3,8 @@
 // The prepare barrier only pauses the real resource session; it replaces no
 // persistence or apply algorithm. Both providers use the same behavior cases.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
@@ -27,18 +29,6 @@ import {
 
 import { buildActor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import {
-  agents,
-  intentApplyJournal,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  intentTurns,
-  intentWorkingSetChanges,
-  plugins,
-  skills,
-  users,
-} from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
@@ -150,7 +140,8 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
 async function seedSession(harness: ProviderHarness): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await harness.db.insert(intentSessions).values({
+  const { intentSessions } = tablesOf(harness.db)
+  await insertOne(harness.db, intentSessions, {
     id,
     ownerUserId: OWNER,
     title: 'Intent composition',
@@ -192,7 +183,8 @@ async function seedDraft(
   if (!parsed.ok) throw new Error(parsed.errors.join('; '))
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical).digest('hex')}`
-  await harness.db.insert(intentDrafts).values({
+  const { intentDrafts, intentSessions } = tablesOf(harness.db)
+  await insertOne(harness.db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -211,7 +203,8 @@ async function seedDraft(
 
 async function seedTurn(harness: ProviderHarness, sessionId: string, createdAt: number) {
   const id = ulid()
-  await harness.db.insert(intentTurns).values({
+  const { intentTurns, intentSessions } = tablesOf(harness.db)
+  await insertOne(harness.db, intentTurns, {
     id,
     sessionId,
     seq: 1,
@@ -249,7 +242,8 @@ async function seedJournal(
 ) {
   const id = ulid()
   const stale = Date.now() - 2 * 3_600_000
-  await harness.db.insert(intentApplyJournal).values({
+  const { intentApplyJournal } = tablesOf(harness.db)
+  await insertOne(harness.db, intentApplyJournal, {
     id,
     sessionId,
     clientMutationId: ulid(),
@@ -279,7 +273,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'rfc359-intent-composition-'))
     const now = Date.now()
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: OWNER,
       displayName: 'Intent composition owner',
@@ -313,6 +308,7 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
       { action: 'create', resourceType: 'skill', name: payload.name, fromCopy: false },
     ])
     const skillId = receipt.applied[0]!.resourceId
+    const { skills, intentApplyJournal } = tablesOf(harness.db)
     const [created] = await harness.db.select().from(skills).where(eq(skills.id, skillId))
     expect(created).toMatchObject({
       name: payload.name,
@@ -359,6 +355,7 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
         }),
       ])
       snapshot = composition.snapshots.activeApplyJournalIds()
+      const { intentApplyJournal, agents } = tablesOf(harness.db)
       const [journal] = await harness.db
         .select()
         .from(intentApplyJournal)
@@ -387,6 +384,7 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     })
     expect(snapshot).toEqual([receipt.journalId])
     expect(composition.snapshots.activeApplyJournalIds()).toEqual([])
+    const { agents, intentSessions, intentApplyJournal, intentProvenance } = tablesOf(harness.db)
     const [created] = await harness.db
       .select()
       .from(agents)
@@ -437,7 +435,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     const laterSession = await seedSession(harness)
     const laterTurn = await seedTurn(harness, laterSession, stale)
     const laterScratch = writeScratch(appHome, laterTurn, stale)
-    await harness.db.insert(intentWorkingSetChanges).values({
+    const { intentWorkingSetChanges, intentTurns, intentApplyJournal } = tablesOf(harness.db)
+    await insertOne(harness.db, intentWorkingSetChanges, {
       id: ulid(),
       sessionId,
       clientMutationId: ulid(),
@@ -512,7 +511,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     const sessionId = await seedSession(harness)
     const pluginId = ulid()
     const generationDir = join(appHome, 'plugins', pluginId, 'generation')
-    await harness.db.insert(plugins).values({
+    const { plugins, intentApplyJournal } = tablesOf(harness.db)
+    await insertOne(harness.db, plugins, {
       id: pluginId,
       name: 'published-plugin',
       spec: 'fixture@1',

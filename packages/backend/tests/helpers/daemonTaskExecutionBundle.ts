@@ -1,10 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 // RFC-382: compose the real provider task bundle with recorded scheduler delivery and real database participants.
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { tasks, workflows, taskExecutionIntents } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import {
@@ -176,7 +177,8 @@ export async function seedBundleTask(
   const slot = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: 1 },
   ])
-  await harness.db.insert(workflows).values({
+  const { workflows, tasks, taskExecutionIntents } = tablesOf(harness.db)
+  await insertOne(harness.db, workflows, {
     id: workflowId,
     name: workflowId,
     definition: JSON.stringify(emptyWorkflow),
@@ -184,7 +186,7 @@ export async function seedBundleTask(
     schemaVersion: 5,
     visibility: 'public',
   })
-  await harness.db.insert(tasks).values({
+  await insertOne(harness.db, tasks, {
     id,
     name: id,
     workflowId,
@@ -204,7 +206,7 @@ export async function seedBundleTask(
     spaceKind: 'internal',
   })
   if (intent)
-    await harness.db.insert(taskExecutionIntents).values({
+    await insertOne(harness.db, taskExecutionIntents, {
       id: intentId,
       taskId: id,
       kind: 'launch',

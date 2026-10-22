@@ -5,14 +5,15 @@
 // 同一段断言在两个引擎上各跑一遍：身份读取按资源类型走 ACL 表、授权等级按 (type,id,user) 精确命中、
 // owner+name 查找只回自己的、读模型按 id / name 取快照并只回活跃用户；附源码锁。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CreateAgentSchema } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { createIntentContextResourceAuthorizationReadPort } from '@/modules/resource-catalog/infrastructure/intentContextResourceAuthorization'
 import {
@@ -24,12 +25,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 const T0 = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: 'active' | 'disabled' = 'active',
 ): Promise<{ id: string; username: string }> {
   const id = ulid()
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -42,11 +44,14 @@ async function seedUser(
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly ownerUserId: string; readonly name: string },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values(
+  const { agents } = tablesOf(db)
+  await insertOne(
+    db,
+    agents,
     createAgentPersistenceValues({
       id,
       agent: CreateAgentSchema.parse({ name: input.name }),
@@ -63,7 +68,8 @@ describeEachProvider('RFC-359 W4-D20 —— Intent 上下文授权读取与资�
     const viewer = await seedUser(harness.db)
     const name = `agent-${ulid().slice(-6).toLowerCase()}`
     const agentId = await seedAgent(harness.db, { ownerUserId: owner.id, name })
-    await harness.db.insert(resourceGrants).values({
+    const { resourceGrants } = tablesOf(harness.db)
+    await insertOne(harness.db, resourceGrants, {
       resourceType: 'agent',
       resourceId: agentId,
       userId: viewer.id,

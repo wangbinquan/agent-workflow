@@ -3,17 +3,14 @@
 // Catalog owns classic-resource ACL/content reads. Both are bound to the same
 // transaction handle before any snapshot is loaded.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 import type { IntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
 } from '@/modules/resource-catalog/public/types'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   IntegrationTriggerAuthorityPair,
   IntegrationTriggerResourceQueries,
@@ -24,7 +21,7 @@ export type IntegrationTriggerResources = IntegrationTriggerResourceQueries &
   IntegrationTriggerTransactionLoader
 
 export function createIntegrationTriggerResources(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   factory: IntegrationTriggerResourceSnapshotFactory,
 ): IntegrationTriggerResources {
   const loadInTransaction: IntegrationTriggerTransactionLoader['loadAuthorized'] = async (
@@ -45,18 +42,18 @@ export function createIntegrationTriggerResources(
     requests: readonly IntegrationTriggerResourceRequest[],
   ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]>
   function loadAuthorized(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     pair: IntegrationTriggerAuthorityPair,
     requests: readonly IntegrationTriggerResourceRequest[],
   ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]>
   async function loadAuthorized(
-    first: DatabaseTransaction | IntegrationTriggerAuthorityPair,
+    first: PersistenceTx | IntegrationTriggerAuthorityPair,
     second: IntegrationTriggerAuthorityPair | readonly IntegrationTriggerResourceRequest[],
     third?: readonly IntegrationTriggerResourceRequest[],
   ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]> {
     if (third !== undefined) {
       return await loadInTransaction(
-        first as DatabaseTransaction,
+        first as PersistenceTx,
         second as IntegrationTriggerAuthorityPair,
         third,
       )

@@ -13,51 +13,47 @@
 //   - sibling cascade: current round decided by SYSTEM_DECIDER → null (R2a)
 //   - reject/iterate reuse (pre re-park): pending run, current = human iterate → 'decided' (R1)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { SYSTEM_DECIDER } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
+async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return { taskId }
 }
 
@@ -71,7 +67,7 @@ type RunStatus =
   | 'interrupted'
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     id?: string
@@ -82,25 +78,23 @@ async function seedRun(
   },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId: opts.nodeId,
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: opts.reviewIteration ?? 0,
-      status: opts.status ?? 'done',
-      startedAt: opts.startedAt,
-      finishedAt: null,
-    })
-    .run()
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
+    id,
+    taskId,
+    nodeId: opts.nodeId,
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: opts.reviewIteration ?? 0,
+    status: opts.status ?? 'done',
+    startedAt: opts.startedAt,
+    finishedAt: null,
+  })
   return id
 }
 
 async function seedDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   reviewNodeRunId: string,
   opts: {
@@ -113,39 +107,33 @@ async function seedDocVersion(
     createdAt?: number
   },
 ): Promise<void> {
-  await db
-    .insert(docVersions)
-    .values({
-      id: ulid(),
-      taskId,
-      reviewNodeId: 'rev',
-      reviewNodeRunId,
-      sourceNodeId: 'agent',
-      sourcePortName: 'docpath',
-      versionIndex: opts.versionIndex,
-      reviewIteration: opts.reviewIteration ?? 0,
-      bodyPath: `reviews/rev/docpath/v${opts.versionIndex}.md`,
-      decision: opts.decision,
-      decidedBy: opts.decidedBy ?? null,
-      itemIndex: opts.itemIndex ?? null,
-      roundGeneration: opts.roundGeneration ?? null,
-      createdAt: opts.createdAt ?? 1000 + opts.versionIndex,
-      decidedAt: null,
-    })
-    .run()
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
+    id: ulid(),
+    taskId,
+    reviewNodeId: 'rev',
+    reviewNodeRunId,
+    sourceNodeId: 'agent',
+    sourcePortName: 'docpath',
+    versionIndex: opts.versionIndex,
+    reviewIteration: opts.reviewIteration ?? 0,
+    bodyPath: `reviews/rev/docpath/v${opts.versionIndex}.md`,
+    decision: opts.decision,
+    decidedBy: opts.decidedBy ?? null,
+    itemIndex: opts.itemIndex ?? null,
+    roundGeneration: opts.roundGeneration ?? null,
+    createdAt: opts.createdAt ?? 1000 + opts.versionIndex,
+    decidedAt: null,
+  })
 }
 
-async function navKind(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  runId: string,
-): Promise<unknown> {
-  const res = await taskNodeRunsProjection({ db: db }, taskId)
+async function navKind(db: PersistenceDb, taskId: string, runId: string): Promise<unknown> {
+  const res = await taskNodeRunsProjection({ db }, taskId)
   return res.runs.find((r) => r.id === runId)!.reviewNavKind ?? null
 }
 
 describeEachProvider('RFC-158 — taskNodeRunsProjection stamps reviewNavKind', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db

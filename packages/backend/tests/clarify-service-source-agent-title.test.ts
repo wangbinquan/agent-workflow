@@ -10,11 +10,12 @@
 // Mirrors the equivalent enrichment review summaries already do for
 // review nodes (see services/review.ts listReviewSummaries).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -41,12 +42,13 @@ function buildDef(agentNode: WorkflowNode): WorkflowDefinition {
 }
 
 async function seedSessionForSnapshot(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   snapshotJson: string,
   agentNodeId: string,
 ): Promise<{ taskId: string; sessionId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -54,7 +56,7 @@ async function seedSessionForSnapshot(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -73,7 +75,7 @@ async function seedSessionForSnapshot(
     startedAt: Date.now(),
   })
   const clarifyNodeRunId = `nr_clarify_${taskId}`
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: clarifyNodeRunId,
     taskId,
     nodeId: 'clarify1',

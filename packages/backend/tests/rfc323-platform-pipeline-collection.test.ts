@@ -13,14 +13,14 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { mergeRequestContextSchema } from '@/modules/development-automation/composition/employeeTypePackage'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const roots: string[] = []
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 const headSha = 'a'.repeat(40)
 const targetSha = 'b'.repeat(40)
 const adapterRef = { id: 'pipeline-adapter', revision: 7 }

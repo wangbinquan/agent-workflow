@@ -1,9 +1,10 @@
 // RFC-360: profile writes and Resource Catalog participants must share one real transaction.
 // Inject a failure after the real session write: neither context may commit alone.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { agents, mcps, mcpRuntimeTestSessions, users } from '@/db/schema'
 import { composeRuntimeProfileParticipants } from '@/modules/resource-catalog/composition/runtimeProfileParticipants'
 import { DrizzleRuntimeRegistryPersistence } from '@/modules/runtime-management/infrastructure/runtimeRegistryPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -28,7 +29,8 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
       })
     }
     const ownerUserId = ulid()
-    await harness.db.insert(users).values({
+    const { users, mcps, mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: ownerUserId,
       username: ownerUserId,
       displayName: 'runtime participant',
@@ -40,8 +42,8 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
     })
     const mcpId = ulid()
     const sessionId = ulid()
-    await harness.db.insert(mcps).values({ id: mcpId, name: mcpId, type: 'local' })
-    await harness.db.insert(mcpRuntimeTestSessions).values({
+    await insertOne(harness.db, mcps, { id: mcpId, name: mcpId, type: 'local' })
+    await insertOne(harness.db, mcpRuntimeTestSessions, {
       id: sessionId,
       mcpId,
       ownerUserId,
@@ -66,6 +68,7 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
       updatedAt: 1,
     })
     async function session() {
+      const { mcpRuntimeTestSessions } = tablesOf(harness.db)
       return (
         await harness.db
           .select()
@@ -88,6 +91,7 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
           ...f.participants.testInvalidation,
           async invalidate(transaction, input) {
             await f.participants.testInvalidation.invalidate(transaction, input)
+            const { mcpRuntimeTestSessions } = tablesOf(transaction)
             const changed = (
               await transaction
                 .select()
@@ -142,9 +146,12 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
     const agentId = ulid()
     await expect(
       harness.session.serializable(async (transaction) => {
-        await transaction
-          .insert(agents)
-          .values({ id: agentId, name: 'new-reference', runtime: f.name })
+        const { agents } = tablesOf(transaction)
+        await insertOne(transaction, agents, {
+          id: agentId,
+          name: 'new-reference',
+          runtime: f.name,
+        })
         expect(
           await f.store.deleteRuntime({
             name: f.name,
@@ -156,6 +163,7 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
         throw new Error('rollback-reference')
       }),
     ).rejects.toThrow('rollback-reference')
+    const { agents } = tablesOf(harness.db)
     expect(await harness.db.select().from(agents).where(eq(agents.id, agentId))).toEqual([])
     expect(await f.store.getRuntime(f.name)).not.toBeNull()
     expect((await f.session())?.status).toBe('active')

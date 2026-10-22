@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
 import {
   selectedResourcePackageRecoveryEffects,
@@ -10,8 +12,7 @@ import { BUNDLE_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import { skills, skillVersions } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
@@ -179,7 +180,7 @@ function assertSkillArtifactPaths(input: {
 }
 
 async function rollForwardSkillArtifact(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly effectsFactory: ResourcePackageRecoveryEffectsFactory
   readonly artifact: PostgresqlSkillArtifact
@@ -195,11 +196,13 @@ async function rollForwardSkillArtifact(input: {
     liveDirectory: expectedLiveDirectory,
     versionDirectory: expectedVersionDirectory,
   })
-  const skill = await input.db
-    .select({ managedPath: skills.managedPath, contentVersion: skills.contentVersion })
-    .from(skills)
-    .where(eq(skills.id, input.artifact.skillId))
-    .get()
+  const { skills, skillVersions } = tablesOf(input.db)
+  const skill = await first(
+    input.db
+      .select({ managedPath: skills.managedPath, contentVersion: skills.contentVersion })
+      .from(skills)
+      .where(eq(skills.id, input.artifact.skillId)),
+  )
   const disposition = resourcePackageSkillRecoveryDisposition({
     currentContentVersion: skill?.contentVersion ?? null,
     artifactVersion: version,
@@ -220,16 +223,17 @@ async function rollForwardSkillArtifact(input: {
   ) {
     throw new Error(`resource-package-skill-publication-missing:${input.artifact.skillId}`)
   }
-  const snapshot = await input.db
-    .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
-    .from(skillVersions)
-    .where(
-      and(
-        eq(skillVersions.skillId, input.artifact.skillId),
-        eq(skillVersions.versionIndex, version),
+  const snapshot = await first(
+    input.db
+      .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
+      .from(skillVersions)
+      .where(
+        and(
+          eq(skillVersions.skillId, input.artifact.skillId),
+          eq(skillVersions.versionIndex, version),
+        ),
       ),
-    )
-    .get()
+  )
   if (snapshot === undefined || snapshot.contentHash === null) {
     throw new Error(`resource-package-skill-snapshot-missing:${input.artifact.skillId}:${version}`)
   }
@@ -291,7 +295,7 @@ async function compensateSkillArtifact(input: {
 }
 
 export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
   readonly effectsFactory?: ResourcePackageRecoveryEffectsFactory
@@ -305,7 +309,7 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
         try {
           assertOperationInReceipt(receipt, artifact)
           if (artifact.kind === 'plugin-install') {
-            const plugin = await pluginCachedPathQuery(input.db, artifact).get()
+            const plugin = await first(pluginCachedPathQuery(input.db, artifact))
             if (
               plugin !== undefined &&
               !(await withResourcePackageRecoveryEffects(factory, (effects) =>

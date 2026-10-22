@@ -12,7 +12,7 @@ import type { Actor } from '@/auth/actor'
 // RFC-359 AC-6：形参放宽到中立客户端。`@/db/*` 不能直接出现在 services 层
 //（`rfc349-provider-cutover` 的「业务面只持有 port、不持有 DB 机制」那条），
 // 所以走 legacy transport 那份既有的中立别名——与 `services/taskArchive.ts` 同形。
-import type { LegacyProviderNeutralDatabase as ProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import type { LegacyProviderNeutralDatabase as PersistenceDb } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { getWorkflow } from '@/services/workflow'
@@ -28,7 +28,7 @@ type LaunchableWorkflow = NonNullable<Awaited<ReturnType<typeof getWorkflow>>>
  * 403 via `assertNotBuiltin` (the row IS visible).
  */
 export async function assertWorkflowLaunchable(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   workflowId: string,
 ): Promise<LaunchableWorkflow> {
@@ -47,7 +47,7 @@ export async function assertWorkflowLaunchable(
  * enforced visibility + built-in policy inside its transaction.
  */
 export async function assertWorkflowSnapshotLaunchable(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   wf: TaskExecutionWorkflowSnapshot,
 ): Promise<void> {
   // RFC-243 实现门 P1-2: launch is the ENFORCEMENT point of the call-node

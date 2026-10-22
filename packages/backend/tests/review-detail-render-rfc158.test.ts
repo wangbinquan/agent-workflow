@@ -9,53 +9,50 @@
 // RFC-359: seed the 600 unrelated reviews in bounded batches. The PostgreSQL
 // CI timeout happened during their 1,200 individual writes, before the query.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches } from '../src/platform/persistence/batchInsert'
 import { getReviewDetail } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
+async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: '{}',
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: '{}',
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'awaiting_review',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'awaiting_review',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return { taskId }
 }
 
-function reviewRunValues(taskId: string): typeof nodeRuns.$inferInsert {
+function reviewRunValues(taskId: string): PersistenceTables['nodeRuns']['$inferInsert'] {
   return {
     id: ulid(),
     taskId,
@@ -69,9 +66,10 @@ function reviewRunValues(taskId: string): typeof nodeRuns.$inferInsert {
   }
 }
 
-async function seedReviewRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedReviewRun(db: PersistenceDb, taskId: string): Promise<string> {
   const row = reviewRunValues(taskId)
-  await db.insert(nodeRuns).values(row).run()
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, row)
   return row.id
 }
 
@@ -79,7 +77,7 @@ function docVersionValues(
   taskId: string,
   reviewNodeRunId: string,
   opts: { versionIndex: number; createdAt: number; decision?: 'pending' | 'approved' },
-): typeof docVersions.$inferInsert {
+): PersistenceTables['docVersions']['$inferInsert'] {
   const bodyPath = `reviews/rev/docpath/${reviewNodeRunId}-v${opts.versionIndex}.md`
   return {
     id: ulid(),
@@ -98,13 +96,14 @@ function docVersionValues(
 }
 
 async function seedDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   reviewNodeRunId: string,
   opts: { versionIndex: number; createdAt: number; decision?: 'pending' | 'approved' },
 ): Promise<{ bodyPath: string }> {
   const row = docVersionValues(taskId, reviewNodeRunId, opts)
-  await db.insert(docVersions).values(row).run()
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, row)
   return { bodyPath: row.bodyPath }
 }
 
@@ -117,7 +116,7 @@ function writeBody(appHome: string, bodyPath: string, text: string): void {
 describeEachProvider(
   'RFC-158 — getReviewDetail renders whenever a doc_version exists',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     beforeEach(() => {
       resetBroadcastersForTests()
@@ -142,8 +141,8 @@ describeEachProvider(
 
       // 600 NEWER doc_versions on other runs — pushing the target out of the
       // global `ORDER BY created_at DESC LIMIT 500` window listReviewSummaries used.
-      const otherRuns: (typeof nodeRuns.$inferInsert)[] = []
-      const otherVersions: (typeof docVersions.$inferInsert)[] = []
+      const otherRuns: PersistenceTables['nodeRuns']['$inferInsert'][] = []
+      const otherVersions: PersistenceTables['docVersions']['$inferInsert'][] = []
       for (let i = 0; i < 600; i++) {
         const otherRun = reviewRunValues(taskId)
         otherRuns.push(otherRun)
@@ -157,18 +156,13 @@ describeEachProvider(
       // These rows only feed the read below. Keep every referenced run present
       // before inserting its version, then finish the transaction before reading.
       await harness.session.transaction(async (tx) => {
-        await insertInBatches(tx, nodeRuns, otherRuns, (batch) =>
-          tx
-            .insert(nodeRuns)
-            .values([...batch])
-            .run(),
-        )
-        await insertInBatches(tx, docVersions, otherVersions, (batch) =>
-          tx
-            .insert(docVersions)
-            .values([...batch])
-            .run(),
-        )
+        const { nodeRuns, docVersions } = tablesOf(tx)
+        await insertInBatches(tx, nodeRuns, otherRuns, (batch) => {
+          return queryWrite(tx.insert(nodeRuns).values([...batch]))
+        })
+        await insertInBatches(tx, docVersions, otherVersions, (batch) => {
+          return queryWrite(tx.insert(docVersions).values([...batch]))
+        })
       })
 
       const detail = await getReviewDetail(db, appHome, targetRun)

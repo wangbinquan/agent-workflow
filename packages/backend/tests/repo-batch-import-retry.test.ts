@@ -3,7 +3,7 @@
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   __resetBatchImportForTests,
@@ -79,7 +79,7 @@ async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise
   throw new Error('timed out waiting for batch.completed')
 }
 
-function deps(db: ProviderNeutralDatabase, resolver: Resolver): RepoBatchImportDeps {
+function deps(db: PersistenceDb, resolver: Resolver): RepoBatchImportDeps {
   return {
     store: composeSqliteRepositoryWorkspaceStore(db),
     resolveCachedRepo: resolver,

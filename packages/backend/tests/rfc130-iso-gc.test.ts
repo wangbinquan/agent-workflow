@@ -5,19 +5,20 @@
 // containers of TERMINAL tasks (and iso dirs with no task row = deleted task), and
 // keeps ACTIVE tasks' iso worktrees (they may be in flight).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
-
-async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const id = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: 'wf',
     definition: '{}',
@@ -28,12 +29,13 @@ async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   workflowId: string,
   status: 'done' | 'running',
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: 'x',
     workflowId,

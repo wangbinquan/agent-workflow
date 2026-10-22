@@ -2,13 +2,14 @@
 // telemetry fields. We focus on serializer / schema shape rather than re-
 // exercising the full clone path (covered in git-repo-cache-submodule.test.ts).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { cachedRepos } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -60,34 +61,29 @@ describeEachProvider('cached-repos HTTP RFC-034 submodule telemetry', (harness) 
 
     test('GET /api/cached-repos serializes the three submodule columns', async () => {
       const now = Date.now()
-      await harness.db
-        .insert(cachedRepos)
-        .values({
-          id: ulid(),
-          urlHash: 'aaaa1111',
-          urlRedacted: 'git@github.com:foo/with-subs.git',
-          localPath: '/tmp/aw-mock-cache/aaaa1111',
-          defaultBranch: 'main',
-          lastFetchedAt: now,
-          createdAt: now,
-          hasSubmodules: true,
-          lastSubmoduleSyncOk: false,
-          lastSubmoduleSyncError: 'fatal: permission denied (publickey)',
-        })
-        .run()
-      await harness.db
-        .insert(cachedRepos)
-        .values({
-          id: ulid(),
-          urlHash: 'bbbb2222',
-          urlRedacted: 'git@github.com:foo/no-subs.git',
-          localPath: '/tmp/aw-mock-cache/bbbb2222',
-          defaultBranch: 'main',
-          lastFetchedAt: now,
-          createdAt: now,
-          // legacy row — submodule columns omitted, should serialize as null
-        })
-        .run()
+      const { cachedRepos } = tablesOf(harness.db)
+      await insertOne(harness.db, cachedRepos, {
+        id: ulid(),
+        urlHash: 'aaaa1111',
+        urlRedacted: 'git@github.com:foo/with-subs.git',
+        localPath: '/tmp/aw-mock-cache/aaaa1111',
+        defaultBranch: 'main',
+        lastFetchedAt: now,
+        createdAt: now,
+        hasSubmodules: true,
+        lastSubmoduleSyncOk: false,
+        lastSubmoduleSyncError: 'fatal: permission denied (publickey)',
+      })
+      await insertOne(harness.db, cachedRepos, {
+        id: ulid(),
+        urlHash: 'bbbb2222',
+        urlRedacted: 'git@github.com:foo/no-subs.git',
+        localPath: '/tmp/aw-mock-cache/bbbb2222',
+        defaultBranch: 'main',
+        lastFetchedAt: now,
+        createdAt: now,
+        // legacy row — submodule columns omitted, should serialize as null
+      })
 
       const res = await req(app, '/api/cached-repos')
       expect(res.status).toBe(200)

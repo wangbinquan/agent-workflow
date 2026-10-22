@@ -2,6 +2,8 @@
 // Digital Employee Case must refresh its cached repository before freezing the
 // Case baseline. Once frozen, later retries must keep that exact baseline.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,7 +11,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { employeeCases, employeeCaseWorkspaces, employeeReactionRounds } from '@/db/schema'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import {
@@ -169,7 +170,8 @@ describeEachProvider('RFC-310 Digital Employee workspace repository freshness', 
       },
       inputEnvelopeJson: JSON.stringify({ contextsJson: JSON.stringify([issueContext]) }),
     } as const
-    await db.insert(employeeCases).values({
+    const { employeeCases, employeeReactionRounds, employeeCaseWorkspaces } = tablesOf(db)
+    await insertOne(db, employeeCases, {
       id: 'case-freshness',
       employeeId: 'employee-freshness',
       employeeRevision: 1,
@@ -188,7 +190,7 @@ describeEachProvider('RFC-310 Digital Employee workspace repository freshness', 
       updatedAt: 1,
       terminalAt: null,
     })
-    await db.insert(employeeReactionRounds).values({
+    await insertOne(db, employeeReactionRounds, {
       id: 'round-freshness',
       caseId: 'case-freshness',
       caseRevision: 1,

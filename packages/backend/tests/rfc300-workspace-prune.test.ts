@@ -4,6 +4,8 @@
 // whole scratch-repository deletion, active-owner deferral, lease retry, boot
 // replay, adjacent exclusions, and idempotent crash windows.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -12,15 +14,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  nodeRunEvents,
-  taskExecutionMaintenanceClaims,
-  nodeRunOutputs,
-  nodeRuns,
-  taskRepos,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { getTask } from '../src/services/task'
@@ -37,16 +30,20 @@ beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
   root = mkdtempSync(join(tmpdir(), 'aw-rfc300-prune-'))
   workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'rfc300', definition: '{}' })
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'rfc300', definition: '{}' })
 })
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-async function seedTask(overrides: Partial<typeof tasks.$inferInsert> = {}): Promise<string> {
+async function seedTask(
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+): Promise<string> {
   const id = overrides.id ?? ulid()
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: 'rfc300-prune',
     workflowId,
@@ -69,6 +66,7 @@ async function seedTask(overrides: Partial<typeof tasks.$inferInsert> = {}): Pro
 }
 
 async function rowOf(id: string) {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, id)))[0]!
 }
 
@@ -161,7 +159,8 @@ describe('RFC-300 physical workspace deletion', () => {
         spaceKind: 'scratch',
       })
       const nodeRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs, nodeRunEvents } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: nodeRunId,
         taskId: id,
         nodeId: 'persisted-result',
@@ -176,13 +175,13 @@ describe('RFC-300 physical workspace deletion', () => {
         v: 1,
         items: [{ path: 'result.txt', file: archivePath, size: 30, truncated: false }],
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId,
         portName: 'result',
         content: 'persisted outside the workspace',
         archiveJson,
       })
-      await db.insert(nodeRunEvents).values({
+      await insertOne(db, nodeRunEvents, {
         nodeRunId,
         ts: 1,
         kind: 'text',
@@ -259,6 +258,7 @@ describe('RFC-300 physical workspace deletion', () => {
       repoCount: repos.length,
       spaceKind: 'remote',
     })
+    const { taskRepos } = tablesOf(db)
     await db.insert(taskRepos).values(
       repos.map((repo, index) => ({
         taskId: id,
@@ -297,6 +297,7 @@ describe('RFC-300 physical workspace deletion', () => {
       workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id, 210),
     ])
     expect(existsSync(scratch)).toBe(false)
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
     expect(await db.select().from(taskExecutionMaintenanceClaims)).toHaveLength(1)
     expect((await rowOf(id)).workspacePrunedAt).toBe(210)
   })

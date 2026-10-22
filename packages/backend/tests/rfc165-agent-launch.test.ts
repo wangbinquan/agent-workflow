@@ -32,6 +32,8 @@
 //   A9  F15 permission carve-out: tasks:launch WITHOUT agents:write may
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
@@ -53,7 +55,6 @@ import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents, tasks, users, workflows } from '../src/db/schema'
 import {
   acquireAgentLaunch,
   isAgentLaunching,
@@ -126,6 +127,7 @@ function daemonActor() {
  * 这不是夹具将就实现——生产上的用户本来就有这几格，旧入口宽容的是它自己不写 git 身份这件事。
  */
 async function seedLaunchUser(db: DbClient): Promise<void> {
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -198,7 +200,8 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     // createAgent would demote an unknown token to project, so insert the row
     // directly (mirrors the deleted-plugin case below).
     const skillyId = ulid()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id: skillyId,
       name: 'skilly',
       description: '',
@@ -221,7 +224,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     // createAgent validates plugin refs at SAVE time — simulate the historical
     // case (plugin deleted after the agent was saved) via a direct row insert.
     const pluggyId = ulid()
-    await db.insert(agents).values({
+    await insertOne(db, agents, {
       id: pluggyId,
       name: 'pluggy',
       description: '',
@@ -269,8 +272,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       createTestTaskExecutionLaunchParticipant({
         db,
         appHome,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         completionMode: 'background',
       }),
       db,
@@ -292,6 +294,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     // Platform-owned host snapshots freeze the shared canonical layout at the
     // task boundary; legacy rows use the same policy in the read projection.
     expect(snapshot.nodes.every((node) => node.position !== undefined)).toBe(true)
+    const { workflows } = tablesOf(db)
     // FK anchor row exists and is builtin (lazily seeded).
     const anchor = (
       await db.select().from(workflows).where(eq(workflows.id, AGENT_HOST_WORKFLOW_ID))
@@ -306,8 +309,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           completionMode: 'background',
         }),
         db,
@@ -316,6 +318,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         BODY(),
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks)).length).toBe(0)
   })
 
@@ -337,6 +340,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       { ...AGENT_FIELDS, name: 'private-agent' },
       { ownerUserId: owner.id },
     )
+    const { agents } = tablesOf(db)
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.name, 'private-agent'))
     const strangerActor = buildActor({
       user: {
@@ -354,8 +358,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           completionMode: 'background',
         }),
         db,
@@ -369,8 +372,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           completionMode: 'background',
         }),
         db,
@@ -381,7 +383,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
     const builtinId = ulid()
-    await db.insert(agents).values({
+    await insertOne(db, agents, {
       id: builtinId,
       name: 'sys-agent',
       description: '',
@@ -402,8 +404,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           completionMode: 'background',
         }),
         db,
@@ -419,8 +420,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           completionMode: 'background',
         }),
         db,
@@ -446,6 +446,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
           async loadVisibleAgent(actor, id) {
             const row = await resources.loadVisibleAgent(actor, id)
             reads++
+            const { agents } = tablesOf(db)
             if (reads === 1) await db.delete(agents).where(eq(agents.id, solo.id))
             return row
           },
@@ -485,15 +486,17 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     expect(reads).toBe(2)
     expect(preparations).toBe(0)
     expect(drives).toBe(0)
+    const { tasks } = tablesOf(db)
     expect(await db.select().from(tasks)).toHaveLength(0)
     expect(isAgentLaunching(solo.id)).toBe(false)
   })
 
   test('A8 delete: live task 409s; display rename is id-stable; terminal delete proceeds', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
+    await composeAgentLaunchResourceOperations({ db }).ensureHostWorkflow()
     const liveId = ulid()
-    await db.insert(tasks).values({
+    const { tasks, agents } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: liveId,
       name: 'live',
       workflowId: AGENT_HOST_WORKFLOW_ID,
@@ -544,7 +547,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'a'.repeat(64),
@@ -563,6 +566,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     })
     adminToken = (await createSession({ db, userId: admin.id })).token
     soloId = (await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })).id
+    const { agents } = tablesOf(db)
     // The A9 permission matrix intentionally launches the same fixture from
     // Bob's scoped PAT. Keep that cross-actor visibility explicit now that
     // RFC-231 changes canonical creates to private.
@@ -595,14 +599,15 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   }
 
   test('A6 lifecycle guards: agent host passes builtin lock; workgroup host stays 403; both sync 422', async () => {
-    await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
+    await composeAgentLaunchResourceOperations({ db }).ensureHostWorkflow()
     const { ensureWorkgroupHostWorkflow, WORKGROUP_HOST_WORKFLOW_ID } =
       await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
     await ensureWorkgroupHostWorkflow(db)
 
     const mk = async (over: Record<string, unknown>) => {
       const id = ulid()
-      await db.insert(tasks).values({
+      const { tasks } = tablesOf(db)
+      await insertOne(db, tasks, {
         id,
         name: 'fixture',
         workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
@@ -748,7 +753,8 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
 
   test('A7a boot auto-resume NOW resumes workgroup tasks too (RFC-186 PR-2 lifted the limitation)', async () => {
     const wf = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: wf,
       name: 'wf',
       definition: '{}',
@@ -757,7 +763,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
     })
     const mk = async (over: Record<string, unknown>) => {
       const id = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id,
         name: 'fixture',
         workflowId: wf,
@@ -843,10 +849,10 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
   test('A7b repair list marks revive options unavailable + apply refuses (workgroup task)', async () => {
     // RFC-359 第 8 刀：修复只剩一份实现，测试统一经 `tests/helpers/repairEngine.ts` 装配。
     const { createRepairEngine } = await import('./helpers/repairEngine')
-    const { lifecycleAlerts } = await import('../src/db/schema')
+    const { lifecycleAlerts, workflows, tasks } = tablesOf(db)
     const engine = createRepairEngine(db, { appHome: '/tmp' })
     const wf = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: wf,
       name: 'wf',
       definition: '{}',
@@ -854,7 +860,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
       updatedAt: Date.now(),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'wg-task',
       workflowId: wf,
@@ -869,7 +875,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
       workgroupId: 'wg1',
     })
     const alertId = ulid()
-    await db.insert(lifecycleAlerts).values({
+    await insertOne(db, lifecycleAlerts, {
       id: alertId,
       taskId,
       rule: 'S4',
@@ -927,8 +933,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
       createTestTaskExecutionLaunchParticipant({
         db,
         appHome,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         completionMode: 'background',
       }),
       db,
@@ -943,8 +948,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
       createTestTaskExecutionLaunchParticipant({
         db,
         appHome,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         completionMode: 'background',
       }),
       db,
@@ -961,8 +965,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           completionMode: 'background',
         }),
         db,
@@ -971,6 +974,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
         BODY({ expectedAgentId: 'stale-other-id' }),
       ),
     ).rejects.toMatchObject({ code: 'agent-id-mismatch' })
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks)).length).toBe(2)
   })
 

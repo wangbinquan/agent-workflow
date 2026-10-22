@@ -21,6 +21,8 @@
 //     streams are still cut at the limit (413 `review-body-too-large`).
 //   - Every refusal leaves review_comments untouched.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Hono } from 'hono'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -35,13 +37,12 @@ import {
 } from '@agent-workflow/shared'
 import type { ReviewCommentAnchor } from '@agent-workflow/shared'
 import { type DbClient } from '../src/db/client'
-import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import {
   buildReviewAnchorDocument,
   resolveReviewAnchor,
 } from '@/modules/collaboration/domain/reviewAnchor'
 import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/routes/reviews'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 
@@ -72,7 +73,7 @@ interface DocRow {
 }
 
 interface Fixture<
-  Database extends ProviderNeutralDatabase = DbClient,
+  Database extends PersistenceDb = DbClient,
   CleanupResult extends void | Promise<void> = void,
 > {
   db: Database
@@ -88,8 +89,8 @@ interface Fixture<
   cleanup: () => CleanupResult
 }
 
-type ProviderFixture = Fixture<ProviderNeutralDatabase, Promise<void>>
-type AnyFixture = Fixture<ProviderNeutralDatabase, void | Promise<void>>
+type ProviderFixture = Fixture<PersistenceDb, Promise<void>>
+type AnyFixture = Fixture<PersistenceDb, void | Promise<void>>
 
 type Mode = 'single' | 'multi-path' | 'multi-inline'
 
@@ -109,9 +110,10 @@ async function buildFixture(
 
   const db = provider.db
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
+  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -178,7 +180,7 @@ async function buildFixture(
   for (let i = 0; i < bodies.length; i++) {
     const id = ulid()
     const body = bodies[i]!
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       ...baseRow(id, reviewRunId, body, 'rev_1'),
       decision: 'pending',
       ...(mode === 'single'
@@ -192,14 +194,14 @@ async function buildFixture(
     docs.push({ id, body })
   }
   const decidedDocId = ulid()
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     ...baseRow(decidedDocId, reviewRunId, '# old round\n', 'rev_1'),
     versionIndex: 0,
     decision: 'iterated',
     decidedAt: Date.now() - 1000,
   })
   const foreignPendingDocId = ulid()
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     ...baseRow(foreignPendingDocId, otherRunId, '# other review\n', 'rev_2'),
     decision: 'pending',
   })
@@ -256,6 +258,7 @@ function commentsPath(f: AnyFixture): string {
 }
 
 async function commentRowCount(f: AnyFixture): Promise<number> {
+  const { reviewComments } = tablesOf(f.db)
   return (await f.db.select().from(reviewComments)).length
 }
 
@@ -289,6 +292,7 @@ registerProviderFixture('RFC-326 AC-11 / AC-12 — simplified anchors over REST'
     expect(json.docVersionId).toBe(f.docs[0]!.id)
     expect(json.commentText).toBe('name the state explicitly')
 
+    const { reviewComments } = tablesOf(f.db)
     const row = (await f.db.select().from(reviewComments))[0]!
     expect(row.anchorOffsetStart).toBe(expected.anchor.offsetStart)
     expect(row.anchorOffsetEnd).toBe(expected.anchor.offsetEnd)
@@ -522,6 +526,7 @@ registerProviderFixture('RFC-326 AC-13 — multi-document rounds name their docu
     expect(ok.status).toBe(201)
     expect(ok.json.docVersionId).toBe(f.docs[1]!.id)
     expect(ok.json.anchor).toEqual(resolved('# B\n\nbeta text\n', { quote: 'beta' }).anchor)
+    const { reviewComments } = tablesOf(f.db)
     const rows = await f.db
       .select()
       .from(reviewComments)
@@ -646,6 +651,7 @@ registerProviderFixture(
         await expect413(request(path, streamOver(REVIEW_WRITE_BODY_MAX_BYTES)), 'chunked')
       }
       expect(await commentRowCount(f)).toBe(0)
+      const { nodeRuns } = tablesOf(f.db)
       const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
       expect(run.status).toBe('awaiting_review')
     })

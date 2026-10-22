@@ -21,6 +21,8 @@
 // 时序确定性：gate 文件慢 mock（同 rfc092-midrun-clarify-dispatch.test.ts），
 // 测试侧轮询 DB 状态，绝不裸 sleep 赌时机。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -31,7 +33,6 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory()
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
@@ -150,7 +151,8 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -170,12 +172,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc098-revival',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc098-wrapper-revival',
     id: taskId,
     workflowId,
@@ -206,6 +209,7 @@ async function waitFor<T>(
 }
 
 async function nodeRows(db: DbClient, taskId: string, nodeId: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select()
     .from(nodeRuns)
@@ -214,6 +218,7 @@ async function nodeRows(db: DbClient, taskId: string, nodeId: string) {
 }
 
 async function taskStatus(db: DbClient, taskId: string): Promise<string> {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status
 }
 
@@ -310,6 +315,7 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     expect(loopAfter).toHaveLength(1)
     expect(loopAfter[0]!.id).toBe(wrapperRunId)
     expect(loopAfter[0]!.status).toBe('done')
+    const { nodeRunOutputs } = tablesOf(h.db)
     const outs = await h.db
       .select()
       .from(nodeRunOutputs)
@@ -392,6 +398,7 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     expect(gwAfter).toHaveLength(1)
     expect(gwAfter[0]!.id).toBe(gwRunId)
     expect(gwAfter[0]!.status).toBe('done')
+    const { nodeRunOutputs } = tablesOf(h.db)
     const outs = await h.db
       .select()
       .from(nodeRunOutputs)
@@ -492,6 +499,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
     try {
       // 提交窗口：clarify 已停泊（wrapper 行 awaiting_human）∧ slow 仍 running。
       const session = await waitFor(async () => {
+        const { clarifyRounds } = tablesOf(h.db)
         const s = (
           await h.db
             .select()
@@ -526,6 +534,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
     }
     await runPromise
 
+    const { tasks, nodeRunOutputs, clarifyRounds } = tablesOf(h.db)
     // RFC-092 限制解除主证：同一次 runTask 内任务直接收敛 done——修复前这里
     // 是 awaiting_human（wrapper 在 dispatchedThisInvocation 里被挡，inbox 已
     // 空、等人工 resume）。

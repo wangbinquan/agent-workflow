@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AgentLaunchResourceOperations,
   AgentLaunchVisibleAgentQuery,
@@ -14,7 +14,7 @@ import { createAgentLaunchResourceOperations } from '../infrastructure/agentLaun
  * PostgreSQL bootstrap 照旧把自己的两份传进来。
  */
 export function composeAgentLaunchResourceOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly agents?: AgentLaunchVisibleAgentQuery
   readonly workflowValidation?: AgentLaunchWorkflowValidation
 }): AgentLaunchResourceOperations {

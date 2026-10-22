@@ -10,12 +10,13 @@
 //     plan.md T5 实施记录）+ 披露聚合 count（沿 workflow.ts task-ACL 论证，
 //     不泄他人任务 id/status）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, users, workgroups } from '../src/db/schema'
 import { deleteWorkgroup } from '../src/services/workgroups'
 
 function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
@@ -25,8 +26,9 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seed(db: ProviderNeutralDatabase, ownerId: string): Promise<string> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, ownerId: string): Promise<string> {
+  const { users, workgroups } = tablesOf(db)
+  await insertOne(db, users, {
     id: ownerId,
     username: `u-${ownerId.slice(-6)}`,
     displayName: 'Owner',
@@ -37,7 +39,7 @@ async function seed(db: ProviderNeutralDatabase, ownerId: string): Promise<strin
     updatedAt: 1,
   })
   const wgId = ulid()
-  await db.insert(workgroups).values({
+  await insertOne(db, workgroups, {
     id: wgId,
     name: `wg-${wgId.toLowerCase()}`,
     mode: 'free_collab',
@@ -48,7 +50,7 @@ async function seed(db: ProviderNeutralDatabase, ownerId: string): Promise<strin
 }
 
 async function seedTaskRef(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   wgId: string,
   // 注意：'interrupted' 在 shared/lifecycle.ts TERMINAL_TASK_STATUSES 里**属
   // 终态**（daemon 重启遗留、可 resume 但记账为终局）——非终态代表取
@@ -56,7 +58,8 @@ async function seedTaskRef(
   status: 'running' | 'done' | 'awaiting_human',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: `ref-${status}`,
     workflowId: 'wf-any', // 0151 后软链——无需真实 workflow 行
@@ -109,6 +112,7 @@ describeEachProvider('RFC-285 B2 — workgroup 删除中档（E3 收紧）', (ha
       { expectedVersion: 1, clientMutationId: ulid() },
       { kind: 'actor', actor: actorOf(owner) },
     )
+    const { workgroups, tasks } = tablesOf(db)
     const wgRows = await db.select().from(workgroups)
     expect(wgRows.length).toBe(0)
     const taskRow = (await db.select().from(tasks)).find((t) => t.id === taskId)
@@ -129,6 +133,7 @@ describeEachProvider('RFC-285 B2 — workgroup 删除中档（E3 收紧）', (ha
       ),
     ).rejects.toMatchObject({ code: 'workgroup-in-use' })
     const { eq } = await import('drizzle-orm')
+    const { tasks, workgroups } = tablesOf(db)
     await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
     await deleteWorkgroup(
       db,

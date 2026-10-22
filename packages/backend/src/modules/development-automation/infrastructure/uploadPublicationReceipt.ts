@@ -5,11 +5,11 @@
 // 后续 action 的 no-change 判定都以该 receipt 为准（seed 已进入发布链，不再是待交付物）。调用点在 source.push effect
 // 结算 arm（主 session 接线）。查—插在一笔事务里，并发重放由唯一索引 + `onConflictDoNothing().returning()` 兜底。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { developmentRepositoryUploadReceipts } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
 export interface RecordUploadPublicationInput {
@@ -23,7 +23,8 @@ export interface RecordUploadPublicationInput {
   readonly now: number
 }
 
-function publicationOf(planId: string, baselineSnapshotRef: string) {
+function publicationOf(db: object, planId: string, baselineSnapshotRef: string) {
+  const { developmentRepositoryUploadReceipts } = tablesOf(db)
   return and(
     eq(developmentRepositoryUploadReceipts.planId, planId),
     eq(developmentRepositoryUploadReceipts.baselineSnapshotRef, baselineSnapshotRef),
@@ -32,15 +33,16 @@ function publicationOf(planId: string, baselineSnapshotRef: string) {
 }
 
 export async function recordUploadPublicationReceipt(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: RecordUploadPublicationInput,
 ): Promise<{ readonly created: boolean; readonly receiptId: string }> {
   return await databaseSessionFor(db).transaction(async (tx) => {
+    const { developmentRepositoryUploadReceipts } = tablesOf(tx)
     const existing = (
       await tx
         .select({ id: developmentRepositoryUploadReceipts.id })
         .from(developmentRepositoryUploadReceipts)
-        .where(publicationOf(input.planId, input.baselineSnapshotRef))
+        .where(publicationOf(tx, input.planId, input.baselineSnapshotRef))
         .limit(1)
     )[0]
     if (existing !== undefined) return { created: false, receiptId: existing.id }
@@ -68,7 +70,7 @@ export async function recordUploadPublicationReceipt(
       await tx
         .select({ id: developmentRepositoryUploadReceipts.id })
         .from(developmentRepositoryUploadReceipts)
-        .where(publicationOf(input.planId, input.baselineSnapshotRef))
+        .where(publicationOf(tx, input.planId, input.baselineSnapshotRef))
         .limit(1)
     )[0]
     if (winner === undefined) throw new Error('upload publication receipt winner unavailable')
@@ -78,9 +80,10 @@ export async function recordUploadPublicationReceipt(
 
 /** 读侧：该 plan 是否已有 publication receipt（arm 幂等判定 / 事实投影用）。 */
 export async function hasUploadPublicationReceipt(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   planId: string,
 ): Promise<boolean> {
+  const { developmentRepositoryUploadReceipts } = tablesOf(db)
   const row = (
     await db
       .select({ id: developmentRepositoryUploadReceipts.id })

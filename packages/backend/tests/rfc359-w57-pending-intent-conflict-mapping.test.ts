@@ -32,13 +32,14 @@
 //   ② 映射本身——真错误经 `pendingIntentInsertConflict` 出来必须是
 //      `TaskExecutionError('task-continuation-conflict')`。
 //   ③ **没有名字的那一档**（`''`）同样被映射；不是唯一冲突的错误原样抛。这两条正是这次修的洞。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { taskExecutionIntents, tasks, users, workflows } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { TaskExecutionError } from '../src/modules/task-execution/application/taskExecutionError'
 import { pendingIntentInsertConflict } from '../src/modules/task-execution/infrastructure/taskContinuationAdmission'
@@ -47,8 +48,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_788_278_400_000
 const TASK_ID = 'task-pending-intent'
 
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'owner',
     username: 'owner',
     displayName: 'owner',
@@ -56,12 +58,12 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: TASK_ID,
     name: TASK_ID,
     workflowId: 'wf',
@@ -78,8 +80,9 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
 }
 
 /** 直插一行 pending intent；第二次调用必然撞上那条部分唯一索引。 */
-async function insertPending(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(taskExecutionIntents).values({
+async function insertPending(db: PersistenceDb): Promise<void> {
+  const { taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, taskExecutionIntents, {
     id: `intent_${ulid()}`,
     taskId: TASK_ID,
     kind: 'resume',
@@ -185,7 +188,7 @@ describeEachProvider('RFC-359 W57 —— pending intent 唯一冲突的领域映
       source.indexOf('  try {'),
       source.indexOf('pendingIntentInsertConflict(engineOf(tx)'),
     )
-    expect(guarded).toContain('.insert(taskExecutionIntents)')
+    expect(guarded).toContain('insertOne(tx, taskExecutionIntents,')
     expect(guarded).not.toContain('.update(')
     expect(guarded).not.toContain('taskExecutionLineageOperationRecords')
   })

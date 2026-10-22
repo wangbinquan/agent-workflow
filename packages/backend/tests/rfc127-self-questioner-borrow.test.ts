@@ -18,20 +18,14 @@
 //   * scheduler converts a borrow ConflictError into a NODE-level failure (source lock) — the
 //     conflict surface stays guarded while resolveBorrowForNode remains in the tree.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  clarifyRounds,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -120,12 +114,9 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  _opts: { deferred?: boolean } = {},
-) {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId: string, _opts: { deferred?: boolean } = {}) {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf-${taskId}`,
     name: 'rfc127-sq',
     description: '',
@@ -133,7 +124,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     // Preserve the values observed from the original SQLite task-row trigger.
     executionLineageId: taskId,
@@ -154,13 +145,14 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   opts: { status?: 'done' | 'pending' | 'failed'; withOutput?: boolean; iteration?: number } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -170,7 +162,7 @@ async function seedRun(
     startedAt: Date.now(),
   })
   if (opts.withOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'x' })
   }
   return id
 }
@@ -181,7 +173,7 @@ async function seedRun(
  *  keys the ledger on the EFFECTIVE TARGET (override ?? default) and mints the rerun ON that target
  *  running its OWN agent — MOVE, not borrow (RFC-131 T4 去借壳). */
 async function seedDispatchedSelfQEntry(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   kind: 'self' | 'cross',
   override: string | null,
@@ -191,7 +183,8 @@ async function seedDispatchedSelfQEntry(
   const intermediary = kind === 'self' ? CL : CC
   const askingRunId = await seedRun(db, taskId, asking, { iteration: 0 })
   const intRunId = await seedRun(db, taskId, intermediary, { iteration: 0 })
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds, taskQuestions } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId,
     kind,
@@ -208,7 +201,7 @@ async function seedDispatchedSelfQEntry(
     status: 'answered',
     createdAt: Date.now(),
   })
-  await db.insert(taskQuestions).values({
+  await insertOne(db, taskQuestions, {
     id: ulid(),
     taskId,
     originNodeRunId: intRunId,

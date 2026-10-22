@@ -7,12 +7,12 @@
 //   - locks live until finishOperation (done), released same-tx; abandon also
 //     releases; boot GCs orphan locks only after active-op recovery.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, beforeEach } from 'bun:test'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
-import { skillOperationLocks, skillOperations } from '../src/db/schema'
 import {
   abandonOperation,
   advancePhase,
@@ -26,7 +26,7 @@ import { ConflictError, ValidationError } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('skillOperations primitives', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -35,9 +35,9 @@ describeEachProvider('skillOperations primitives', (harness) => {
     return await databaseSessionFor(db).transaction(async (tx) => await beginOperation(tx, spec))
   }
   async function locksFor(skillId: string): Promise<number> {
-    return (await db.select().from(skillOperationLocks).all()).filter(
-      (l) => l.lockedSkillId === skillId,
-    ).length
+    const { skillOperationLocks } = tablesOf(db)
+    return (await db.select().from(skillOperationLocks)).filter((l) => l.lockedSkillId === skillId)
+      .length
   }
 
   test('beginOperation records intent + acquires a lock', async () => {
@@ -104,13 +104,13 @@ describeEachProvider('skillOperations primitives', (harness) => {
     const doneSkill = ulid()
     await begin({ skillId: liveSkill, kind: 'delete' })
     const doneOp = await begin({ skillId: doneSkill, kind: 'reserve' })
+    const { skillOperations } = tablesOf(db)
     // Simulate a crash that flipped the op inactive but left a stale lock behind
     // (bypassing finishOperation's same-tx release).
     await db
       .update(skillOperations)
       .set({ active: 0, phase: 'done' })
       .where(eq(skillOperations.opId, doneOp))
-      .run()
     expect(await locksFor(doneSkill)).toBe(1) // stale lock still present pre-GC
 
     const removed = await databaseSessionFor(db).transaction(async (tx) => await gcOrphanLocks(tx))

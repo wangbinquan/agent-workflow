@@ -1,7 +1,8 @@
 // Real-model acceptance found a designer result masking the later clarified result.
 // Exercise the production read model and execution core, including persisted generations.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { nodeRuns, nodeRunOutputs, tasks, workflows } from '@/db/schema'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecutionCore,
@@ -19,7 +20,8 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
           { id: 'result', kind: 'output', ports: [{ name: 'agent-result' }] },
         ],
       })
-      await harness.db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
+      await insertOne(harness.db, workflows, {
         id: 'workflow',
         name: 'graph',
         definition,
@@ -27,7 +29,7 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
         createdAt: 1,
         updatedAt: 1,
       })
-      await harness.db.insert(tasks).values({
+      await insertOne(harness.db, tasks, {
         id: 'task',
         name: 'graph',
         workflowId: 'workflow',

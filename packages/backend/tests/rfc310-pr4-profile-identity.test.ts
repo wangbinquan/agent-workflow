@@ -10,13 +10,14 @@
 //      GIT_AUTHOR/COMMITTER、SSH agent、token/secret 注入 token（对齐
 //      rfc310-architecture-lock T7 的口径；注释行不扫）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { users } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { createWorkflow } from '../src/services/workflow'
@@ -116,8 +117,9 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
       },
     })
 
+    const { users } = tablesOf(db)
     // RFC-395 II-pre：生产根启动从真实用户档案冻结身份；系统任务保持空身份。
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id: 'identity-control',
       username: 'identity-control',
       displayName: 'Control',
@@ -144,7 +146,7 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
           },
           {
             db,
-            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
               .schedulerDriver,
             appHome,
             actorUserId: 'identity-control',

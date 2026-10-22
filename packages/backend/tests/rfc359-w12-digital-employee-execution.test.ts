@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 W12: exercise both production Digital Employee execution composers
 // through the complete selected TaskEngine and a real mock-opencode child.
@@ -14,15 +16,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import {
-  agents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
 import { developmentExecutionContractRegistrations } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
@@ -132,7 +125,9 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         const workflowId = ulid()
         const agentName = `employee-execution-${kind}`
         const now = Date.now()
-        await harness.db.insert(users).values({
+        const { users, agents, workflows, tasks, nodeRuns, nodeRunOutputs, taskExecutionIntents } =
+          tablesOf(harness.db)
+        await insertOne(harness.db, users, {
           id: userId,
           username: `employee-${userId}`,
           displayName: 'Employee Execution Fixture',
@@ -143,7 +138,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           createdAt: now,
           updatedAt: now,
         })
-        await harness.db.insert(agents).values({
+        await insertOne(harness.db, agents, {
           id: agentId,
           name: agentName,
           description: 'Real subprocess fixture',
@@ -156,7 +151,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           updatedAt: now,
         })
         const definition = workflow(agentId, agentName)
-        await harness.db.insert(workflows).values({
+        await insertOne(harness.db, workflows, {
           id: workflowId,
           name: 'Employee execution workflow',
           definition: JSON.stringify(definition),

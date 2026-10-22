@@ -3,9 +3,10 @@
 // to the generation (registered in one journal transaction, no per-file JSON
 // rewrite); retirement releases the scope with the generation row and the
 // hosted object maintenance job unpins them.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedObjectPublications, pluginArtifactGenerations, plugins } from '@/db/schema'
 import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/infrastructure/crewstation/backupReleaseHorizon'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { createHostedPluginGenerations } from '@/modules/resource-catalog/infrastructure/crewstation/pluginGenerations'
@@ -135,6 +136,7 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     await expect(f.create().installGeneration('plugin', 'fixture@1', 'gen')).rejects.toThrow(
       'pin reply lost',
     )
+    const { pluginArtifactGenerations, hostedObjectPublications } = tablesOf(harness.db)
     const installing = (await harness.db.select().from(pluginArtifactGenerations))[0]!
     expect(installing).toMatchObject({ state: 'installing', objectId: null })
     expect(installing.installedJson).not.toBeNull()
@@ -166,7 +168,8 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     const f = fixture()
     const publication = await f.create().installGeneration('plugin', 'fixture@1', 'gen')
     const reference = f.create().generationReference('plugin', 'gen')
-    await harness.db.insert(plugins).values({
+    const { plugins, pluginArtifactGenerations, hostedObjectPublications } = tablesOf(harness.db)
+    await insertOne(harness.db, plugins, {
       id: 'plugin',
       name: 'Plugin',
       spec: 'fixture@1',
@@ -215,6 +218,7 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     await expect(f.create().installGeneration('plugin', 'fixture@1', 'gen')).rejects.toThrow(
       'fence lost',
     )
+    const { pluginArtifactGenerations, hostedObjectPublications } = tablesOf(harness.db)
     expect(await harness.db.select().from(pluginArtifactGenerations)).toHaveLength(0)
     expect(await harness.db.select().from(hostedObjectPublications)).toHaveLength(0)
     expect(f.pins).toHaveLength(0)
@@ -231,6 +235,7 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     f.advanceLease()
     expect(await f.create().gc.collect(request)).toEqual(['cs-plugin:plugin/gen'])
     expect(f.calls).toEqual(['install', 'discard'])
+    const { pluginArtifactGenerations } = tablesOf(harness.db)
     expect((await harness.db.select().from(pluginArtifactGenerations))[0]!.state).toBe('retired')
     // The interrupted upload's pin is found by replaying its request without bytes.
     await f.settle()
@@ -250,6 +255,7 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
         .create()
         .gc.collect({ referencedCachedPaths: new Set(), graceMs: 0, now: Date.now() + 1000 }),
     ).toEqual([])
+    const { pluginArtifactGenerations } = tablesOf(harness.db)
     expect((await harness.db.select().from(pluginArtifactGenerations))[0]!.state).toBe('ready')
     expect(f.releases).toHaveLength(0)
     await databaseSessionFor(harness.db).transaction((tx) =>

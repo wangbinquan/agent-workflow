@@ -34,6 +34,8 @@
 // attempts' half-products are gone. Under the pre-fix code the same chain
 // reset src.txt to its committed HEAD body — losing X.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -42,7 +44,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
@@ -155,7 +156,8 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedWriterAgent(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -186,14 +188,15 @@ async function seedSingleRepoTask(h: Harness, agentId: string): Promise<string> 
     ],
     edges: [],
   }
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -269,6 +272,7 @@ describe('S-2b followup-chain retry rollback restores the last FRESH baseline (R
         }),
     )
 
+    const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
     // Attempt 2 succeeded → task done.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')

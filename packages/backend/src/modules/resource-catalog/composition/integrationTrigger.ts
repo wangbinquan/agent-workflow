@@ -6,7 +6,7 @@
 
 import type { Actor } from '@/auth/actor'
 import type { DigitalEmployeeIntegrationTriggerParticipant } from '@/modules/digital-employee/public/participants'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   createIntegrationTriggerResourceSnapshotReader,
   type IntegrationTriggerResourceDependencies,
@@ -21,7 +21,7 @@ export interface IntegrationTriggerResourceAuthorityPair {
 
 export interface IntegrationTriggerResourceSnapshotFactory {
   inTransaction(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     pair: IntegrationTriggerResourceAuthorityPair,
     digitalEmployees: DigitalEmployeeIntegrationTriggerParticipant,
   ): IntegrationTriggerResourceSnapshotReader
@@ -37,7 +37,7 @@ export function composeIntegrationTriggerResourceSnapshotFactory(
 ): IntegrationTriggerResourceSnapshotFactory {
   return Object.freeze({
     inTransaction(
-      transaction: DatabaseTransaction,
+      transaction: PersistenceTx,
       pair: IntegrationTriggerResourceAuthorityPair,
       digitalEmployees: DigitalEmployeeIntegrationTriggerParticipant,
     ) {

@@ -3,6 +3,7 @@
 // and composing or shutting down identity presence must not close the outer
 // provider runtime.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { DatabaseConfig } from '@agent-workflow/shared'
@@ -13,7 +14,6 @@ import { join, resolve } from 'node:path'
 
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/public/participants'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'
 import {
@@ -103,10 +103,10 @@ function postgresqlFixture() {
     if (/count\(\*\)/i.test(sql)) return rows([], [[0]])
     return rows()
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       reserves += 1
@@ -148,7 +148,6 @@ function postgresqlFixture() {
 }
 
 afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 

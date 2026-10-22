@@ -44,6 +44,10 @@
 // 不存在）。索引补齐后 PG 的计划会变，所以下面每条结论都只对**这个 schema 状态**成立；
 // 下面第一个 describe 用「SQLite 有的具名索引 PG 必须也有」把这个状态本身钉住。
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
@@ -53,17 +57,7 @@ import { join, resolve } from 'node:path'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  developmentMissions,
-  lifecycleAlerts,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
@@ -210,8 +204,10 @@ function actorOf(id: string, role: 'admin' | 'user' = 'admin'): Actor {
  * 两个引擎都是零成本——量不出任何东西。这里按 10% 的任务带告警、其中五分之一未闭合来铺，
  * 那条 CTE 才回到生产形状（实测：默认视图首页从 33ms 涨到 85ms，缺陷这才现形）。
  */
-async function seedAuditCorpus(db: ProviderNeutralDatabase, n: number): Promise<void> {
-  await db.insert(users).values({
+async function seedAuditCorpus(db: PersistenceDb, n: number): Promise<void> {
+  const { users, workflows, tasks, taskRepos, cachedRepos, developmentMissions, lifecycleAlerts } =
+    tablesOf(db)
+  await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
     displayName: 'admin',
@@ -219,13 +215,13 @@ async function seedAuditCorpus(db: ProviderNeutralDatabase, n: number): Promise<
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'nightly', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'nightly', definition: '{}' })
 
-  const taskRows: (typeof tasks.$inferInsert)[] = []
-  const repoRows: (typeof taskRepos.$inferInsert)[] = []
-  const cacheRows: (typeof cachedRepos.$inferInsert)[] = []
-  const missionRows: (typeof developmentMissions.$inferInsert)[] = []
-  const alertRows: (typeof lifecycleAlerts.$inferInsert)[] = []
+  const taskRows: PersistenceTables['tasks']['$inferInsert'][] = []
+  const repoRows: PersistenceTables['taskRepos']['$inferInsert'][] = []
+  const cacheRows: PersistenceTables['cachedRepos']['$inferInsert'][] = []
+  const missionRows: PersistenceTables['developmentMissions']['$inferInsert'][] = []
+  const alertRows: PersistenceTables['lifecycleAlerts']['$inferInsert'][] = []
   for (let i = 0; i < n; i += 1) {
     const id = `t${String(i).padStart(6, '0')}`
     taskRows.push({
@@ -311,7 +307,7 @@ async function seedAuditCorpus(db: ProviderNeutralDatabase, n: number): Promise<
 
 interface AuditedPath {
   readonly name: string
-  run(db: ProviderNeutralDatabase): Promise<unknown>
+  run(db: PersistenceDb): Promise<unknown>
 }
 
 /** 受审的热读路径——与 `rfc311-perf-guards.test.ts` 的 GUARDED 注册表同源。 */
@@ -701,11 +697,10 @@ if (!postgresqlSelected) {
 } else {
   describe('RFC-359 W6-T26 —— PostgreSQL 计划审计', () => {
     let runtime: PostgresqlDatabaseRuntime | undefined
-    let client: ProviderNeutralDatabase | undefined
+    let client: PersistenceDb | undefined
     let raw:
       | ((query: string, params?: readonly unknown[]) => Promise<Record<string, unknown>[]>)
       | undefined
-    let restoreProvider: (() => void) | undefined
     const recorded: { sql: string; params: readonly unknown[] }[] = []
     let recording = false
 
@@ -746,7 +741,6 @@ if (!postgresqlSelected) {
           '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
           `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_rfc359_w6_t26_source', 'digest', 'active', 1, 1)`,
       )
-      restoreProvider = selectDatabaseSchemaProvider('postgresql')
       // 语句录制：包住连接池的 `unsafe`，drizzle 与裸 SQL 两条路都抓得到。池对象是冻结的，
       // 所以走对象字面量而不是 Proxy（Proxy 无法为不可写属性返回别的值）。
       const wrap =
@@ -760,18 +754,18 @@ if (!postgresqlSelected) {
         unsafe: wrap(pool.unsafe.bind(pool) as never),
         reserve: async (options?: { readonly signal?: AbortSignal }) => {
           const connection = await pool.reserve(options)
-          return {
+          return withNativeTransactions({
             ...connection,
             unsafe: wrap(connection.unsafe.bind(connection) as never),
             release: () => connection.release(),
-          }
+          })
         },
         close: (options?: { readonly timeout?: number }) => pool.close(options),
       }
       client = createPostgresqlDatabaseClient({
         ...runtime,
         providerPool: () => recordingPool,
-      } as unknown as PostgresqlDatabaseRuntime) as unknown as ProviderNeutralDatabase
+      } as unknown as PostgresqlDatabaseRuntime) as unknown as PersistenceDb
       await seedAuditCorpus(client, AUDIT_ROWS)
       // 装载后维护：**两件事都要做，缺一件量到的都不是生产里的形状**。
       //
@@ -788,32 +782,29 @@ if (!postgresqlSelected) {
     }, 600_000)
 
     afterAll(async () => {
-      restoreProvider?.()
       await runtime?.close()
     })
 
     test('SQLite 上的具名索引在 PostgreSQL 上一条都不少', async () => {
-      const restore = selectDatabaseSchemaProvider('sqlite')
       const sqliteIndexes = new Map<string, string[]>()
-      try {
+      {
         const sqliteDb = createInMemoryDb(MIGRATIONS)
-        for (const { name } of sqliteDb.all<{ name: string }>(
+        for (const { name } of rawRows<{ name: string }>(
+          sqliteDb,
           sql.raw("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"),
         )) {
           sqliteIndexes.set(
             name,
-            sqliteDb
-              .all<{ name: string; origin: string }>(sql.raw(`PRAGMA index_list('${name}')`))
+            rawRows<{ name: string; origin: string }>(
+              sqliteDb,
+              sql.raw(`PRAGMA index_list('${name}')`),
+            )
               // origin 'c' = CREATE INDEX 显式建的；'u'/'pk' 是约束派生的，PG 上名字不同。
               .filter((row) => row.origin === 'c')
               .map((row) => row.name),
           )
         }
-      } finally {
-        restore()
       }
-      selectDatabaseSchemaProvider('postgresql')
-
       const rows = await raw!(
         "select tablename, indexname from pg_indexes where schemaname = 'agent_workflow'",
       )

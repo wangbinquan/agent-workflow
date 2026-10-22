@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
@@ -45,7 +45,7 @@ type HostedScriptOutcome = Omit<ScriptRunOutcome, 'result'> & {
  * resolution and dependency preparation are ordinary workspace commands. */
 export function createHostedTaskScriptRunFamily(input: {
   readonly taskId: string
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly helper: WorkspaceHelper
   readonly executions: HostedExecution

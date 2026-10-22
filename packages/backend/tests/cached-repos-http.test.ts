@@ -2,6 +2,8 @@
 // POST /api/tasks. Exercises the full HTTP surface so the launcher and
 // /repos management page can rely on the contract.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { execFileSync } from 'node:child_process'
@@ -11,8 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { type DbClient } from '../src/db/client'
-import { cachedRepos, tasks, workflows, taskRepos } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -77,7 +78,7 @@ beforeAll(async () => {
 })
 
 function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
-  let h: Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }
+  let h: Omit<Harness, 'db'> & { db: PersistenceDb }
   let application: ProviderHttpApplication | undefined
   let cleanup: (() => void) | undefined
 
@@ -200,7 +201,8 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
     )
     const res = await req(h.app, `/api/cached-repos/${r.cached.id}`, { method: 'DELETE' })
     expect(res.status).toBe(200)
-    expect((await h.db.select().from(cachedRepos).all()).length).toBe(0)
+    const { cachedRepos } = tablesOf(h.db)
+    expect((await h.db.select().from(cachedRepos)).length).toBe(0)
   })
 
   test('DELETE blocked by reference count without ?force=1', async () => {
@@ -213,54 +215,46 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
     // for private repos, whose tasks.repo_url is stored redacted.
     const wfId = ulid()
     const taskId = ulid()
-    await h.db
-      .insert(workflows)
-      .values({
-        id: wfId,
-        name: 'wf',
-        definition: '{}',
-        version: 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      .run()
-    await h.db
-      .insert(tasks)
-      .values({
-        name: 'fixture-task',
+    const { workflows, tasks, taskRepos, cachedRepos } = tablesOf(h.db)
+    await insertOne(h.db, workflows, {
+      id: wfId,
+      name: 'wf',
+      definition: '{}',
+      version: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    await insertOne(h.db, tasks, {
+      name: 'fixture-task',
 
-        id: taskId,
-        workflowId: wfId,
-        workflowSnapshot: '{}',
-        repoPath: r.cached.localPath,
-        repoUrl: r.cached.urlRedacted,
-        worktreePath: r.cached.localPath,
-        baseBranch: 'main',
-        branch: 'agent-workflow/x',
-        baseCommit: null,
-        status: 'done',
-        inputs: '{}',
-        startedAt: Date.now(),
-        cachedRepoId: r.cached.id,
-        executionLineageId: taskId,
-        lineageSlotPathJson: JSON.stringify([
-          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-        ]),
-      })
-      .run()
-    await h.db
-      .insert(taskRepos)
-      .values({
-        taskId,
-        repoIndex: 0,
-        repoPath: r.cached.localPath,
-        repoUrl: r.cached.urlRedacted,
-        cachedRepoId: r.cached.id,
-        branch: 'agent-workflow/x',
-        worktreePath: r.cached.localPath,
-        worktreeDirName: '',
-      })
-      .run()
+      id: taskId,
+      workflowId: wfId,
+      workflowSnapshot: '{}',
+      repoPath: r.cached.localPath,
+      repoUrl: r.cached.urlRedacted,
+      worktreePath: r.cached.localPath,
+      baseBranch: 'main',
+      branch: 'agent-workflow/x',
+      baseCommit: null,
+      status: 'done',
+      inputs: '{}',
+      startedAt: Date.now(),
+      cachedRepoId: r.cached.id,
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
+    })
+    await insertOne(h.db, taskRepos, {
+      taskId,
+      repoIndex: 0,
+      repoPath: r.cached.localPath,
+      repoUrl: r.cached.urlRedacted,
+      cachedRepoId: r.cached.id,
+      branch: 'agent-workflow/x',
+      worktreePath: r.cached.localPath,
+      worktreeDirName: '',
+    })
 
     const res = await req(h.app, `/api/cached-repos/${r.cached.id}`, { method: 'DELETE' })
     expect(res.status).toBe(409)
@@ -271,7 +265,7 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
       method: 'DELETE',
     })
     expect(forced.status).toBe(200)
-    expect((await h.db.select().from(cachedRepos).all()).length).toBe(0)
+    expect((await h.db.select().from(cachedRepos)).length).toBe(0)
   })
 
   test('DELETE 404 when id unknown', async () => {

@@ -10,14 +10,15 @@
 //      match display names ⇒ zero rows ⇒ no missing). Now required; this file
 //      pins the source shape so a future "convenience default" cannot return.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { users, workflows } from '../src/db/schema'
 import { resolveRefsUsableByName } from '../src/services/resourceRefs'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -30,14 +31,15 @@ function actorOf(id: string): Actor {
 }
 
 describeEachProvider('RFC-282 D4 — name-domain grandfathering lives in the resolver', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   const ownerId = ulid()
   const editorId = ulid()
 
   beforeEach(async () => {
     db = harness.db
     for (const id of [ownerId, editorId]) {
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id,
         username: `u-${id.slice(-6)}`,
         displayName: 'U',
@@ -48,7 +50,8 @@ describeEachProvider('RFC-282 D4 — name-domain grandfathering lives in the res
       })
     }
     for (const name of ['secret-a', 'secret-b']) {
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: ulid(),
         name,
         description: '',

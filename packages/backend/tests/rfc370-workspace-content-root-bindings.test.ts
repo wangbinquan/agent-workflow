@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -7,7 +9,6 @@ import {
   worktreeFileResponseSchema,
   worktreeTreeResponseSchema,
 } from '@agent-workflow/shared'
-import { tasks, workflows } from '@/db/schema'
 import type {
   WorkspaceContentEffects,
   WorkspaceContentEffectsFactory,
@@ -79,7 +80,8 @@ describeEachProviderHttpApplication(
       const id = randomUUID()
       const snapshot = '{"$schema_version":4,"inputs":[],"nodes":[],"edges":[],"outputs":[]}'
       const reference = `logical:workspace:${id}`
-      await scope.harness.db.insert(workflows).values({
+      const { workflows, tasks } = tablesOf(scope.harness.db)
+      await insertOne(scope.harness.db, workflows, {
         id,
         name: id,
         description: '',
@@ -87,7 +89,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await scope.harness.db.insert(tasks).values({
+      await insertOne(scope.harness.db, tasks, {
         id,
         name: id,
         workflowId: id,

@@ -10,21 +10,23 @@
 // completeApproved（非 approved 拒绝、幂等 upsert、sourceFilePath 缺失时的兜底内容、事务原子性）、
 // unapprove（CAS 只吃 approved、二次调用为 false、跨任务 / 跨 run 不越界）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createReviewRepairParticipant } from '@/modules/collaboration/infrastructure/reviewRepairParticipant'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_w7r_${ulid()}`
   const workflowId = `wf_w7r_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -32,7 +34,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -48,9 +50,10 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   return id
 }
 
-async function seedReviewRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedReviewRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_w7r_${ulid()}`
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'review', status: 'awaiting_review' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'review', status: 'awaiting_review' })
   return id
 }
 
@@ -62,13 +65,14 @@ interface DocSeed {
 }
 
 async function seedDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   reviewNodeRunId: string,
   seed: DocSeed = {},
 ): Promise<string> {
   const id = `dv_w7r_${ulid()}`
-  await db.insert(docVersions).values({
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
     id,
     taskId,
     reviewNodeId: 'review',
@@ -84,10 +88,8 @@ async function seedDocVersion(
   return id
 }
 
-async function outputsOf(
-  db: ProviderNeutralDatabase,
-  nodeRunId: string,
-): Promise<Record<string, string>> {
+async function outputsOf(db: PersistenceDb, nodeRunId: string): Promise<Record<string, string>> {
+  const { nodeRunOutputs } = tablesOf(db)
   const rows = await db
     .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
     .from(nodeRunOutputs)
@@ -118,9 +120,12 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：inspect', (harne
     expect(await repair.inspect({ ...identity, taskId: 'task_other' })).toBeNull()
     expect(await repair.inspect({ ...identity, nodeRunId: 'nr_other' })).toBeNull()
 
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId, portName: 'approved_doc', content: 'docs/result.md' })
+    const { nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId,
+      portName: 'approved_doc',
+      content: 'docs/result.md',
+    })
     expect(await repair.inspect(identity)).toMatchObject({
       hasApprovedDocOutput: true,
       hasApprovalMetaOutput: false,
@@ -229,6 +234,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：unapprove', (har
     const identity = { taskId, docVersionId, nodeRunId }
 
     expect(await repair.unapprove(identity)).toBe(true)
+    const { docVersions } = tablesOf(db)
     expect(
       (
         await db
@@ -259,6 +265,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：unapprove', (har
     expect(await repair.unapprove({ taskId: otherTaskId, docVersionId, nodeRunId })).toBe(false)
     expect(await repair.unapprove({ taskId, docVersionId, nodeRunId: otherRunId })).toBe(false)
     expect(await repair.unapprove({ taskId, docVersionId: 'dv_missing', nodeRunId })).toBe(false)
+    const { docVersions } = tablesOf(db)
     expect(
       (
         await db

@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskWorkspaces } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { parseHostedWorkspaceReference } from './workspaceReference'
 
 /** Volume owners are AW task ids (bare ULIDs) or namespaced shared owners
@@ -29,9 +29,10 @@ export function hostedWorkspaceOwnerFromReference(reference: string): string | n
 /** The AW task owning the volume of one CrewStation parent task, whatever its
  * workspace state (a recovery request names the platform's parent task). */
 export async function readHostedWorkspaceOwnerForBusinessTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   businessTaskId: string,
 ) {
+  const { hostedTaskWorkspaces } = tablesOf(db)
   const [row] = await db
     .select({
       taskId: hostedTaskWorkspaces.taskId,

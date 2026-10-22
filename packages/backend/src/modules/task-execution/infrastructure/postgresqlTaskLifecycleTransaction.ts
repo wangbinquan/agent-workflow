@@ -8,7 +8,7 @@
 // plan §5hn 的裁决仍然有效：`withPostgresqlTaskAggregateTransaction` 生产调用方已归零，
 // **不删**——两个测试文件仍用它锁方言行为，且它的函数体就是这条技术的锁定参照。
 
-import { tasks } from '@/db/schema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 
@@ -47,6 +47,7 @@ export async function withPostgresqlTaskAggregateTransaction<T>(
   body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return await databaseSessionFor(db).transaction(async (tx) => {
+    const { tasks } = tablesOf(tx)
     // RFC-359 W11：行锁的渲染权归能力矩阵——PG 渲染 `select 1 … for update`，SQLite 是
     // no-op（`BEGIN IMMEDIATE` 已全库独占）。此前这里裸写 `for update`，于是同一个聚合根锁
     // 在仓里有两份渲染，改矩阵不会红这里；顺带它也让这个 opener 在 SQLite 上直接语法错误。

@@ -32,7 +32,7 @@ export {
 } from '../infrastructure/local/webSocketAuthentication'
 
 import type { AuthRuntime } from '@/auth/application/authRuntime'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HttpAuthenticationParticipant,
   WebSocketAuthenticationParticipant,
@@ -50,7 +50,7 @@ import type { JWTVerifyGetKey } from 'jose'
 
 /** What a deployment's credential mechanism may use; the daemon core supplies it. */
 export interface CredentialAdapterDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly auth: AuthRuntime
   readonly daemonToken: string
   readonly identityAccess: DirectAuthorityAdmissionRuntime

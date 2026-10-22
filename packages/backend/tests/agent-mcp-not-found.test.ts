@@ -4,9 +4,10 @@
 // silently drops it), turning "agent X needs mcp Y" into a non-actionable
 // runtime mystery.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { ValidationError } from '../src/util/errors'
 import {
@@ -32,7 +33,7 @@ function agentInput(name: string, mcp: string[] = []): Parameters<typeof createA
 }
 
 describeEachProvider('agent.mcp save-time guard', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let mcpCatalog: McpCatalogTestBinding
   beforeEach(() => {
     db = harness.db
@@ -121,11 +122,11 @@ describeEachProvider('agent.mcp save-time guard', (harness) => {
       enabled: true,
     })
     const agent = await createAgent(db, agentInput('a', [m1.id]))
+    const { mcps: mcpsTable } = tablesOf(db)
     // Now delete the mcp from the table by force (bypass the cascade guard so
     // we can construct the "stale ref" scenario without ref to other agents).
     // We simulate by manually clearing the row through the service: the guard
     // refuses, so use raw DB.
-    const { mcps: mcpsTable } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
     await db.delete(mcpsTable).where(eq(mcpsTable.id, m1.id))
 

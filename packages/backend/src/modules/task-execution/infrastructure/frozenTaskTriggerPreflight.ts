@@ -10,6 +10,7 @@
 // 本体所在处）是被守卫按住的：`rfc349-provider-cutover` 的
 // `databaseMechanismDependencies` 判据禁止 `services/` 面直接拥有 `@/db/*` / drizzle。
 // 纯判据留在那边，带读点的这一层归 task-execution 的 infrastructure。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import {
   WorkflowDefinitionSchema,
@@ -17,13 +18,12 @@ import {
   parseTriggerContextJson,
 } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { ValidationError } from '@/util/errors'
 
 /** 只读一行 `tasks` 就够——两个 provider 的任何 db / tx 句柄都满足这个面。 */
-export type FrozenTaskTriggerReader = Pick<ProviderNeutralDatabase, 'select'>
+export type FrozenTaskTriggerReader = Pick<PersistenceDb, 'select'>
 
 /** 调用方可以给一份候选 root+closure（syncWorkflow 换定义时用），但绝不能替换 trigger 源。 */
 export interface FrozenTaskTriggerCandidate {
@@ -42,6 +42,7 @@ export async function assertFrozenTaskTriggerPreflight(
   taskId: string,
   candidate?: FrozenTaskTriggerCandidate,
 ): Promise<void> {
+  const { tasks } = tablesOf(db)
   const frozen = (
     await db
       .select({

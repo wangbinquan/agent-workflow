@@ -5,6 +5,9 @@
 // runner set OPENCODE_CONFIG_DIR / OPENCODE_CONFIG_CONTENT correctly, then
 // emits configurable JSON events + envelope. The DB is in-memory.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, rawExec } from '@/platform/persistence/queryHelpers'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
@@ -12,17 +15,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-  observationCalls,
-  observationCallModels,
-} from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import type { Logger } from '../src/util/log'
 import { composeRunObservationCalls } from '../src/modules/run-observability/composition/runObservation'
@@ -31,7 +25,7 @@ import type { CallObservations } from '../src/modules/run-observability/public/p
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -60,21 +54,22 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-runner-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
+  const { workflows, tasks } = tablesOf(db)
   // Seed workflow + task so the FK from node_runs.task_id stays satisfied.
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -98,13 +93,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  nodeId = 'node1',
-): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string, nodeId = 'node1'): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -130,10 +122,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-function proxyDbInsert(
-  db: ProviderNeutralDatabase,
-  intercept: (table: unknown) => void,
-): ProviderNeutralDatabase {
+function proxyDbInsert(db: PersistenceDb, intercept: (table: unknown) => void): PersistenceDb {
   return new Proxy(db, {
     get(target, property) {
       if (property === 'insert') {
@@ -145,30 +134,30 @@ function proxyDbInsert(
       const value = Reflect.get(target, property, target) as unknown
       return typeof value === 'function' ? value.bind(target) : value
     },
-  }) as ProviderNeutralDatabase
+  }) as PersistenceDb
 }
 
 /**
  * RFC-359 W4-D24 —— 统一事务原语用 `BEGIN IMMEDIATE`（`db.run`），不是 drizzle 的 `db.transaction`。
  * 想数「整笔事务被重试了几次」，插桩点就得跟着挪到真正的事务起点上。
  */
-function proxyDbBeginImmediate(
-  db: ProviderNeutralDatabase,
-  intercept: () => void,
-): ProviderNeutralDatabase {
+function proxyDbBeginImmediate(db: PersistenceDb, intercept: () => void): PersistenceDb {
   return new Proxy(db, {
     get(target, property) {
       if (property === 'run') {
         return (...args: unknown[]) => {
           const [query] = args as [{ readonly queryChunks?: unknown } | undefined]
           if (JSON.stringify(query ?? '').includes('BEGIN IMMEDIATE')) intercept()
-          return (target.run as unknown as (...values: unknown[]) => unknown).apply(target, args)
+          return (Reflect.get(target, 'run') as (...values: unknown[]) => unknown).apply(
+            target,
+            args,
+          )
         }
       }
       const value = Reflect.get(target, property, target) as unknown
       return typeof value === 'function' ? value.bind(target) : value
     },
-  }) as ProviderNeutralDatabase
+  }) as PersistenceDb
 }
 
 function captureWarnings(): { log: Logger; warnings: Array<Record<string, unknown>> } {
@@ -200,9 +189,10 @@ describeEachProvider('runNode', (harness) => {
     const observationInvocations: CallObservations = {
       async accept(call) {
         await calls.accept(call)
+        const { observationCalls } = tablesOf(h.db)
         // Persisted (running) before the child exists.
         expect(
-          await h.db.select().from(observationCalls).where(eq(observationCalls.id, call.id)).get(),
+          await first(h.db.select().from(observationCalls).where(eq(observationCalls.id, call.id))),
         ).toMatchObject({ status: 'running', usageState: 'pending' })
         accepted.push(call.id)
       },
@@ -232,17 +222,17 @@ describeEachProvider('runNode', (harness) => {
       })
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'accepted' }) }, async () => {
       expect((await invoke()).status).toBe('done')
+      const { nodeRuns } = tablesOf(h.db)
       await h.db.update(nodeRuns).set({ status: 'pending' }).where(eq(nodeRuns.id, nodeRunId))
       expect((await invoke()).status).toBe('done')
     })
     expect(accepted).toHaveLength(2)
     expect(new Set(accepted).size).toBe(2)
     for (const id of accepted) {
-      const row = await h.db
-        .select()
-        .from(observationCalls)
-        .where(eq(observationCalls.id, id))
-        .get()
+      const { observationCalls } = tablesOf(h.db)
+      const row = await first(
+        h.db.select().from(observationCalls).where(eq(observationCalls.id, id)),
+      )
       expect(row).toMatchObject({
         purpose: 'system',
         systemKind: 'commit-push',
@@ -290,8 +280,9 @@ describeEachProvider('runNode', (harness) => {
     expect(result.status).toBe('failed')
     expect(existsSync(marker)).toBe(false)
     expect(finished).toEqual([])
+    const { nodeRuns } = tablesOf(h.db)
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.pid,
+      (await first(h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))))?.pid,
     ).toBeNull()
   })
 
@@ -331,11 +322,10 @@ describeEachProvider('runNode', (harness) => {
         }),
     )
     expect(result.status).toBe('done')
-    const row = await h.db
-      .select()
-      .from(observationCalls)
-      .where(eq(observationCalls.nodeRunId, nodeRunId))
-      .get()
+    const { observationCalls, observationCallModels } = tablesOf(h.db)
+    const row = await first(
+      h.db.select().from(observationCalls).where(eq(observationCalls.nodeRunId, nodeRunId)),
+    )
     expect(row).toMatchObject({
       purpose: 'task',
       status: 'done',
@@ -393,6 +383,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.outputs.findings).toBe('none')
     expect(result.prompt).toContain('<workflow-output>')
 
+    const { nodeRuns, nodeRunOutputs, nodeRunEvents } = tablesOf(h.db)
     // DB side-effects
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))
     const row = rows[0]
@@ -453,6 +444,7 @@ describeEachProvider('runNode', (harness) => {
 
     expect(result.status).toBe('done')
     expect(result.outputs.done_signal).toBe('')
+    const { nodeRunOutputs } = tablesOf(h.db)
     const outputRows = await h.db
       .select()
       .from(nodeRunOutputs)
@@ -483,6 +475,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.status).toBe('failed')
     expect(result.errorMessage).toContain('envelope')
 
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))
     const row = rows[0]
     expect(row?.status).toBe('failed')
@@ -600,6 +593,7 @@ describeEachProvider('runNode', (harness) => {
           db: h.db,
         }),
     )
+    const { nodeRunEvents } = tablesOf(h.db)
     const allEvents = await h.db
       .select()
       .from(nodeRunEvents)
@@ -624,7 +618,9 @@ describeEachProvider('runNode', (harness) => {
     if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    await h.db.run(sql`
+    await rawExec(
+      h.db,
+      sql`
       CREATE TRIGGER fail_node_run_event_insert
       BEFORE INSERT ON node_run_events
       BEGIN
@@ -633,7 +629,8 @@ describeEachProvider('runNode', (harness) => {
           'forced node-run-event persistence failure --token=settle-pump-secret'
         );
       END
-    `)
+    `,
+    )
 
     const result = await withEnv(
       {
@@ -661,6 +658,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.errorMessage).toContain('forced node-run-event persistence failure')
     expect(result.errorMessage).not.toContain('settle-pump-secret')
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.failureCode).toBe('runtime-stream-interrupted')
@@ -680,6 +678,7 @@ describeEachProvider('runNode', (harness) => {
     let eventInsertAttempts = 0
     let failNextEventInsert = true
     const transientDb = proxyDbInsert(h.db, (table) => {
+      const { nodeRunEvents } = tablesOf(h.db)
       if (table !== nodeRunEvents) return
       eventInsertAttempts += 1
       if (!failNextEventInsert) return
@@ -715,6 +714,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.status).toBe('done')
     expect(result.outputs.summary).toBe('survived contention')
     expect(eventInsertAttempts).toBeGreaterThanOrEqual(2)
+    const { nodeRunEvents } = tablesOf(h.db)
     const events = await h.db
       .select()
       .from(nodeRunEvents)
@@ -770,6 +770,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.status).toBe('done')
     expect(result.sessionId).toBe('session-busy-retry')
     expect(transactionAttempts).toBeGreaterThanOrEqual(2)
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.opencodeSessionId).toBe('session-busy-retry')
   })
@@ -784,13 +785,16 @@ describeEachProvider('runNode', (harness) => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const spawnMarker = join(h.appHome, 'must-not-spawn.jsonl')
-    await h.db.run(sql`
+    await rawExec(
+      h.db,
+      sql`
       CREATE TRIGGER fail_session_reset_event
       BEFORE INSERT ON node_run_events
       BEGIN
         SELECT RAISE(ABORT, 'forced session reset persistence failure');
       END
-    `)
+    `,
+    )
 
     const result = await withEnv(
       {
@@ -818,6 +822,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.errorMessage).toContain('runtime-session-reset-persistence-failed')
     expect(result.errorMessage).toContain('forced session reset persistence failure')
     expect(existsSync(spawnMarker)).toBe(false)
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorMessage).toBe(result.errorMessage)
@@ -832,14 +837,17 @@ describeEachProvider('runNode', (harness) => {
     if (harness.capabilities.provider !== 'sqlite') return
     const agent = makeAgent({ outputs: ['summary', 'findings'] })
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    await h.db.run(sql`
+    await rawExec(
+      h.db,
+      sql`
       CREATE TRIGGER fail_findings_output
       BEFORE INSERT ON node_run_outputs
       WHEN NEW.port_name = 'findings'
       BEGIN
         SELECT RAISE(ABORT, 'forced findings output persistence failure');
       END
-    `)
+    `,
+    )
 
     const result = await withEnv(
       {
@@ -868,6 +876,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.outputs).toEqual({})
     expect(result.errorMessage).toContain('runtime-output-persistence-failed')
     expect(result.errorMessage).toContain('forced findings output persistence failure')
+    const { nodeRunOutputs, nodeRuns } = tablesOf(h.db)
     const outputRows = await h.db
       .select()
       .from(nodeRunOutputs)

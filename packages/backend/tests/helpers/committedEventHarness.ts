@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { committedEventFamilyCutovers } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCollaborationDurableConsumerDefinitions,
   collaborationCommittedEventCodec,
@@ -23,7 +23,8 @@ import { registerAfterCommitEventPump } from '@/platform/events/committed/runtim
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 
-async function enableCollaborationCutover(db: ProviderNeutralDatabase): Promise<void> {
+async function enableCollaborationCutover(db: PersistenceDb): Promise<void> {
+  const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
     .set({ mode: 'dispatchable', epoch: 2, changedAt: Date.now(), changeRef: 'test-harness' })
@@ -33,14 +34,13 @@ async function enableCollaborationCutover(db: ProviderNeutralDatabase): Promise<
         eq(committedEventFamilyCutovers.epoch, 1),
       ),
     )
-    .run()
 }
 
 /** Install only the synchronous projection half of the RFC-341 bootstrap for
  * broadcaster-boundary tests. Durable consumer behavior has its own worker
  * harnesses; these tests need deterministic frame delivery in-process. */
 export async function installCommittedEventProjectionHarness(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<() => void> {
   await enableCollaborationCutover(db)
   const codecs = combineCommittedEventCodecRegistries(
@@ -67,7 +67,7 @@ export interface CommittedEventDeliveryTestHarness {
   dispose(): void
 }
 
-function durableTestConsumers(db: ProviderNeutralDatabase) {
+function durableTestConsumers(db: PersistenceDb) {
   const memoryDistill = createSqliteMemoryDistillEnqueuer(db)
   const events = {
     async observe(input: { readonly dedupeKey: string }) {
@@ -103,7 +103,7 @@ function durableTestConsumers(db: ProviderNeutralDatabase) {
  * projector. Useful when a test already owns a task-lifecycle projection
  * pump but needs to observe the later durable consumer boundary. */
 export async function drainCommittedEventDeliveriesForTests(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   maxSteps = 256,
 ): Promise<void> {
   await enableCollaborationCutover(db)
@@ -125,7 +125,7 @@ export async function drainCommittedEventDeliveriesForTests(
  * projection. The caller chooses the deterministic drain point; request
  * services never run durable consumers inline. */
 export async function installCommittedEventDeliveryHarness(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<CommittedEventDeliveryTestHarness> {
   await enableCollaborationCutover(db)
   const codecs = combineCommittedEventCodecRegistries(

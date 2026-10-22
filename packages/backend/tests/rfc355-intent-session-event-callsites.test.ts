@@ -25,7 +25,7 @@
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Hono } from 'hono'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
@@ -44,7 +44,7 @@ const DAEMON_TOKEN = 'rfc355-callsites-daemon-token'
 // 对整文件生效，混两种引擎形态时必错（pre-flight 的 MODULE-LEVEL-HARNESS），所以整段
 // 上提进注册面；`intentTestDependencies` 是注册期参数、`stubRun()` 按用例新建，照例走
 // 稳定转发闭包。app home 交给作用域（原来自建 `root` 并自己设 `AGENT_WORKFLOW_HOME`）。
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let app: Hono
 let ownerToken: string
 let seen: { type: string; sessionId?: string }[]

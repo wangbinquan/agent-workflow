@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPortableImportReferenceApplication } from '../application/portableImportReferences'
 import {
   createAgentImportReferenceReadPort,
@@ -7,7 +7,7 @@ import {
 import type { ResourceCatalogTransaction } from '../infrastructure/resourceCatalogTransaction'
 
 /** 一份装配，两个 provider 共用（RFC-359 W4-D14）。 */
-export function composePortableImportReferences(db: ProviderNeutralDatabase) {
+export function composePortableImportReferences(db: PersistenceDb) {
   return createPortableImportReferenceApplication(createAgentImportReferenceReadPort(db))
 }
 

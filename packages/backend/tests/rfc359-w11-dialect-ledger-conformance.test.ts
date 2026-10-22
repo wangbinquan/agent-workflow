@@ -26,6 +26,9 @@
 //
 // 双引擎是缺省（`helpers/eachProvider.ts`）：缺 `AW_TEST_POSTGRESQL_URL` 是硬红不是 skip。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -36,8 +39,7 @@ import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
 import { asc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { withPostgresqlTaskAggregateTransaction } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { createMaintenanceExecutionFence } from '@/platform/persistence/maintenanceExecutionFence'
@@ -53,15 +55,16 @@ const OWNER = 'u_rfc359_w11_owner'
  * 于是同一份实现在 SQLite 客户端上也跑得动——**这正是本文件要证的事**，所以这里按客户端
  * 句柄的实际角色转型，而不是去放宽生产签名。
  */
-const asClient = (db: ProviderNeutralDatabase): PostgresqlDatabaseClient =>
+const asClient = (db: PersistenceDb): PostgresqlDatabaseClient =>
   db as unknown as PostgresqlDatabaseClient
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 夹具
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function seedTask(db: ProviderNeutralDatabase, startedAt: number): Promise<string> {
+async function seedTask(db: PersistenceDb, startedAt: number): Promise<string> {
   const now = Date.now()
+  const { users, workflows, tasks } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -75,7 +78,7 @@ async function seedTask(db: ProviderNeutralDatabase, startedAt: number): Promise
     })
     .onConflictDoNothing()
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc359-w11',
     description: '',
@@ -84,7 +87,7 @@ async function seedTask(db: ProviderNeutralDatabase, startedAt: number): Promise
     schemaVersion: 4,
   })
   const id = `t_${ulid()}`
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: 'rfc359 w11 task',
     workflowId,
@@ -110,33 +113,31 @@ async function seedTask(db: ProviderNeutralDatabase, startedAt: number): Promise
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  values: Partial<typeof nodeRuns.$inferInsert> & { nodeId: string },
+  values: Partial<PersistenceTables['nodeRuns']['$inferInsert']> & { nodeId: string },
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     status: 'done',
     retryIndex: 0,
     iteration: 0,
     ...values,
-  } as typeof nodeRuns.$inferInsert)
+  } as PersistenceTables['nodeRuns']['$inferInsert'])
   return id
 }
 
 /** 一格标量：两个引擎上 `db.all` 都回一行一列的对象。 */
-async function scalar(
-  db: ProviderNeutralDatabase,
-  query: ReturnType<typeof sql>,
-): Promise<unknown> {
-  const rows = (await db.all<Record<string, unknown>>(query)) as Record<string, unknown>[]
+async function scalar(db: PersistenceDb, query: ReturnType<typeof sql>): Promise<unknown> {
+  const rows = (await rawRows<Record<string, unknown>>(db, query)) as Record<string, unknown>[]
   const row = rows[0]
   return row === undefined ? undefined : Object.values(row)[0]
 }
 
-/** 数值归一：PG 的 int8 经驱动回来是字符串（矩阵的 `numericFromRawRow` 是同一判据）。 */
+/** 数值归一：PG 的 int8 经驱动回来是字符串（raw-row codec 使用同一判据）。 */
 function asNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   return typeof value === 'number' ? value : Number(value)
@@ -154,6 +155,7 @@ describeEachProvider('RFC-359 W11 ① NULL 落位：矩阵是唯一渲染处', (
     await seedRun(db, taskId, { nodeId: 'a', startedAt: null })
     await seedRun(db, taskId, { nodeId: 'c', startedAt: 10 })
 
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ nodeId: nodeRuns.nodeId })
       .from(nodeRuns)
@@ -173,6 +175,7 @@ describeEachProvider('RFC-359 W11 ① NULL 落位：矩阵是唯一渲染处', (
     await seedRun(db, taskId, { nodeId: 'a', startedAt: null })
     await seedRun(db, taskId, { nodeId: 'c', startedAt: 10 })
 
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ nodeId: nodeRuns.nodeId })
       .from(nodeRuns)
@@ -309,6 +312,7 @@ describeEachProvider('RFC-359 W11 ③ greatest()：两个引擎上的真实执�
     const engine = engineOf(db)
     const taskId = await seedTask(db, 100)
     const bumpTo = async (occurredAt: number): Promise<void> => {
+      const { tasks } = tablesOf(db)
       await db
         .update(tasks)
         .set({
@@ -319,11 +323,13 @@ describeEachProvider('RFC-359 W11 ③ greatest()：两个引擎上的真实执�
         })
         .where(eq(tasks.id, taskId))
     }
-    const read = async (): Promise<number | null> =>
-      asNumber(
+    const read = async (): Promise<number | null> => {
+      const { tasks } = tablesOf(db)
+      return asNumber(
         (await db.select({ v: tasks.branchStartedAt }).from(tasks).where(eq(tasks.id, taskId)))[0]
           ?.v,
       )
+    }
 
     await bumpTo(200)
     expect(await read()).toBe(200)
@@ -344,6 +350,7 @@ describeEachProvider('RFC-359 W11 ④ 聚合根行锁：渲染权归矩阵', (ha
     const taskId = await seedTask(db, 100)
 
     const seen = await withPostgresqlTaskAggregateTransaction(asClient(db), taskId, async (tx) => {
+      const { tasks } = tablesOf(tx)
       const rows = await tx
         .select({ id: tasks.id })
         .from(tasks)
@@ -402,18 +409,20 @@ describeEachProvider('RFC-359 W11 ④ 聚合根行锁：渲染权归矩阵', (ha
 
     await expect(
       withPostgresqlTaskAggregateTransaction(asClient(db), taskId, async (tx) => {
-        await tx.insert(nodeRuns).values({
+        const { nodeRuns } = tablesOf(tx)
+        await insertOne(tx, nodeRuns, {
           id: runId,
           taskId,
           nodeId: 'n1',
           status: 'done',
           retryIndex: 0,
           iteration: 0,
-        } as typeof nodeRuns.$inferInsert)
+        } as PersistenceTables['nodeRuns']['$inferInsert'])
         throw new Error('body failed')
       }),
     ).rejects.toThrow('body failed')
 
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.id, runId))
     expect(rows, '体内抛错却留下了行 ⇒ 这笔事务没有回滚').toEqual([])
   })

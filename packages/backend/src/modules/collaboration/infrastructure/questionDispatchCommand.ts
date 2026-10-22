@@ -9,15 +9,13 @@
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { QuestionDispatchCommandPort } from '@/modules/collaboration/application/ports/questionDispatchCommand'
 import type { TaskActorRole } from '@agent-workflow/shared'
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
-export function createQuestionDispatchCommand(
-  db: ProviderNeutralDatabase,
-): QuestionDispatchCommandPort {
+export function createQuestionDispatchCommand(db: PersistenceDb): QuestionDispatchCommandPort {
   return {
     async dispatch(command) {
       const { dispatchTaskQuestionsWithDecision } = await import('./taskQuestionDispatch')

@@ -16,10 +16,10 @@
 //
 // 网络探针留在事务外：候选读 + 探针 + 第二阶段围栏落账，三段式与合一前一致。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, ne } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionEffectAttempts, taskExecutionEffects, taskExecutionOwners } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskExecutionRecoveryFinalization,
   TaskExecutionRecoveryPersistence,
@@ -46,7 +46,7 @@ import {
 } from './effectQuiescence'
 import { DrizzleTaskOwnershipPersistence } from './taskOwnershipPersistence'
 
-type OwnerRow = typeof taskExecutionOwners.$inferSelect
+type OwnerRow = PersistenceTables['taskExecutionOwners']['$inferSelect']
 
 function tuple(row: OwnerRow): OwnershipTuple {
   return {
@@ -73,7 +73,7 @@ interface ProbedCodeHostMutation {
 export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRecoveryPersistence {
   private readonly ownership: DrizzleTaskOwnershipPersistence
 
-  constructor(private readonly db: ProviderNeutralDatabase) {
+  constructor(private readonly db: PersistenceDb) {
     this.ownership = new DrizzleTaskOwnershipPersistence(db)
   }
 
@@ -84,6 +84,7 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
   async prepare(input: Parameters<TaskExecutionRecoveryPersistence['prepare']>[0]) {
     assertExclusiveDaemonLockProof(input.lockProof)
     const now = input.now ?? Date.now()
+    const { taskExecutionOwners } = tablesOf(this.db)
     const oldClaims = await this.db
       .select()
       .from(taskExecutionOwners)
@@ -118,6 +119,7 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
       throw new Error('task execution recovery requires a completed orphan-process barrier')
     }
     const now = input.now ?? Date.now()
+    const { taskExecutionOwners } = tablesOf(this.db)
     const candidates = await this.db
       .select()
       .from(taskExecutionOwners)
@@ -249,6 +251,7 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
     owner: OwnerRow,
     probe: ((descriptor: CodeHostRecoveryDescriptor) => Promise<CodeHostProbeOutcome>) | undefined,
   ): Promise<readonly ProbedCodeHostMutation[]> {
+    const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(this.db)
     const candidates = (
       await this.db
         .select({

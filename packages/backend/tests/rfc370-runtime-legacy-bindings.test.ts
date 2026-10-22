@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // The daemon selects one raw legacy source independently of parsed settings.
 // Both provider compositions must retain that source through boot and cutover.
@@ -7,7 +8,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
-import { runtimes } from '@/db/schema'
 import {
   composeFileRuntimeLegacyConfiguration,
   initializeRuntimeRegistryBoot,
@@ -187,6 +187,7 @@ describeEachProvider('RFC-370 selected runtime legacy configuration', (harness) 
     source.current = JSON.stringify({ defaultClaudeModel: 'selected-claude-model' })
     await expect(boot()).rejects.toThrow(/defaultClaudeModel/)
     expect(source.reads).toBe(2)
+    const { runtimes } = tablesOf(harness.db)
     await harness.db
       .update(runtimes)
       .set({ model: 'selected-claude-model' })

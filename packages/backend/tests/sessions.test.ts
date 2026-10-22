@@ -1,8 +1,10 @@
 // RFC-036 — sessionStore CRUD + lookup invariants.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createLoginSession,
@@ -14,10 +16,9 @@ import {
   revokeSession,
   SESSION_DEFAULT_TTL_MS,
 } from './helpers/auth/sessionStore'
-import { users, userSessions } from '../src/db/schema'
-
-async function seedActiveUser(db: ProviderNeutralDatabase, id = '01HQUSER'): Promise<string> {
-  await db.insert(users).values({
+async function seedActiveUser(db: PersistenceDb, id = '01HQUSER'): Promise<string> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id.toLowerCase(),
     email: `${id.toLowerCase()}@example.com`,
@@ -36,7 +37,7 @@ async function seedActiveUser(db: ProviderNeutralDatabase, id = '01HQUSER'): Pro
 }
 
 describeEachProvider('sessionStore', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -52,7 +53,10 @@ describeEachProvider('sessionStore', (harness) => {
     // confirm only the hash is in the row, not the raw token
     const stored = await lookupRawHash(db, token)
     expect(stored).toBe(true)
-    expect((await db.select().from(users).where(idEq(userId)).limit(1))[0]?.lastLoginAt).toBeNull()
+    const { users } = tablesOf(db)
+    expect(
+      (await db.select().from(users).where(idEq(db, userId)).limit(1))[0]?.lastLoginAt,
+    ).toBeNull()
   })
 
   test('createLoginSession atomically stamps the authenticated user', async () => {
@@ -71,7 +75,8 @@ describeEachProvider('sessionStore', (harness) => {
       createdAt: 12_345,
       lastUsedAt: 12_345,
     })
-    expect((await db.select().from(users).where(idEq(userId)).limit(1))[0]?.lastLoginAt).toBe(
+    const { users } = tablesOf(db)
+    expect((await db.select().from(users).where(idEq(db, userId)).limit(1))[0]?.lastLoginAt).toBe(
       12_345,
     )
   })
@@ -91,7 +96,8 @@ describeEachProvider('sessionStore', (harness) => {
   test('lookupActiveSession returns null when user is disabled', async () => {
     const id = await seedActiveUser(db)
     const { token } = await createSession({ db, userId: id })
-    await db.update(users).set({ status: 'disabled' }).where(idEq(id))
+    const { users } = tablesOf(db)
+    await db.update(users).set({ status: 'disabled' }).where(idEq(db, id))
     expect(await lookupActiveSession(db, token)).toBe(null)
   })
 
@@ -102,6 +108,7 @@ describeEachProvider('sessionStore', (harness) => {
     expect(first?.session.lastUsedAt).toBe(5_000)
     const burst = await lookupActiveSession(db, token, 5_500)
     expect(burst?.session.lastUsedAt).toBe(5_500)
+    const { userSessions } = tablesOf(db)
     expect((await db.select().from(userSessions).limit(1))[0]?.lastUsedAt).toBe(5_000)
     const second = await lookupActiveSession(db, token, 7_500)
     expect(second?.session.lastUsedAt).toBe(7_500)
@@ -135,13 +142,14 @@ describeEachProvider('sessionStore', (harness) => {
   })
 })
 
-async function lookupRawHash(db: ProviderNeutralDatabase, raw: string): Promise<boolean> {
+async function lookupRawHash(db: PersistenceDb, raw: string): Promise<boolean> {
+  const { userSessions } = tablesOf(db)
   // Look directly at user_sessions to confirm only the hash was persisted.
-  const { userSessions } = await import('../src/db/schema')
   const rows = (await db.select().from(userSessions)) as { tokenHash: string }[]
   return rows.some((r) => r.tokenHash === hashToken(raw))
 }
 
-function idEq(id: string) {
+function idEq(db: object, id: string) {
+  const { users } = tablesOf(db)
   return eq(users.id, id)
 }

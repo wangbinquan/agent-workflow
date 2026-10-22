@@ -8,12 +8,14 @@
 //   3. Cycle / missing-dep mapping to NodeStepResult 'failed' (does not throw
 //      — scheduler's normal failure path expects a structured result)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Logger } from '@/util/log'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { skills } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
@@ -28,7 +30,7 @@ const NOOP_LOG: Logger = {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   opts: { dependsOn?: string[]; skills?: string[]; mcp?: string[] } = {},
 ) {
@@ -50,10 +52,11 @@ async function seedAgent(
   })
 }
 
-async function seedManagedSkill(db: ProviderNeutralDatabase, name: string): Promise<void> {
+async function seedManagedSkill(db: PersistenceDb, name: string): Promise<void> {
+  const { skills } = tablesOf(db)
   // Raw insert keeps the test free of filesystem setup — prepareSkills /
   // resolveSkills only care about the DB row + sourceKind.
-  await db.insert(skills).values({
+  await insertOne(db, skills, {
     id: ulid(),
     name,
     description: '',
@@ -64,7 +67,7 @@ async function seedManagedSkill(db: ProviderNeutralDatabase, name: string): Prom
 }
 
 describeEachProvider('RFC-022 scheduler.prepareNodeRunInjection', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -114,7 +117,7 @@ describeEachProvider('RFC-022 scheduler.prepareNodeRunInjection', (harness) => {
     // otherwise refuse). This is the exact scenario the runtime guard exists
     // to catch — when external SQL editing or a race breaks the closure.
     const { sql } = await import('drizzle-orm')
-    await db.run(sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
+    await rawExec(db, sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
@@ -138,7 +141,7 @@ describeEachProvider('RFC-022 scheduler.prepareNodeRunInjection', (harness) => {
     const idB = (await getAgent(db, 'b'))!.id
     const idC = (await getAgent(db, 'c'))!.id
     const { sql } = await import('drizzle-orm')
-    await db.run(sql`UPDATE agents SET depends_on = ${JSON.stringify([idA])} WHERE name = 'c'`)
+    await rawExec(db, sql`UPDATE agents SET depends_on = ${JSON.stringify([idA])} WHERE name = 'c'`)
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 

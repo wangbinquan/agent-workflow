@@ -1,14 +1,10 @@
 // RFC-359 W4-B1 —— 人工门 continuation 的 effect 检视 / 准备 / 结算：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import {
-  taskExecutionEffectAttempts,
-  taskExecutionEffects,
-  taskExecutionIntents,
-} from '@/db/schema'
 import type { GateContinuationEffectPersistence } from '../application/drive/gateContinuationEffectStep'
 import { waitForEffectResourceTurn } from '../application/effectResourceWait'
 import { TaskExecutionError } from '../application/taskExecutionError'
@@ -23,11 +19,14 @@ const TRANSPORT_VERSION = 'rfc333-local-plan-v1'
 
 export class DrizzleGateContinuationEffectPersistence implements GateContinuationEffectPersistence {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly effects: TaskExecutionPersistence['effects'],
   ) {}
 
   async inspect(input: Parameters<GateContinuationEffectPersistence['inspect']>[0]) {
+    const { taskExecutionIntents, taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(
+      this.db,
+    )
     const intentRows = await this.db
       .select({
         kind: taskExecutionIntents.kind,

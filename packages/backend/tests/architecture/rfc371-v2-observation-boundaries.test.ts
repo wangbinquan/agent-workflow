@@ -73,8 +73,10 @@ describe('RFC-371 v2 observation boundaries', () => {
     const allowed = new Set([
       '@agent-workflow/shared',
       '@/auth/actor',
-      '@/db/query',
-      '@/db/schema',
+      '@/platform/persistence/persistenceDb',
+      '@/platform/persistence/sessionTables',
+      '@/platform/persistence/queryHelpers',
+      '@/platform/persistence/singleInsert',
       '@/platform/persistence/schema/dsl',
       '@/platform/persistence/schema/drizzle',
       '@/platform/persistence/databaseTransaction',
@@ -111,7 +113,29 @@ describe('RFC-371 v2 observation boundaries', () => {
             tables.has((element.propertyName ?? element.name).text),
           ),
       )
-    const importers = backend.filter(importsTables).map((unit) => unit.path)
+    const accessesSessionTables = (unit: SourceUnit): boolean => {
+      let found = false
+      const visit = (node: ts.Node): void => {
+        if (
+          ts.isVariableDeclaration(node) &&
+          ts.isObjectBindingPattern(node.name) &&
+          node.initializer &&
+          ts.isCallExpression(node.initializer) &&
+          ts.isIdentifier(node.initializer.expression) &&
+          node.initializer.expression.text === 'tablesOf'
+        ) {
+          found ||= node.name.elements.some((element) =>
+            tables.has((element.propertyName ?? element.name).getText(unit.source)),
+          )
+        }
+        ts.forEachChild(node, visit)
+      }
+      visit(unit.source)
+      return found
+    }
+    const importers = backend
+      .filter((unit) => importsTables(unit) || accessesSessionTables(unit))
+      .map((unit) => unit.path)
     expect(importers.length).toBeGreaterThan(0)
     expect(importers.filter((path) => !path.startsWith(MODULE))).toEqual([])
   })

@@ -4,6 +4,8 @@
 // cannot create resources or use the task surface. Granting the private range
 // changes only that capability while the persisted role remains `guest`.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
@@ -11,7 +13,6 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { agents, resourceGrants } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
@@ -58,6 +59,7 @@ describeEachProviderHttpApplication(
       const session = await createSession({ db, userId: guest.id })
       const publicId = ulid()
       const privateId = ulid()
+      const { agents, resourceGrants } = tablesOf(db)
       await db.insert(agents).values([
         {
           id: publicId,
@@ -73,7 +75,7 @@ describeEachProviderHttpApplication(
         },
       ])
       // A resource grant alone must not punch through the guest preset.
-      await db.insert(resourceGrants).values({
+      await insertOne(db, resourceGrants, {
         resourceType: 'agent',
         resourceId: privateId,
         userId: guest.id,

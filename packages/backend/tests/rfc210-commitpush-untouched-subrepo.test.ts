@@ -18,12 +18,13 @@
 // **fast-forward 到 upstream tip** 然后发布出去，pin 就此销毁，而没有任何人要求
 // 过 bump 子仓。这正是 gitSubmoduleRemote 默认关闭要避免的漂移。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
@@ -102,9 +103,10 @@ async function fixture(subPushable: boolean): Promise<{ parent: string; sub: str
  * RFC-359 AC-6: the same explicit columns, but through the neutral query builder —
  * the raw `INSERT INTO …` text only parsed against the bun:sqlite dialect.
  */
-async function seedTask(db: ProviderNeutralDatabase, repo: string): Promise<void> {
-  await db.insert(workflows).values({ id: 'wf', name: 'f', definition: '{}' })
-  await db.insert(tasks).values({
+async function seedTask(db: PersistenceDb, repo: string): Promise<void> {
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
+  await insertOne(db, tasks, {
     id: 't1',
     name: 'cp',
     workflowId: 'wf',
@@ -125,7 +127,7 @@ async function seedTask(db: ProviderNeutralDatabase, repo: string): Promise<void
       { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
     ]),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'parent-run',
     taskId: 't1',
     nodeId: 'writer',

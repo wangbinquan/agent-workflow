@@ -6,6 +6,7 @@
 // commitSkillZip:  applies a decision map and writes accepted candidates to
 //                  ~/.agent-workflow/skills/{id}/files/.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { Unzip, UnzipInflate, unzipSync, type UnzipFileInfo } from 'fflate'
 import { eq, inArray } from 'drizzle-orm'
 import {
@@ -27,8 +28,7 @@ import {
   type ZipEntryRef,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkillWithFiles,
   getSkillById,
@@ -357,10 +357,11 @@ type SkillZipTargetRow = {
 }
 
 async function listTargetRowsByName(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   names: ReadonlyArray<string>,
 ): Promise<SkillZipTargetRow[]> {
   if (names.length === 0) return []
+  const { skills } = tablesOf(db)
   return db
     .select({
       id: skills.id,
@@ -378,9 +379,10 @@ async function listTargetRowsByName(
 }
 
 async function loadTargetRowById(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   skillId: string,
 ): Promise<SkillZipTargetRow | null> {
+  const { skills } = tablesOf(db)
   const rows = await db
     .select({
       id: skills.id,
@@ -418,7 +420,7 @@ function toOverwriteCandidate(row: SkillZipTargetRow): SkillZipOverwriteCandidat
 }
 
 export async function parseSkillZipBuffer(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   buffer: Uint8Array,
 ): Promise<{ response: ParseSkillZipResponse; candidates: SkillCandidate[] }> {
@@ -479,7 +481,7 @@ interface CommitOutcome {
 }
 
 export async function commitSkillZipBuffer(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SkillZipFsOptions,
   buffer: Uint8Array,
   decisions: SkillZipDecisionMap,

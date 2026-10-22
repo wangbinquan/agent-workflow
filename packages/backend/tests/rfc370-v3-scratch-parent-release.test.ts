@@ -26,9 +26,9 @@
 // the parent busy. A superseded parent now keeps serving only while the
 // platform still runs subtasks in it; with nothing in flight the running
 // release gets its own parent at once.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedTaskWorkspaces } from '@/db/schema'
 import { createHostedTaskWorkspaces } from '@/modules/source-control/infrastructure/crewstation/taskWorkspace'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
 import type {
@@ -138,13 +138,15 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
         clock += ms
       },
     })
-    const row = async (owner: string) =>
-      (
+    const row = async (owner: string) => {
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      return (
         await harness.db
           .select()
           .from(hostedTaskWorkspaces)
           .where(eq(hostedTaskWorkspaces.taskId, owner))
       )[0]!
+    }
     return {
       workspaces,
       parents,
@@ -223,6 +225,7 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     const key = (await f.row('mcp-test:01SESSION')).requestKey
     expect(key).toContain(`${releaseTag('release-1')}~`)
     expect(await f.workspaces.superseded('mcp-test:01SESSION')).toBe(false)
+    const { hostedTaskWorkspaces } = tablesOf(harness.db)
     // A registration the platform released (recorded closed) is re-armed too.
     await harness.db
       .update(hostedTaskWorkspaces)

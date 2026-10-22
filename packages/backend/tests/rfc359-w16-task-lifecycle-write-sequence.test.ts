@@ -10,20 +10,15 @@
 // 一起退役——生产侧再没有同步调用方。通用的「一份 program 两种解释」契约仍由
 // `tests/rfc359-committed-append-program-conformance.test.ts` 看守。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first, queryRows, queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEventAggregateHeads,
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import type { TaskNodeChangeV1 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
@@ -50,13 +45,14 @@ const ADDED: TaskNodeChangeV1 = {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
-  extra: Partial<typeof tasks.$inferInsert> = {},
+  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<void> {
   const workflowId = `workflow-${id}`
-  await db.insert(workflows).values({ id: workflowId, name: workflowId, definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks, committedEventFamilyCutovers } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: workflowId, definition: '{}' })
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -85,13 +81,15 @@ async function seedTask(
     .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
 }
 
-async function taskRow(db: ProviderNeutralDatabase, id: string) {
+async function taskRow(db: PersistenceDb, id: string) {
+  const { tasks } = tablesOf(db)
   const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
   if (row === undefined) throw new Error(`missing fixture task ${id}`)
   return row
 }
 
-async function durableRows(db: ProviderNeutralDatabase) {
+async function durableRows(db: PersistenceDb) {
+  const { committedEvents, committedEventAggregateHeads, committedEventDeliveries } = tablesOf(db)
   return {
     events: await db.select().from(committedEvents).orderBy(committedEvents.id),
     heads: await db.select().from(committedEventAggregateHeads),
@@ -149,7 +147,8 @@ describe('RFC-359 lifecycle native writer contract', () => {
           taskRevision: 5,
           eventRefs: [{ eventId: 'task-lifecycle:native:5' }],
         })
-        expect((await tx.select().from(tasks).where(eq(tasks.id, 'native')).get())?.status).toBe(
+        const { tasks, committedEvents } = tablesOf(tx)
+        expect((await first(tx.select().from(tasks).where(eq(tasks.id, 'native'))))?.status).toBe(
           'awaiting_review',
         )
         expect(await tx.select().from(committedEvents)).toHaveLength(1)
@@ -177,12 +176,13 @@ describe('RFC-359 lifecycle native writer contract', () => {
       now: NOW,
       reason: 'native-companion',
       // RFC-359：`setTaskStatus` 的写事务已经搬到中立的显式边界，`onTransitionTx` 因此收到的是
-      // `DatabaseTransaction`——判据一字未改，只是每条语句都要 await（同步 drizzle 面上
+      // `PersistenceTx`——判据一字未改，只是每条语句都要 await（同步 drizzle 面上
       // `.get()` / `.all()` 直接返回值，中立面上返回的是 thenable）。
       async onTransitionTx(tx, transition, collector) {
         order.push('companion')
         expect(transition).toEqual({ from: 'running', to: 'done' })
-        expect((await tx.select().from(tasks).where(eq(tasks.id, 'native')).get())?.status).toBe(
+        const { tasks, committedEvents } = tablesOf(tx)
+        expect((await first(tx.select().from(tasks).where(eq(tasks.id, 'native'))))?.status).toBe(
           'done',
         )
         expect(await tx.select().from(committedEvents)).toEqual([])
@@ -192,7 +192,8 @@ describe('RFC-359 lifecycle native writer contract', () => {
       deferCommittedEventPublication(refs) {
         order.push('defer')
         expect(db.$client.inTransaction).toBe(false)
-        expect(db.select().from(committedEvents).all()).toHaveLength(1)
+        const { committedEvents } = tablesOf(db)
+        expect(queryRows(db.select().from(committedEvents))).toHaveLength(1)
         deferred.push(...refs)
       },
     })
@@ -217,7 +218,8 @@ describe('RFC-359 lifecycle native writer contract', () => {
         now: NOW,
         reason: 'native-rollback',
         onTransitionTx(tx) {
-          tx.update(tasks).set({ name: 'must-rollback' }).where(eq(tasks.id, 'native')).run()
+          const { tasks } = tablesOf(tx)
+          queryWrite(tx.update(tasks).set({ name: 'must-rollback' }).where(eq(tasks.id, 'native')))
           throw sentinel
         },
         deferCommittedEventPublication() {
@@ -263,6 +265,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
           expect(transition).toEqual({ from: 'running', to: 'done' })
           expect((await taskRow(companionTx, 'complete')).status).toBe('done')
           expect((await durableRows(companionTx)).events).toEqual([])
+          const { tasks } = tablesOf(companionTx)
           await companionTx
             .update(tasks)
             .set({ name: 'companion-written' })
@@ -404,7 +407,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
     },
   ] satisfies readonly {
     name: string
-    row: Partial<typeof tasks.$inferInsert>
+    row: Partial<PersistenceTables['tasks']['$inferInsert']>
     input: Partial<Parameters<typeof writeTaskRuntimeLifecycleInTx>[1]>
   }[])('$name stops before companion and event', async ({ row, input }) => {
     await seedTask(harness.db, 'miss', row)
@@ -434,6 +437,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
         writeTaskRuntimeLifecycleInTx(tx, {
           ...writeInput('rollback'),
           async onTransitionTx(companionTx) {
+            const { tasks } = tablesOf(companionTx)
             await companionTx
               .update(tasks)
               .set({ name: 'must-rollback' })
@@ -462,6 +466,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
             order.push('entered')
             entered.resolve()
             await release.promise
+            const { tasks } = tablesOf(companionTx)
             await companionTx
               .update(tasks)
               .set({ name: 'released' })
@@ -489,6 +494,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
 
   test('legacy cutover still commits the CAS and companion while returning a null receipt', async () => {
     await seedTask(harness.db, 'legacy', { runningSince: null })
+    const { committedEventFamilyCutovers } = tablesOf(harness.db)
     await harness.db
       .update(committedEventFamilyCutovers)
       .set({ mode: 'legacy' })

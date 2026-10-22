@@ -11,6 +11,7 @@
 //      gets a single task_repos row with repo_index=0 + worktree_dir_name=''
 //      mirroring tasks.* columns.
 
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -34,7 +35,8 @@ interface SqlMaster {
 describe('RFC-066 — migration 0034 task_repos', () => {
   test('task_repos table + two indexes exist with expected DDL shape', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const tbl = (await db.all(
+    const tbl = (await rawRows(
+      db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='task_repos'`,
     )) as SqlMaster[]
     expect(tbl).toHaveLength(1)
@@ -60,7 +62,8 @@ describe('RFC-066 — migration 0034 task_repos', () => {
     // Composite PK.
     expect(/primary key.*task_id.*repo_index/.test(ddl)).toBe(true)
 
-    const idxs = (await db.all(
+    const idxs = (await rawRows(
+      db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='task_repos'`,
     )) as { name: string }[]
     const names = idxs.map((r) => r.name)
@@ -70,7 +73,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
 
   test('tasks.repo_count column exists (NOT NULL DEFAULT 1)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(tasks)`)) as Array<{
+    const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as Array<{
       name: string
       notnull: number
       dflt_value: string | null
@@ -84,7 +87,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
 
   test('node_runs.pre_snapshot_repos_json column exists (nullable TEXT)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(node_runs)`)) as Array<{
+    const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as Array<{
       name: string
       notnull: number
       type: string
@@ -138,7 +141,8 @@ describe('RFC-066 — migration 0034 task_repos', () => {
 
     // Apply the rest (just 0034) using the full migrations folder.
     const final = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const rows = (await final.all(
+    const rows = (await rawRows(
+      final,
       sql`SELECT * FROM task_repos WHERE task_id = 't-legacy'`,
     )) as Array<{
       task_id: string
@@ -176,28 +180,36 @@ describe('RFC-066 — migration 0034 task_repos', () => {
 
   test('cascade delete: deleting a task removes its task_repos rows', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'f', '{}')`)
-    await db.run(sql`
+    await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'f', '{}')`)
+    await rawExec(
+      db,
+      sql`
       INSERT INTO tasks
         (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
          base_branch, branch, status, inputs, started_at, schema_version)
       VALUES
         ('t-cascade', 'cascade', 'wf-1', '{}', '/p', '/w',
          'main', 'agent-workflow/t-cascade', 'done', '{}', 1, 1)
-    `)
-    await db.run(sql`
+    `,
+    )
+    await rawExec(
+      db,
+      sql`
       INSERT INTO task_repos
         (task_id, repo_index, repo_path, branch, worktree_path)
       VALUES
         ('t-cascade', 0, '/p', 'agent-workflow/t-cascade', '/w'),
         ('t-cascade', 1, '/p2', 'agent-workflow/t-cascade', '/w/p2')
-    `)
-    const before = (await db.all(
+    `,
+    )
+    const before = (await rawRows(
+      db,
       sql`SELECT count(*) AS n FROM task_repos WHERE task_id='t-cascade'`,
     )) as { n: number }[]
     expect(before[0]!.n).toBe(2)
-    await db.run(sql`DELETE FROM tasks WHERE id='t-cascade'`)
-    const after = (await db.all(
+    await rawExec(db, sql`DELETE FROM tasks WHERE id='t-cascade'`)
+    const after = (await rawRows(
+      db,
       sql`SELECT count(*) AS n FROM task_repos WHERE task_id='t-cascade'`,
     )) as { n: number }[]
     expect(after[0]!.n).toBe(0)

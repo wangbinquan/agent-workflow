@@ -6,11 +6,11 @@
 // a shared JSON document). Retirement releases the whole scope in the same
 // transaction that marks the generation retired; physical unpin is deferred to
 // the hosted object maintenance job.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { pluginArtifactGenerations, plugins } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
@@ -95,37 +95,40 @@ const fileKey = (reference: string, path: string) => `${reference}/file/${sha256
 const manifestKey = (reference: string) => `${reference}/manifest`
 const cachedReference = (reference: string, entry: string) =>
   `${reference}/${encodeURIComponent(entry)}`
-type Row = typeof pluginArtifactGenerations.$inferSelect
+type Row = PersistenceTables['pluginArtifactGenerations']['$inferSelect']
 
 export function createHostedPluginGenerations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
   readonly helper: WorkspaceHelper
   readonly reference: (taskId: string, path: string) => string
   readonly openFile: (reference: string) => Promise<ReadableStream<Uint8Array>>
-  readonly retainedReferences: (db?: ProviderNeutralDatabase) => Promise<readonly string[]>
+  readonly retainedReferences: (db?: PersistenceDb) => Promise<readonly string[]>
   readonly now?: () => number
 }) {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
-  const write = async <T>(run: (tx: ProviderNeutralDatabase) => Promise<T>) => {
+  const write = async <T>(run: (tx: PersistenceDb) => Promise<T>) => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
       return run(tx)
     })
   }
-  const find = async (reference: string, db = input.db) =>
-    (
+  const find = async (reference: string, db = input.db) => {
+    const { pluginArtifactGenerations } = tablesOf(db)
+    return (
       await db
         .select()
         .from(pluginArtifactGenerations)
         .where(eq(pluginArtifactGenerations.reference, reference))
         .limit(1)
     )[0]
-  const lock = async (tx: ProviderNeutralDatabase, reference: string) => {
+  }
+  const lock = async (tx: PersistenceDb, reference: string) => {
+    const { pluginArtifactGenerations } = tablesOf(tx)
     await session.engine.lockAggregateRoot(
       tx,
       pluginArtifactGenerations,
@@ -165,6 +168,7 @@ export function createHostedPluginGenerations(input: {
   const begin = (reference: string, pluginId: string, generationId: string, spec: string) =>
     write(async (tx) => {
       const epoch = input.fence.current().epoch
+      const { pluginArtifactGenerations } = tablesOf(tx)
       await tx
         .insert(pluginArtifactGenerations)
         .values({
@@ -218,6 +222,7 @@ export function createHostedPluginGenerations(input: {
       if (row?.state !== 'installing') throw new Error('hosted-plugin-installation-not-writable')
       if (row.installedJson !== null && row.installedJson !== installedJson)
         throw new Error('hosted-plugin-installation-receipt-changed')
+      const { pluginArtifactGenerations } = tablesOf(tx)
       await tx
         .update(pluginArtifactGenerations)
         .set({ installedJson, updatedAt: now() })
@@ -275,6 +280,7 @@ export function createHostedPluginGenerations(input: {
           if (row?.state === 'ready' && row.objectId === object!.id) return
           if (row?.state !== 'installing')
             throw new Error('hosted-plugin-installation-not-writable')
+          const { pluginArtifactGenerations } = tablesOf(tx)
           await tx
             .update(pluginArtifactGenerations)
             .set({
@@ -302,6 +308,7 @@ export function createHostedPluginGenerations(input: {
       const generation = await lock(tx, parsed.root)
       if (generation === undefined) return 'physical' as const
       if (generation.state === 'retired') return 'retired' as const
+      const { plugins, pluginArtifactGenerations } = tablesOf(tx)
       const current = await tx
         .select({ cachedPath: plugins.cachedPath })
         .from(plugins)
@@ -345,6 +352,7 @@ export function createHostedPluginGenerations(input: {
       const row = await lock(tx, parsed.root)
       if (row?.state !== 'releasing') return
       await input.publications.release({ owner: HOSTED_PLUGIN_OWNER, scope: parsed.root }, tx)
+      const { pluginArtifactGenerations } = tablesOf(tx)
       await tx
         .update(pluginArtifactGenerations)
         .set({ state: 'retired', updatedAt: now() })
@@ -404,6 +412,7 @@ export function createHostedPluginGenerations(input: {
   }
   const candidates = async (request: { now?: number; graceMs?: number }) => {
     const retained = await input.retainedReferences()
+    const { pluginArtifactGenerations } = tablesOf(input.db)
     const rows = await input.db
       .select()
       .from(pluginArtifactGenerations)

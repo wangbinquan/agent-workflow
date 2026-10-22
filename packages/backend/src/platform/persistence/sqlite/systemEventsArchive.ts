@@ -28,7 +28,7 @@ import {
   writeSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
 import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
@@ -293,7 +293,7 @@ export async function archiveEventsWithStore(
 
 /** SQLite compatibility adapter retained for existing callers and tests. */
 export async function archiveEvents(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   config: { eventsArchiveThresholds: ArchiveThresholds },
   logsDir: string,
   opts: EventsArchiveOptions = {},

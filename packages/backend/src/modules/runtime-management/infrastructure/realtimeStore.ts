@@ -6,25 +6,17 @@
 // 可以合成一份，判据与 RFC-350 的 `taskIdleTimeoutPersistence.ts` 同款：本 adapter 的四个方法
 // （`findTaskAudience` / `findResource` / `findMemoryScope` / `listTaskEvents`）**全是只读
 // select、没有任何事务**，SQLite 的 `dbTxSync` 与 PostgreSQL 的异步事务那道真正的分歧在这里
-// 不存在；而 `DbClient` 与 `PostgresqlDatabaseClient` 都是 drizzle 的 `BaseSQLiteDatabase`
-// （即 `ProviderNeutralDatabase`），同一套 query builder 在 `await` 下两边行为一致。
+// 不存在；而 `DbClient` 与 `PostgresqlDatabaseClient` 都是 drizzle 的 `PersistenceDb`
+// （即 `PersistenceDb`），同一套 query builder 在 `await` 下两边行为一致。
 //
 // 于是 provider 一致性在**结构上**成立，而不是靠纸面对账。行为侧另有
 // `tests/rfc359-w7-realtime-store-conformance.test.ts` 把这四个方法在两个引擎上各跑一遍
 // ——合一之前这一对是「无对拍」的，那份对拍本身就是合一换来的。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, gt } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  memories,
-  nodeRunEvents,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  workflows,
-  workgroups,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   RealtimeAclResourceType,
   RealtimeResourceRow,
@@ -32,9 +24,10 @@ import type {
 } from '../application/ports/realtimeStore'
 
 export class DrizzleRealtimeStore implements RealtimeStore {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async findTaskAudience(taskId: string, userId: string) {
+    const { tasks, taskCollaborators } = tablesOf(this.db)
     const taskRows = await this.db
       .select({ ownerUserId: tasks.ownerUserId })
       .from(tasks)
@@ -55,6 +48,7 @@ export class DrizzleRealtimeStore implements RealtimeStore {
     resourceId: string,
   ): Promise<RealtimeResourceRow | null> {
     if (type === 'workflow') {
+      const { workflows } = tablesOf(this.db)
       const rows = await this.db
         .select({
           id: workflows.id,
@@ -66,6 +60,7 @@ export class DrizzleRealtimeStore implements RealtimeStore {
         .limit(1)
       return rows[0] ?? null
     }
+    const { workgroups } = tablesOf(this.db)
     const rows = await this.db
       .select({
         id: workgroups.id,
@@ -79,6 +74,7 @@ export class DrizzleRealtimeStore implements RealtimeStore {
   }
 
   async findMemoryScope(memoryId: string) {
+    const { memories } = tablesOf(this.db)
     const rows = await this.db
       .select({ scopeType: memories.scopeType, scopeId: memories.scopeId })
       .from(memories)
@@ -88,6 +84,7 @@ export class DrizzleRealtimeStore implements RealtimeStore {
   }
 
   async listTaskEvents(taskId: string, since: number) {
+    const { nodeRunEvents, nodeRuns } = tablesOf(this.db)
     return await this.db
       .select({
         id: nodeRunEvents.id,

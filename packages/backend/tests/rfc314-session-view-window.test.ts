@@ -16,13 +16,14 @@
 //
 // 根不退化那条判据由 `rfc311-session-view-bounded.test.ts` 继续看守，这里不重复。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
@@ -37,8 +38,9 @@ interface SeedEvent {
   payload: string
 }
 
-async function seedBase(db: ProviderNeutralDatabase): Promise<string> {
-  await db.insert(users).values({
+async function seedBase(db: PersistenceDb): Promise<string> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -50,8 +52,8 @@ async function seedBase(db: ProviderNeutralDatabase): Promise<string> {
     nodes: [{ id: 'n1', kind: 'agent-single', data: { agentName: 'worker' } }],
     edges: [],
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: snapshot })
-  await db.insert(tasks).values({
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: snapshot })
+  await insertOne(db, tasks, {
     id: 't1',
     name: 't1',
     workflowId: 'wf1',
@@ -79,13 +81,14 @@ async function seedBase(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   runId: string,
   events: SeedEvent[],
   retryIndex = 0,
   eventChunkSize = 1,
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId: 't1',
     nodeId: 'n1',
@@ -199,7 +202,7 @@ async function capture(
   database?: ProviderDatabaseHarness,
 ): Promise<{
   statements: RecordedStatement[]
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
 }> {
   const db = database?.db ?? createInMemoryDb(MIGRATIONS)
   await seedBase(db)

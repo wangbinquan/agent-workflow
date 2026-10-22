@@ -9,6 +9,8 @@
 // build. Shrinking should still bisect any failing trace into a minimal
 // repro.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
@@ -18,16 +20,8 @@ import { join } from 'node:path'
 import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import fc from 'fast-check'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   dispatchReviewNode,
   submitReviewDecision,
@@ -51,8 +45,9 @@ interface Violation {
   rule: Rule
   detail: string
 }
-async function checkInvariants(db: ProviderNeutralDatabase, taskId: string): Promise<Violation[]> {
+async function checkInvariants(db: PersistenceDb, taskId: string): Promise<Violation[]> {
   const v: Violation[] = []
+  const { tasks, nodeRuns, docVersions } = tablesOf(db)
   const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (t === undefined) return v
   const def = JSON.parse(t.workflowSnapshot) as { nodes?: Array<{ id?: string; kind?: string }> }
@@ -110,7 +105,7 @@ const eventArbitrary: fc.Arbitrary<Event> = fc.oneof(
 )
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   repoPath: string
   taskId: string
@@ -118,7 +113,7 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-t1h-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -147,16 +142,17 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
     '-m',
     'i',
   ])
+  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
   // RFC-359 AC-1（第 9 刀）：库由 `describeEachProvider` 提供，整份 property 的**每一轮**
   // 共用同一个库（fast-check 一个用例跑几十轮）。代理名是唯一键，所以按名字幂等地种；
   // 其余种子行都带 `taskId`，而全部判据（`checkInvariants`）本就按 taskId 作用域，轮与轮之间不互相看见。
   const seededAgent = await db
-    .select({ id: agentsTable.id })
-    .from(agentsTable)
-    .where(eq(agentsTable.name, 'doc'))
+    .select({ id: agents.id })
+    .from(agents)
+    .where(eq(agents.name, 'doc'))
     .limit(1)
   if (seededAgent.length === 0) {
-    await db.insert(agentsTable).values({
+    await insertOne(db, agents, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -187,13 +183,13 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
     ],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -208,7 +204,7 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   })
   // Initial agent done + outputs.
   const agentRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: agentRunId,
     taskId,
     nodeId: 'doc',
@@ -218,12 +214,14 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
     startedAt: Date.now() - 1000,
     finishedAt: Date.now() - 900,
   })
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId: agentRunId, portName: 'docpath', content: '# v0' })
+  await insertOne(db, nodeRunOutputs, {
+    nodeRunId: agentRunId,
+    portName: 'docpath',
+    content: '# v0',
+  })
   // Initial review row awaiting decision + pending dv.
   const reviewRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -235,7 +233,7 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   })
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
   writeFileSync(join(appHome, 'doc_versions', 'v1.md'), '# v0')
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: ulid(),
     taskId,
     reviewNodeId: 'rev_1',
@@ -265,6 +263,7 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
 async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
   try {
     if (ev.kind === 'approve' || ev.kind === 'iterate' || ev.kind === 'reject') {
+      const { nodeRuns, docVersions } = tablesOf(h.db)
       const rows = await h.db
         .select()
         .from(nodeRuns)
@@ -296,6 +295,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       return true
     }
     if (ev.kind === 'dispatch') {
+      const { tasks } = tablesOf(h.db)
       // Re-enter dispatch only when the review has no active awaiting row
       // (otherwise dispatch is no-op or idempotent).
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
@@ -312,6 +312,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       return true
     }
     if (ev.kind === 'retry-agent') {
+      const { tasks, nodeRuns } = tablesOf(h.db)
       // Need a task that's NOT pending/running. If task is awaiting_review or
       // failed/interrupted, retryNode accepts it. If task is running, skip.
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!

@@ -1,7 +1,8 @@
 // RFC-374 T7/T10: inverted IDs exercise freshness, rollback, frame/branch projections, memory and real persistence readers.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import {
   pickLatestSettledRun,
   pickLatestRunInFrame,
@@ -347,6 +348,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db),
       path = 'plans/current.md'
+    const { tasks, nodeRunOutputs } = tablesOf(db)
     await db
       .update(tasks)
       .set({
@@ -399,16 +401,23 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
     for (const id of ['z', 'b', 'a']) await mintSequenceRun(db, taskId, { id })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: 'z', portName: 'out', content: 'prior', kind: 'document' })
+    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: 'z',
+      portName: 'out',
+      content: 'prior',
+      kind: 'document',
+    })
     const current = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, 'a')))[0]!
     expect(
       (await freshestPriorRunWithOutput(new DrizzleNodeExecutionPersistence(db), current))?.id,
     ).toBe('z')
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: 'b', portName: 'out', content: 'newer', kind: 'document' })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: 'b',
+      portName: 'out',
+      content: 'newer',
+      kind: 'document',
+    })
     expect(
       (await freshestPriorRunWithOutput(new DrizzleNodeExecutionPersistence(db), current))?.id,
     ).toBe('b')
@@ -426,6 +435,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
       status: 'pending',
       overrides: { shardKey: 'two' },
     })
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)),
       persistence = createTaskExecutionPersistence(db)
     const result = await resolveSchedulerRunRow({
@@ -446,6 +456,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
   test('T3 sees the last-minted output state, including a newer non-done row', async () => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({

@@ -2,6 +2,7 @@
 // Mirrors design/RFC-057-diagnose-repair-actions/design.md §4.3 (S3 row).
 // 4 options × 3 cases = 12 tests + 1 stale-alert reentrancy guard.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -286,8 +287,8 @@ describeEachProvider('RFC-057 — S3 cross-cutting', (provider) => {
   test('apply on already-resolved alert → 409 alert-already-resolved', async () => {
     h = await buildHarness(provider.db, { taskStatus: 'running' })
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
+    const { lifecycleAlerts } = tablesOf(h.db)
     // Manually flip resolvedAt.
-    const { lifecycleAlerts } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
     await h.db
       .update(lifecycleAlerts)

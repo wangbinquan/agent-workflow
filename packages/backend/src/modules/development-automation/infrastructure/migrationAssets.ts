@@ -24,18 +24,11 @@
 // 是既有资源的 ACL 事实随迁移保留（§13.2「id、owner、visibility、ACL、
 // upstream provenance 尽可能保留」）。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  actionTemplates,
-  automationPolicies,
-  capabilityTemplates,
-  digitalEmployees,
-  maintenanceState,
-  repoCapabilityConfig,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createActionTemplate } from '../application/commands/actionTemplateCommands'
 import {
   analyzeLegacyAssets,
@@ -59,9 +52,8 @@ export const MIGRATION_REPORT_KEY = 'rfc310-migration-report'
 // T94 读侧
 // ---------------------------------------------------------------------------
 
-export async function collectLegacyAssets(
-  db: ProviderNeutralDatabase,
-): Promise<AnalyzeLegacyInput> {
+export async function collectLegacyAssets(db: PersistenceDb): Promise<AnalyzeLegacyInput> {
+  const { capabilityTemplates, repoCapabilityConfig } = tablesOf(db)
   const templates = await db
     .select({
       id: capabilityTemplates.id,
@@ -95,7 +87,7 @@ export async function collectLegacyAssets(
 }
 
 export async function runMigrationAnalysis(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   generatedAt: number,
 ): Promise<MigrationReport> {
   return analyzeLegacyAssets(await collectLegacyAssets(db), generatedAt)
@@ -110,9 +102,13 @@ type MaterializableResource = Extract<
   'action-template' | 'digital-employee' | 'automation-policy'
 >
 
-type IdentityTable = typeof actionTemplates | typeof digitalEmployees | typeof automationPolicies
+type IdentityTable =
+  | PersistenceTables['actionTemplates']
+  | PersistenceTables['digitalEmployees']
+  | PersistenceTables['automationPolicies']
 
-function identityTableOf(resource: MaterializableResource): IdentityTable {
+function identityTableOf(db: object, resource: MaterializableResource): IdentityTable {
+  const { actionTemplates, digitalEmployees, automationPolicies } = tablesOf(db)
   return resource === 'action-template'
     ? actionTemplates
     : resource === 'digital-employee'
@@ -122,7 +118,7 @@ function identityTableOf(resource: MaterializableResource): IdentityTable {
 
 /** 幂等键 (owner, name)：owner 为 NULL 的 legacy 行按 IS NULL 命中，两个引擎同一条谓词。 */
 async function nameExists(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   table: IdentityTable,
   ownerUserId: string | null,
   name: string,
@@ -142,7 +138,7 @@ async function nameExists(
 
 /** migration-only：把 legacy 'public' 的 ACL 事实带到 candidate 上（见文件头）。 */
 async function restoreVisibility(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   table: IdentityTable,
   id: string,
   visibility: 'public' | 'private',
@@ -152,7 +148,7 @@ async function restoreVisibility(
 }
 
 export async function materializeMigrationCandidates(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   report: MigrationReport,
   opts: { readonly now?: () => number } = {},
 ): Promise<MaterializeMigrationResult> {
@@ -181,7 +177,7 @@ export async function materializeMigrationCandidates(
         })
         continue
       }
-      const table = identityTableOf(target.resource)
+      const table = identityTableOf(db, target.resource)
       if (await nameExists(db, table, item.ownerUserId, target.proposedName)) {
         skipped.push({
           resource: target.resource,
@@ -225,6 +221,7 @@ export async function materializeMigrationCandidates(
 
   const materializedAt = now()
   const value = JSON.stringify({ report, materializedAt, created, skipped })
+  const { maintenanceState } = tablesOf(db)
   await db
     .insert(maintenanceState)
     .values({ key: MIGRATION_REPORT_KEY, value, updatedAt: materializedAt })
@@ -237,8 +234,9 @@ export async function materializeMigrationCandidates(
 }
 
 export async function readPersistedMigrationRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<PersistedMigrationRun | null> {
+  const { maintenanceState } = tablesOf(db)
   const row = (
     await db
       .select({ value: maintenanceState.value })
@@ -255,7 +253,7 @@ export async function readPersistedMigrationRun(
 }
 
 export function createDevelopmentMigrationPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: { readonly now?: () => number } = {},
 ): DevelopmentMigrationPersistence {
   const now = options.now ?? (() => Date.now())

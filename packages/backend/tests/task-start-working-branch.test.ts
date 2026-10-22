@@ -9,6 +9,7 @@
 //   - reusing an existing branch that conflicts with base on merge →
 //     ValidationError(working-branch-base-merge-conflict).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
@@ -18,7 +19,6 @@ import { join, resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { taskRepos, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
@@ -187,6 +187,7 @@ describe('RFC-075 — launchTestTask working branch', () => {
   test('workingBranch + autoCommitPush persist on tasks + task_repos and surface via getTask', async () => {
     const task = await launch({ workingBranch: 'feature/wb', autoCommitPush: true })
 
+    const { tasks, taskRepos } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.workingBranch).toBe('feature/wb')
     expect(row.autoCommitPush).toBe(true)
@@ -204,6 +205,7 @@ describe('RFC-075 — launchTestTask working branch', () => {
 
   test('omitted → NULL working branch, auto_commit_push false, legacy isolation branch', async () => {
     const task = await launch({})
+    const { tasks } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.workingBranch).toBeNull()
     expect(row.autoCommitPush).toBe(false)

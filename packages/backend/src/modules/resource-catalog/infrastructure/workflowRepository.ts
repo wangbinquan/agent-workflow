@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   WorkflowDraftSnapshotSchema,
   serializeWorkflowDefinitionStorageV1,
@@ -12,8 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { resourceGrants, workflows } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { NotFoundError, staleConflictError } from '@/util/errors'
 import type { WorkflowAclIdentity, WorkflowRepository } from '../application/workflows/ports'
 import type { WorkflowOperationContext } from '../public/participants'
@@ -94,7 +94,7 @@ function stale(id: string, current: Workflow) {
 }
 
 /** 版本冲突：正常行带 revision 详情；定义损坏的行只报冲突，不让 stale 分支自己 422。 */
-function staleRow(id: string, row: typeof workflows.$inferSelect) {
+function staleRow(id: string, row: PersistenceTables['workflows']['$inferSelect']) {
   try {
     return stale(id, workflowFromPersistenceRow(row))
   } catch {
@@ -102,7 +102,7 @@ function staleRow(id: string, row: typeof workflows.$inferSelect) {
   }
 }
 
-function aclIdentity(row: typeof workflows.$inferSelect): WorkflowAclIdentity {
+function aclIdentity(row: PersistenceTables['workflows']['$inferSelect']): WorkflowAclIdentity {
   return Object.freeze({
     id: row.id,
     name: row.name,
@@ -117,7 +117,7 @@ function aclIdentity(row: typeof workflows.$inferSelect): WorkflowAclIdentity {
  * 删除只用原始行的 ACL 身份与版本（定义损坏的行必须能删，RFC-359 W1-T6）。
  */
 export function createWorkflowRepository(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly semantics: WorkflowPersistenceSemantics
   readonly id?: () => string
   readonly now?: () => number
@@ -126,16 +126,19 @@ export function createWorkflowRepository(input: {
   const now = input.now ?? Date.now
 
   async function get(id: string) {
+    const { workflows } = tablesOf(input.db)
     const row = (await input.db.select().from(workflows).where(eq(workflows.id, id)).limit(1))[0]
     return row === undefined ? null : workflowDetailOf(workflowFromPersistenceRow(row))
   }
 
   const repository: WorkflowRepository = {
     async list() {
+      const { workflows } = tablesOf(input.db)
       return (await input.db.select().from(workflows)).map(workflowFromPersistenceRow)
     },
     get,
     async getAclIdentity(id) {
+      const { workflows } = tablesOf(input.db)
       const row = (await input.db.select().from(workflows).where(eq(workflows.id, id)).limit(1))[0]
       return row === undefined ? null : aclIdentity(row)
     },
@@ -150,6 +153,7 @@ export function createWorkflowRepository(input: {
       })
       const created = await runResourceCatalogTransaction(input.db, async (transaction) => {
         await input.semantics.assertCreateInTransaction(transaction, authority, canonical)
+        const { workflows } = tablesOf(transaction)
         const row = (await transaction.insert(workflows).values(values).returning())[0]
         if (row === undefined) throw new Error('workflow insert returned no row')
         return workflowFromPersistenceRow(row)
@@ -159,6 +163,7 @@ export function createWorkflowRepository(input: {
     },
     async copy(authority, id, copy: CopyWorkflowRequest) {
       const created = await runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { workflows } = tablesOf(transaction)
         const sourceRow = (
           await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
         )[0]
@@ -204,6 +209,7 @@ export function createWorkflowRepository(input: {
       const result = await runResourceCatalogTransaction(
         input.db,
         async (transaction): Promise<{ receipt: SaveWorkflowReceipt; committed: boolean }> => {
+          const { workflows } = tablesOf(transaction)
           const row = (
             await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
           )[0]
@@ -274,6 +280,7 @@ export function createWorkflowRepository(input: {
     },
     async delete(authority, id, deletion) {
       const deletedVersion = await runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { workflows, resourceGrants } = tablesOf(transaction)
         const row = (
           await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
         )[0]

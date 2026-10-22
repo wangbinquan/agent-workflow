@@ -5,47 +5,43 @@
 // This is a thin contract test against the row mappers (no HTTP). The 422
 // validation flow lives in tasks-create-name.test.ts (T5).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { getTask } from '../src/services/task'
 
-async function seedTask(db: ProviderNeutralDatabase, name: string) {
+async function seedTask(db: PersistenceDb, name: string) {
   const wfId = ulid()
   const tId = ulid()
   const now = Date.now()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      description: '',
-      definition: '{}',
-      version: 1,
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
-  await db
-    .insert(tasks)
-    .values({
-      id: tId,
-      name,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/r',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${tId}`,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: now,
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    description: '',
+    definition: '{}',
+    version: 1,
+    schemaVersion: 1,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await insertOne(db, tasks, {
+    id: tId,
+    name,
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/r',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${tId}`,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: now,
+  })
   return tId
 }
 

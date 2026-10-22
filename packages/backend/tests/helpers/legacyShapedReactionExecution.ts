@@ -8,7 +8,7 @@
 //
 // 新合同自己的判据（预分配执行身份、重放、access 核对）不在这里测，见 tests/rfc368-*.test.ts。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ReactionArtifactPersistence } from '@/modules/digital-employee/application/ports/reactionArtifacts'
 import type { DigitalEmployeeReactionExecutionWiring } from '@/modules/digital-employee/application/runtimeService'
 import type { DigitalEmployeeReactionExecutionProvider } from '@/modules/digital-employee/composition'
@@ -124,7 +124,7 @@ export function legacyShapedReactionExecution(
   now: () => number = Date.now,
 ): DigitalEmployeeReactionExecutionProvider {
   return {
-    admission: (tx: ProviderNeutralDatabase) =>
+    admission: (tx: PersistenceDb) =>
       composeReactionExecutionAdmissionParticipantInTx(createReactionAdmissionStore(tx), { now }),
     port: (artifacts) => legacyShapedPort(fake, artifacts),
   }

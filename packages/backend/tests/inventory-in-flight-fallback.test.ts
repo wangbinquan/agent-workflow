@@ -15,13 +15,14 @@
 //          stub is NOT promoted to 'in-flight' — propagate verbatim so the
 //          original plugin failure surface stays visible.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { runRootFor } from '../src/services/runtime/opencode/inventory'
 import type {
@@ -30,7 +31,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -61,7 +62,7 @@ interface SeedOpts {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SeedOpts = {},
   lineage?: (id: string) => { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<{ taskId: string; nodeRunId: string }> {
@@ -81,7 +82,8 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -89,7 +91,7 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -104,7 +106,7 @@ async function seed(
     ...(lineage?.(taskId) ?? {}),
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId,
@@ -414,7 +416,7 @@ function registerProviderApplication(
   register: (
     // RFC-359 AC-6 —— 模块级那个自建 SQLite 的 `buildApp` 已无调用方（所有用例都在注册器的
     // 回调里用同名参数），随之删除；这里改写显式形状，不再从它推导。
-    buildProviderApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildProviderApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedForCase: typeof seed,
   ) => void,
 ): void {

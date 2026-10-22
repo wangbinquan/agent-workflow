@@ -51,6 +51,8 @@
 //
 // ⑥（续跑交棒的事件语义）不吃这条折扣：它走的是每一次 PostgreSQL 重试都会发生的事件面。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -60,8 +62,7 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { committedEvents, nodeRuns, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
@@ -163,7 +164,7 @@ interface ChildCalls {
  * `syncWorkflow` 走的是 legacy 的 `syncTaskWorkflow`、根本不碰资源权威。合一之后两侧走同一份
  * 实现，替身也必须是同一个。
  */
-function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
+function resourceAuthorityFor(db: PersistenceDb): () => never {
   return () =>
     ({
       resources: {
@@ -173,6 +174,7 @@ function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
         ) {
           const request = requests[0]
           if (request === undefined) return []
+          const { workflows } = tablesOf(db)
           const rows = await db
             .select()
             .from(workflows)
@@ -292,8 +294,9 @@ function graphDefinition(
   } as unknown as WorkflowDefinition
 }
 
-async function seedUsers(db: ProviderNeutralDatabase): Promise<void> {
+async function seedUsers(db: PersistenceDb): Promise<void> {
   const now = Date.now()
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values([
@@ -311,11 +314,12 @@ async function seedUsers(db: ProviderNeutralDatabase): Promise<void> {
 }
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   def: WorkflowDefinition = definition(),
 ): Promise<string> {
   const id = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: 'rfc359-w8',
     description: '',
@@ -339,15 +343,13 @@ interface SeedTaskOptions {
   readonly branchStartedAt?: number
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  options: SeedTaskOptions = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promise<string> {
   const id = `t_${ulid()}`
   await seedUsers(db)
   const workflowId = options.workflowId ?? (await seedWorkflow(db))
   const startedAt = options.startedAt ?? Date.now()
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: 'rfc359 w8 task',
     workflowId,
@@ -379,19 +381,20 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  values: Partial<typeof nodeRuns.$inferInsert> & { nodeId: string },
+  values: Partial<PersistenceTables['nodeRuns']['$inferInsert']> & { nodeId: string },
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     status: 'failed',
     retryIndex: 0,
     iteration: 0,
     ...values,
-  } as typeof nodeRuns.$inferInsert)
+  } as PersistenceTables['nodeRuns']['$inferInsert'])
   return id
 }
 
@@ -408,21 +411,21 @@ async function code(promise: Promise<unknown>): Promise<string> {
   return 'no-throw'
 }
 
-async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
+async function taskRow(db: PersistenceDb, taskId: string) {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
 }
 
 /** 被拒绝的重试**不许**在时间线上留下假尝试；只有 retryNode 写这条 errorMessage。 */
-async function retryPlaceholders(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<readonly string[]> {
+async function retryPlaceholders(db: PersistenceDb, taskId: string): Promise<readonly string[]> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   return rows.filter((row) => row.errorMessage === 'queued for retry').map((row) => row.nodeId)
 }
 
 /** 重试铸出的占位行（`retryNode` 是唯一写这条 errorMessage 的地方），按 nodeId 取一条。 */
-async function retryPlaceholder(db: ProviderNeutralDatabase, taskId: string, nodeId: string) {
+async function retryPlaceholder(db: PersistenceDb, taskId: string, nodeId: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   return rows.find((row) => row.nodeId === nodeId && row.errorMessage === 'queued for retry')
 }
@@ -457,7 +460,7 @@ interface LifecycleDelivery {
  * 照样会送到。靠不发布来遮这件事，遮不住。
  */
 async function deliverLifecycleEvents(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: Readonly<{
     watchedTaskId: string
     budget: ChildTaskBudget
@@ -495,6 +498,7 @@ async function deliverLifecycleEvents(
     await dispatcher.drain()
 
     const projector = createDatabaseTaskLifecycleWsProjector(db)
+    const { committedEvents } = tablesOf(db)
     const rows = await db
       .select()
       .from(committedEvents)
@@ -630,6 +634,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       worktreePath: repoPath,
     })
     await seedRun(db, taskId, { nodeId: WRITER, status: 'canceled', preSnapshot: snapshot })
+    const { workflows } = tablesOf(db)
     // 工作流被改过（多一个节点）并 bump 到 v2 —— sync 的正向前提。
     await db
       .update(workflows)
@@ -853,7 +858,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
   // 判据两条，都用**用户能看见的东西**：父任务被没被唤醒、排队的兄弟被没被放行。
 
   /** 子任务处于 `awaiting_human`：可重试（在 RETRYABLE 集里）**且不是终态**——父任务因此还在等。 */
-  async function seedAwaitedChild(db: ProviderNeutralDatabase, options: { preSnapshot?: string }) {
+  async function seedAwaitedChild(db: PersistenceDb, options: { preSnapshot?: string }) {
     const parentId = await seedTask(db, { status: 'running' })
     const callRunId = await seedRun(db, parentId, {
       nodeId: 'call',
@@ -866,6 +871,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       worktreePath: scratchDir('aw-rfc359-w8-wt-'),
       parentTaskId: parentId,
     })
+    const { tasks, nodeRuns } = tablesOf(db)
     await db.update(tasks).set({ parentNodeRunId: callRunId }).where(eq(tasks.id, childId))
     await db.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, callRunId))
     const runId = await seedRun(db, childId, {

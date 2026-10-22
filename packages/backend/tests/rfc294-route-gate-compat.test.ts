@@ -6,7 +6,9 @@
 // the visible 404/403/conflict split, losing a committed decision, or leaking
 // continuation/worker internals is not.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -17,15 +19,6 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createSession } from './helpers/auth/sessionStore'
-import {
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskCollaborators,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
@@ -36,7 +29,7 @@ interface Principal {
 }
 
 interface Fixture {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Principal
   collaborator: Principal
@@ -49,7 +42,7 @@ interface Fixture {
 
 let fixture: Fixture
 
-async function principal(db: ProviderNeutralDatabase, username: string): Promise<Principal> {
+async function principal(db: PersistenceDb, username: string): Promise<Principal> {
   const user = await createUser(db, {
     username,
     displayName: username,
@@ -116,14 +109,16 @@ describeEachProviderHttpApplication(
         edges: [],
       }
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks, taskCollaborators, nodeRuns, nodeRunOutputs, docVersions } =
+        tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'rfc294-route-oracle',
         definition: JSON.stringify(definition),
       })
 
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'rfc294-route-oracle',
         workflowId,
@@ -155,7 +150,7 @@ describeEachProviderHttpApplication(
       ])
 
       const writerRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: writerRunId,
         taskId,
         nodeId: 'writer',
@@ -165,14 +160,14 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: writerRunId,
         portName: 'document',
         content: '# reviewed body',
       })
 
       const reviewRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: reviewRunId,
         taskId,
         nodeId: 'review',
@@ -185,7 +180,7 @@ describeEachProviderHttpApplication(
       const bodyPath = 'doc_versions/rfc294.md'
       writeFileSync(join(appHome, bodyPath), '# reviewed body')
       const docVersionId = ulid()
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: docVersionId,
         taskId,
         reviewNodeId: 'review',
@@ -202,7 +197,7 @@ describeEachProviderHttpApplication(
       // is rejected before the detail query, so we can delete it between two
       // probes and prove that hidden-vs-missing stays byte-identical.
       const probeRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: probeRunId,
         taskId,
         nodeId: 'review-probe',
@@ -230,6 +225,7 @@ describeEachProviderHttpApplication(
     }
 
     async function currentDecisionState() {
+      const { docVersions, nodeRuns, nodeRunOutputs } = tablesOf(fixture.db)
       // 中立面没有 bun:sqlite 的同步终结符：查询回数组，取第一行。
       // （这句刻意不写出那个方法名——守卫是按文本扫的，注释也算它的输入。）
       const doc = (
@@ -280,6 +276,7 @@ describeEachProviderHttpApplication(
           /ContinuationIntent|OwnershipToken|workerId|leaseEpoch|AbortController|worktreePath/,
         )
 
+        const { reviewComments } = tablesOf(fixture.db)
         const row = (await fixture.db.select().from(reviewComments))[0]
         expect(row).toMatchObject({
           docVersionId: fixture.docVersionId,
@@ -302,6 +299,7 @@ describeEachProviderHttpApplication(
         expect(hidden.status).toBe(404)
         const hiddenBody = await hidden.text()
 
+        const { nodeRuns } = tablesOf(fixture.db)
         await fixture.db.delete(nodeRuns).where(eq(nodeRuns.id, fixture.probeRunId))
         const missing = await request(
           fixture.app,

@@ -15,6 +15,8 @@
 // body's interrupted run into the wrapper's own worktree before driving the
 // body, without re-running the run; the wrapper's `git_diff` lists the run's
 // file and the wrapper's own merge carries it to the task worktree.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -22,7 +24,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createNodeIso, type CanonRepo } from '../src/services/nodeIsolation'
 import { runGit } from '../src/util/git'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -63,7 +64,8 @@ function registerCases(provider: ProviderHarness) {
   test('a revived git wrapper completes its body run into the wrapper worktree, then merges it', async () => {
     const { db } = provider
     const agentId = ulid()
-    await db.insert(agents).values({ id: agentId, name: 'a', outputs: JSON.stringify(['summary']) })
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, agents, { id: agentId, name: 'a', outputs: JSON.stringify(['summary']) })
     const definition = {
       $schema_version: 3,
       inputs: [],
@@ -75,12 +77,12 @@ function registerCases(provider: ProviderHarness) {
     } as WorkflowDefinition
     const workflowId = ulid()
     const taskId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'interrupted-merge',
       workflowId,
@@ -121,7 +123,7 @@ function registerCases(provider: ProviderHarness) {
       canonRepos: [{ ...canon[0]!, worktreePath: wrapperWorktree }],
     })
     writeFileSync(join(runIso.repos[0]!.isoWorktreePath, 'produced.txt'), 'by the body run\n')
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: wrapperRunId,
       taskId,
       nodeId: 'gw',
@@ -141,7 +143,7 @@ function registerCases(provider: ProviderHarness) {
       }),
       startedAt: Date.now(),
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'A',
@@ -155,7 +157,7 @@ function registerCases(provider: ProviderHarness) {
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'summary', content: 'ok' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'summary', content: 'ok' })
 
     await execution!.runTask({
       taskId,

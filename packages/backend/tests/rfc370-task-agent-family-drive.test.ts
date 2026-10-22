@@ -1,5 +1,7 @@
 // RFC-370: a replacement complete family must be consumed by the actual
 // SQLite and PostgreSQL Task drive, including the original persisted failure.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,7 +9,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
-import { agents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
 import { createWorkerIdentity } from '../src/modules/task-execution/domain/ownership'
 import { composeLocalTaskAgentRunFamilyFor } from '../src/modules/task-execution/composition/localTaskAgentRunFamily'
@@ -43,7 +44,8 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
       let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
       const reason = new Error('chosen complete family compilation failed')
       try {
-        await db.insert(users).values({
+        const { users, agents, workflows, tasks, nodeRuns } = tablesOf(db)
+        await insertOne(db, users, {
           id: userId,
           username: userId,
           displayName: userId,
@@ -52,7 +54,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           createdAt: 1,
           updatedAt: 1,
         })
-        await db.insert(agents).values({
+        await insertOne(db, agents, {
           id: agentId,
           name: 'family-' + agentId,
           outputs: '["summary"]',
@@ -73,10 +75,12 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           ],
           edges: [],
         }
-        await db
-          .insert(workflows)
-          .values({ id: workflowId, name: workflowId, definition: JSON.stringify(definition) })
-        await db.insert(tasks).values({
+        await insertOne(db, workflows, {
+          id: workflowId,
+          name: workflowId,
+          definition: JSON.stringify(definition),
+        })
+        await insertOne(db, tasks, {
           id: taskId,
           executionLineageId: taskId,
           lineageSlotPathJson: JSON.stringify([

@@ -16,12 +16,13 @@
 // and (RFC-141) an ask-back round renders the draft with the ask-back directive
 // variant instead of the update pair.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
 
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
@@ -36,13 +37,14 @@ import {
 
 const seedUlid = monotonicFactory()
 
-const nodePersistence = (db: ProviderNeutralDatabase) => new DrizzleNodeExecutionPersistence(db)
+const nodePersistence = (db: PersistenceDb) => new DrizzleNodeExecutionPersistence(db)
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${seedUlid()}`
   const wfId = `wf_${taskId}`
   const def = '{"schema_version":1,"nodes":[],"edges":[],"inputs":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'rerun-prior-output',
     description: '',
@@ -50,7 +52,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -74,13 +76,14 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 /** Insert a node_run; returns its (monotonic) id. Defaults: top-level done at
  *  iteration 0, shardKey null. */
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<typeof nodeRuns.$inferInsert> = {},
+  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = seedUlid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -94,13 +97,14 @@ async function seedRun(
 }
 
 async function seedOutput(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   nodeRunId: string,
   portName: string,
   content: string,
   kind?: string,
 ): Promise<void> {
-  await db.insert(nodeRunOutputs).values({
+  const { nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRunOutputs, {
     nodeRunId,
     portName,
     content,

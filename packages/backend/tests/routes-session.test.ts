@@ -4,12 +4,13 @@
 // with subagent nesting / 404 task / 404 node-run / 410 non-agent kind
 // / multi-attempt isolation.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -21,7 +22,7 @@ const TOKEN = 'a'.repeat(64)
 
 async function buildApp(
   scope: ProviderHttpApplicationScope,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   const db = scope.harness.db
   const app = (await scope.open()).app
   return { db, app }
@@ -41,7 +42,7 @@ interface SeedOpts {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SeedOpts = {},
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = `task_${ulid()}`
@@ -60,7 +61,8 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -68,7 +70,7 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -83,7 +85,7 @@ async function seed(
     startedAt: 1000,
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId,
@@ -98,7 +100,7 @@ async function seed(
 }
 
 async function insertEvent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   nodeRunId: string,
   partial: {
     ts?: number
@@ -108,7 +110,8 @@ async function insertEvent(
     payload: object
   },
 ): Promise<void> {
-  await db.insert(nodeRunEvents).values({
+  const { nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRunEvents, {
     nodeRunId,
     ts: partial.ts ?? Date.now(),
     kind: partial.kind,
@@ -209,7 +212,8 @@ describeEachProviderHttpApplication(
       const { taskId, nodeRunId } = await seed(db, { promptText: 'go' })
       // Sibling node_run on the SAME task but distinct nodeRunId.
       const siblingId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: siblingId,
         taskId,
         nodeId: 'n2',
@@ -239,6 +243,7 @@ describeEachProviderHttpApplication(
     test('RFC-027 §UX merge: inline-session siblings get their events + prompts unified', async () => {
       const { db, app } = await buildApp(scope)
       const { taskId, nodeRunId } = await seed(db, { promptText: 'round-0 ask' })
+      const { nodeRuns } = tablesOf(db)
       // The seed gives us round 0 (clarifyIteration=0). Attach an
       // opencode session_id to it, then mint two more node_runs that
       // share the same session_id (RFC-026 inline reruns).
@@ -262,7 +267,7 @@ describeEachProviderHttpApplication(
       })
 
       const round1Id = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: round1Id,
         taskId,
         nodeId: 'n1',
@@ -287,7 +292,7 @@ describeEachProviderHttpApplication(
       })
 
       const round2Id = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: round2Id,
         taskId,
         nodeId: 'n1',
@@ -335,7 +340,8 @@ describeEachProviderHttpApplication(
       // Same node, no opencode session id — a follow-up retry should
       // NOT leak its events into this run's /session response.
       const siblingId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: siblingId,
         taskId,
         nodeId: 'n1',

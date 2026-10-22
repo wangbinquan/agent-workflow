@@ -4,17 +4,14 @@
 // ④同 mission 重放 claim 幂等；⑤TTL 过期拒 claim、sweep 只清 pending；⑥plan + 有序 entries 落库），再把 saga
 // 的认领幂等 / 状态机 CAS / mission link / approval saga / step join / digest 也钉在两个引擎上。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentRepositoryUploadPlanEntries,
-  developmentRepositoryUploadPlans,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'
 import { createMissionPersistence } from '@/modules/development-automation/infrastructure/missionStore'
 import { createPlaybookSagaPersistence } from '@/modules/development-automation/infrastructure/playbookSagaStore'
@@ -74,7 +71,7 @@ function missionRow(overrides: Partial<MissionRow> = {}): MissionRow {
   }
 }
 
-async function newMission(db: ProviderNeutralDatabase): Promise<string> {
+async function newMission(db: PersistenceDb): Promise<string> {
   const row = missionRow()
   await createMissionPersistence(db).createMission(row)
   return row.id
@@ -279,6 +276,9 @@ describeEachProvider('RFC-359 W4-D11 —— 上传会话 store', (harness) => {
         },
       ],
     })
+    const { developmentRepositoryUploadPlans, developmentRepositoryUploadPlanEntries } = tablesOf(
+      harness.db,
+    )
     const plan = (
       await harness.db
         .select()
@@ -612,7 +612,7 @@ test('源码锁：saga / 上传会话持久化不再有 provider 专属文件；
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update/i)
-    expect(source).toContain('ProviderNeutralDatabase')
+    expect(source).toContain('PersistenceDb')
   }
   const missionStore = readFileSync(join(infra, 'missionStore.ts'), 'utf8')
   expect(missionStore).toContain('claimUploadSessions(tx, {')

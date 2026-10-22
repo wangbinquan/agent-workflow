@@ -1,5 +1,5 @@
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDispatchDeps } from '@/services/webhook/webhookDispatch'
 import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
 import type { ScheduledTaskOperations } from '@/services/scheduledTasks'
@@ -29,7 +29,7 @@ export function composeWebhookDispatchPersistence(
  * 两者本来就不是一对「provider 实现」，只是同一族的两层。
  */
 export function composeWebhookDispatchPersistenceFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): WebhookDispatchPersistencePort {
   return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
 }
@@ -52,7 +52,7 @@ export function composeWebhookTriggerServiceDependencies(
  * SQLite bootstrap 自己先造一次再传进来。
  */
 export function composeWebhookTriggerServiceDependenciesFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   validateSaveable: WebhookTriggerServiceDeps['validateSaveable'],
 ): WebhookTriggerServiceDeps {
   return composeWebhookTriggerServiceDependencies({
@@ -71,7 +71,7 @@ export function composeWebhookTriggerServiceDependenciesFor(
 // 留着的实际代价不是不好看：全仓有好几处判据按 `composeSqlite*` 这个形状找「provider 专属实现」，
 // 一个没有孪生的中立函数顶着这个前缀，会让那些判据把它数成「还有一份 SQLite 专属实现」。
 export function composeWebhookDispatchCore(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   secretBox: SecretBox,
   scheduledTasks: ScheduledTaskOperations,
 ): Pick<

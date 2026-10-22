@@ -9,6 +9,8 @@
 // `infrastructure/review.ts`（RFC-005 评论锚 / RFC-079 多文档 / RFC-158 摘要装配）、
 // `taskQuestions.ts`（RFC-140 问题条目）与 `clarifyRounds.ts`（草稿）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,8 +18,7 @@ import { dirname, join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, docVersions, nodeRuns, tasks, taskQuestions, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createCollaborationRouteOperations } from '@/modules/collaboration/infrastructure/collaborationRouteOperations'
 import type {
@@ -60,7 +61,7 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 })
 
 // 合一后两个引擎装配的是同一个工厂；`describeEachProvider` 只换客户端。
-function operations(db: ProviderNeutralDatabase): CollaborationRoutePersistenceOperations {
+function operations(db: PersistenceDb): CollaborationRoutePersistenceOperations {
   return createCollaborationRouteOperations({
     db,
     clarifyDraftEvents: createCollaborationClarifyDraftEventPublisher(),
@@ -112,13 +113,11 @@ interface ReviewFixture {
   readonly versionIds: readonly string[]
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  overrides: { status?: string } = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, overrides: { status?: string } = {}): Promise<string> {
   const taskId = `t_${ulid()}`
   const definition = JSON.stringify(reviewDefinition())
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-w7-route',
     description: '',
@@ -126,7 +125,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359 w7 route',
     workflowId: `wf_${taskId}`,
@@ -148,23 +147,19 @@ async function seedTask(
 }
 
 /** 手工问题的目标节点必须跑过（`manual-question-target-never-run`）。 */
-async function seedDoneRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  nodeId: string,
-): Promise<string> {
+async function seedDoneRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${ulid()}`
-  await db
-    .insert(nodeRuns)
-    .values({ id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
   return id
 }
 
 /** 单文档评审轮：一个 awaiting_review 的 node_run + 两个版本（v1 已迭代、v2 未决）。 */
-async function seedSingleDocReview(db: ProviderNeutralDatabase): Promise<ReviewFixture> {
+async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
   const taskId = await seedTask(db)
   const reviewNodeRunId = `nr_${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, docVersions } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: reviewNodeRunId,
     taskId,
     nodeId: REVIEW,
@@ -212,10 +207,11 @@ async function seedSingleDocReview(db: ProviderNeutralDatabase): Promise<ReviewF
 }
 
 /** 多文档评审轮：两个成员行（item_index 0/1），用于选择（selection）判据。 */
-async function seedMultiDocReview(db: ProviderNeutralDatabase): Promise<ReviewFixture> {
+async function seedMultiDocReview(db: PersistenceDb): Promise<ReviewFixture> {
   const taskId = await seedTask(db)
   const reviewNodeRunId = `nr_${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, docVersions } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: reviewNodeRunId,
     taskId,
     nodeId: REVIEW,
@@ -294,6 +290,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
     const fixture = await seedSingleDocReview(db)
     const ops = operations(db)
     expect(await ops.reviews.countPending(ACTOR)).toBe(1)
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, fixture.taskId))
     expect(await ops.reviews.countPending(ACTOR)).toBe(0)
   })
@@ -399,6 +396,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
       docVersionId: fixture.versionIds[0]!,
       selection: 'accepted',
     })
+    const { docVersions } = tablesOf(db)
     const rows = await db
       .select({ id: docVersions.id, selection: docVersions.selection })
       .from(docVersions)
@@ -423,6 +421,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
         throw new Error('rollback-probe')
       }),
     ).rejects.toThrow('rollback-probe')
+    const { docVersions } = tablesOf(db)
     const rows = await db
       .select({ selection: docVersions.selection })
       .from(docVersions)
@@ -546,6 +545,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
     })
     expect((await ops.questions.list({ taskId }))[0]?.staged).toBe(true)
 
+    const { taskQuestions } = tablesOf(db)
     // 只有 awaiting_confirm 的条目才可确认：把条目挂到一条已 done 的承接 run 上。
     await db
       .update(taskQuestions)
@@ -607,6 +607,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
       actor: { userId: ACTOR.user.id, role: 'owner' },
     })
     expect(action).toBe('moved-manual')
+    const { taskQuestions } = tablesOf(db)
     const rows = await db
       .select({ override: taskQuestions.overrideTargetNodeId })
       .from(taskQuestions)
@@ -628,6 +629,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
       targetNodeId: DESIGNER,
       actor: { userId: ACTOR.user.id, role: 'owner' },
     })
+    const { taskQuestions } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: Date.now(), dispatchedBy: ACTOR.user.id })
@@ -683,6 +685,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
       value: { selectedOptionIndices: [1], customText: 'later' },
       editor: { userId: 'u_second', displayName: 'Second', role: 'user' },
     })
+    const { clarifyRounds } = tablesOf(db)
     const rows = await db
       .select({
         drafts: clarifyRounds.draftAnswersJson,
@@ -716,6 +719,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
         throw new Error('rollback-probe')
       }),
     ).rejects.toThrow('rollback-probe')
+    const { clarifyRounds } = tablesOf(db)
     const rows = await db
       .select({ drafts: clarifyRounds.draftAnswersJson })
       .from(clarifyRounds)
@@ -726,6 +730,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
   test('clarify.saveDraft —— 非 awaiting_human 的轮拒绝草稿', async () => {
     const db = harness.db
     const { roundId, originNodeRunId } = await seedClarifyRound(db)
+    const { clarifyRounds } = tablesOf(db)
     await db
       .update(clarifyRounds)
       .set({ status: 'answered', answeredAt: Date.now() })
@@ -778,6 +783,7 @@ describeEachProvider('RFC-359 W7 —— 协作路由持久化（CollaborationRou
       directive: 'continue',
     })
     expect(full.roundFullySealed).toBe(true)
+    const { clarifyRounds, taskQuestions } = tablesOf(db)
     const rows = await db
       .select({ status: clarifyRounds.status })
       .from(clarifyRounds)
@@ -798,10 +804,11 @@ interface ClarifyFixture {
   readonly originNodeRunId: string
 }
 
-async function seedClarifyRound(db: ProviderNeutralDatabase): Promise<ClarifyFixture> {
+async function seedClarifyRound(db: PersistenceDb): Promise<ClarifyFixture> {
   const taskId = await seedTask(db, { status: 'awaiting_human' })
   const askingRunId = `nr_${ulid()}`
   const originNodeRunId = `nr_${ulid()}`
+  const { nodeRuns, clarifyRounds } = tablesOf(db)
   await db.insert(nodeRuns).values([
     { id: askingRunId, taskId, nodeId: DESIGNER, status: 'done', retryIndex: 0, iteration: 0 },
     {
@@ -814,7 +821,7 @@ async function seedClarifyRound(db: ProviderNeutralDatabase): Promise<ClarifyFix
     },
   ])
   const roundId = `cr_${ulid()}`
-  await db.insert(clarifyRounds).values({
+  await insertOne(db, clarifyRounds, {
     id: roundId,
     taskId,
     kind: 'self',

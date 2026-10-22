@@ -2,10 +2,11 @@
 // Trigger failures and readback interference use the selected physical database.
 // PostgreSQL execution is provided by the default dual-provider hosted lane.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, asc, eq } from 'drizzle-orm'
 
-import { committedEventAggregateHeads, committedEventFamilyCutovers } from '@/db/schema'
 import {
   changeCommittedEventCutover,
   readCommittedEventCutover,
@@ -16,10 +17,13 @@ import type { RecordedStatement } from './helpers/statementRecorder'
 
 const NOW = 1_789_488_100_000
 type Change = Parameters<typeof changeCommittedEventCutover>[1]
-const family = and(
-  eq(committedEventFamilyCutovers.producer, 'collaboration'),
-  eq(committedEventFamilyCutovers.family, 'review'),
-)
+const family = (db: object) => {
+  const { committedEventFamilyCutovers } = tablesOf(db)
+  return and(
+    eq(committedEventFamilyCutovers.producer, 'collaboration'),
+    eq(committedEventFamilyCutovers.family, 'review'),
+  )
+}
 
 function change(overrides: Partial<Change> = {}): Change {
   return {
@@ -35,19 +39,19 @@ function change(overrides: Partial<Change> = {}): Change {
 }
 
 async function seed(harness: ProviderHarness): Promise<void> {
+  const { committedEventFamilyCutovers } = tablesOf(harness.db)
   await harness.db
     .update(committedEventFamilyCutovers)
     .set({ mode: 'legacy', epoch: 1, changedAt: NOW - 1, changeRef: 'w28:legacy' })
-    .where(family)
-    .run()
+    .where(family(harness.db))
 }
 
 async function rows(harness: ProviderHarness) {
+  const { committedEventFamilyCutovers } = tablesOf(harness.db)
   return await harness.db
     .select()
     .from(committedEventFamilyCutovers)
     .orderBy(asc(committedEventFamilyCutovers.producer), asc(committedEventFamilyCutovers.family))
-    .all()
 }
 
 function cutoverSql(statements: readonly RecordedStatement[]): readonly RecordedStatement[] {
@@ -158,9 +162,9 @@ describeEachProvider('RFC-359 W28 committed cutover transaction', (harness) => {
           expectedMode,
           input.expectedEpoch,
         ],
-        ['collaboration', 'review'],
+        ['collaboration', 'review', 1],
       ])
-      expect(statements.map(({ params }) => params)).toEqual([8, 2])
+      expect(statements.map(({ params }) => params)).toEqual([8, 3])
       expectedMode = mode
     }
   })
@@ -225,7 +229,8 @@ describeEachProvider('RFC-359 W28 committed cutover transaction', (harness) => {
 
   test('a missing row loses CAS before the readback step', async () => {
     await seed(harness)
-    await harness.db.delete(committedEventFamilyCutovers).where(family).run()
+    const { committedEventFamilyCutovers } = tablesOf(harness.db)
+    await harness.db.delete(committedEventFamilyCutovers).where(family(harness.db))
     const before = await rows(harness)
     const recording = harness.recordStatements()
     const error = await failureOf(
@@ -290,7 +295,8 @@ describeEachProvider('RFC-359 W28 committed cutover transaction', (harness) => {
             async (step) => {
               await step()
               steps += 1
-              if (steps === 1) await tx.delete(committedEventFamilyCutovers).where(family).run()
+              const { committedEventFamilyCutovers } = tablesOf(tx)
+              if (steps === 1) await tx.delete(committedEventFamilyCutovers).where(family(tx))
             },
           ),
       ),
@@ -299,7 +305,7 @@ describeEachProvider('RFC-359 W28 committed cutover transaction', (harness) => {
     expect(steps).toBe(2)
     expect(cutoverSql(recording.statements).map(({ values }) => values)).toEqual([
       ['shadow', 2, NOW, 'w28:shadow', 'collaboration', 'review', 'legacy', 1],
-      ['collaboration', 'review'],
+      ['collaboration', 'review', 1],
     ])
     expect(await rows(harness)).toEqual(before)
   })
@@ -307,29 +313,28 @@ describeEachProvider('RFC-359 W28 committed cutover transaction', (harness) => {
   test('an outer failure rolls back cutover and a real companion write together', async () => {
     await seed(harness)
     const before = await rows(harness)
-    const beforeHeads = await harness.db.select().from(committedEventAggregateHeads).all()
+    const { committedEventAggregateHeads } = tablesOf(harness.db)
+    const beforeHeads = await harness.db.select().from(committedEventAggregateHeads)
     const stop = new Error('w28 outer rollback')
     const error = await failureOf(
       harness.session.transaction(async (tx) => {
         const receipt = await changeCommittedEventCutover(tx, change())
         expect(await readCommittedEventCutover(tx, 'collaboration', 'review')).toEqual(receipt)
-        await tx
-          .insert(committedEventAggregateHeads)
-          .values({
-            producer: 'collaboration',
-            family: 'review',
-            aggregateKind: 'review-round',
-            aggregateId: 'w28-companion',
-            lastSeq: 17,
-            updatedAt: NOW,
-          })
-          .run()
+        const { committedEventAggregateHeads } = tablesOf(tx)
+        await insertOne(tx, committedEventAggregateHeads, {
+          producer: 'collaboration',
+          family: 'review',
+          aggregateKind: 'review-round',
+          aggregateId: 'w28-companion',
+          lastSeq: 17,
+          updatedAt: NOW,
+        })
         throw stop
       }),
     )
     expect(error).toBe(stop)
     expect(await rows(harness)).toEqual(before)
-    expect(await harness.db.select().from(committedEventAggregateHeads).all()).toEqual(beforeHeads)
+    expect(await harness.db.select().from(committedEventAggregateHeads)).toEqual(beforeHeads)
   })
 
   test('two transactions expecting the same epoch have exactly one stored winner', async () => {

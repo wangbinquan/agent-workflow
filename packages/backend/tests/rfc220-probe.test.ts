@@ -10,7 +10,7 @@
 //     pure-OAuth2 provider (gate round 6).
 
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -23,11 +23,11 @@ import {
 const ISSUER = 'https://idp.example.com'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   svc: OidcProvidersService
 }
 
-function buildHarness(__db: ProviderNeutralDatabase): Harness {
+function buildHarness(__db: PersistenceDb): Harness {
   const db = __db
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   return { db, svc: createOidcProvidersService({ db, secretBox }) }

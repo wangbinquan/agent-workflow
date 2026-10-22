@@ -1,12 +1,12 @@
 // RFC-359 W4-D11 —— 上传输入的 transport 持久化与过期清扫：两份薄适配都建在同一份中立的上传会话 store 上。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MissionInputUploadPersistence } from '../application/missionInputUploadOperations'
 import type { UploadMaintenancePersistence } from '../application/ports/uploadMaintenance'
 import { createUploadSessionPersistence } from './uploadSessionStore'
 
 export function createMissionInputUploadPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): MissionInputUploadPersistence {
   const store = createUploadSessionPersistence(db)
   return {
@@ -17,7 +17,7 @@ export function createMissionInputUploadPersistence(
 }
 
 export function createUploadMaintenancePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): UploadMaintenancePersistence {
   const store = createUploadSessionPersistence(db)
   return {

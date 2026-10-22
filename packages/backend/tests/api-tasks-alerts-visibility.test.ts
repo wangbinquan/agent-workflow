@@ -9,12 +9,13 @@
 // Mirrors `tests/tasks-visibility.test.ts` but targets the two RFC-053
 // routes explicitly.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -24,7 +25,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   aliceToken: string
   bobToken: string
@@ -68,7 +69,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const daveToken = (await createSession({ db, userId: dave.id })).token
 
   const wfId = 'wf-vis'
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
@@ -76,7 +78,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
 
   const bobTaskId = 'task-bob-vis'
   const now = Date.now()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: bobTaskId,
     name: 't',
     workflowId: wfId,

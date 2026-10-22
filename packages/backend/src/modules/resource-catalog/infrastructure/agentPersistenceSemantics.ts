@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   TERMINAL_TASK_STATUSES,
   type Agent,
@@ -6,12 +7,11 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray, notInArray } from 'drizzle-orm'
 
-import { agents, mcps, plugins, scheduledTasks, skills, tasks, workflows } from '@/db/schema'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
 } from '@/modules/execution-contract/public/commands'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { isAgentLaunching } from '@/services/agentLaunchReservation'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
@@ -61,6 +61,7 @@ async function rowsByIds(
   ids: readonly string[],
 ): Promise<readonly NamedAclRow[]> {
   if (ids.length === 0) return []
+  const { agents, skills, mcps, plugins } = tablesOf(transaction)
   switch (type) {
     case 'agent':
       return transaction
@@ -124,6 +125,7 @@ async function assertPluginsEnabled(
 ): Promise<void> {
   const unique = [...new Set(ids.filter((id) => id.length > 0))]
   if (unique.length === 0) return
+  const { plugins } = tablesOf(transaction)
   const rows = await transaction
     .select({ id: plugins.id, enabled: plugins.enabled })
     .from(plugins)
@@ -204,6 +206,7 @@ async function assertDependencyGraph(
     throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
   }
   await assertAgentDependencyTraversal(candidateId, unique(dependencyIds), async (id) => {
+    const { agents } = tablesOf(transaction)
     const row = (
       await transaction
         .select({ dependsOn: agents.dependsOn })
@@ -307,6 +310,7 @@ async function assertNotReferenced(
       `agent '${current.name}' has a task launch in progress; retry after it completes`,
     )
   }
+  const { workflows, agents, tasks, scheduledTasks } = tablesOf(transaction)
   // RFC-285 B2 档位：agent 对**任务**引用零检查即是统一中档（任务快照冻结定义），这里
   // 的 agent-in-use 挡的是 **workflow 定义**引用——活的编辑面，删了就当场悬空。
   const workflowRows = await transaction
@@ -419,7 +423,7 @@ export interface AgentRuntimeProfileLookup {
 
 /** Owner-native semantics for the Agent repository（RFC-359 W4-D14：一份实现，两个 provider 共用）。 */
 export function createAgentPersistenceSemantics(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly authorization: ResourceAuthorizationApplication
   readonly resourceInventory: AgentResourceInventorySource
   readonly runtimeProfiles: AgentRuntimeProfileLookup
@@ -433,6 +437,7 @@ export function createAgentPersistenceSemantics(input: {
     const skillIds = managedSkillIds(selected.flatMap((agent) => agent.skills))
     const mcpIds = unique(selected.flatMap((agent) => agent.mcp))
     const pluginIds = unique(selected.flatMap((agent) => agent.plugins))
+    const { skills, mcps, plugins } = tablesOf(input.db)
     const [skillRows, mcpRows, pluginRows] = await Promise.all([
       skillIds.length === 0
         ? Promise.resolve([])

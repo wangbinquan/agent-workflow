@@ -4,11 +4,10 @@
 // 不在这里写第二遍。SQLite 融合提交的同步路径（`sqliteMemoryMembershipParticipant.ts`）随 knowledge-evolution 的
 // dbTxSync 归零一起退。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, gt, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { memories } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createMemoryMembershipParticipantInTx } from '../application/memoryMembership'
 import { fusedIntoSkill } from '../domain/fusedProvenanceRows'
 import {
@@ -24,7 +23,7 @@ import type {
 } from '../public/participants'
 
 export interface SkillMemoryFusionParticipantFactory {
-  inTransaction(transaction: DatabaseTransaction): MemoryMembershipParticipantInTx
+  inTransaction(transaction: PersistenceTx): MemoryMembershipParticipantInTx
 }
 
 /**
@@ -34,9 +33,10 @@ export interface SkillMemoryFusionParticipantFactory {
  */
 export function composeSkillMemoryFusionParticipantFactory(): SkillMemoryFusionParticipantFactory {
   return Object.freeze({
-    inTransaction(transaction: DatabaseTransaction) {
+    inTransaction(transaction: PersistenceTx) {
       return createMemoryMembershipParticipantInTx({
         async unfuseAboveVersion(input: MemoryMembershipUnfuseSelector) {
+          const { memories } = tablesOf(transaction)
           // 清哪几列由 memory domain 的**同一份** stamp 决定，不在这里手写第二遍。
           const rows = await transaction
             .update(memories)
@@ -54,6 +54,7 @@ export function composeSkillMemoryFusionParticipantFactory(): SkillMemoryFusionP
           return Object.freeze(orderMembershipIds(rows.map((row) => row.id)))
         },
         async markFused(command: MemoryMembershipFuseCommand) {
+          const { memories } = tablesOf(transaction)
           // 候选逐条判 `approved` 是**真实分支**（审批之间记忆可能被归档、被别的融合吃掉），
           // 判据与同步路径共用 `memoriesToMarkFused`。
           const candidates = await transaction
@@ -83,6 +84,7 @@ export function composeSkillMemoryFusionParticipantFactory(): SkillMemoryFusionP
           return Object.freeze(ids)
         },
         async reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }) {
+          const { memories } = tablesOf(transaction)
           await transaction
             .update(memories)
             .set({ fusedIntoSkillId: input.skillId })
@@ -100,9 +102,10 @@ export type PostgresqlSkillMemoryFusionParticipantFactory = SkillMemoryFusionPar
  * 用得上），选中与定序的裁定权归 domain 的纯函数 `fusedIntoSkill`——无 ORDER BY 的读在两个 provider 上会漂。
  */
 export async function listFusedIntoSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   skillId: string,
 ): Promise<FusedIntoSkillMemory[]> {
+  const { memories } = tablesOf(db)
   const rows = await db
     .select({
       id: memories.id,

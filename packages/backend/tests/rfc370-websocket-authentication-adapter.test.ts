@@ -1,8 +1,9 @@
 // RFC-370: one deployment-selected identity adapter must cover the complete
 // WebSocket lifetime, including upgrade/open revalidation and synchronous expiry.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import type { ServerWebSocket } from 'bun'
-import { users } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { admitDurableWorkOwner } from '@/modules/identity-access/composition/authentication'
 import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
@@ -23,7 +24,8 @@ afterEach(resetConnectionsForTest)
 
 describeEachProvider('RFC-370 selected WebSocket identity adapter', (harness) => {
   test('uses alternate credentials for upgrade, open, coalesced refresh and frame expiry', async () => {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'ws-adapter-user',
       username: 'ws-adapter-user',
       displayName: 'WS adapter user',

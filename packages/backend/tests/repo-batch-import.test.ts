@@ -6,7 +6,7 @@
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import {
@@ -23,14 +23,14 @@ import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-con
 type StubResolver = typeof resolveCachedRepo
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   events: Array<{ batchId: string; msg: RepoImportWsMessage }>
   resolverCalls: string[]
   peakInFlight: number
   inFlight: number
 }
 
-function makeHarness(__db: ProviderNeutralDatabase): Harness {
+function makeHarness(__db: PersistenceDb): Harness {
   const db = __db
   const events: Harness['events'] = []
   return { db, events, resolverCalls: [], peakInFlight: 0, inFlight: 0 }

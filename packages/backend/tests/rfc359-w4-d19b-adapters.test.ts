@@ -4,13 +4,14 @@
 // 这一刀之前 PostgreSQL 跑的是一条几乎没有行为覆盖的路径（SQLite / legacy 侧有 13 个行为套件，PG 侧只有 3 个
 // 源码形状锁）。这里给房间补上两引擎同跑的行为断言：房间聚合读、可见性 404、发言写入与终态拒绝；附源码锁。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks, users, workflows, workgroupMessages } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
@@ -48,11 +49,12 @@ function workgroupConfig(ownerUserId: string): Record<string, unknown> {
 }
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ id: string; authority: DirectAuthenticatedAuthority }> {
   const id = ulid()
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -73,18 +75,19 @@ async function seedUser(
 }
 
 async function seedWorkgroupTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly ownerUserId: string; readonly status?: 'running' | 'done' },
 ): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `rfc359-d19b-${workflowId.slice(-8).toLowerCase()}`,
     definition: '{}',
     builtin: true,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359 d19b room',
     workflowId,
@@ -100,7 +103,7 @@ async function seedWorkgroupTask(
     workgroupId: WORKGROUP_ID,
     workgroupConfigJson: JSON.stringify(workgroupConfig(input.ownerUserId)),
   })
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId,
     userId: input.ownerUserId,
     role: 'owner',
@@ -110,7 +113,7 @@ async function seedWorkgroupTask(
   return taskId
 }
 
-function roomFor(db: ProviderNeutralDatabase, broadcasts: string[]) {
+function roomFor(db: PersistenceDb, broadcasts: string[]) {
   return composeWorkgroupTaskRoom({
     db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
@@ -175,6 +178,7 @@ describeEachProvider('RFC-359 W4-D19b —— 工作组任务房', (harness) => {
       taskId,
       submission: { kind: 'json-body', body: JSON.stringify({ body: 'hello squad' }) },
     })
+    const { workgroupMessages } = tablesOf(harness.db)
     const rows = await harness.db
       .select({
         body: workgroupMessages.bodyMd,

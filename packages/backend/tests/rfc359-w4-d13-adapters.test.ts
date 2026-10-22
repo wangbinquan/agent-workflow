@@ -2,20 +2,15 @@
 // （审批 saga / change candidate / case workspace）、交付面的仓库 / MR 事实目录、旧 Mission 排空视图。
 // 同一段断言在两个引擎上各跑一遍；源码锁钉住「不再有 provider 命名的孪生」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  employeeCases,
-  employeeCaseWorkspaces,
-  employeeReactionRounds,
-  employeeRoundWorkspaceStates,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'
 import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
@@ -75,21 +70,16 @@ function missionRow(overrides: Partial<MissionRow> = {}): MissionRow {
   }
 }
 
-async function newMission(
-  db: ProviderNeutralDatabase,
-  overrides: Partial<MissionRow> = {},
-): Promise<string> {
+async function newMission(db: PersistenceDb, overrides: Partial<MissionRow> = {}): Promise<string> {
   const row = missionRow(overrides)
   await createMissionPersistence(db).createMission(row)
   return row.id
 }
 
-async function seedRepo(
-  db: ProviderNeutralDatabase,
-  urlEnc: string | null = null,
-): Promise<string> {
+async function seedRepo(db: PersistenceDb, urlEnc: string | null = null): Promise<string> {
   const id = ulid()
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id,
     urlHash: id.slice(-8).toLowerCase(),
     urlEnc,
@@ -101,12 +91,11 @@ async function seedRepo(
   return id
 }
 
-async function seedCaseAndRound(
-  db: ProviderNeutralDatabase,
-): Promise<{ caseId: string; roundId: string }> {
+async function seedCaseAndRound(db: PersistenceDb): Promise<{ caseId: string; roundId: string }> {
   const caseId = ulid()
   const roundId = ulid()
-  await db.insert(employeeCases).values({
+  const { employeeCases, employeeReactionRounds } = tablesOf(db)
+  await insertOne(db, employeeCases, {
     id: caseId,
     employeeId: 'emp-1',
     employeeRevision: 1,
@@ -117,7 +106,7 @@ async function seedCaseAndRound(
     createdAt: T0,
     updatedAt: T0,
   })
-  await db.insert(employeeReactionRounds).values({
+  await insertOne(db, employeeReactionRounds, {
     id: roundId,
     caseId,
     caseRevision: 1,
@@ -146,7 +135,8 @@ describeEachProvider('RFC-359 W4-D13 —— 数字员工平台工作项持久化
       [caseId, repoId],
       [orphan, 'repo-missing'],
     ] as const) {
-      await harness.db.insert(employeeCaseWorkspaces).values({
+      const { employeeCaseWorkspaces } = tablesOf(harness.db)
+      await insertOne(harness.db, employeeCaseWorkspaces, {
         caseId: id,
         repositoryId: 'repo-1',
         cachedRepoId,
@@ -247,7 +237,8 @@ describeEachProvider('RFC-359 W4-D13 —— 数字员工平台工作项持久化
     const persistence = createEmployeePlatformWorkItemPersistence(harness.db)
     const { caseId, roundId } = await seedCaseAndRound(harness.db)
     const repoId = await seedRepo(harness.db)
-    await harness.db.insert(employeeCaseWorkspaces).values({
+    const { employeeCaseWorkspaces, employeeRoundWorkspaceStates } = tablesOf(harness.db)
+    await insertOne(harness.db, employeeCaseWorkspaces, {
       caseId,
       repositoryId: 'repo-1',
       cachedRepoId: repoId,
@@ -310,7 +301,7 @@ describeEachProvider('RFC-359 W4-D13 —— 数字员工平台工作项持久化
       [2, '{"ok":true}'],
       [1, null],
     ] as const) {
-      await harness.db.insert(employeeRoundWorkspaceStates).values({
+      await insertOne(harness.db, employeeRoundWorkspaceStates, {
         roundId,
         attemptOrdinal,
         caseId,
@@ -497,7 +488,7 @@ test('源码锁：development-automation 的持久化与装配不再有 provider
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source, file).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync/)
-    expect(source, file).toContain('ProviderNeutralDatabase')
+    expect(source, file).toContain('PersistenceDb')
     expect(source, file).not.toMatch(/\b(?:create|compose)(?:Sqlite|Postgresql)[A-Za-z]+\(/)
   }
 })

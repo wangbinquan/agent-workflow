@@ -5,15 +5,15 @@
 // reused by the scheduled-task scheduler. Locks the three outcomes so any future
 // drift in one of the three call sites is caught: missing/invisible → 404
 // workflow-not-found; built-in → 403; visible non-builtin → returns the row.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import type { CreateWorkflow } from '@agent-workflow/shared'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { workflows } from '../src/db/schema'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow } from '../src/services/workflow'
 import { ForbiddenError, NotFoundError } from '../src/util/errors'
@@ -29,14 +29,15 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function makePrivate(db: ProviderNeutralDatabase, id: string) {
+async function makePrivate(db: PersistenceDb, id: string) {
+  const { workflows } = tablesOf(db)
   await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, id))
 }
 
 describeEachProvider(
   'assertWorkflowLaunchable — shared launch gate (RFC-159 T2 parity)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -86,6 +87,7 @@ describeEachProvider(
 
     test('public non-builtin → returns the workflow (with parsed .definition.inputs)', async () => {
       const wf = await createWorkflow(db, { name: 'pub', description: '', definition: DEF })
+      const { workflows } = tablesOf(db)
       await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, wf.id))
       const got = await assertWorkflowLaunchable(db, actor('alice'), wf.id)
       expect(got.id).toBe(wf.id)

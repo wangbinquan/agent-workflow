@@ -2,10 +2,10 @@
 // repository search. Both providers must preserve the original ASCII search,
 // literal wildcard escaping, NULL fallback, ordering and page cursor behavior.
 // The separate compiler probe returns no PostgreSQL rows or network evidence.
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
-import type { SQLWrapper } from 'drizzle-orm'
-import { cachedRepos } from '@/db/schema'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { sql, type SQLWrapper } from 'drizzle-orm'
 import { RepositoryWorkspaceSqlStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceSqlStore'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import type { CachedRepositoryRecord } from '@/modules/source-control/ports/repositoryWorkspaceStore'
@@ -90,14 +90,13 @@ function postgresqlCompilerProbe() {
     },
     poolFactory: () => pool,
   })
-  const provider = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(provider)
   return { db, runtime, stop, statements }
 }
 
 describeEachProvider('RFC-359 W20 repository search conformance', (harness) => {
   test('all three text fields preserve mixed ASCII case, literal patterns, NULLs and full pages', async () => {
+    const { cachedRepos } = tablesOf(harness.db)
     await harness.db.insert(cachedRepos).values(repositories)
     const store = new DrizzleRepositoryWorkspaceStore(harness.db)
     const matching = ['search-z', 'search-y', 'search-x', 'search-w']
@@ -157,14 +156,18 @@ describeEachProvider('RFC-359 W20 repository search conformance', (harness) => {
     // a pool that always throws. No PostgreSQL result rows are fabricated.
     const store = new RepositoryWorkspaceSqlStore(
       {
+        db: probe.db,
         async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
           reads += 1
-          if (reads === 1) return await harness.db.all<T>(query)
-          const restore = selectDatabaseSchemaProvider('postgresql')
-          try {
-            return await probe.db.all<T>(query)
-          } finally {
-            restore()
+          if (reads === 1) {
+            const { scheduledTasks } = tablesOf(harness.db)
+            return await rawRows<T>(
+              harness.db,
+              sql`SELECT ${scheduledTasks.launchPayload} AS launch_payload FROM ${scheduledTasks}`,
+            )
+          }
+          {
+            return await rawRows<T>(probe.db, query)
           }
         },
         async run() {

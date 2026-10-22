@@ -1,9 +1,7 @@
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
-export type PostgresqlResourceCatalogTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
+export type PostgresqlResourceCatalogTransaction = PersistenceTx
 
 // RFC-359 W10 —— 这里此前还住着 `runPostgresqlResourceCatalogTransaction`：把
 // `sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')` + `retryPostgresqlSerialization`

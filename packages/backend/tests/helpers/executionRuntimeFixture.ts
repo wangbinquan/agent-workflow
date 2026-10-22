@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 
 export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
@@ -9,7 +9,7 @@ export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
  * `runtime ?? defaultRuntime ?? "opencode"` path while making that default
  * product-valid.
  */
-export async function seedTestDefaultOpencodeRuntime(db: ProviderNeutralDatabase): Promise<void> {
+export async function seedTestDefaultOpencodeRuntime(db: PersistenceDb): Promise<void> {
   const runtimeRegistry = composeRuntimeRegistryOperations(db)
   const existing = await runtimeRegistry.getRuntime('opencode')
   if (existing === null) {

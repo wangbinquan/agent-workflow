@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createMissionInputUploadOperations,
   type MissionInputBlobPersistence,
@@ -25,7 +25,7 @@ function lazyEvidenceBlobs(appHome: string): MissionInputBlobPersistence {
 
 /** RFC-359 W4-D11：一份装配，两个 provider 共用（persistence 已是中立实现）。 */
 export function composeMissionInputUploadOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly blobs?: MissionInputBlobPersistence
   readonly artifacts?: EvidenceArtifactPort

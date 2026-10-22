@@ -15,6 +15,8 @@
 //   T3  tasks.status='done'            ⟹ all output node_runs.status='done'
 //   U1  per (task, nodeId, iteration), ≤ 1 row in {awaiting_review, awaiting_human}
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -22,12 +24,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-let fixtureDb: ProviderNeutralDatabase
+let fixtureDb: PersistenceDb
 
 // ---------------------------------------------------------------------------
 // Invariant checker (PR-A inline; PR-D will extract to services/).
@@ -39,8 +40,9 @@ interface Violation {
   detail: string
 }
 
-async function checkInvariants(db: ProviderNeutralDatabase, taskId: string): Promise<Violation[]> {
+async function checkInvariants(db: PersistenceDb, taskId: string): Promise<Violation[]> {
   const v: Violation[] = []
+  const { tasks, nodeRuns, docVersions, clarifyRounds } = tablesOf(db)
   const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (taskRow === undefined) return v
 
@@ -162,7 +164,7 @@ async function checkInvariants(db: ProviderNeutralDatabase, taskId: string): Pro
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
@@ -203,13 +205,14 @@ async function buildHarness(
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -234,7 +237,7 @@ async function buildHarness(
 }
 
 async function insertNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     nodeId: string
@@ -256,7 +259,8 @@ async function insertNodeRun(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId,
@@ -272,7 +276,7 @@ async function insertNodeRun(
 }
 
 async function insertDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     reviewNodeId: string
@@ -283,7 +287,8 @@ async function insertDocVersion(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(docVersions).values({
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
     id,
     taskId,
     reviewNodeId: opts.reviewNodeId,

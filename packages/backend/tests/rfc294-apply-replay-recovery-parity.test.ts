@@ -10,6 +10,9 @@
 // 这四条是**合一前后都不许变**的用户可见行为，正是合一最容易悄悄改掉的那一类
 // （回收阈值、收敛的幂等性、失败重放的语义）。任何一条红都说明合一动了不该动的东西。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -21,8 +24,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, intentApplyJournal, intentSessions, resourceBundleApplies } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { applyIntentChangeset, type IntentApplyReceipt } from '@/modules/intent/composition/apply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeSqliteResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
@@ -34,7 +36,7 @@ import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const OWNER_ID = 'rfc294-apply-owner'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 let sessionId: string
 
@@ -141,7 +143,8 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   appHome = mkdtempSync(join(tmpdir(), 'aw-rfc294-apply-parity-'))
   sessionId = ulid()
   const now = Date.now()
-  await db.insert(intentSessions).values({
+  const { intentSessions } = tablesOf(db)
+  await insertOne(db, intentSessions, {
     id: sessionId,
     ownerUserId: OWNER_ID,
     title: 'RFC-294 apply parity',
@@ -174,7 +177,8 @@ async function seedPair(
   const bundleId = ulid()
   const bundleScope = PACKAGE_SCOPE
   const bundleKey = `bundle-${suffix}`
-  await db.insert(intentApplyJournal).values({
+  const { intentApplyJournal, resourceBundleApplies } = tablesOf(db)
+  await insertOne(db, intentApplyJournal, {
     id: intentId,
     sessionId,
     clientMutationId: intentKey,
@@ -187,7 +191,7 @@ async function seedPair(
     createdAt: updatedAt,
     updatedAt,
   })
-  await db.insert(resourceBundleApplies).values({
+  await insertOne(db, resourceBundleApplies, {
     id: bundleId,
     scope: bundleScope,
     key: bundleKey,
@@ -203,11 +207,13 @@ async function seedPair(
 }
 
 async function intentState(id: string) {
-  return db.select().from(intentApplyJournal).where(eq(intentApplyJournal.id, id)).get()
+  const { intentApplyJournal } = tablesOf(db)
+  return first(db.select().from(intentApplyJournal).where(eq(intentApplyJournal.id, id)))
 }
 
 async function bundleState(id: string) {
-  return db.select().from(resourceBundleApplies).where(eq(resourceBundleApplies.id, id)).get()
+  const { resourceBundleApplies } = tablesOf(db)
+  return first(db.select().from(resourceBundleApplies).where(eq(resourceBundleApplies.id, id)))
 }
 
 // RFC-359（AC-6）—— 改成双引擎。此前钉死在 `createInMemoryDb` 上不是因为判据与引擎有关，
@@ -239,6 +245,7 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
       expect((await bundleState(pair.bundleId))?.state).toBe('applying')
 
       const stale = Date.now() - 11 * 60 * 1000
+      const { intentApplyJournal, resourceBundleApplies, agents } = tablesOf(db)
       await db
         .update(intentApplyJournal)
         .set({ updatedAt: stale })
@@ -305,6 +312,7 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
         bundle: bundleReceipt,
       })
 
+      const { intentSessions } = tablesOf(db)
       // A byte-identical successful request may be retried after the UI archived
       // its Intent session or after a package preview expired. Duplicate lookup
       // must win over those mutable validations; actor/request mismatches are a

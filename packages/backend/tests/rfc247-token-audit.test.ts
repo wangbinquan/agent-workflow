@@ -11,16 +11,17 @@
 //     making it a side channel is lost the first time it can throw.
 //   · retention actually deletes, and deletes only what is past the window.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eventually, eventuallyAtLeast } from './helpers/eventually'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import type { ProviderHttpApplication } from './helpers/providerHttpApplication'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
-import { agents, tokenAudit, tokenDeleteSnapshot } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -32,7 +33,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   audit: ProviderHttpApplication['tokenCallAudit']
   userId: string
@@ -51,7 +52,8 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
     password: 'pw12345678',
   })
   const ownedAgentId = 'rfc247-audit-owner-agent'
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ownedAgentId,
     name: 'RFC 247 audit owner agent',
     ownerUserId: user.id,
@@ -140,7 +142,10 @@ describeEachProviderHttpApplication(
         body: JSON.stringify({ name: 'has-a-body', secretish: 'sk-live-123' }),
       })
       const rows = await eventuallyAtLeast(
-        () => h.db.select().from(tokenAudit),
+        () => {
+          const { tokenAudit } = tablesOf(h.db)
+          return h.db.select().from(tokenAudit)
+        },
         1,
         'the audit row for the bodied request',
       )
@@ -213,7 +218,8 @@ describeEachProviderHttpApplication(
         insert: () => {
           throw new Error('disk is on fire')
         },
-      } as unknown as ProviderNeutralDatabase
+      } as unknown as PersistenceDb
+      inheritDatabaseHandle(brokenDb, h.db)
       const actor = buildActor({
         user: {
           id: h.userId,
@@ -287,6 +293,7 @@ describeEachProviderHttpApplication(
       })
       expect(id).not.toBeNull()
 
+      const { tokenDeleteSnapshot } = tablesOf(h.db)
       const snaps = await h.db.select().from(tokenDeleteSnapshot)
       expect(snaps.length).toBe(1)
       expect(snaps[0]?.auditId).toBe(id ?? '')
@@ -354,6 +361,7 @@ describeEachProviderHttpApplication(
       const left = await h.audit.list()
       expect(left.length).toBe(1)
       expect(left[0]?.createdAt).toBe(now - 10 * day)
+      const { tokenDeleteSnapshot } = tablesOf(h.db)
       expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
     })
 
@@ -394,7 +402,7 @@ describeEachProviderHttpApplication(
   },
   (scope) => {
     async function seed(
-      db: ProviderNeutralDatabase,
+      db: PersistenceDb,
       userId: string,
       patId: string,
       username: string,
@@ -609,6 +617,7 @@ describeEachProviderHttpApplication(
       })
       expect(id).not.toBeNull()
 
+      const { tokenAudit, tokenDeleteSnapshot } = tablesOf(h.db)
       // The audit row survives (F13: auditing never breaks the call)…
       const rows = await h.db.select().from(tokenAudit)
       const row = rows.find((r) => r.id === id)
@@ -641,6 +650,7 @@ describeEachProviderHttpApplication(
         statusCode: 204,
         deletedSnapshot: { id: 'a1', name: 'fine' },
       })
+      const { tokenAudit } = tablesOf(h.db)
       const row = (await h.db.select().from(tokenAudit)).find((r) => r.id === id)
       expect(row?.snapshotFailed).toBe(false)
     })
@@ -690,7 +700,10 @@ describeEachProviderHttpApplication(
       // 够，在 PostgreSQL 的真实往返上本机够、忙分片不够——CI 上 ubuntu shard 7/8 实红）。
       // 读到为止。
       const snaps = await eventuallyAtLeast(
-        () => h.db.select().from(tokenDeleteSnapshot),
+        () => {
+          const { tokenDeleteSnapshot } = tablesOf(h.db)
+          return h.db.select().from(tokenDeleteSnapshot)
+        },
         1,
         'the delete snapshot',
       )
@@ -744,7 +757,10 @@ describeEachProviderHttpApplication(
       })
       expect(barrierRes.status).toBe(200)
       const snaps = await eventuallyAtLeast(
-        () => h.db.select().from(tokenDeleteSnapshot),
+        () => {
+          const { tokenDeleteSnapshot } = tablesOf(h.db)
+          return h.db.select().from(tokenDeleteSnapshot)
+        },
         1,
         'the PAT barrier snapshot',
       )
@@ -795,7 +811,10 @@ describeEachProviderHttpApplication(
       })
       expect(barrierRes.status).toBe(200)
       const snaps = await eventuallyAtLeast(
-        () => h.db.select().from(tokenDeleteSnapshot),
+        () => {
+          const { tokenDeleteSnapshot } = tablesOf(h.db)
+          return h.db.select().from(tokenDeleteSnapshot)
+        },
         1,
         'the refusal barrier snapshot',
       )

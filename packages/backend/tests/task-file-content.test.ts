@@ -10,11 +10,12 @@
 // `RepositoryWorkspaceStore`）。`openContainedFile` 那一组**一条数据库语句都没有**
 // ——纯文件系统判据，双跑只是白花墙钟，留单份。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import {
   FILE_CONTENT_MAX_BYTES,
@@ -22,7 +23,7 @@ import {
   openContainedFile,
 } from '../src/services/worktreeFileContent'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const dirs: string[] = []
@@ -50,18 +51,19 @@ async function makeRepo(): Promise<{ dir: string; commit: string }> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
 ): Promise<string> {
   const taskId = `01FC${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -241,6 +243,7 @@ describeEachProvider('getTaskFileContent（双引擎）', (harness) => {
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
     }
+    const { taskRepos } = tablesOf(db)
     await db.insert(taskRepos).values([
       {
         ...repoRow,

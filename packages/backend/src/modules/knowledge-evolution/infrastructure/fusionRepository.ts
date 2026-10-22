@@ -3,6 +3,9 @@
 // RFC-370 §10 V20：技能的字节与版本操作日志归 resource-catalog——apply 把提案树交给它暂存、在本仓的
 // 事务里经它的 participant 提交、事务后由它发布；这里不再碰文件系统，也不再自己写技能操作锁。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { MemoryMembershipParticipantInTx } from '@/modules/memory/public/participants'
 import type {
@@ -11,20 +14,8 @@ import type {
 } from '@/modules/resource-catalog/public/participants'
 import type { FusionStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import {
-  agents,
-  fusions,
-  memories,
-  resourceGrants,
-  skills,
-  skillVersions,
-  workflows,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   FusionBuiltinWorkflowSeed,
   FusionDecisionRecoveryReceipt,
@@ -51,8 +42,8 @@ import {
 } from './fusionRepositorySupport'
 import { ConflictError, staleConflictError } from '@/util/errors'
 
-type FusionRow = typeof fusions.$inferSelect
-type SkillRow = typeof skills.$inferSelect
+type FusionRow = PersistenceTables['fusions']['$inferSelect']
+type SkillRow = PersistenceTables['skills']['$inferSelect']
 
 function asRecord(row: FusionRow): FusionPersistenceRecord {
   return { ...row, status: row.status as FusionStatus }
@@ -72,22 +63,24 @@ function skillIdentity(row: SkillRow): FusionSkillIdentity {
 }
 
 async function grantInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   skillId: string,
 ): Promise<'read' | 'write' | null> {
   if (!actor.permissions.has('resource-acl:private')) return null
-  const row = await tx
-    .select({ level: resourceGrants.level })
-    .from(resourceGrants)
-    .where(
-      and(
-        eq(resourceGrants.resourceType, 'skill'),
-        eq(resourceGrants.resourceId, skillId),
-        eq(resourceGrants.userId, actor.user.id),
+  const { resourceGrants } = tablesOf(tx)
+  const row = await first(
+    tx
+      .select({ level: resourceGrants.level })
+      .from(resourceGrants)
+      .where(
+        and(
+          eq(resourceGrants.resourceType, 'skill'),
+          eq(resourceGrants.resourceId, skillId),
+          eq(resourceGrants.userId, actor.user.id),
+        ),
       ),
-    )
-    .get()
+  )
   return row?.level ?? null
 }
 
@@ -95,11 +88,7 @@ function mutablePatch(patch: FusionPersistencePatch | undefined) {
   return patch === undefined ? {} : patch
 }
 
-async function assertClaimSkill(
-  tx: DatabaseTransaction,
-  row: FusionRow,
-  actor: Actor,
-): Promise<void> {
+async function assertClaimSkill(tx: PersistenceTx, row: FusionRow, actor: Actor): Promise<void> {
   if (row.preconditionToken === null) {
     throw new ConflictError(
       'fusion-precondition-legacy',
@@ -118,11 +107,13 @@ async function assertClaimSkill(
       'the target skill identity is invalid; re-initiate the fusion',
     )
   }
-  const live = await tx
-    .select()
-    .from(skills)
-    .where(and(eq(skills.id, target.skillId), eq(skills.reservationState, 'ready')))
-    .get()
+  const { skills } = tablesOf(tx)
+  const live = await first(
+    tx
+      .select()
+      .from(skills)
+      .where(and(eq(skills.id, target.skillId), eq(skills.reservationState, 'ready'))),
+  )
   const liveToken =
     live === undefined
       ? null
@@ -152,7 +143,7 @@ async function assertClaimSkill(
  * RFC-359 W4-D5 起两个 provider 同一份，SQLite 那侧的同步变体退役。
  */
 export interface FusionMemoryMembership {
-  inTransaction(transaction: DatabaseTransaction): MemoryMembershipParticipantInTx
+  inTransaction(transaction: PersistenceTx): MemoryMembershipParticipantInTx
 }
 
 /**
@@ -161,12 +152,12 @@ export interface FusionMemoryMembership {
  * 由本仓的数据库句柄 `bind` 出绑在选定内容绑定上的 participant。
  */
 export interface FusionSkillVersionCommit {
-  bind(input: { readonly db: ProviderNeutralDatabase; readonly appHome: string }): FusionSkillTrees
+  bind(input: { readonly db: PersistenceDb; readonly appHome: string }): FusionSkillTrees
 }
 
 /** The bound participant: tree operations plus the tx-bound version commit. */
 export interface FusionSkillTrees extends SkillTreeVersionOperations {
-  inTransaction(transaction: DatabaseTransaction): SkillVersionCommitParticipantInTx
+  inTransaction(transaction: PersistenceTx): SkillVersionCommitParticipantInTx
 }
 
 /** RFC-223 provenance 修复：非事务，逐条改判某条记忆的 `fusedIntoSkillId`。 */
@@ -180,7 +171,7 @@ export type PostgresqlFusionSkillVersionCommit = FusionSkillVersionCommit
 export type PostgresqlFusedSkillReassignment = FusedSkillReassignment
 
 export function createFusionPersistence(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly memoryMembership: FusionMemoryMembership
   readonly fusedSkillReassignment: FusedSkillReassignment
   readonly skillVersionCommit: FusionSkillTrees
@@ -190,7 +181,8 @@ export function createFusionPersistence(input: {
 
   async function seedResources(seed: FusionResourceSeed): Promise<void> {
     const now = Date.now()
-    const merger = await db.select().from(agents).where(eq(agents.id, seed.agent.id)).get()
+    const { agents, workflows } = tablesOf(db)
+    const merger = await first(db.select().from(agents).where(eq(agents.id, seed.agent.id)))
     if (merger !== undefined) {
       if (merger.name !== seed.agent.name) {
         throw new ConflictError(
@@ -213,42 +205,36 @@ export function createFusionPersistence(input: {
             aclRevision: merger.aclRevision + 1,
           })
           .where(eq(agents.id, seed.agent.id))
-          .run()
       }
     } else {
-      await db
-        .insert(agents)
-        .values({
-          id: seed.agent.id,
-          name: seed.agent.name,
-          description: seed.agent.description,
-          outputs: JSON.stringify(seed.agent.outputs),
-          inputs: '[]',
-          syncOutputsOnIterate: seed.agent.syncOutputsOnIterate,
-          runtime: null,
-          permission: '{}',
-          skills: '[]',
-          dependsOn: '[]',
-          mcp: '[]',
-          plugins: '[]',
-          frontmatterExtra: '{}',
-          bodyMd: seed.agent.bodyMd,
-          ownerUserId: seed.ownerUserId,
-          visibility: 'public',
-          aclRevision: 0,
-          builtin: true,
-          schemaVersion: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(db, agents, {
+        id: seed.agent.id,
+        name: seed.agent.name,
+        description: seed.agent.description,
+        outputs: JSON.stringify(seed.agent.outputs),
+        inputs: '[]',
+        syncOutputsOnIterate: seed.agent.syncOutputsOnIterate,
+        runtime: null,
+        permission: '{}',
+        skills: '[]',
+        dependsOn: '[]',
+        mcp: '[]',
+        plugins: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: seed.agent.bodyMd,
+        ownerUserId: seed.ownerUserId,
+        visibility: 'public',
+        aclRevision: 0,
+        builtin: true,
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
     }
 
-    const workflow = await db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, seed.workflow.id))
-      .get()
+    const workflow = await first(
+      db.select().from(workflows).where(eq(workflows.id, seed.workflow.id)),
+    )
     if (workflow !== undefined) {
       if (workflow.name !== seed.workflow.name) {
         throw new ConflictError(
@@ -276,30 +262,26 @@ export function createFusionPersistence(input: {
             ...(drift ? { aclRevision: workflow.aclRevision + 1, updatedAt: now } : {}),
           })
           .where(eq(workflows.id, seed.workflow.id))
-          .run()
       }
     } else {
       const definition = repairFusionWorkflowDefinition(
         JSON.stringify(seed.workflow.definition),
         seed.workflow.mergerAgentId,
       ).definition
-      await db
-        .insert(workflows)
-        .values({
-          id: seed.workflow.id,
-          name: seed.workflow.name,
-          description: seed.workflow.description,
-          definition,
-          version: 1,
-          ownerUserId: seed.ownerUserId,
-          visibility: 'public',
-          aclRevision: 0,
-          builtin: true,
-          schemaVersion: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(db, workflows, {
+        id: seed.workflow.id,
+        name: seed.workflow.name,
+        description: seed.workflow.description,
+        definition,
+        version: 1,
+        ownerUserId: seed.ownerUserId,
+        visibility: 'public',
+        aclRevision: 0,
+        builtin: true,
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
     }
   }
 
@@ -307,16 +289,18 @@ export function createFusionPersistence(input: {
     seed: FusionBuiltinWorkflowSeed,
     ownerUserId: string,
   ): Promise<string> {
-    const row = await db
-      .select({
-        id: workflows.id,
-        name: workflows.name,
-        ownerUserId: workflows.ownerUserId,
-        builtin: workflows.builtin,
-      })
-      .from(workflows)
-      .where(eq(workflows.id, seed.id))
-      .get()
+    const { workflows } = tablesOf(db)
+    const row = await first(
+      db
+        .select({
+          id: workflows.id,
+          name: workflows.name,
+          ownerUserId: workflows.ownerUserId,
+          builtin: workflows.builtin,
+        })
+        .from(workflows)
+        .where(eq(workflows.id, seed.id)),
+    )
     if (
       row === undefined ||
       row.name !== seed.name ||
@@ -330,11 +314,13 @@ export function createFusionPersistence(input: {
 
   async function loadSkillAccess(actor: Actor, skillId: string): Promise<FusionSkillAccess | null> {
     return await session.transaction(async (tx) => {
-      const row = await tx
-        .select()
-        .from(skills)
-        .where(and(eq(skills.id, skillId), eq(skills.reservationState, 'ready')))
-        .get()
+      const { skills } = tablesOf(tx)
+      const row = await first(
+        tx
+          .select()
+          .from(skills)
+          .where(and(eq(skills.id, skillId), eq(skills.reservationState, 'ready'))),
+      )
       if (row === undefined) return null
       const skill = skillIdentity(row)
       return {
@@ -350,21 +336,25 @@ export function createFusionPersistence(input: {
   }
 
   async function loadSkillIdentity(skillId: string): Promise<FusionSkillIdentity | null> {
-    const row = await db
-      .select()
-      .from(skills)
-      .where(and(eq(skills.id, skillId), eq(skills.reservationState, 'ready')))
-      .get()
+    const { skills } = tablesOf(db)
+    const row = await first(
+      db
+        .select()
+        .from(skills)
+        .where(and(eq(skills.id, skillId), eq(skills.reservationState, 'ready'))),
+    )
     return row === undefined ? null : skillIdentity(row)
   }
 
   async function casStatus(command: FusionStatusCas): Promise<boolean> {
     return await session.transaction(async (tx) => {
-      const current = await tx
-        .select({ status: fusions.status, currentTaskId: fusions.currentTaskId })
-        .from(fusions)
-        .where(eq(fusions.id, command.id))
-        .get()
+      const { fusions } = tablesOf(tx)
+      const current = await first(
+        tx
+          .select({ status: fusions.status, currentTaskId: fusions.currentTaskId })
+          .from(fusions)
+          .where(eq(fusions.id, command.id)),
+      )
       if (current === undefined || !command.from.includes(current.status as FusionStatus)) {
         return false
       }
@@ -378,27 +368,27 @@ export function createFusionPersistence(input: {
         .update(fusions)
         .set({ status: command.to, ...mutablePatch(command.patch) })
         .where(eq(fusions.id, command.id))
-        .run()
       return true
     })
   }
 
   async function claimDecision(command: FusionDecisionClaimInput): Promise<boolean> {
     return await session.transaction(async (tx) => {
-      const row = await tx.select().from(fusions).where(eq(fusions.id, command.id)).get()
+      const { fusions } = tablesOf(tx)
+      const row = await first(tx.select().from(fusions).where(eq(fusions.id, command.id)))
       if (row === undefined || row.status !== command.from) return false
       await assertClaimSkill(tx, row, command.actor)
       await tx
         .update(fusions)
         .set({ status: command.to, ...mutablePatch(command.patch) })
         .where(eq(fusions.id, command.id))
-        .run()
       return true
     })
   }
 
   async function apply(command: FusionApplyCommand): Promise<{ readonly versionIndex: number }> {
-    const fusion = await db.select().from(fusions).where(eq(fusions.id, command.fusionId)).get()
+    const { fusions } = tablesOf(db)
+    const fusion = await first(db.select().from(fusions).where(eq(fusions.id, command.fusionId)))
     if (fusion === undefined || fusion.status !== 'applying') {
       throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
     }
@@ -430,11 +420,10 @@ export function createFusionPersistence(input: {
           await skillVersionCommit.inTransaction(tx).commit(staged, {
             // 先答「还在 applying 吗 / 还有权吗」，再答「技能被推进」——这正是既有的错误优先级。
             before: async () => {
-              const currentFusion = await tx
-                .select()
-                .from(fusions)
-                .where(eq(fusions.id, command.fusionId))
-                .get()
+              const { fusions } = tablesOf(tx)
+              const currentFusion = await first(
+                tx.select().from(fusions).where(eq(fusions.id, command.fusionId)),
+              )
               if (currentFusion === undefined || currentFusion.status !== 'applying') {
                 throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
               }
@@ -472,7 +461,8 @@ export function createFusionPersistence(input: {
     let repairedMemories = 0
     let quarantinedMemories = 0
     const nonterminal = new Set<FusionStatus>(['running', 'awaiting_approval', 'applying'])
-    const fusionRows = await db.select().from(fusions).all()
+    const { fusions, skillVersions, memories } = tablesOf(db)
+    const fusionRows = await db.select().from(fusions)
     for (const row of fusionRows) {
       const versions = (
         await db
@@ -483,7 +473,6 @@ export function createFusionPersistence(input: {
           })
           .from(skillVersions)
           .where(eq(skillVersions.fusionId, row.id))
-          .all()
       ).filter((version) => version.source === 'fusion')
       const token =
         row.preconditionToken === null ? null : decodeFusionSkillToken(row.preconditionToken)
@@ -520,7 +509,6 @@ export function createFusionPersistence(input: {
               : {}),
           })
           .where(eq(fusions.id, row.id))
-          .run()
         if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedFusions++
         else repairedFusions++
         if (terminalize) terminalizedFusions++
@@ -528,7 +516,7 @@ export function createFusionPersistence(input: {
     }
 
     const resolvedFusions = new Map(
-      (await db.select({ id: fusions.id, skillId: fusions.skillId }).from(fusions).all()).map(
+      (await db.select({ id: fusions.id, skillId: fusions.skillId }).from(fusions)).map(
         (row) => [row.id, row.skillId] as const,
       ),
     )
@@ -541,7 +529,6 @@ export function createFusionPersistence(input: {
       })
       .from(memories)
       .where(eq(memories.status, 'fused'))
-      .all()
     for (const memory of fusedRows) {
       const fusionSkillId =
         memory.fusionId === null ? undefined : resolvedFusions.get(memory.fusionId)
@@ -557,7 +544,6 @@ export function createFusionPersistence(input: {
                 })
                 .from(skillVersions)
                 .where(eq(skillVersions.fusionId, memory.fusionId))
-                .all()
             ).filter((version) => version.source === 'fusion' && version.version === memory.version)
       const exactId = exactVersions.length === 1 ? exactVersions[0]!.skillId : undefined
       const resolved =
@@ -585,6 +571,7 @@ export function createFusionPersistence(input: {
     let rolledForward = 0
     let rolledBack = 0
     let rejectFailed = 0
+    const { fusions, skillVersions } = tablesOf(db)
     const applying = await db
       .select({
         id: fusions.id,
@@ -593,7 +580,6 @@ export function createFusionPersistence(input: {
       })
       .from(fusions)
       .where(eq(fusions.status, 'applying'))
-      .all()
     for (const fusion of applying) {
       const versions = (
         await db
@@ -601,7 +587,6 @@ export function createFusionPersistence(input: {
           .from(skillVersions)
           .where(eq(skillVersions.fusionId, fusion.id))
           .orderBy(desc(skillVersions.versionIndex))
-          .all()
       ).filter((version) => version.source === 'fusion')
       const sole = versions.length === 1 ? versions[0] : undefined
       const trustworthy =
@@ -639,7 +624,6 @@ export function createFusionPersistence(input: {
       .select({ id: fusions.id })
       .from(fusions)
       .where(and(eq(fusions.status, 'running'), isNull(fusions.currentTaskId)))
-      .all()
     for (const row of stuck) {
       if (
         await casStatus({
@@ -662,16 +646,19 @@ export function createFusionPersistence(input: {
     loadSkillAccess,
     loadSkillIdentity,
     async create(record: FusionPersistenceRecord) {
-      await db.insert(fusions).values(record).run()
+      const { fusions } = tablesOf(db)
+      await insertOne(db, fusions, record)
     },
     async load(id: string) {
-      const row = await db.select().from(fusions).where(eq(fusions.id, id)).get()
+      const { fusions } = tablesOf(db)
+      const row = await first(db.select().from(fusions).where(eq(fusions.id, id)))
       return row === undefined ? null : asRecord(row)
     },
     async listSummaries(
       filter: { readonly skillId?: string; readonly status?: FusionStatus } = {},
     ) {
       const conditions = []
+      const { fusions } = tablesOf(db)
       if (filter.skillId !== undefined) conditions.push(eq(fusions.skillId, filter.skillId))
       if (filter.status !== undefined) conditions.push(eq(fusions.status, filter.status))
       const base = db
@@ -699,22 +686,23 @@ export function createFusionPersistence(input: {
           error: fusions.error,
         })
         .from(fusions)
-      const rows = await (conditions.length === 0 ? base : base.where(and(...conditions))).all()
+      const rows = await (conditions.length === 0 ? base : base.where(and(...conditions)))
       return rows
         .sort((left, right) => right.createdAt - left.createdAt)
         .map((row) => asRecord({ ...row, proposedDiff: null }))
     },
     async listIdsByStatus(status: FusionStatus) {
+      const { fusions } = tablesOf(db)
       return (
-        await db.select({ id: fusions.id }).from(fusions).where(eq(fusions.status, status)).all()
+        await db.select({ id: fusions.id }).from(fusions).where(eq(fusions.status, status))
       ).map((row) => row.id)
     },
     async listAwaitingApprovalOwners() {
+      const { fusions } = tablesOf(db)
       return await db
         .select({ id: fusions.id, ownerUserId: fusions.ownerUserId })
         .from(fusions)
         .where(eq(fusions.status, 'awaiting_approval'))
-        .all()
     },
     casStatus,
     claimDecision,
@@ -724,7 +712,8 @@ export function createFusionPersistence(input: {
       readonly now: number
     }) {
       return await session.transaction(async (tx) => {
-        const row = await tx.select().from(fusions).where(eq(fusions.id, command.id)).get()
+        const { fusions } = tablesOf(tx)
+        const row = await first(tx.select().from(fusions).where(eq(fusions.id, command.id)))
         if (row === undefined || (row.status !== 'running' && row.status !== 'awaiting_approval')) {
           return { ok: false as const }
         }
@@ -745,7 +734,6 @@ export function createFusionPersistence(input: {
             decidedAt: command.now,
           })
           .where(eq(fusions.id, command.id))
-          .run()
         return { ok: true as const, taskId: row.currentTaskId }
       })
     },

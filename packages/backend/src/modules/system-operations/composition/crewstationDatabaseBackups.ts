@@ -1,7 +1,7 @@
 // RFC-370 v3 V5 — assemble hosted database backups: the standalone PostgreSQL
 // logical backup format, stored as one CS object through the publication
 // journal. Assembly only; provenance and catalog reads live in infrastructure.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
@@ -16,7 +16,7 @@ import { sha256Hex } from '@/util/hash'
 
 export function composeCrewStationDatabaseBackups(input: {
   readonly contract: LogicalSchemaContract
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly runtime: PostgresqlDatabaseRuntime
   readonly fence: CrewStationMutationFence
   readonly objects: Pick<CrewStationStreamObjectStorage, 'stat'>

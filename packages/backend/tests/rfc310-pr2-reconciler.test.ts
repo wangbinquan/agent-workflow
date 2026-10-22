@@ -10,6 +10,7 @@
 // ⑤MR 外部终态 guard 优先：mark-terminal → merged absorbing + claim 释放；
 // ⑥每轮 readinessJson 落盘且 unknown required-gate 不折算 pass。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -23,11 +24,6 @@ import type {
   AgentActionLauncherPort,
   RepositoryFactsCollectorPort,
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
-import {
-  developmentActionRuns,
-  developmentAgentAttempts,
-  developmentDecisions,
-} from '../src/db/schema'
 import { buildPr2Fixture, JAVA_CELLS } from './helpers/rfc310Pr2Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
@@ -78,6 +74,7 @@ describeEachProvider('rfc310 pr2 reconciler', (harness) => {
       },
       handled: 'action-launched',
     })
+    const { developmentActionRuns, developmentAgentAttempts, developmentDecisions } = tablesOf(f.db)
     const runs = await f.db.select().from(developmentActionRuns)
     expect(runs).toHaveLength(1)
     expect(runs[0]!.writable).toBe(1)
@@ -165,6 +162,7 @@ describeEachProvider('rfc310 pr2 reconciler', (harness) => {
     const mission = (await f.store.getMission(missionId))!
     expect(mission.status).toBe('blocked')
     expect(mission.blockCode).toBe('agent-launcher-not-wired')
+    const { developmentActionRuns } = tablesOf(f.db)
     const run = (await f.db.select().from(developmentActionRuns))[0]!
     expect(run.status).toBe('failed')
     expect(run.failureJson).toContain('agent-launcher-not-wired')

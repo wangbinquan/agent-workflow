@@ -8,25 +8,12 @@
 // 「把 ACL 列写回去」（aclRevision CAS）。列表在 JS 侧按 displayName / name 排序——两个引擎的 collation 不同，
 // DB 端 ORDER BY 会让顺序取决于部署选了哪个数据库。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  employeeExecutionPolicyRevisions,
-  employeeJobTemplateRevisions,
-  employeeJobTemplates,
-  employeeOsSettings,
-  employeeToolRegistrationRevisions,
-  employeeToolRegistrations,
-  employeeTypePackages,
-  employeeWorkScopeRevisions,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   DigitalEmployeeAclIdentityMutation,
@@ -90,7 +77,8 @@ function typePackageDriftMessage(
   ].join('\n')
 }
 
-function typeWhere(ref: EmployeeTypeRef) {
+function typeWhere(db: object, ref: EmployeeTypeRef) {
+  const { employeeTypePackages } = tablesOf(db)
   return and(
     eq(employeeTypePackages.typeId, ref.typeId),
     eq(employeeTypePackages.revision, ref.revision),
@@ -117,7 +105,9 @@ function toTypePackageRegistration(row: {
   }
 }
 
-function toTypePackage(row: typeof employeeTypePackages.$inferSelect): TypePackageRecord {
+function toTypePackage(
+  row: PersistenceTables['employeeTypePackages']['$inferSelect'],
+): TypePackageRecord {
   return {
     descriptor: parsePersistedEmployeeTypePackageDescriptor(parseJson(row.descriptorJson)),
     descriptorDigest: row.descriptorDigest,
@@ -126,7 +116,9 @@ function toTypePackage(row: typeof employeeTypePackages.$inferSelect): TypePacka
   }
 }
 
-function toTool(row: typeof employeeToolRegistrations.$inferSelect): ToolDraftRecord {
+function toTool(
+  row: PersistenceTables['employeeToolRegistrations']['$inferSelect'],
+): ToolDraftRecord {
   const draft = zRecord(row.draftJson)
   return {
     id: row.id,
@@ -144,7 +136,7 @@ function toTool(row: typeof employeeToolRegistrations.$inferSelect): ToolDraftRe
 }
 
 function toToolRevision(
-  row: typeof employeeToolRegistrationRevisions.$inferSelect,
+  row: PersistenceTables['employeeToolRegistrationRevisions']['$inferSelect'],
 ): ToolRevisionRecord {
   return {
     ref: { id: row.toolId, revision: row.revision },
@@ -157,7 +149,9 @@ function toToolRevision(
   }
 }
 
-function toJobTemplate(row: typeof employeeJobTemplates.$inferSelect): JobTemplateRecord {
+function toJobTemplate(
+  row: PersistenceTables['employeeJobTemplates']['$inferSelect'],
+): JobTemplateRecord {
   return {
     id: row.id,
     typeRef: { typeId: row.typeId, revision: row.typeRevision },
@@ -173,7 +167,7 @@ function toJobTemplate(row: typeof employeeJobTemplates.$inferSelect): JobTempla
 }
 
 function toJobTemplateRevision(
-  row: typeof employeeJobTemplateRevisions.$inferSelect,
+  row: PersistenceTables['employeeJobTemplateRevisions']['$inferSelect'],
 ): JobTemplateRevisionRecord {
   return {
     ref: { id: row.templateId, revision: row.revision },
@@ -184,7 +178,9 @@ function toJobTemplateRevision(
   }
 }
 
-function toEmployee(row: typeof employeeDefinitions.$inferSelect): EmployeeDefinitionRecord {
+function toEmployee(
+  row: PersistenceTables['employeeDefinitions']['$inferSelect'],
+): EmployeeDefinitionRecord {
   return {
     id: row.id,
     name: row.name,
@@ -200,7 +196,7 @@ function toEmployee(row: typeof employeeDefinitions.$inferSelect): EmployeeDefin
 }
 
 function toEmployeeRevision(
-  row: typeof employeeDefinitionRevisions.$inferSelect,
+  row: PersistenceTables['employeeDefinitionRevisions']['$inferSelect'],
 ): EmployeeDefinitionRevisionRecord {
   return {
     ref: { id: row.employeeId, revision: row.revision },
@@ -211,7 +207,9 @@ function toEmployeeRevision(
   }
 }
 
-function toExecutionPolicy(row: typeof employeeExecutionPolicyRevisions.$inferSelect) {
+function toExecutionPolicy(
+  row: PersistenceTables['employeeExecutionPolicyRevisions']['$inferSelect'],
+) {
   return {
     revision: row.revision,
     content: globalExecutionPolicySchema.parse(parseJson(row.contentJson)),
@@ -229,9 +227,9 @@ function toExecutionPolicy(row: typeof employeeExecutionPolicyRevisions.$inferSe
 // SQLite 形态的列句柄冻结在 PG 路径上——aclRevision 会以 int8 字符串回来，CAS 永远不等。
 function aclColumns(
   table:
-    | typeof employeeDefinitions
-    | typeof employeeToolRegistrations
-    | typeof employeeJobTemplates,
+    | PersistenceTables['employeeDefinitions']
+    | PersistenceTables['employeeToolRegistrations']
+    | PersistenceTables['employeeJobTemplates'],
 ) {
   return {
     id: table.id,
@@ -242,12 +240,11 @@ function aclColumns(
   }
 }
 
-function employeeDefinitionAclIdentity(
-  db: ProviderNeutralDatabase,
-): DigitalEmployeeAclIdentityPersistence {
+function employeeDefinitionAclIdentity(db: PersistenceDb): DigitalEmployeeAclIdentityPersistence {
   const identity: DigitalEmployeeAclIdentityPersistence = {
     type: 'employee_definition',
     async getRevision(resourceId) {
+      const { employeeDefinitions } = tablesOf(db)
       const columns = aclColumns(employeeDefinitions)
       const rows = await db
         .select({ aclRevision: columns.aclRevision })
@@ -256,7 +253,8 @@ function employeeDefinitionAclIdentity(
         .limit(1)
       return rows[0]?.aclRevision ?? 0
     },
-    async loadForMutation(transaction: DatabaseTransaction, resourceId: string) {
+    async loadForMutation(transaction: PersistenceTx, resourceId: string) {
+      const { employeeDefinitions } = tablesOf(transaction)
       const columns = aclColumns(employeeDefinitions)
       const row = (
         await transaction
@@ -303,12 +301,11 @@ function employeeDefinitionAclIdentity(
   return Object.freeze(identity)
 }
 
-function employeeToolAclIdentity(
-  db: ProviderNeutralDatabase,
-): DigitalEmployeeAclIdentityPersistence {
+function employeeToolAclIdentity(db: PersistenceDb): DigitalEmployeeAclIdentityPersistence {
   const identity: DigitalEmployeeAclIdentityPersistence = {
     type: 'employee_tool',
     async getRevision(resourceId) {
+      const { employeeToolRegistrations } = tablesOf(db)
       const columns = aclColumns(employeeToolRegistrations)
       const rows = await db
         .select({ aclRevision: columns.aclRevision })
@@ -317,7 +314,8 @@ function employeeToolAclIdentity(
         .limit(1)
       return rows[0]?.aclRevision ?? 0
     },
-    async loadForMutation(transaction: DatabaseTransaction, resourceId: string) {
+    async loadForMutation(transaction: PersistenceTx, resourceId: string) {
+      const { employeeToolRegistrations } = tablesOf(transaction)
       const columns = aclColumns(employeeToolRegistrations)
       const row = (
         await transaction
@@ -352,12 +350,11 @@ function employeeToolAclIdentity(
   return Object.freeze(identity)
 }
 
-function employeeJobTemplateAclIdentity(
-  db: ProviderNeutralDatabase,
-): DigitalEmployeeAclIdentityPersistence {
+function employeeJobTemplateAclIdentity(db: PersistenceDb): DigitalEmployeeAclIdentityPersistence {
   const identity: DigitalEmployeeAclIdentityPersistence = {
     type: 'employee_job_template',
     async getRevision(resourceId) {
+      const { employeeJobTemplates } = tablesOf(db)
       const columns = aclColumns(employeeJobTemplates)
       const rows = await db
         .select({ aclRevision: columns.aclRevision })
@@ -366,7 +363,8 @@ function employeeJobTemplateAclIdentity(
         .limit(1)
       return rows[0]?.aclRevision ?? 0
     },
-    async loadForMutation(transaction: DatabaseTransaction, resourceId: string) {
+    async loadForMutation(transaction: PersistenceTx, resourceId: string) {
+      const { employeeJobTemplates } = tablesOf(transaction)
       const columns = aclColumns(employeeJobTemplates)
       const row = (
         await transaction
@@ -431,7 +429,7 @@ function employeeJobTemplateAclIdentity(
 // ---------------------------------------------------------------------------
 
 export function createDigitalEmployeeAuthoringPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeAuthoringAdapter {
   const session = databaseSessionFor(db)
   const uniqueError = (error: unknown, code: string, message: string): never => {
@@ -454,15 +452,19 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async ensureTypePackage(input) {
       const { typeId, revision } = input.descriptor.typeRef
-      const registered = async () =>
-        (
+      const registered = async () => {
+        const { employeeTypePackages } = tablesOf(db)
+        return (
           await db
             .select()
             .from(employeeTypePackages)
-            .where(typeWhere(input.descriptor.typeRef))
+            .where(typeWhere(db, input.descriptor.typeRef))
             .limit(1)
         )[0]
-      const assertSameDigest = (existing: typeof employeeTypePackages.$inferSelect) => {
+      }
+      const assertSameDigest = (
+        existing: PersistenceTables['employeeTypePackages']['$inferSelect'],
+      ) => {
         if (existing.descriptorDigest === input.descriptorDigest) return
         throw new ConflictError(
           'employee-type-revision-drift',
@@ -485,6 +487,7 @@ export function createDigitalEmployeeAuthoringPersistence(
         assertSameDigest(existing)
         return
       }
+      const { employeeTypePackages } = tablesOf(db)
       // 启动期不止一份装配（路由层与 worker 各构造一个 service）会在同一拍并发注册同一个类型包：读—插之间
       // 有让出点，第二个 insert 不能撞 (type_id, revision) 主键。ON CONFLICT DO NOTHING 在两个引擎上同形；
       // 插完回读再比对 digest——谁先落库谁算数，漂移仍按同一条规则报错。
@@ -509,6 +512,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listTypePackageRegistrations() {
+      const { employeeTypePackages } = tablesOf(db)
       const rows = await db
         .select({
           typeId: employeeTypePackages.typeId,
@@ -524,6 +528,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listTypePackageDescriptorJsons() {
+      const { employeeTypePackages } = tablesOf(db)
       const rows = await db
         .select({ descriptorJson: employeeTypePackages.descriptorJson })
         .from(employeeTypePackages)
@@ -531,6 +536,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listTypePackages() {
+      const { employeeTypePackages } = tablesOf(db)
       const rows = await db.select().from(employeeTypePackages)
       return rows
         .map(toTypePackage)
@@ -538,12 +544,16 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getTypePackage(ref) {
-      const row = (await db.select().from(employeeTypePackages).where(typeWhere(ref)).limit(1))[0]
+      const { employeeTypePackages } = tablesOf(db)
+      const row = (
+        await db.select().from(employeeTypePackages).where(typeWhere(db, ref)).limit(1)
+      )[0]
       return row === undefined ? null : toTypePackage(row)
     },
 
     async createTool(input) {
-      await db.insert(employeeToolRegistrations).values({
+      const { employeeToolRegistrations } = tablesOf(db)
+      await insertOne(db, employeeToolRegistrations, {
         id: input.id,
         typeId: input.typeRef.typeId,
         typeRevision: input.typeRef.revision,
@@ -564,6 +574,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async updateToolValidation(id, content, receipt, updatedAt) {
+      const { employeeToolRegistrations } = tablesOf(db)
       const updated = await db
         .update(employeeToolRegistrations)
         .set({
@@ -579,6 +590,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getTool(id) {
+      const { employeeToolRegistrations } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -590,6 +602,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getToolAcl(id) {
+      const { employeeToolRegistrations } = tablesOf(db)
       const row = (
         await db
           .select({
@@ -607,6 +620,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listTools(typeRef, workItemRef) {
+      const { employeeToolRegistrations } = tablesOf(db)
       const rows = await db
         .select()
         .from(employeeToolRegistrations)
@@ -625,6 +639,7 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async publishTool(input) {
       await session.transaction(async (tx) => {
+        const { employeeToolRegistrations, employeeToolRegistrationRevisions } = tablesOf(tx)
         const identity = (
           await tx
             .select({ id: employeeToolRegistrations.id })
@@ -638,7 +653,7 @@ export function createDigitalEmployeeAuthoringPersistence(
             .limit(1)
         )[0]
         if (identity === undefined) throw toolNotFound(input.ref.id)
-        await tx.insert(employeeToolRegistrationRevisions).values({
+        await insertOne(tx, employeeToolRegistrationRevisions, {
           toolId: input.ref.id,
           revision: input.ref.revision,
           contentJson: JSON.stringify(input.content),
@@ -656,6 +671,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getToolRevision(ref) {
+      const { employeeToolRegistrationRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -673,6 +689,7 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async retireTool(id, retiredAt) {
       await session.transaction(async (tx) => {
+        const { employeeToolRegistrations, employeeToolRegistrationRevisions } = tablesOf(tx)
         const updated = await tx
           .update(employeeToolRegistrations)
           .set({ retiredAt, updatedAt: retiredAt })
@@ -690,7 +707,8 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async createJobTemplate(input) {
       try {
-        await db.insert(employeeJobTemplates).values({
+        const { employeeJobTemplates } = tablesOf(db)
+        await insertOne(db, employeeJobTemplates, {
           id: input.id,
           typeId: input.typeRef.typeId,
           typeRevision: input.typeRef.revision,
@@ -714,6 +732,7 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async updateJobTemplate(id, name, draft, now) {
       try {
+        const { employeeJobTemplates } = tablesOf(db)
         const updated = await db
           .update(employeeJobTemplates)
           .set({ name, draftJson: JSON.stringify(draft), updatedAt: now })
@@ -731,6 +750,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getJobTemplate(id) {
+      const { employeeJobTemplates } = tablesOf(db)
       const row = (
         await db.select().from(employeeJobTemplates).where(eq(employeeJobTemplates.id, id)).limit(1)
       )[0]
@@ -738,6 +758,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getJobTemplateAcl(id) {
+      const { employeeJobTemplates } = tablesOf(db)
       const row = (
         await db
           .select({
@@ -755,6 +776,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listJobTemplates(typeRef) {
+      const { employeeJobTemplates } = tablesOf(db)
       const rows = await db
         .select()
         .from(employeeJobTemplates)
@@ -769,6 +791,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listJobTemplatesByTypeId(typeId) {
+      const { employeeJobTemplates } = tablesOf(db)
       const rows = await db
         .select()
         .from(employeeJobTemplates)
@@ -787,6 +810,7 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async publishJobTemplate(input) {
       await session.transaction(async (tx) => {
+        const { employeeJobTemplates, employeeJobTemplateRevisions } = tablesOf(tx)
         // 先判 identity：revision 表带 FK，缺席行直接插会以驱动错误而不是 typed 404 收场。
         const identity = (
           await tx
@@ -801,7 +825,7 @@ export function createDigitalEmployeeAuthoringPersistence(
             .limit(1)
         )[0]
         if (identity === undefined) throw jobTemplateNotFound(input.ref.id)
-        await tx.insert(employeeJobTemplateRevisions).values({
+        await insertOne(tx, employeeJobTemplateRevisions, {
           templateId: input.ref.id,
           revision: input.ref.revision,
           contentJson: JSON.stringify(input.content),
@@ -821,6 +845,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getJobTemplateRevision(ref) {
+      const { employeeJobTemplateRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -837,6 +862,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getEmployeeDefinition(id) {
+      const { employeeDefinitions } = tablesOf(db)
       const row = (
         await db.select().from(employeeDefinitions).where(eq(employeeDefinitions.id, id)).limit(1)
       )[0]
@@ -844,6 +870,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getEmployeeDefinitionAcl(id) {
+      const { employeeDefinitions } = tablesOf(db)
       const row = (
         await db
           .select({
@@ -861,6 +888,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async listEmployeeDefinitions(typeRef) {
+      const { employeeDefinitions } = tablesOf(db)
       const where =
         typeRef === undefined
           ? isNull(employeeDefinitions.archivedAt)
@@ -880,6 +908,7 @@ export function createDigitalEmployeeAuthoringPersistence(
             // 先判 identity（同一谓词：存在、类型未变、未归档）：revision / work scope 表带 FK，缺席行直接插会以
             // 驱动错误而不是 typed 404 收场。
             const update = input.definitionMutation
+            const { employeeDefinitions } = tablesOf(tx)
             const current = (
               await tx
                 .select({ id: employeeDefinitions.id })
@@ -903,7 +932,8 @@ export function createDigitalEmployeeAuthoringPersistence(
           }
           if (input.definitionMutation.kind === 'create') {
             const record = input.definitionMutation.record
-            await tx.insert(employeeDefinitions).values({
+            const { employeeDefinitions } = tablesOf(tx)
+            await insertOne(tx, employeeDefinitions, {
               id: record.id,
               name: record.name,
               typeId: record.typeRef.typeId,
@@ -917,7 +947,9 @@ export function createDigitalEmployeeAuthoringPersistence(
               archivedAt: record.archivedAt,
             })
           }
-          await tx.insert(employeeWorkScopeRevisions).values({
+          const { employeeWorkScopeRevisions, employeeDefinitionRevisions, employeeDefinitions } =
+            tablesOf(tx)
+          await insertOne(tx, employeeWorkScopeRevisions, {
             scopeId: input.workScope.ref.id,
             revision: input.workScope.ref.revision,
             typeId: input.workScope.typeRef.typeId,
@@ -928,7 +960,7 @@ export function createDigitalEmployeeAuthoringPersistence(
             createdAt: input.workScope.createdAt,
             createdBy: input.workScope.createdBy,
           })
-          await tx.insert(employeeDefinitionRevisions).values({
+          await insertOne(tx, employeeDefinitionRevisions, {
             employeeId: input.revision.ref.id,
             revision: input.revision.ref.revision,
             contentJson: JSON.stringify(input.revision.content),
@@ -972,6 +1004,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getEmployeeDefinitionRevision(ref) {
+      const { employeeDefinitionRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -988,6 +1021,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getWorkScopeRevision(ref) {
+      const { employeeWorkScopeRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -1014,6 +1048,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getCurrentExecutionPolicy() {
+      const { employeeOsSettings, employeeExecutionPolicyRevisions } = tablesOf(db)
       const current = (
         await db
           .select({ revision: employeeOsSettings.executionPolicyRevision })
@@ -1033,6 +1068,7 @@ export function createDigitalEmployeeAuthoringPersistence(
     },
 
     async getExecutionPolicyRevision(revision) {
+      const { employeeExecutionPolicyRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -1048,6 +1084,7 @@ export function createDigitalEmployeeAuthoringPersistence(
         // 首次启动时 'global' 单例行还不存在，行锁锁不住「同时创建」：advisory lock 让 PG 上并发的两份装配串行
         // 拿到同一个 revision（SQLite 独占事务下 no-op）。
         await session.engine.advisoryLock(tx, 'digital-employee:execution-policy')
+        const { employeeOsSettings, employeeExecutionPolicyRevisions } = tablesOf(tx)
         await session.engine.lockAggregateRoot(
           tx,
           employeeOsSettings,
@@ -1074,7 +1111,7 @@ export function createDigitalEmployeeAuthoringPersistence(
           }
         }
         const revision = (current?.revision ?? 0) + 1
-        await tx.insert(employeeExecutionPolicyRevisions).values({
+        await insertOne(tx, employeeExecutionPolicyRevisions, {
           revision,
           contentJson: JSON.stringify(input.content),
           contentDigest: input.contentDigest,

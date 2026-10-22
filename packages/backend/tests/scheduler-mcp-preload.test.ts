@@ -3,10 +3,11 @@
 // pins the contract on the helper itself (not the full scheduler tick) so
 // red here points squarely at the closure→mcp glue, not at fan-out timing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
@@ -14,7 +15,7 @@ import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup
 import { createLogger } from '../src/util/log'
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   opts: { dependsOn?: string[]; mcp?: string[] } = {},
 ) {
@@ -34,7 +35,7 @@ async function seedAgent(
 }
 
 describeEachProvider('prepareNodeRunInjection — RFC-028 mcp union', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let mcpIdByName: Map<string, string>
   beforeEach(async () => {
     db = harness.db
@@ -64,10 +65,8 @@ describeEachProvider('prepareNodeRunInjection — RFC-028 mcp union', (harness) 
       },
     ].entries()) {
       const id = `mcp-${index + 1}`
-      await db
-        .insert(mcps)
-        .values({ ...mcp, id, config: JSON.stringify(mcp.config) })
-        .run()
+      const { mcps } = tablesOf(db)
+      await insertOne(db, mcps, { ...mcp, id, config: JSON.stringify(mcp.config) })
       mcpIdByName.set(mcp.name, id)
     }
   })
@@ -139,7 +138,7 @@ describeEachProvider('prepareNodeRunInjection — RFC-028 mcp union', (harness) 
     // the agent was created. The save guard blocks deletes via the cascade,
     // so we go to raw DB to bypass it and exercise the final runtime fence.
     await seedAgent(db, 'a', { mcp: [mcpIdByName.get('m-root')!] })
-    const { mcps: mcpsTable } = await import('../src/db/schema')
+    const { mcps: mcpsTable } = tablesOf(db)
     const { eq } = await import('drizzle-orm')
     await db.delete(mcpsTable).where(eq(mcpsTable.id, mcpIdByName.get('m-root')!))
 

@@ -11,12 +11,12 @@
 //
 // 判据：通知归 composition 所有（谁调用都发），且调用方自己的 `afterCommit` 不被吞掉。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents } from '../src/db/schema'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import {
   composeOwnedResourceAclEndpoints,
@@ -40,7 +40,7 @@ const AGENT_FIELDS = {
 }
 
 describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let admin: Actor
   let bobId: string
   let reasons: RevocationReason[]
@@ -91,6 +91,7 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
         ownerUserId: admin.user.id,
       },
     )
+    const { agents } = tablesOf(db)
     const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
     await updateResourceAcl(db, admin, 'agent', row, {
       visibility: 'private',
@@ -111,6 +112,7 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
         ownerUserId: admin.user.id,
       },
     )
+    const { agents } = tablesOf(db)
     const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
     let ownEffect = 0
     await updateResourceAcl(
@@ -137,6 +139,7 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
         ownerUserId: admin.user.id,
       },
     )
+    const { agents } = tablesOf(db)
     const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
     let ownEffect = 0
     await composeOwnedResourceAclEndpoints(composeResourceCatalogFor({ db })).updateResourceAcl(

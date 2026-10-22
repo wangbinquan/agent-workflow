@@ -16,13 +16,14 @@
 // a real daemon: `lifecycle.stuck` scanned every 5 min, same 7 alerts, zero
 // state changes, ERROR every tick since May).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   logAlertSummary,
   runLifecycleInvariants,
@@ -33,7 +34,7 @@ import {
 import { configureLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 import { createLogger } from '../src/util/log'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const GRACE_MS = 24 * 3_600_000
@@ -240,7 +241,7 @@ function parse(captured: string): Captured[] {
 }
 
 async function seedOffendingTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: 'done' | 'awaiting_human',
 ): Promise<string> {
   // done + an output node with no done run → T3 (terminal).
@@ -251,9 +252,10 @@ async function seedOffendingTask(
       : ({ id: 'clr', kind: 'clarify' } as WorkflowNode)
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes: [node], edges: [] }
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -266,7 +268,7 @@ async function seedOffendingTask(
     inputs: '{}',
     startedAt: 0,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: node.id,
@@ -296,7 +298,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
 
   // Detect at t0 (severity=warning), rescan past the 24h grace so the finding
   // promotes to error — the state that made the real daemon log ERROR.
-  async function detectThenPromote(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+  async function detectThenPromote(db: PersistenceDb, taskId: string): Promise<void> {
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db).recoveryAdministration,
       scope: { taskId },

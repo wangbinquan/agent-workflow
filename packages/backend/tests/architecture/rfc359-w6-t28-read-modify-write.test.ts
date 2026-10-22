@@ -272,7 +272,11 @@ interface ChainCall {
 function chainCalls(root: ts.Node): ChainCall[] {
   const out: ChainCall[] = []
   const visit = (node: ts.Node): void => {
-    if (ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node)) {
+    if (
+      ts.isAwaitExpression(node) ||
+      ts.isParenthesizedExpression(node) ||
+      ts.isElementAccessExpression(node)
+    ) {
       visit(node.expression)
       return
     }
@@ -290,13 +294,25 @@ function chainCalls(root: ts.Node): ChainCall[] {
         step !== undefined &&
         ts.isArrowFunction(step) &&
         step.parameters.length === 0 &&
-        !ts.isBlock(step.body)
-      )
-        visit(step.body)
+        step.body !== undefined
+      ) {
+        if (ts.isBlock(step.body)) {
+          const returned = step.body.statements.find(ts.isReturnStatement)
+          if (returned?.expression) visit(returned.expression)
+        } else visit(step.body)
+      }
       return
     }
     if (ts.isCallExpression(node)) {
       const method = calleeName(node)
+      if (
+        method !== null &&
+        ['first', 'queryRows', 'queryWrite'].includes(method) &&
+        node.arguments[0]
+      ) {
+        visit(node.arguments[0])
+        return
+      }
       if (method !== null) out.push({ method, call: node })
       const target = node.expression
       if (ts.isPropertyAccessExpression(target)) visit(target.expression)
@@ -550,6 +566,8 @@ const CORPUS_FILES: readonly string[] = (() => {
 
 /** `<相对 src 的路径>: <未加锁的读—改—写处数>`，按路径字典序。只降不升。 */
 export const READ_MODIFY_WRITE_DEBT: readonly string[] = [
+  // RFC-395 I-b: element-access reads are now recognized; this existing limited-array site is unchanged.
+  'modules/integration/infrastructure/scheduledTaskPersistence.ts: 1',
   'modules/intent/infrastructure/intentApplyEngine.ts: 1',
   // W8-T28：`acceptMessage` 的两处已按 §10.1 取会话聚合根行锁修掉（10 → 8）。剩下 8 处实测不可达，
   // 理由见上面清单里那段与 `tests/rfc359-w8-t28-mcp-runtime-lost-update.test.ts` 的头注释。
@@ -690,6 +708,14 @@ describe('RFC-359 W6-T28 —— 判据的负 fixture（matcher 不咬了 ⇒ 违
     const sites = readModifyWriteSites('fixture-debt.ts', DEBT_FIXTURE)
     expect(sites.map((site) => `${site.table}<-${site.readVariable}`)).toEqual(['cases<-current'])
   }, 30_000)
+
+  test('native first and block-bodied transaction steps preserve the existing matcher', () => {
+    const native = DEBT_FIXTURE.replace(
+      'await tx.select().from(cases).where(eq(cases.id, id)).get()',
+      'await first(tx.select().from(cases).where(eq(cases.id, id)))',
+    )
+    expect(readModifyWriteSites('native.ts', native).map((site) => site.table)).toEqual(['cases'])
+  })
 
   test('正解 A 不被报出：读之前 lockAggregateRoot', () => {
     expect(readModifyWriteSites('fixture-locked.ts', LOCKED_FIXTURE)).toEqual([])

@@ -6,15 +6,10 @@
 // `where state = from` 的 CAS，整段放在统一事务原语里。`sagaDigest` 要三张表的同一快照，走 `serializable`
 // （PG 是 SERIALIZABLE 快照，SQLite 是独占事务）。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentApprovalSagas,
-  developmentMissionLinks,
-  developmentStepJoins,
-  developmentStepRuns,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   ApprovalSagaRow,
@@ -26,11 +21,11 @@ import type {
 import { canonicalDigest } from '../domain/canonicalJson'
 import { canTransitionStepRun, stepRunStateSchema } from '../domain/stepSaga'
 
-function step(row: typeof developmentStepRuns.$inferSelect): StepRunRow {
+function step(row: PersistenceTables['developmentStepRuns']['$inferSelect']): StepRunRow {
   return { ...row, state: stepRunStateSchema.parse(row.state) }
 }
 
-function link(row: typeof developmentMissionLinks.$inferSelect): MissionLinkRow {
+function link(row: PersistenceTables['developmentMissionLinks']['$inferSelect']): MissionLinkRow {
   return {
     ...row,
     completion: row.completion as MissionLinkRow['completion'],
@@ -38,11 +33,13 @@ function link(row: typeof developmentMissionLinks.$inferSelect): MissionLinkRow 
   }
 }
 
-function approval(row: typeof developmentApprovalSagas.$inferSelect): ApprovalSagaRow {
+function approval(
+  row: PersistenceTables['developmentApprovalSagas']['$inferSelect'],
+): ApprovalSagaRow {
   return { ...row, latestStatus: row.latestStatus as ApprovalSagaRow['latestStatus'] }
 }
 
-function join(row: typeof developmentStepJoins.$inferSelect): StepJoinRow {
+function join(row: PersistenceTables['developmentStepJoins']['$inferSelect']): StepJoinRow {
   return {
     ...row,
     mode: row.mode as StepJoinRow['mode'],
@@ -50,12 +47,11 @@ function join(row: typeof developmentStepJoins.$inferSelect): StepJoinRow {
   }
 }
 
-export function createPlaybookSagaPersistence(
-  db: ProviderNeutralDatabase,
-): PlaybookSagaPersistence {
+export function createPlaybookSagaPersistence(db: PersistenceDb): PlaybookSagaPersistence {
   const session = databaseSessionFor(db)
   return {
     async claimStepRun(input) {
+      const { developmentStepRuns } = tablesOf(db)
       const inserted = await db
         .insert(developmentStepRuns)
         .values({
@@ -95,12 +91,14 @@ export function createPlaybookSagaPersistence(
       return { created: false, row: step(existing) }
     },
     async getStepRun(id) {
+      const { developmentStepRuns } = tablesOf(db)
       const row = (
         await db.select().from(developmentStepRuns).where(eq(developmentStepRuns.id, id)).limit(1)
       )[0]
       return row === undefined ? null : step(row)
     },
     async listStepRuns(missionId) {
+      const { developmentStepRuns } = tablesOf(db)
       return (
         await db
           .select()
@@ -110,6 +108,7 @@ export function createPlaybookSagaPersistence(
       ).map(step)
     },
     async findStepRunByAction(actionRunId) {
+      const { developmentStepRuns } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -121,6 +120,7 @@ export function createPlaybookSagaPersistence(
     },
     async updateStepRun(input) {
       return await session.transaction(async (tx) => {
+        const { developmentStepRuns } = tablesOf(tx)
         const current = (
           await tx
             .select({ state: developmentStepRuns.state })
@@ -154,6 +154,7 @@ export function createPlaybookSagaPersistence(
     },
 
     async claimMissionLink(input) {
+      const { developmentMissionLinks } = tablesOf(db)
       const inserted = await db
         .insert(developmentMissionLinks)
         .values({
@@ -184,6 +185,7 @@ export function createPlaybookSagaPersistence(
       return { created: false, row: link(existing) }
     },
     async getMissionLinkByStepRun(stepRunId) {
+      const { developmentMissionLinks } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -194,6 +196,7 @@ export function createPlaybookSagaPersistence(
       return row === undefined ? null : link(row)
     },
     async findParentMissionLink(childMissionId) {
+      const { developmentMissionLinks } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -204,6 +207,7 @@ export function createPlaybookSagaPersistence(
       return row === undefined ? null : link(row)
     },
     async listMissionLinks(missionId) {
+      const { developmentMissionLinks } = tablesOf(db)
       return (
         await db
           .select()
@@ -213,6 +217,7 @@ export function createPlaybookSagaPersistence(
       ).map(link)
     },
     async observeMissionLink(input) {
+      const { developmentMissionLinks } = tablesOf(db)
       await db
         .update(developmentMissionLinks)
         .set({
@@ -229,6 +234,7 @@ export function createPlaybookSagaPersistence(
     },
 
     async claimApprovalSaga(input) {
+      const { developmentApprovalSagas } = tablesOf(db)
       const inserted = await db
         .insert(developmentApprovalSagas)
         .values({
@@ -259,6 +265,7 @@ export function createPlaybookSagaPersistence(
       return { created: false, row: approval(existing) }
     },
     async getApprovalSaga(id) {
+      const { developmentApprovalSagas } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -269,6 +276,7 @@ export function createPlaybookSagaPersistence(
       return row === undefined ? null : approval(row)
     },
     async getApprovalSagaByStepRun(stepRunId) {
+      const { developmentApprovalSagas } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -279,6 +287,7 @@ export function createPlaybookSagaPersistence(
       return row === undefined ? null : approval(row)
     },
     async listApprovalSagas(missionId) {
+      const { developmentApprovalSagas } = tablesOf(db)
       return (
         await db
           .select()
@@ -288,6 +297,7 @@ export function createPlaybookSagaPersistence(
       ).map(approval)
     },
     async recordApprovalSubmitted(input) {
+      const { developmentApprovalSagas } = tablesOf(db)
       await db
         .update(developmentApprovalSagas)
         .set({
@@ -301,6 +311,7 @@ export function createPlaybookSagaPersistence(
     },
     async recordApprovalObservation(input) {
       const settled = ['approved', 'rejected', 'expired', 'unavailable'].includes(input.status)
+      const { developmentApprovalSagas } = tablesOf(db)
       await db
         .update(developmentApprovalSagas)
         .set({
@@ -316,6 +327,7 @@ export function createPlaybookSagaPersistence(
     },
 
     async upsertJoinMember(input) {
+      const { developmentStepJoins } = tablesOf(db)
       await db
         .insert(developmentStepJoins)
         .values({
@@ -345,6 +357,7 @@ export function createPlaybookSagaPersistence(
         })
     },
     async listJoinMembers(missionId, groupId) {
+      const { developmentStepJoins } = tablesOf(db)
       return (
         await db
           .select()
@@ -359,6 +372,7 @@ export function createPlaybookSagaPersistence(
       ).map(join)
     },
     async settleJoin(missionId, groupId, result, now) {
+      const { developmentStepJoins } = tablesOf(db)
       await db
         .update(developmentStepJoins)
         .set({ settledResult: result, updatedAt: now })
@@ -371,6 +385,8 @@ export function createPlaybookSagaPersistence(
     },
     async sagaDigest(missionId) {
       return await session.serializable(async (tx) => {
+        const { developmentStepRuns, developmentMissionLinks, developmentApprovalSagas } =
+          tablesOf(tx)
         const steps = await tx
           .select({
             id: developmentStepRuns.id,

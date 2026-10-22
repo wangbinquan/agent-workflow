@@ -9,6 +9,7 @@
 //        停不掉也不把终止本身报成失败。
 // 另锁 D 侧的产物存档：同一段正文只存一行（AC-9），sink 按工作区根改写路径（R2）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -21,7 +22,6 @@ import {
   scriptedPort,
   seedReaction,
 } from './helpers/rfc368ReactionFixture'
-import { employeeReactionArtifacts } from '@/db/schema'
 import type { ReactionArtifactPersistence } from '@/modules/digital-employee/application/ports/reactionArtifacts'
 import { composeReactionArtifactPorts } from '@/modules/digital-employee/composition/reactionArtifacts'
 import type {
@@ -230,7 +230,8 @@ describe('RFC-368 T10/T12/T14 —— Reaction 结算', () => {
       const crossKind = await store.put('diagnostics', text, 3)
       expect(first).toBe(`retry-feedback:${text.digest}`)
       expect(second).toBe(first)
-      expect(await harness.db.select().from(employeeReactionArtifacts).all()).toHaveLength(1)
+      const { employeeReactionArtifacts } = tablesOf(harness.db)
+      expect(await harness.db.select().from(employeeReactionArtifacts)).toHaveLength(1)
       expect(await store.read(first)).toBe('e: d')
       expect(await store.read(crossKind)).toBe('e: d')
       expect(await store.read('not-a-ref')).toBeNull()

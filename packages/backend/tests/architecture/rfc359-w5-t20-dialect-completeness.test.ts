@@ -1,67 +1,4 @@
-// RFC-359 W5-T20 —— **方言表完备性**：凡业务代码用到的方言点，方言表里必须有声明。
-//
-// # 为什么这条守卫能存在（本仓的 PG 是怎么跑起来的）
-//
-// 本仓的 PostgreSQL 客户端是 drizzle 的 **sqlite-proxy**（`db/query.ts` 的
-// `ProviderNeutralDatabase = BaseSQLiteDatabase<'sync' | 'async', …>`）。也就是说：**查询构造器
-// 渲染的是 SQLite 方言的 SQL 文本**，再经 `platform/persistence/postgresqlSql.ts` 的
-// `compilePostgresqlSql` 做一次**极窄**的改写（`?` → `$n`、ON CONFLICT 目标列去限定、
-// PRAGMA/VACUUM/ATTACH fail-closed），然后原样交给 PG。这条链路没有第二个翻译层。
-//
-// 推论：**一句 SQL 里出现的每个函数名 / 每个语法构造，必须在两个引擎上同名同参地存在**，
-// 否则它在 SQLite 上跑得好好的，在 PG 上是 `42883 undefined_function` / `42601 syntax_error`
-// ——而且只在真跑到那条语句时才炸。这正是 RFC-359 对账里的「C 类方言陷阱」。
-//
-// # 方言表 = 两张**从生产代码派生**的声明面
-//
-//   ① **能力矩阵** `platform/persistence/capabilities.ts` —— provider 差异的容身处：实现只说
-//      「锁这个聚合根」「NULL 排最后」「大小写不敏感搜索」，矩阵按引擎各渲染一次最优 SQL。
-//   ② **PG 函数 shim** `platform/persistence/schema/postgresqlPlan.ts` 的 bootstrap 语句 —— 给
-//      PG 装上一组**同名同参**的 SQLite 标量函数（`unixepoch` / `instr` / `hex` / `max(a,b)` /
-//      `json_valid` / `json_type` / `json_extract`），让同一句 SQL 两边都认。
-//      ⚠️ `docs/dev-gotchas.md`：shim **同名同参、返回词汇表可以完全不同**（`json_type` 转发
-//      `jsonb_typeof`，两套词汇几乎不重叠）。所以本守卫只判「声明在不在」，语义对齐是
-//      `rfc357-provider-portability` 那一档的事——两条互补，缺一不可。
-//
-// # 判据（四条，都窄）
-//
-//   **J1 渲染权垄断**：方言构造（`for update` / `nulls last` / `ilike` / `INDEXED BY` / `PRAGMA` …）
-//   只允许出现在 `DIALECT_RENDERERS` 具名的渲染器文件里——那里它按引擎各写一次。语料里其它
-//   任何地方出现，逐条进 exact 账本 `RAW_DIALECT_DEBT`（逐字相等、只降不升、每条写明理由与清偿波次）。
-//   **不采纳的宽松版**：「矩阵里存在同类能力方法即算已声明」——那样业务代码裸写 `for update`
-//   也算绿，账本永远为空，守卫零预言力。
-//
-//   **J2 函数词汇闭集**：语料的 raw SQL 里出现的每个函数名，必须 ∈ 可移植核心
-//   `PORTABLE_SQL_FUNCTIONS`（具名 + 逐条理由）∪ 从 `postgresqlSchema.ts` **派生**的 shim 集
-//   ∪ J1 词汇表（那类由 J1 报）∪ 渲染器文件内部。否则进 `UNSHIMMED_FUNCTION_DEBT`。
-//   今天该账本为空——它挡的是未来：谁写下 `strftime(` / `iif(` / `json_each(` / `group_concat(`
-//   当场红，而不是等 PG 上某条冷路径 42883。
-//
-//   **J3 shim 集合逐字钉死**：派生出来的 shim 名字集合与 `POSTGRESQL_FUNCTION_SHIMS` 逐字相等。
-//   删掉一个 shim（而业务还在用）或悄悄加一个，都必须留下一次有署名的提交。
-//
-//   **J4 矩阵自证**：词汇表里认领了能力方法的构造，那些方法名必须真的是 `EngineCapabilities`
-//   的成员（从接口声明派生），且该构造必须**真的出现在矩阵文件里**——矩阵哪天不再渲染它，
-//   先红在这条前提上，而不是让 J1 的账本安静地变绿。
-//
-// # 语料
-//
-// `tests/architecture/postgresqlSurface.ts` 的**类型可达**派生（不是文件名前缀），与 RFC-349
-// 三条陷阱守卫共用。
-//
-// 2026-09-07（RFC-359 W7 第二波）补掉了原来的第一条盲区：`BUILDS_SQL` 此前只认 `sql\`` 与
-// `.from(` 等构造痕迹，**整篇只用 `sql.raw('…')` 的文件一个都不进语料**——而 raw 文本恰恰完全
-// 绕开查询构造器，最该被看住。加一条 `sql.raw(` 痕迹后语料 275 → 277，四条共用守卫里只有本文件
-// 的 J1 多出一条真债（`resource-catalog` 的 `repositorySupport.ts` 手搓可串行化事务，已进
-// `RAW_DIALECT_DEBT` 并写明 clearedBy）；其余三条陷阱守卫零新增。
-//
-// **剩余已知盲区**（不在本守卫职权内，记在这里免得被误读成已覆盖）：
-//   · `db/schema.ts` 的 CHECK / DEFAULT 表达式（`json_valid` / `hex` / `unixepoch`）不经查询构造器，
-//     走 `postgresqlSchema.ts` 的 DDL 投影，归 W5-T19g 的「迁移后 sqlite_master vs 逻辑契约」对账。
-//   · `connection.unsafe(…)` 直连 Bun.SQL 的迁移 / 导出机件（`postgresqlMigrator` /
-//     `postgresqlLogicalSource` / `postgresqlLogicalTargetInvariants`）：它们**本来就是 PG 专属工具**，
-//     没有 SQLite 孪生，不是「两个引擎上跑的执行面」。
-
+// RFC-395 I-b: native provider queries; business SQL may not rely on historical PostgreSQL shims.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -112,6 +49,13 @@ interface DialectConstruct {
  * 命中数为 0 的条目**不是**过期豁免、不清理：它们挡的是未来第一次写下该构造的那个人。
  */
 const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
+  {
+    id: 'substring-position',
+    pattern: /\b(?:instr|strpos)\s*\(/iu,
+    dialect: 'divergent',
+    capability: ['instr'],
+    why: 'RFC-395 I-b：SQLite instr 与 PostgreSQL strpos 由能力矩阵渲染，业务 SQL 不再依赖同名 shim。',
+  },
   {
     id: 'for-update',
     pattern: /\bfor\s+update\b/iu,
@@ -166,7 +110,7 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     pattern: /\bpragma\b/iu,
     dialect: 'sqlite-only',
     capability: ['reclaimScrubbedStorage'],
-    why: 'SQLite 运维语句；compilePostgresqlSql 对它 fail-closed，走到 PG 就是硬失败。',
+    why: 'SQLite 运维语句；assertPostgresqlBusinessStatement 拒绝该操作，走到 PG 就是硬失败。',
   },
   {
     id: 'vacuum',
@@ -278,7 +222,7 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     pattern: /\b(?:attach|detach)\s+database\b/iu,
     dialect: 'sqlite-only',
     capability: [],
-    why: 'SQLite 多库挂载；compilePostgresqlSql 对它 fail-closed。',
+    why: 'SQLite 多库挂载；PostgreSQL 连接分类器拒绝该物理操作。',
   },
   {
     id: 'limit-comma',
@@ -297,7 +241,9 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
  * 别让它变成停车场。
  */
 const PORTABLE_SQL_FUNCTIONS: Readonly<Record<string, string>> = {
+  max: '单参数 SQL 聚合；双参数标量必须经 greatest 能力。',
   avg: 'SQL-92 聚合，两侧同名同参。（返回类型差异——PG 对整型列返回 numeric、经 Bun.SQL 是字符串——由 rfc349-postgresql-numeric-projection 那条守卫负责，不在方言表职权内。）',
+  nullif: 'SQL-92 标量，两个引擎原生比较并返回 NULL。',
   coalesce: 'SQL-92 标量，两侧同名同参同义。',
   count: 'SQL-92 聚合，两侧同名同参。（int8 归一同 avg，另有守卫。）',
   length: 'SQL-92 标量，两侧对文本都按字符计。（blob/bytea 上都按字节，语义同样对齐。）',
@@ -548,7 +494,7 @@ export function sqlFunctionNames(path: string, text: string): string[] {
   for (const fragment of sqlFragments(path, text)) {
     const ctes = new Set<string>()
     for (const match of fragment.matchAll(
-      /\b(?:with\s+(?:recursive\s+)?|,\s*)([a-z_][a-z0-9_]*)\s*(?:\([^)]*\))?\s+as\s*\(/giu,
+      /\b([a-z_][a-z0-9_]*)\s*(?:\([^)]*\))?\s+as\s+(?:materialized\s+|not\s+materialized\s+)?\(/giu,
     )) {
       ctes.add(match[1]!.toLowerCase())
     }
@@ -559,6 +505,34 @@ export function sqlFunctionNames(path: string, text: string): string[] {
     }
   }
   return [...names].sort()
+}
+
+/** RFC-395 I-b: distinguish the portable aggregate from SQLite's scalar MAX. */
+export function scalarMaxCalls(path: string, text: string): number {
+  let count = 0
+  for (const fragment of sqlFragments(path, text))
+    for (const match of fragment.matchAll(/\bmax\s*\(/giu)) {
+      let depth = 1
+      let quote = ''
+      for (let index = match.index! + match[0].length; index < fragment.length && depth; index++) {
+        const ch = fragment[index]!
+        if (quote) {
+          if (ch === quote) {
+            if (fragment[index + 1] === quote) index++
+            else quote = ''
+          }
+          continue
+        }
+        if (ch === "'" || ch === '"') quote = ch
+        else if (ch === '(') depth++
+        else if (ch === ')') depth--
+        else if (ch === ',' && depth === 1) {
+          count++
+          break
+        }
+      }
+    }
+  return count
 }
 
 /** J3：从 `postgresqlSchema.ts` 的 bootstrap 语句派生出来的 PG shim 函数名。 */
@@ -617,9 +591,9 @@ for (const file of SURFACE) {
     continue // 渲染器按引擎各写一次，是方言点的家。
   }
   observedDebt.push(...findings)
+  if (scalarMaxCalls(file.path, file.text)) unshimmed.add(`${file.path}: scalar max()`)
   for (const name of functions) {
     if (PORTABLE_SQL_FUNCTIONS[name] !== undefined) continue
-    if (POSTGRESQL_FUNCTION_SHIMS[name] !== undefined) continue
     // 已被方言词汇表认领的函数（greatest / pg_advisory_*）由 J1 报，这里不重复记账。
     if (DIALECT_CONSTRUCTS.some((construct) => construct.pattern.test(`${name}(`))) continue
     unshimmed.add(`${file.path}: ${name}()`)
@@ -738,14 +712,10 @@ describe('RFC-359 W5-T20 —— J1 渲染权垄断', () => {
 })
 
 describe('RFC-359 W5-T20 —— J2 函数词汇闭集', () => {
-  test('语料里的每个 SQL 函数都在方言表里有声明（可移植核心 / PG shim / 矩阵能力项）', () => {
+  test('业务 SQL 只使用可移植核心或矩阵能力，不依赖保留的 schema shim', () => {
     expect(
       [...unshimmed].sort(),
-      '这些函数既不在可移植核心、也没有 PG shim、也不是矩阵渲染的能力项。' +
-        '本仓的 PG 客户端是 drizzle sqlite-proxy：查询构造器发出的就是这段文本，' +
-        'PG 上没有同名同参的函数 ⇒ 运行到该语句时 42883，SQLite 上却一路绿。' +
-        '**正确动作**：换成可移植写法；确实需要就去 postgresqlSchema.ts 加一条同名 shim（并写清它转发到什么），' +
-        '或给能力矩阵加一项按引擎渲染。',
+      '业务 SQL 只能使用可移植函数或 EngineCapabilities。旧 shim 只为现存 CHECK/default 保留到新 baseline；不能给业务调用提供豁免。',
     ).toEqual([...UNSHIMMED_FUNCTION_DEBT].sort())
   })
 
@@ -767,13 +737,20 @@ describe('RFC-359 W5-T20 —— J2 函数词汇闭集', () => {
         `${name} 被当成了已声明的方言点——它既不可移植也没 shim`,
       ).toBe(true)
     }
-    // 反向：已声明的那些必须被判为「已覆盖」，否则判据宽到会误报。
-    for (const name of ['instr', 'json_extract', 'unixepoch', 'coalesce', 'lower']) {
+    for (const name of ['instr', 'json_extract', 'json_valid', 'json_type', 'unixepoch', 'hex']) {
+      expect(PORTABLE_SQL_FUNCTIONS[name], name + ' cannot be used in business SQL').toBeUndefined()
       expect(
-        PORTABLE_SQL_FUNCTIONS[name] !== undefined || POSTGRESQL_FUNCTION_SHIMS[name] !== undefined,
-        `${name} 明明在方言表里，却被判成未声明`,
-      ).toBe(true)
+        POSTGRESQL_FUNCTION_SHIMS[name],
+        name + ' remains until baseline replacement',
+      ).toBeDefined()
     }
+    expect(scalarMaxCalls('store.ts', 'const q = sql`select max(coalesce(a, 0), b)`')).toBe(1)
+    expect(
+      scalarMaxCalls(
+        'store.ts',
+        'const q = sql`select max(coalesce(a, 0)), max(case when x then 1 else 0 end)`',
+      ),
+    ).toBe(0)
   })
 })
 

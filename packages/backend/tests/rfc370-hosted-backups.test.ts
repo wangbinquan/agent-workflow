@@ -3,12 +3,13 @@
 // makes the catalog row ready; workspaces are refused (C10); prune and failure
 // only release catalog references (maintenance unpins behind the horizon); the
 // lightweight verify is catalog + `stat`, never a download.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { hostedDatabaseBackups, hostedObjectPublications } from '@/db/schema'
 import { createHostedBackupCatalog } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupCatalog'
 import {
   HOSTED_BACKUP_OWNER,
@@ -106,14 +107,19 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
       failArchives: () => {
         failArchive = true
       },
-      rows: () => harness.db.select().from(hostedDatabaseBackups),
-      publication: async (id: string) =>
-        (
+      rows: () => {
+        const { hostedDatabaseBackups } = tablesOf(harness.db)
+        return harness.db.select().from(hostedDatabaseBackups)
+      },
+      publication: async (id: string) => {
+        const { hostedObjectPublications } = tablesOf(harness.db)
+        return (
           await harness.db
             .select()
             .from(hostedObjectPublications)
             .where(eq(hostedObjectPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, id)))
-        )[0],
+        )[0]
+      },
     }
   }
 
@@ -151,7 +157,8 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
 
   test('one building slot: a concurrent request is refused, a failed archive releases its slot', async () => {
     const f = fixture()
-    await harness.db.insert(hostedDatabaseBackups).values({
+    const { hostedDatabaseBackups } = tablesOf(harness.db)
+    await insertOne(harness.db, hostedDatabaseBackups, {
       id: '01a13e6d-3e00-7000-9e3c-0000000000c1',
       epoch: 1,
       kind: 'manual',
@@ -179,7 +186,8 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
     const restoreSource = '01a13e6d-3e00-7000-9e3c-0000000000d1'
     const f = fixture({ protectedIds: [restoreSource] })
     const ready = async (id: string, kind: 'manual' | 'scheduled', createdAt: number) => {
-      await harness.db.insert(hostedDatabaseBackups).values({
+      const { hostedDatabaseBackups, hostedObjectPublications } = tablesOf(harness.db)
+      await insertOne(harness.db, hostedDatabaseBackups, {
         id,
         epoch: 1,
         kind,
@@ -194,7 +202,7 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
         createdAt,
         updatedAt: createdAt,
       })
-      await harness.db.insert(hostedObjectPublications).values({
+      await insertOne(harness.db, hostedObjectPublications, {
         id: hostedPublicationId(HOSTED_BACKUP_OWNER, id),
         owner: HOSTED_BACKUP_OWNER,
         logicalKey: id,
@@ -254,6 +262,7 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
     await expect(f.catalog.verify(row!.id)).rejects.toMatchObject({
       code: 'backup-archive-unavailable',
     })
+    const { hostedDatabaseBackups } = tablesOf(harness.db)
     await harness.db
       .update(hostedDatabaseBackups)
       .set({ state: 'released' })

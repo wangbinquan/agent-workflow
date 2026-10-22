@@ -56,7 +56,7 @@ import { ValidationError, ForbiddenError } from '@/util/errors'
 import { join } from 'node:path'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { ResourceAcl, UpdateResourceAclBody } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { Logger } from '@/util/log'
 import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
@@ -94,7 +94,7 @@ export interface DaemonDigitalEmployeeInput {
   readonly verificationCommands?: Parameters<typeof createGraphDevelopmentVerificationBinding>[0]
   readonly repositoryRevisionContent?: Parameters<typeof composeGraphDevelopment>[0]['content']
   readonly reviewReader?: Parameters<typeof createCommittedHumanInputQueries>[0]['reviewReader']
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly configuration: ApplicationConfigurationQueries
   readonly log: Pick<Logger, 'info' | 'warn'>

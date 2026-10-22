@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
 import {
   selectedResourcePackageRecoveryEffects,
@@ -9,9 +11,8 @@ import { errorValue } from './resourcePackageMaintenancePaths'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { skills } from '@/db/schema'
 import { skillOperationStateQuery } from './skillOperationStateQuery'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
@@ -76,7 +77,7 @@ function parseArtifacts(json: string): readonly LegacyArtifact[] {
 }
 
 async function publishStagedVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   artifact: LegacySkillVersionArtifact,
   factory: ResourcePackageRecoveryEffectsFactory,
@@ -96,15 +97,17 @@ async function publishStagedVersion(
     throw new Error('resource-package-skill-version-artifact-path-mismatch')
   }
 
+  const { skills } = tablesOf(db)
   // RFC-359 W9（判据缺口 13b）：换盘之前先问账面还认不认这一代。崩溃到收敛之间用户可能又发布了
   // 一版、或把技能删了；此前这里从头到尾不读 `content_version`，于是无条件 `swapInStaged` 会把
   // **陈旧代际**换回 live、或把**已删技能的目录复活**成一棵没有数据库行的孤儿树，两者都无声无息。
   // 判定与 PostgreSQL 侧共用中立的 `resourcePackageSkillRecoveryDisposition`（纯算术，无引擎差异）。
-  const current = await db
-    .select({ contentVersion: skills.contentVersion })
-    .from(skills)
-    .where(eq(skills.id, staged.skillId))
-    .get()
+  const current = await first(
+    db
+      .select({ contentVersion: skills.contentVersion })
+      .from(skills)
+      .where(eq(skills.id, staged.skillId)),
+  )
   const disposition = resourcePackageSkillRecoveryDisposition({
     currentContentVersion: current?.contentVersion ?? null,
     artifactVersion: staged.newVersion,
@@ -144,7 +147,7 @@ async function publishStagedVersion(
 }
 
 async function compensateArtifact(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   pluginsDir: string,
   artifact: LegacyArtifact,
@@ -167,6 +170,7 @@ async function compensateArtifact(
         effects.removeDirectory(skillDir),
       )
       await databaseSessionFor(db).transaction(async (tx) => {
+        const { skills } = tablesOf(tx)
         await tx.delete(skills).where(eq(skills.id, artifact.skillId))
         await abandonOperation(tx, artifact.opId)
       })
@@ -198,7 +202,7 @@ async function compensateArtifact(
 }
 
 async function rollForwardArtifacts(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly artifacts: readonly LegacyArtifact[]
   readonly effectsFactory: ResourcePackageRecoveryEffectsFactory
@@ -215,7 +219,7 @@ async function rollForwardArtifacts(input: {
         continue
       }
       if (artifact.kind === 'plugin-install') {
-        const row = await pluginCachedPathQuery(input.db, artifact).get()
+        const row = await first(pluginCachedPathQuery(input.db, artifact))
         if (
           row !== undefined &&
           !(await withResourcePackageRecoveryEffects(input.effectsFactory, (effects) =>
@@ -235,7 +239,7 @@ async function rollForwardArtifacts(input: {
       // 但同一段代码只要接上 PostgreSQL（或换成中立设施），`operation` 就成了 Promise，
       // `operation?.active === 1` 恒 false、`operation?.phase !== 'done'` 恒真 —— 静默改走告警分支。
       // 同函数上一处读 `plugins` 一直是 await 的，这一处是漏的。
-      const operation = await skillOperationStateQuery(input.db, opId).get()
+      const operation = await first(skillOperationStateQuery(input.db, opId))
       if (operation?.active === 1) {
         pendingVersions.push(artifact)
         continue
@@ -263,7 +267,7 @@ async function rollForwardArtifacts(input: {
 }
 
 export function createSqliteResourcePackageApplyArtifactRecovery(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
   readonly log?: ResourcePackageApplyMaintenanceLog

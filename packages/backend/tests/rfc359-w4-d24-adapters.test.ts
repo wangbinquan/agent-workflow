@@ -9,26 +9,28 @@
 // **并发 claimNew 恰好一个成功、另一个是 owner-conflict**——它防重复认领靠的是主键
 // `(protocol, session_id)` + 能力矩阵的唯一冲突映射，不是靠隔离级别。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const DIGEST = 'a'.repeat(64)
 
-async function seedRunningRun(db: ProviderNeutralDatabase): Promise<{
+async function seedRunningRun(db: PersistenceDb): Promise<{
   taskId: string
   nodeId: string
   runId: string
 }> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'lease task',
     workflowId,
@@ -43,13 +45,13 @@ async function seedRunningRun(db: ProviderNeutralDatabase): Promise<{
   })
   const runId = ulid()
   const nodeId = 'n1'
-  await db.insert(nodeRuns).values({ id: runId, taskId, nodeId, status: 'running' })
+  await insertOne(db, nodeRuns, { id: runId, taskId, nodeId, status: 'running' })
   return { taskId, nodeId, runId }
 }
 
 describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) => {
   test('认领后租约与 node run 双向落定；同一个 session 再认领是 owner-conflict', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const operations = createRuntimeSessionLeaseOperations(db)
     const { taskId, nodeId, runId } = await seedRunningRun(db)
     const sessionId = `sess-${ulid().slice(-8).toLowerCase()}`
@@ -69,6 +71,7 @@ describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) =>
     const lease = await operations.load('opencode', sessionId)
     expect(lease?.taskId).toBe(taskId)
     expect(lease?.leaseNodeRunId).toBe(runId)
+    const { nodeRuns } = tablesOf(db)
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)).limit(1))[0]
     expect(run?.opencodeSessionId).toBe(sessionId)
 
@@ -92,7 +95,7 @@ describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) =>
   })
 
   test('并发 claimNew 恰好一个成功，另一个以 owner-conflict 收场（主键 + 冲突映射，不靠隔离级别）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const operations = createRuntimeSessionLeaseOperations(db)
     const sessionId = `race-${ulid().slice(-8).toLowerCase()}`
     const a = await seedRunningRun(db)
@@ -125,6 +128,7 @@ describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) =>
     expect(lease).not.toBeUndefined()
     const winner = [a, b].find((seed) => seed.taskId === lease?.taskId)
     expect(winner).not.toBeUndefined()
+    const { nodeRuns } = tablesOf(db)
     const run = (
       await db
         .select()
@@ -145,7 +149,7 @@ describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) =>
   })
 
   test('释放会清空租约的持有列，但保留行；丢弃会整行删除', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const operations = createRuntimeSessionLeaseOperations(db)
     const { taskId, nodeId, runId } = await seedRunningRun(db)
     const sessionId = `rel-${ulid().slice(-8).toLowerCase()}`

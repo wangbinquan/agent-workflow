@@ -28,6 +28,8 @@
 //   T6  workspace-GC：终结事务的原子性。墓碑（`workspace_pruning_at`）被抹掉后 CAS 命中 0 行，
 //       整笔回滚——`workspace_pruned_at` 仍为空、认领仍停在 io-complete。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -36,14 +38,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  taskFeedback,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -80,17 +75,18 @@ function id(prefix: string): string {
 
 /** `services/*` 与 `platform/persistence/sqlite/*` 的形参仍写着 legacy 的 bun:sqlite 句柄类型；
  *  本轮之后它们的事务面是中立的，两个引擎上跑的是同一段代码。 */
-function legacy(db: ProviderNeutralDatabase): DbClient {
+function legacy(db: PersistenceDb): DbClient {
   return db as unknown as DbClient
 }
 
-function store(db: ProviderNeutralDatabase): DrizzleTerminalMaintenancePersistence {
+function store(db: PersistenceDb): DrizzleTerminalMaintenancePersistence {
   return new DrizzleTerminalMaintenancePersistence(db)
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const workflowId = id('wf')
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -102,12 +98,13 @@ async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const taskId = (over.id as string | undefined) ?? id('task')
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -128,9 +125,10 @@ async function seedTask(
 }
 
 async function claimRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   claimId: string,
 ): Promise<{ state: string; revision: number } | undefined> {
+  const { taskExecutionMaintenanceClaims } = tablesOf(db)
   return (
     await db
       .select({
@@ -143,7 +141,8 @@ async function claimRow(
   )[0]
 }
 
-async function taskExists(db: ProviderNeutralDatabase, taskId: string): Promise<boolean> {
+async function taskExists(db: PersistenceDb, taskId: string): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   return (
     (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)).length ===
     1
@@ -180,7 +179,9 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
       startedAt: NOW - 1_000,
       branchStartedAt: NOW - 1_000,
     })
-    await db.insert(taskFeedback).values({
+    const { taskFeedback, tasks, taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } =
+      tablesOf(db)
+    await insertOne(db, taskFeedback, {
       id: id('fb'),
       taskId: childId,
       bodyMd: 'feedback that must not outlive its task',
@@ -237,6 +238,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     })
     // 认领推进到 io-complete 之后，紧接着就是 acquire()——等到这一步再动任务行。
     for (let attempt = 0; attempt < 200; attempt += 1) {
+      const { taskExecutionMaintenanceClaims } = tablesOf(db)
       const rows = await db
         .select({ state: taskExecutionMaintenanceClaims.state })
         .from(taskExecutionMaintenanceClaims)
@@ -244,6 +246,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
       await settle(1)
     }
     await settle(2)
+    const { tasks, taskExecutionMaintenanceClaims } = tablesOf(db)
     // 并发的续跑把任务翻回非终态：删除事务里的复检必须看到它。
     await db.update(tasks).set({ status: 'running', finishedAt: null }).where(eq(tasks.id, taskId))
     release()
@@ -293,6 +296,7 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
 
     expect(await taskExists(db, rootId)).toBe(false)
     expect(await taskExists(db, childId)).toBe(false)
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
     expect(
       await db
         .select({
@@ -363,6 +367,7 @@ describeEachProvider('RFC-359 W7 —— workspace GC 终结事务迁离 dbTxSync
       await workspaceMaintenanceForTest(legacy(db)).finalizeClaimedWorkspace(taskId, NOW + 1),
     ).toBeUndefined()
     expect(existsSync(dir)).toBe(false)
+    const { tasks, taskExecutionMaintenanceClaims } = tablesOf(db)
     const row = (
       await db
         .select({ prunedAt: tasks.workspacePrunedAt })
@@ -401,6 +406,7 @@ describeEachProvider('RFC-359 W7 —— workspace GC 终结事务迁离 dbTxSync
     })
     const ioComplete = await store(db).transition({ claim, to: 'io-complete', now: NOW + 1 })
     expect(ioComplete.revision).toBe(2)
+    const { tasks } = tablesOf(db)
     // 并发的 lifecycle 修复抹掉了墓碑：终结事务的 CAS 必须落空。
     await db.update(tasks).set({ workspacePruningAt: null }).where(eq(tasks.id, taskId))
 

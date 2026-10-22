@@ -1,9 +1,9 @@
 // RFC-349 — projection for bounded code work-item history. RFC-359 W4-B5：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, count, desc, eq, lt, type SQL } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   decodeCursor,
   deriveRoundStatus,
@@ -20,7 +20,8 @@ import type {
 } from '../public/queries'
 
 // 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。
-function workItemFields() {
+function workItemFields(db: object) {
+  const { codeWorkItems } = tablesOf(db)
   return {
     id: codeWorkItems.id,
     capability: codeWorkItems.capability,
@@ -32,7 +33,8 @@ function workItemFields() {
   }
 }
 
-function roundFields() {
+function roundFields(db: object) {
+  const { codeWorkRounds } = tablesOf(db)
   return {
     id: codeWorkRounds.id,
     roundSeq: codeWorkRounds.roundSeq,
@@ -44,7 +46,8 @@ function roundFields() {
   }
 }
 
-function stageFields() {
+function stageFields(db: object) {
+  const { codeRoundStages } = tablesOf(db)
   return {
     stageName: codeRoundStages.stageName,
     stageSeq: codeRoundStages.stageSeq,
@@ -57,10 +60,11 @@ function stageFields() {
 }
 
 async function projectRounds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workItemId: string,
   limit: number,
 ): Promise<{ rounds: CodeRoundProjection[]; hidden: number }> {
+  const { codeWorkRounds, codeRoundStages } = tablesOf(db)
   const [counted] = await db
     .select({ n: count() })
     .from(codeWorkRounds)
@@ -68,7 +72,7 @@ async function projectRounds(
   const total = counted?.n ?? 0
 
   const rounds = await db
-    .select(roundFields())
+    .select(roundFields(db))
     .from(codeWorkRounds)
     .where(eq(codeWorkRounds.workItemId, workItemId))
     .orderBy(desc(codeWorkRounds.roundSeq))
@@ -77,7 +81,7 @@ async function projectRounds(
   const projected: CodeRoundProjection[] = []
   for (const round of rounds) {
     const stages = await db
-      .select(stageFields())
+      .select(stageFields(db))
       .from(codeRoundStages)
       .orderBy(codeRoundStages.stageSeq)
       .where(eq(codeRoundStages.roundId, round.id))
@@ -108,28 +112,30 @@ async function projectRounds(
   return { rounds: projected, hidden: roundWindow({ total, limit }).hidden }
 }
 
-export function createWorkItemProjectionRead(
-  db: ProviderNeutralDatabase,
-): WorkItemProjectionReadPort {
+export function createWorkItemProjectionRead(db: PersistenceDb): WorkItemProjectionReadPort {
   return {
     async readPage(input) {
       const limit = Math.max(1, Math.min(input.limit ?? WORK_ITEM_PAGE_LIMIT, 100))
       const filters: SQL[] = []
       if (input.codeHostEndpointId !== undefined) {
+        const { codeWorkItems } = tablesOf(db)
         filters.push(eq(codeWorkItems.codeHostEndpointId, input.codeHostEndpointId))
       }
       if (input.stableProjectId !== undefined) {
+        const { codeWorkItems } = tablesOf(db)
         filters.push(eq(codeWorkItems.stableProjectId, input.stableProjectId))
       }
       if (input.capability !== undefined) {
+        const { codeWorkItems } = tablesOf(db)
         filters.push(eq(codeWorkItems.capability, input.capability))
       }
 
       const cursor = input.cursor == null ? null : decodeCursor(input.cursor)
+      const { codeWorkItems } = tablesOf(db)
       if (cursor !== null) filters.push(lt(codeWorkItems.createdAt, cursor.createdAt))
 
       const rows = await db
-        .select(workItemFields())
+        .select(workItemFields(db))
         .from(codeWorkItems)
         .where(filters.length === 0 ? undefined : and(...filters))
         .orderBy(desc(codeWorkItems.createdAt), desc(codeWorkItems.id))

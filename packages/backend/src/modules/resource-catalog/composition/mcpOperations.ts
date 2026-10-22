@@ -1,6 +1,6 @@
 import type { Mcp } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMcpApplication } from '../application/mcps/mcpApplication'
 import type {
   McpAccessPort,
@@ -36,7 +36,7 @@ export interface McpCatalogCompositionDependencies extends Omit<
   McpCatalogAdapterCompositionDependencies,
   'repository' | 'projection' | 'access' | 'acl'
 > {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly lifecycle: McpTransactionLifecycle
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }

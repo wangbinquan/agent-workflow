@@ -1,10 +1,12 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mcps, mcpRuntimeTestSessions, resourceGrants, runtimes, users } from '../src/db/schema'
 import { mcpAclRuntimeTestLifecycle } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createMcpTransactionLifecycle } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
@@ -36,54 +38,51 @@ const admin = buildActor({
 })
 
 function insertUser(db: DbClient, id: string): void {
-  db.insert(users)
-    .values({
-      id,
-      username: id,
-      displayName: id,
-      role: 'user',
-      status: 'active',
-      forcePasswordChange: false,
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  const { users } = tablesOf(db)
+  insertOne(db, users, {
+    id,
+    username: id,
+    displayName: id,
+    role: 'user',
+    status: 'active',
+    forcePasswordChange: false,
+    createdAt: 1,
+    updatedAt: 1,
+  })
 }
 
 function insertMcp(db: DbClient, ownerUserId = SYSTEM_USER_ID): void {
-  db.insert(mcps)
-    .values({
-      id: 'mcp-1',
-      name: 'fixture',
-      description: 'before',
-      type: 'remote',
-      config: JSON.stringify({ url: 'https://example.test/mcp' }),
-      enabled: true,
-      ownerUserId,
-      visibility: 'private',
-      aclRevision: 0,
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  const { mcps } = tablesOf(db)
+  insertOne(db, mcps, {
+    id: 'mcp-1',
+    name: 'fixture',
+    description: 'before',
+    type: 'remote',
+    config: JSON.stringify({ url: 'https://example.test/mcp' }),
+    enabled: true,
+    ownerUserId,
+    visibility: 'private',
+    aclRevision: 0,
+    createdAt: 1,
+    updatedAt: 1,
+  })
 }
 
 function insertRuntime(
   db: DbClient,
   input: { name?: string; binaryPath?: string | null } = {},
 ): void {
-  db.insert(runtimes)
-    .values({
-      id: `runtime-${input.name ?? 'opencode'}`,
-      name: input.name ?? 'opencode',
-      protocol: 'opencode',
-      binaryPath: input.binaryPath === undefined ? '/mock/opencode' : input.binaryPath,
-      model: 'openai/old-model',
-      enabled: true,
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  const { runtimes } = tablesOf(db)
+  insertOne(db, runtimes, {
+    id: `runtime-${input.name ?? 'opencode'}`,
+    name: input.name ?? 'opencode',
+    protocol: 'opencode',
+    binaryPath: input.binaryPath === undefined ? '/mock/opencode' : input.binaryPath,
+    model: 'openai/old-model',
+    enabled: true,
+    createdAt: 1,
+    updatedAt: 1,
+  })
 }
 
 function insertIdleSession(
@@ -95,43 +94,44 @@ function insertIdleSession(
     runtimeRowId?: string
   },
 ): void {
-  db.insert(mcpRuntimeTestSessions)
-    .values({
-      id: input.id,
-      mcpId: 'mcp-1',
-      ownerUserId: input.ownerUserId ?? SYSTEM_USER_ID,
-      clientCreateId: `create-${input.id}`,
-      clientCreateDigest: HASH,
-      status: 'active',
-      mcpConfigHash: HASH,
-      runtimeRowId: input.runtimeRowId ?? 'runtime-opencode',
-      runtimeName: input.runtimeName ?? 'opencode',
-      runtimeProtocol: 'opencode',
-      runtimeSnapshotJson: '{}',
-      runtimeBinaryPath: '/mock/opencode',
-      runtimeSessionId: `native-${input.id}`,
-      nativeSessionState: 'ready',
-      turnSeq: 1,
-      sessionVersion: 1,
-      idleDeadlineAt: 600_001,
-      scratchRoot: `/tmp/${input.id}`,
-      cleanupState: 'not-started',
-      createdAt: 1,
-      updatedAt: 1,
-    })
-    .run()
+  const { mcpRuntimeTestSessions } = tablesOf(db)
+  insertOne(db, mcpRuntimeTestSessions, {
+    id: input.id,
+    mcpId: 'mcp-1',
+    ownerUserId: input.ownerUserId ?? SYSTEM_USER_ID,
+    clientCreateId: `create-${input.id}`,
+    clientCreateDigest: HASH,
+    status: 'active',
+    mcpConfigHash: HASH,
+    runtimeRowId: input.runtimeRowId ?? 'runtime-opencode',
+    runtimeName: input.runtimeName ?? 'opencode',
+    runtimeProtocol: 'opencode',
+    runtimeSnapshotJson: '{}',
+    runtimeBinaryPath: '/mock/opencode',
+    runtimeSessionId: `native-${input.id}`,
+    nativeSessionState: 'ready',
+    turnSeq: 1,
+    sessionVersion: 1,
+    idleDeadlineAt: 600_001,
+    scratchRoot: `/tmp/${input.id}`,
+    cleanupState: 'not-started',
+    createdAt: 1,
+    updatedAt: 1,
+  })
 }
 
 function lifecycle(db: DbClient, id: string) {
-  return db
-    .select({
-      status: mcpRuntimeTestSessions.status,
-      endReason: mcpRuntimeTestSessions.endReason,
-      blocked: mcpRuntimeTestSessions.continuationBlockedReason,
-    })
-    .from(mcpRuntimeTestSessions)
-    .where(eq(mcpRuntimeTestSessions.id, id))
-    .get()
+  const { mcpRuntimeTestSessions } = tablesOf(db)
+  return first(
+    db
+      .select({
+        status: mcpRuntimeTestSessions.status,
+        endReason: mcpRuntimeTestSessions.endReason,
+        blocked: mcpRuntimeTestSessions.continuationBlockedReason,
+      })
+      .from(mcpRuntimeTestSessions)
+      .where(eq(mcpRuntimeTestSessions.id, id)),
+  )
 }
 
 describe('RFC-238 canonical mutation lifecycle transitions', () => {
@@ -166,17 +166,20 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     const db = createInMemoryDb(MIGRATIONS)
     insertMcp(db)
     insertIdleSession(db, { id: 'session-delete-rollback' })
-    db.update(mcpRuntimeTestSessions)
-      .set({
-        status: 'ended',
-        endReason: 'user',
-        idleDeadlineAt: null,
-        cleanupState: 'complete',
-        endedAt: 2,
-        updatedAt: 2,
-      })
-      .where(eq(mcpRuntimeTestSessions.id, 'session-delete-rollback'))
-      .run()
+    const { mcpRuntimeTestSessions } = tablesOf(db)
+    queryWrite(
+      db
+        .update(mcpRuntimeTestSessions)
+        .set({
+          status: 'ended',
+          endReason: 'user',
+          idleDeadlineAt: null,
+          cleanupState: 'complete',
+          endedAt: 2,
+          updatedAt: 2,
+        })
+        .where(eq(mcpRuntimeTestSessions.id, 'session-delete-rollback')),
+    )
     db.$client.exec(`
       CREATE TRIGGER fail_rfc238_mcp_delete
       BEFORE DELETE ON mcps
@@ -204,15 +207,14 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     insertUser(db, 'owner-a')
     insertUser(db, 'viewer-b')
     insertMcp(db, 'owner-a')
-    db.insert(resourceGrants)
-      .values({
-        resourceType: 'mcp',
-        resourceId: 'mcp-1',
-        userId: 'viewer-b',
-        addedBy: SYSTEM_USER_ID,
-        addedAt: 1,
-      })
-      .run()
+    const { resourceGrants } = tablesOf(db)
+    insertOne(db, resourceGrants, {
+      resourceType: 'mcp',
+      resourceId: 'mcp-1',
+      userId: 'viewer-b',
+      addedBy: SYSTEM_USER_ID,
+      addedAt: 1,
+    })
     insertIdleSession(db, { id: 'session-owner', ownerUserId: 'owner-a' })
     insertIdleSession(db, { id: 'session-viewer', ownerUserId: 'viewer-b' })
     const row = await getMcpById(composeMcpServiceBindingForTest(db, { actor: admin }), 'mcp-1')

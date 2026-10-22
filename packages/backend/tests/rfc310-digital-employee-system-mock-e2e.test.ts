@@ -19,6 +19,9 @@
 // 的整套复位：code-hosts / pipeline / approval / faults / 请求流水）并**另开一个 `root`**，
 // 让两遍看到的外部世界与第一遍完全同形——判据一条都不放宽。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { receiveCrewStationSystemMockIssue } from './helpers/rfc370CrewStationIssueIngress'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
@@ -49,7 +52,6 @@ import {
   type StartedSystemMockSuite,
 } from '@agent-workflow/system-mocks'
 
-import { cachedRepos, employeeOsOutbox, webhookDeliveries, webhookEndpoints } from '@/db/schema'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
@@ -236,10 +238,11 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
         const reviewRemoteRepo = mockRepoDiskPath(reviewProject.gitTransportUrl)
         git(root, 'clone', '-q', reviewRemoteRepo, reviewBaselineRepo)
         git(reviewBaselineRepo, 'checkout', '-q', 'main')
+        const { cachedRepos, webhookEndpoints, webhookDeliveries, employeeOsOutbox } = tablesOf(db)
         // Deliberately leave the target branch without a remote ref. Ordinary MR
         // readiness consumes the exact target SHA from code-host facts; fetching a
         // target branch is reserved for constructing a real conflict-repair scene.
-        await db.insert(cachedRepos).values({
+        await insertOne(db, cachedRepos, {
           id: 'repo-system-mock',
           urlHash: 'rfc310-system-mock',
           urlEnc: null,
@@ -249,7 +252,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           lastFetchedAt: 1,
           createdAt: 1,
         })
-        await db.insert(cachedRepos).values({
+        await insertOne(db, cachedRepos, {
           id: 'repo-system-mock-dependency',
           urlHash: 'rfc310-system-mock-dependency',
           urlEnc: null,
@@ -259,7 +262,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           lastFetchedAt: 1,
           createdAt: 1,
         })
-        await db.insert(cachedRepos).values({
+        await insertOne(db, cachedRepos, {
           id: 'repo-system-mock-delivery-only',
           urlHash: 'rfc310-system-mock-delivery-only',
           urlEnc: null,
@@ -269,7 +272,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           lastFetchedAt: 1,
           createdAt: 1,
         })
-        await db.insert(cachedRepos).values({
+        await insertOne(db, cachedRepos, {
           id: 'repo-system-mock-review',
           urlHash: 'rfc310-system-mock-review',
           urlEnc: null,
@@ -300,7 +303,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           role: 'admin',
           password: 'longEnoughPassword',
         })
-        await db.insert(webhookEndpoints).values({
+        await insertOne(db, webhookEndpoints, {
           id: 'rfc310-issue-endpoint',
           name: 'RFC-310 ISSUE ingress',
           provider: 'gitlab',
@@ -1353,11 +1356,12 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           ),
         ).toMatchObject({ state: 'accepted' })
         expect(
-          await db
-            .select({ status: webhookDeliveries.status })
-            .from(webhookDeliveries)
-            .where(eq(webhookDeliveries.id, issueReceipt.deliveryId))
-            .get(),
+          await first(
+            db
+              .select({ status: webhookDeliveries.status })
+              .from(webhookDeliveries)
+              .where(eq(webhookDeliveries.id, issueReceipt.deliveryId)),
+          ),
         ).toEqual({ status: 'matched' })
 
         const driveUntilIdle = async (budget = 300): Promise<void> => {
@@ -1426,7 +1430,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
               }
             }),
           )
-          const pendingOutbox = (await db.select().from(employeeOsOutbox).all())
+          const pendingOutbox = (await db.select().from(employeeOsOutbox))
             .filter((row) => row.state !== 'completed')
             .map((row) => ({
               id: row.id,
@@ -2149,7 +2153,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           )
           mkdirSync(terminalRemoteRepo, { recursive: true })
           git(terminalRemoteRepo, 'init', '-q', '--bare')
-          await db.insert(cachedRepos).values({
+          await insertOne(db, cachedRepos, {
             id: terminalRepositoryId,
             urlHash: `rfc310-system-mock-approval-${approvalStatus}`,
             urlEnc: null,

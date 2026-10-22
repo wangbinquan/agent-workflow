@@ -1,10 +1,10 @@
 // RFC-359 W12: one per-target atom for both providers. Runtime publication,
 // stopping and SQLite's no-driver finalization remain in their existing hosts.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   ConcurrentTaskTransition,
   resolveTerminalWorkspacePruneDecision,
@@ -47,6 +47,7 @@ export type AppliedSourceTerminationTarget = Readonly<{
 }>
 
 async function readTarget(tx: TaskExecutionTransaction, taskId: string) {
+  const { tasks } = tablesOf(tx)
   return (
     await tx
       .select({
@@ -75,6 +76,7 @@ async function writeFence(
   fence: 'closed' | 'merged' | null,
   effectRevision: number,
 ): Promise<void> {
+  const { tasks } = tablesOf(tx)
   const changed = await tx
     .update(tasks)
     .set({
@@ -97,6 +99,7 @@ async function cancelOpenNodeRuns(
   now: number,
   cause: string,
 ): Promise<readonly TaskNodeChangeV1[]> {
+  const { nodeRuns } = tablesOf(tx)
   const rows = await tx
     .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
     .from(nodeRuns)
@@ -118,6 +121,7 @@ async function stopOwner(
   runtimeRegistry: InMemoryTaskRuntimeRegistry,
   revoke?: Readonly<{ now: number; recoveryCode: string }>,
 ): Promise<StopOwner> {
+  const { taskExecutionOwners } = tablesOf(tx)
   const owner = (
     await tx
       .select()
@@ -153,7 +157,7 @@ async function terminalizeCompanions(
 }
 
 export async function applySourceTerminationTarget(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   runtimeRegistry: InMemoryTaskRuntimeRegistry,
   taskId: string,
   input: TaskSourceTerminationEffectInput,

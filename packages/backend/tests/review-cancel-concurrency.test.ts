@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite, first as firstRow, queryRows } from '@/platform/persistence/queryHelpers'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 // Review mutations and user cancellation share one task-scoped FIFO.  These
@@ -26,16 +29,7 @@ import { ulid } from 'ulid'
 import type { ReviewDecisionKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  docVersions,
-  memoryDistillJobs,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import {
   addReviewComment,
@@ -63,7 +57,7 @@ import { drainCommittedEventDeliveriesForTests } from './helpers/committedEventH
 import { describeEachProvider } from './helpers/eachProvider'
 import { MIGRATIONS } from './migration-freeze'
 
-interface Harness<Database extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface Harness<Database extends PersistenceDb = PersistenceDb> {
   db: Database
   appHome: string
   worktreePath: string
@@ -85,7 +79,7 @@ afterEach(() => {
   current = undefined
 })
 
-async function seedHarness<Database extends ProviderNeutralDatabase>(
+async function seedHarness<Database extends PersistenceDb>(
   db: Database,
   options: { multiDoc?: boolean } = {},
 ): Promise<Harness<Database>> {
@@ -119,12 +113,13 @@ async function seedHarness<Database extends ProviderNeutralDatabase>(
     ],
     edges: [],
   }
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, nodeRunOutputs, docVersions, reviewComments } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'review-cancel-lock',
     definition: JSON.stringify(definition),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'review-cancel-lock',
     workflowId,
@@ -141,7 +136,7 @@ async function seedHarness<Database extends ProviderNeutralDatabase>(
     // 于是夹具自己补齐——两个引擎从同一行出发。
     ...taskRootLineage(taskId),
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: upstreamRunId,
     taskId,
     nodeId: 'writer',
@@ -151,12 +146,12 @@ async function seedHarness<Database extends ProviderNeutralDatabase>(
     startedAt: Date.now() - 20,
     finishedAt: Date.now() - 10,
   })
-  await db.insert(nodeRunOutputs).values({
+  await insertOne(db, nodeRunOutputs, {
     nodeRunId: upstreamRunId,
     portName: 'doc',
     content: '# body inline',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'review',
@@ -168,7 +163,7 @@ async function seedHarness<Database extends ProviderNeutralDatabase>(
   })
   const bodyPath = 'review/v1.md'
   writeFileSync(join(appHome, bodyPath), '# body inline')
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: docVersionId,
     taskId,
     reviewNodeId: 'review',
@@ -186,7 +181,7 @@ async function seedHarness<Database extends ProviderNeutralDatabase>(
     selectionStale: options.multiDoc === true ? true : null,
     createdAt: Date.now(),
   })
-  await db.insert(reviewComments).values({
+  await insertOne(db, reviewComments, {
     id: commentId,
     docVersionId,
     anchorSectionPath: 'body',
@@ -285,7 +280,7 @@ function expectRejectedCode(result: PromiseSettledResult<unknown>, code: string)
 function decide(
   h: Harness,
   decision: ReviewDecisionKind,
-  db: ProviderNeutralDatabase = h.db,
+  db: PersistenceDb = h.db,
 ): ReturnType<typeof submitReviewDecision> {
   return submitReviewDecision({
     db,
@@ -363,7 +358,7 @@ function observeDbSelect(db: DbClient, onSelect: () => void): DbClient {
  * 旧的 `dbTxSync` 走 drizzle 的 `db.transaction(cb)`，于是注入点是「拦 `transaction`、
  * 把回调拿到的 `tx` 再包一层」。统一原语 `databaseSessionFor(db).transaction(...)` 不走它：
  * 它自己发 `db.run(sql.raw('BEGIN IMMEDIATE'))`，而且在 SQLite 上**事务句柄就是 db 本身**
- * （`createSqliteDatabaseSession`：`const tx = db as unknown as DatabaseTransaction`）。
+ * （`createSqliteDatabaseSession`：`const tx = db as unknown as PersistenceTx`）。
  * 两条推论，注入器照此改写：
  *   · 事务边界的信号从「`transaction` 被调用」变成「`run` 收到一条 BEGIN」；
  *   · 事务内的语句就走 db 这一层，所以直接包 `db.update` 就能拦到 CAS，不必再包 tx。
@@ -379,8 +374,11 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
           return (...args: unknown[]) => {
             lost = true
             onLost()
+            const { tasks } = tablesOf(db)
             // 在目标 UPDATE 的 CAS 之前把行挪走：CAS 必然 miss，而它的伴随 outbox 写也不该出现。
-            db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId)).run()
+            queryWrite(
+              db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId)),
+            )
             const method = Reflect.get(target, property, target) as (...inner: unknown[]) => unknown
             return Reflect.apply(method, target, args)
           }
@@ -409,12 +407,14 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
           ? (value as (...inner: unknown[]) => unknown).bind(target)
           : value
       }
-      return (...updateArgs: unknown[]) =>
-        wrapBuilder(
+      return (...updateArgs: unknown[]) => {
+        const { tasks } = tablesOf(db)
+        return wrapBuilder(
           Reflect.apply(value, target, updateArgs) as object,
           updateArgs[0] === tasks,
           false,
         )
+      }
     },
   }) as DbClient
 }
@@ -432,16 +432,15 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
  */
 function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): () => void {
   return () => {
-    const current = db
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get()?.status
+    const { tasks } = tablesOf(db)
+    const current = firstRow(
+      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)),
+    )?.status
     // 只搅动仍可取消的目标；父任务先落终态之后就不再动它。
     if (current !== 'awaiting_review' && current !== 'awaiting_human') return
     onAttempt()
     const next = current === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-    db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId)).run()
+    queryWrite(db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId)))
   }
 }
 
@@ -462,6 +461,8 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
       expect(cancelResult.status).toBe('fulfilled')
       expectRejectedCode(decisionResult, 'task-terminal')
+      const { tasks, nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } =
+        tablesOf(h.db)
       expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
         'canceled',
       )
@@ -502,6 +503,8 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
     expect(decisionResult.status).toBe('fulfilled')
     expect(cancelResult.status).toBe('fulfilled')
+    const { tasks, nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } =
+      tablesOf(h.db)
     expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
       'canceled',
     )
@@ -534,12 +537,13 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
   test('cancel first makes queued stale-source dispatch perform zero refresh writes', async () => {
     const h = (current = await seedHarness(harness.db))
+    const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(h.db)
     await h.db
       .update(nodeRuns)
       .set({ consumedUpstreamRunsJson: JSON.stringify({ writer: h.upstreamRunId }) })
       .where(eq(nodeRuns.id, h.reviewRunId))
     const freshUpstreamRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: freshUpstreamRunId,
       taskId: h.taskId,
       nodeId: 'writer',
@@ -549,7 +553,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       startedAt: Date.now() - 2,
       finishedAt: Date.now() - 1,
     })
-    await h.db.insert(nodeRunOutputs).values({
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: freshUpstreamRunId,
       portName: 'doc',
       content: '# fresh upstream body',
@@ -631,6 +635,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
       expect(cancelResult.status).toBe('fulfilled')
       expectRejectedCode(commentResult, 'task-terminal')
+      const { reviewComments } = tablesOf(h.db)
       const comments = await h.db
         .select()
         .from(reviewComments)
@@ -651,6 +656,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
     expect(commentResult.status).toBe('fulfilled')
     expect(cancelResult.status).toBe('fulfilled')
+    const { reviewComments, nodeRuns } = tablesOf(h.db)
     expect(
       (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]
         ?.commentText,
@@ -676,6 +682,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
     expect(cancelResult.status).toBe('fulfilled')
     expectRejectedCode(selectionResult, 'task-terminal')
+    const { docVersions } = tablesOf(h.db)
     const doc = (
       await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
     )[0]!
@@ -699,6 +706,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
     expect(selectionResult.status).toBe('fulfilled')
     expect(cancelResult.status).toBe('fulfilled')
+    const { docVersions } = tablesOf(h.db)
     const doc = (
       await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
     )[0]!
@@ -728,18 +736,18 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     let stateAtEvent: { runStatus: string | undefined; outputCount: number } | undefined
     const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
       if (event.type !== 'review.decision_made') return
+      const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
       stateAtEvent = {
-        runStatus: h.db
-          .select({ status: nodeRuns.status })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, h.reviewRunId))
-          .limit(1)
-          .all()[0]?.status,
-        outputCount: h.db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
-          .all().length,
+        runStatus: queryRows(
+          h.db
+            .select({ status: nodeRuns.status })
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, h.reviewRunId))
+            .limit(1),
+        )[0]?.status,
+        outputCount: queryRows(
+          h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId)),
+        ).length,
       }
     })
     try {
@@ -763,6 +771,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       unsubscribe()
     }
     expect(decisions).toHaveLength(0)
+    const { nodeRuns } = tablesOf(h.db)
     expect(
       (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
     ).toBe('awaiting_review')
@@ -772,6 +781,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     const h = (current = await seedNativeHarness())
     const sourcePath = 'doc.md'
     writeFileSync(join(h.worktreePath, sourcePath), '# fresh upstream body')
+    const { nodeRunOutputs, nodeRuns, docVersions, tasks } = tablesOf(h.db)
     await h.db
       .update(nodeRunOutputs)
       .set({ content: sourcePath, kind: 'path<md>' })
@@ -786,7 +796,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       .where(eq(docVersions.id, h.docVersionId))
     await Bun.sleep(2)
     const freshUpstreamRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: freshUpstreamRunId,
       taskId: h.taskId,
       nodeId: 'writer',
@@ -796,7 +806,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       startedAt: Date.now() - 2,
       finishedAt: Date.now() - 1,
     })
-    await h.db.insert(nodeRunOutputs).values({
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: freshUpstreamRunId,
       portName: 'doc',
       content: sourcePath,
@@ -824,7 +834,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
           schedulerClaimed = true
           // dispatchReviewNode normally runs after the scheduler has claimed
           // pending → running. This direct service fixture models that entry.
-          h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId)).run()
+          queryWrite(h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId)))
         }
       }),
       taskId: h.taskId,
@@ -870,6 +880,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
 
   test('cancel retries when a non-coordinator writer wins CAS into another cancelable state', async () => {
     const h = (current = await seedNativeHarness())
+    const { tasks, nodeRuns } = tablesOf(h.db)
     await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
     let firstCasLost = false
 
@@ -918,10 +929,11 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
   test('parent cancel releases the parent mutation lock before waiting on an active child', async () => {
     const h = (current = await seedNativeHarness())
     const childId = ulid()
+    const { tasks } = tablesOf(h.db)
     const workflowId = (
       await h.db.select({ workflowId: tasks.workflowId }).from(tasks).where(eq(tasks.id, h.taskId))
     )[0]!.workflowId
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       id: childId,
       name: 'active child',
       workflowId,
@@ -987,10 +999,11 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
   test('parent cascade surfaces child cancel starvation instead of reporting success', async () => {
     const h = (current = await seedNativeHarness())
     const childId = ulid()
+    const { tasks } = tablesOf(h.db)
     const workflowId = (
       await h.db.select({ workflowId: tasks.workflowId }).from(tasks).where(eq(tasks.id, h.taskId))
     )[0]!.workflowId
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       id: childId,
       name: 'starved child',
       workflowId,
@@ -1027,6 +1040,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     'RFC-202 keeps an awaiting review writable while its task is revivable (%s)',
     async (taskStatus) => {
       const h = (current = await seedNativeHarness())
+      const { tasks, reviewComments, nodeRuns } = tablesOf(h.db)
       await h.db.update(tasks).set({ status: taskStatus }).where(eq(tasks.id, h.taskId))
 
       await updateReviewCommentText(

@@ -14,7 +14,13 @@ export interface SqlRows extends PromiseLike<readonly Record<string, unknown>[]>
   values(): Promise<readonly (readonly unknown[])[]>
 }
 
+export interface PostgresqlTransactionConnection {
+  unsafe(query: string, parameters?: readonly unknown[]): SqlRows
+  savepoint<T>(body: (connection: PostgresqlTransactionConnection) => Promise<T>): Promise<T>
+}
+
 export interface PostgresqlReservedConnection {
+  begin<T>(body: (connection: PostgresqlTransactionConnection) => Promise<T>): Promise<T>
   unsafe(query: string, parameters?: readonly unknown[]): SqlRows
   release(): void
   /** Bun ReservedSQL closes this physical channel, not the original pool. */

@@ -1,6 +1,6 @@
 // RFC-384: one Intent graph per session, with independent worker and HTTP families.
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeIntentApplyArtifactLifecycle,
   composeIntentApplyOperations,
@@ -32,7 +32,7 @@ import type { DaemonProviderCore } from './providerCore'
 import type { DaemonResourceCatalogModules } from './resourceCatalog'
 
 export interface DaemonIntentInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly configuration: ApplicationConfigurationQueries
   readonly log: Pick<Logger, 'warn'>

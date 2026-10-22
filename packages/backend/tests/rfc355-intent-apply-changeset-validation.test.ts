@@ -15,6 +15,8 @@
 //
 // `parseIntentChangeset` 本来就在 `@agent-workflow/shared`，两侧都能用；SQLite 只是没用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,9 +25,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { composeIntentApplyOperations } from '../src/modules/intent/composition/apply'
 import { createIntentSession as createSession } from '../src/modules/intent/application/session'
@@ -39,7 +40,7 @@ import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 const OWNER = 'user_owner_rfc355_00000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let harness: ProviderHarness
 let appHome: string
 
@@ -72,7 +73,7 @@ function applyIntentChangeset(binding: ReturnType<typeof deps>, command: IntentA
 }
 
 async function createIntentSession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   input: Parameters<typeof createSession>[3],
   _appHome: string,
@@ -119,19 +120,17 @@ async function installRawDraft(
 ): Promise<{ draftHash: string }> {
   const draftHash = `sha256:${createHash('sha256').update(changesetJson, 'utf8').digest('hex')}`
   const draftId = ulid()
-  await db
-    .insert(intentDrafts)
-    .values({
-      id: draftId,
-      sessionId,
-      revision: 1,
-      changesetJson,
-      validationJson: '{"errors":[],"credentialFindings":[]}',
-      draftHash,
-      contextRevision: 0,
-      createdAt: Date.now(),
-    })
-    .run()
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  await insertOne(db, intentDrafts, {
+    id: draftId,
+    sessionId,
+    revision: 1,
+    changesetJson,
+    validationJson: '{"errors":[],"credentialFindings":[]}',
+    draftHash,
+    contextRevision: 0,
+    createdAt: Date.now(),
+  })
   await db
     .update(intentSessions)
     .set({
@@ -139,7 +138,6 @@ async function installRawDraft(
       contextManifestJson: JSON.stringify({ version: 1, entries: [] }),
     })
     .where(eq(intentSessions.id, sessionId))
-    .run()
   return { draftHash }
 }
 
@@ -151,19 +149,17 @@ describeEachProvider(
       db = harness.db
       appHome = mkdtempSync(join(tmpdir(), 'aw-rfc355-'))
       mkdirSync(join(appHome, 'skills'), { recursive: true })
-      await db
-        .insert(users)
-        .values({
-          id: OWNER,
-          username: 'owner',
-          displayName: 'Owner',
-          role: 'user',
-          status: 'active',
-          passwordHash: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        })
-        .run()
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
+        id: OWNER,
+        username: 'owner',
+        displayName: 'Owner',
+        role: 'user',
+        status: 'active',
+        passwordHash: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
     })
     afterEach(() => {
       rmSync(appHome, { recursive: true, force: true })

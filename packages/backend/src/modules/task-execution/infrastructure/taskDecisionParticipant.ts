@@ -9,16 +9,14 @@
 // 一笔 `session.transaction`，先锁任务聚合根（PostgreSQL：`FOR UPDATE`，同任务的决定串行；
 // SQLite：独占事务，no-op），再走上面的原子。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
 import { committedEventGroupId } from '@/platform/events/committed/types'
-import {
-  engineOf,
-  type DatabaseSession,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { engineOf, type DatabaseSession } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
@@ -65,7 +63,7 @@ function assertInput(input: AcceptHumanGateDecisionInput): void {
 }
 
 async function assertProjection(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     taskId: string
     expected: HumanGateNodeProjectionFence
@@ -74,6 +72,7 @@ async function assertProjection(
 ): Promise<HumanGateContinuationLineage> {
   const lineage = canonicalHumanGateContinuationLineage(input.lineage)
   const ids = [...lineage.sourceNodeRunIds, ...lineage.rerunNodeRunIds]
+  const { nodeRuns } = tablesOf(tx)
   const rows =
     ids.length === 0
       ? []
@@ -104,7 +103,7 @@ async function assertProjection(
 
 /** 在调用方已持有的事务里接受一个 human-gate 决定。 */
 export async function acceptHumanGateDecisionTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: AcceptHumanGateDecisionInput,
 ): Promise<AcceptedHumanGateDecision> {
   assertInput(input)
@@ -151,20 +150,22 @@ export async function acceptHumanGateDecisionTx(
   })
 
   if (input.workspaceRollbackPlan !== undefined) {
-    const intent = await tx
-      .select({
-        executionLineageId: taskExecutionIntents.executionLineageId,
-        continuationSlotKey: taskExecutionIntents.continuationSlotKey,
-        slotPathJson: taskExecutionIntents.slotPathJson,
-      })
-      .from(taskExecutionIntents)
-      .where(
-        and(
-          eq(taskExecutionIntents.id, submitted.intentId),
-          eq(taskExecutionIntents.taskId, input.taskId),
+    const { taskExecutionIntents } = tablesOf(tx)
+    const intent = await first(
+      tx
+        .select({
+          executionLineageId: taskExecutionIntents.executionLineageId,
+          continuationSlotKey: taskExecutionIntents.continuationSlotKey,
+          slotPathJson: taskExecutionIntents.slotPathJson,
+        })
+        .from(taskExecutionIntents)
+        .where(
+          and(
+            eq(taskExecutionIntents.id, submitted.intentId),
+            eq(taskExecutionIntents.taskId, input.taskId),
+          ),
         ),
-      )
-      .get()
+    )
     if (intent === undefined) {
       throw new TaskExecutionError(
         'task-continuation-stale',
@@ -205,6 +206,7 @@ export class DatabaseTaskDecisionPersistence implements HumanGateDecisionPersist
   async accept(input: AcceptHumanGateDecisionInput): Promise<AcceptedHumanGateDecision> {
     assertInput(input)
     return await this.session.transaction(async (tx) => {
+      const { tasks } = tablesOf(tx)
       await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, input.taskId)
       return await acceptHumanGateDecisionTx(tx, input)
     })

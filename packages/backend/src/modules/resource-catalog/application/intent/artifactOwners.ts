@@ -1,6 +1,6 @@
 import type { PluginSourceKind, Skill } from '@agent-workflow/shared'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
 
 type SkillPlan = Extract<VersionedIntentResourceChangesetPlan, { readonly kind: 'skill' }>
@@ -62,7 +62,7 @@ export interface IntentSkillPublication {
   /** Consume the confirmed stage in AW's transaction; async storage effects
    * belong to stage/publication rather than this transaction callback. The
    * callback handle is derived from the neutral transaction, not its client. */
-  commitInTransaction(transaction: DatabaseTransaction, versionIndex: number): Promise<void>
+  commitInTransaction(transaction: PersistenceTx, versionIndex: number): Promise<void>
 }
 
 /**

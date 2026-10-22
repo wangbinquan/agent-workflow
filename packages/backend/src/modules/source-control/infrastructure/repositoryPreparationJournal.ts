@@ -1,22 +1,24 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import { scPreparationOperations, scRepositorySnapshots, scRepositorySources } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError } from '@/util/errors'
 import { canAdvanceRepositoryPreparation } from '../domain/repositoryPreparationState'
 import type { RepositoryPreparationJournal } from '../application/ports/repositoryPreparationJournal'
 
 /** The caller supplies its live transaction for admission. Effects use the normal DB handle. */
 export function createRepositoryPreparationJournal(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): RepositoryPreparationJournal {
   return {
     async source(id) {
+      const { scRepositorySources } = tablesOf(db)
       return (
         (await db.select().from(scRepositorySources).where(eq(scRepositorySources.id, id)))[0] ??
         null
       )
     },
     async sourceByRequest(requestKey) {
+      const { scRepositorySources } = tablesOf(db)
       return (
         (
           await db
@@ -27,6 +29,7 @@ export function createRepositoryPreparationJournal(
       )
     },
     async seal(input) {
+      const { scRepositorySources } = tablesOf(db)
       await db.insert(scRepositorySources).values(input).onConflictDoNothing()
       const row = (
         await db
@@ -47,6 +50,7 @@ export function createRepositoryPreparationJournal(
       return row
     },
     async snapshot(id) {
+      const { scRepositorySnapshots } = tablesOf(db)
       return (
         (
           await db.select().from(scRepositorySnapshots).where(eq(scRepositorySnapshots.id, id))
@@ -54,6 +58,7 @@ export function createRepositoryPreparationJournal(
       )
     },
     async freeze(input) {
+      const { scRepositorySnapshots } = tablesOf(db)
       await db.insert(scRepositorySnapshots).values(input).onConflictDoNothing()
       const row = (
         await db.select().from(scRepositorySnapshots).where(eq(scRepositorySnapshots.id, input.id))
@@ -68,6 +73,7 @@ export function createRepositoryPreparationJournal(
       return row
     },
     async operation(id) {
+      const { scPreparationOperations } = tablesOf(db)
       return (
         (
           await db.select().from(scPreparationOperations).where(eq(scPreparationOperations.id, id))
@@ -75,6 +81,7 @@ export function createRepositoryPreparationJournal(
       )
     },
     async plan(input) {
+      const { scPreparationOperations } = tablesOf(db)
       await db
         .insert(scPreparationOperations)
         .values({
@@ -98,6 +105,7 @@ export function createRepositoryPreparationJournal(
       return row
     },
     async checkpoint(input) {
+      const { scPreparationOperations } = tablesOf(db)
       const rows = await db
         .update(scPreparationOperations)
         .set({
@@ -116,6 +124,7 @@ export function createRepositoryPreparationJournal(
       return rows[0] ?? null
     },
     async recordCleanup(input) {
+      const { scPreparationOperations } = tablesOf(db)
       const rows = await db
         .update(scPreparationOperations)
         .set({
@@ -163,6 +172,7 @@ export function createRepositoryPreparationJournal(
           'repository-preparation-facts-immutable',
           'preparation facts cannot be replaced',
         )
+      const { scPreparationOperations } = tablesOf(db)
       const rows = await db
         .update(scPreparationOperations)
         .set({

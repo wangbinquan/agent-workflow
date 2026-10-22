@@ -15,15 +15,16 @@
 // goes red, the underlying patch logic was preserved but a corner case
 // regressed.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -43,7 +44,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // patch-25 dispatched_at consumed marker) is now minted by an explicit reassign of the answered
 // round's questioner card to the graph designer node + a dispatch of that designer entry.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -60,7 +61,7 @@ async function reassignThenDispatchDesigner(
 }
 
 async function seedTriad(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; definition: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const nodes: WorkflowNode[] = [
@@ -92,7 +93,8 @@ async function seedTriad(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -100,7 +102,7 @@ async function seedTriad(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'patch-baseline',
     id: taskId,
     executionLineageId: taskId,
@@ -151,8 +153,9 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
     test('answering the awaiting cross round mints a fresh pending designer attempt', async () => {
       const db = harness.db
       const { taskId } = await seedTriad(db)
+      const { nodeRuns } = tablesOf(db)
       // Seed designer at cci=2 (i.e. has been pumped before)
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'nr_designer_old',
         taskId,
         nodeId: 'designer',
@@ -161,7 +164,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
         iteration: 0,
         startedAt: Date.now() - 1000,
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'nr_q1',
         taskId,
         nodeId: 'questioner',
@@ -205,8 +208,9 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
     test('cross-clarify session cci row inherits from latest questioner cci value', async () => {
       const db = harness.db
       const { taskId } = await seedTriad(db)
+      const { nodeRuns } = tablesOf(db)
       // Questioner has been around — has cci=3
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'nr_q3',
         taskId,
         nodeId: 'questioner',
@@ -244,6 +248,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
     test('the answer dispatch returns the designer rerun nodeRunId (cascade caller hooks in)', async () => {
       const db = harness.db
       const { taskId } = await seedTriad(db)
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_designer_prior',
@@ -292,6 +297,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
     test('submit continue stamps dispatched_at on the consumed designer entries', async () => {
       const db = harness.db
       const { taskId } = await seedTriad(db)
+      const { nodeRuns, taskQuestions } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_designer_prior',
@@ -348,6 +354,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
     test('cascade BFS does not strand questioner — runner can find the next attempt', async () => {
       const db = harness.db
       const { taskId } = await seedTriad(db)
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_designer_prior',

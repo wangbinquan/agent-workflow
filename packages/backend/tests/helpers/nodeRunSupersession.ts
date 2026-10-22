@@ -4,20 +4,18 @@
 //   ② `expectFencedToAbandoned`：对该行发一次在它当前状态下**本来合法**的迁移，断言被拦成非法迁移、
 //      且 abandoned 确实落库（design §4.2：事务内收尾并提交，事务外才抛）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect } from 'bun:test'
 import { and, eq, inArray } from 'drizzle-orm'
 import { IllegalMergeStateTransition, type MergeStateTransitionEvent } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { SUPERSEDABLE_MERGE_STATES } from '@/modules/task-execution/domain/nodeRunSupersession'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
 import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/nodeRunSupersession'
 
-export async function derivedSupersededIds(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<string[]> {
+export async function derivedSupersededIds(db: PersistenceDb, taskId: string): Promise<string[]> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)
@@ -39,10 +37,8 @@ const LEGAL_FORWARD: Record<(typeof SUPERSEDABLE_MERGE_STATES)[number], MergeSta
     'conflict-human': { kind: 'complete-human-resolution' },
   }
 
-export async function expectFencedToAbandoned(
-  db: ProviderNeutralDatabase,
-  nodeRunId: string,
-): Promise<void> {
+export async function expectFencedToAbandoned(db: PersistenceDb, nodeRunId: string): Promise<void> {
+  const { nodeRuns } = tablesOf(db)
   const before = (
     await db
       .select({ mergeState: nodeRuns.mergeState })

@@ -9,18 +9,20 @@
 //   (the awaiting-refresh path, design §7). If a future migration rebuild
 //   drops/renames the column, or the enum is tightened, these go RED.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'm40',
     description: '',
@@ -28,7 +30,7 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'm40',
     workflowId: wfId,
@@ -47,7 +49,7 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
 describe('RFC-074 migration 0040 — consumed_upstream_runs_json + superseded', () => {
   test('node_runs has the consumed_upstream_runs_json column', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = db.all(sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
+    const cols = rawRows(db, sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
     const names = cols.map((c) => c.name)
     expect(names).toContain('consumed_upstream_runs_json')
   })
@@ -56,7 +58,8 @@ describe('RFC-074 migration 0040 — consumed_upstream_runs_json + superseded', 
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     const consumed = JSON.stringify({ designer: '01UPSTREAMRUN', spec: '01OTHERRUN' })
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: '01RUNWITHPROV',
       taskId,
       nodeId: 'review',
@@ -72,7 +75,8 @@ describe('RFC-074 migration 0040 — consumed_upstream_runs_json + superseded', 
   test('historical-style row leaves consumed_upstream_runs_json NULL', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: '01LEGACYRUN',
       taskId,
       nodeId: 'designer',
@@ -87,8 +91,9 @@ describe('RFC-074 migration 0040 — consumed_upstream_runs_json + superseded', 
   test("docVersions.decision accepts 'superseded'", async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
+    const { nodeRuns, docVersions } = tablesOf(db)
     // A review node_run to satisfy the doc_version FK.
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: '01REVIEWRUN',
       taskId,
       nodeId: 'review',
@@ -96,7 +101,7 @@ describe('RFC-074 migration 0040 — consumed_upstream_runs_json + superseded', 
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: '01DOCV1',
       taskId,
       reviewNodeId: 'review',

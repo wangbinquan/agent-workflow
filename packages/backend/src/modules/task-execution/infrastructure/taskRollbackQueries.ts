@@ -1,18 +1,19 @@
 // RFC-359 W4-B1 —— 回滚目标投影：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskRepos, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskRollbackQueries,
   TaskRollbackTargetSnapshot,
 } from '../application/ports/taskRollbackQueries'
 
 export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async load(taskId: string): Promise<TaskRollbackTargetSnapshot | null> {
+    const { tasks, taskRepos } = tablesOf(this.db)
     const taskRows = await this.db
       .select({
         taskId: tasks.id,

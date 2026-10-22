@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import { createReviewDecisionCommand } from '@/modules/collaboration/infrastructure/reviewDecisionCommand'
 import { createCommittedHumanInputQueries } from '@/modules/collaboration/infrastructure/committedHumanInputQueries'
 import { getReviewDetail } from '@/modules/collaboration/infrastructure/review'
@@ -30,6 +30,7 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
     test(`${decision} closes the gate, returns the actual decision and replays without upstream reruns`, async () => {
       const db = harness.db
       round = await seedReviewRound(db)
+      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
       const task = (await db.select().from(tasks).where(eq(tasks.id, round.taskId)))[0]!
       const definition = JSON.parse(task.workflowSnapshot)
       definition.nodes.find((node: { kind: string }) => node.kind === 'review').decisionHandling =
@@ -102,6 +103,7 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
       expectedReviewIteration: 0,
       rejectReason: 'Revise',
     })
+    const { nodeRuns } = tablesOf(harness.db)
     const runs = await harness.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
     expect(runs.find((run) => run.id === round!.reviewRunId)?.status).toBe('pending')
     expect(runs.some((run) => run.rerunCause === 'review-reject')).toBe(true)

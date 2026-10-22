@@ -1,5 +1,7 @@
 // RFC-359 AC1: one MCP insert/update atom, with the existing id-only and
 // captured-row match contracts and transactional runtime-test invalidation.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -14,7 +16,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { mcps, mcpRuntimeTestSessions, resourceBundleApplies, users } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { McpCreateRecord } from '@/modules/resource-catalog/application/mcps/ports'
@@ -67,7 +68,10 @@ function record(id: string, input = localInput): McpCreateRecord {
     now: T0,
   }
 }
-function sessionInput(mcpId: string, busy: boolean): typeof mcpRuntimeTestSessions.$inferInsert {
+function sessionInput(
+  mcpId: string,
+  busy: boolean,
+): PersistenceTables['mcpRuntimeTestSessions']['$inferInsert'] {
   return {
     id: `session-${mcpId}`,
     mcpId,
@@ -149,7 +153,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
     for (const root of roots.splice(0)) removeTempDirSync(root)
   })
   async function seedOwner() {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: OWNER,
       displayName: 'MCP Owner',
@@ -164,9 +169,11 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
       .repository
   }
   async function stored(id: string) {
+    const { mcps } = tablesOf(harness.db)
     return (await harness.db.select().from(mcps).where(eq(mcps.id, id)).limit(1))[0]
   }
   async function session(mcpId: string) {
+    const { mcpRuntimeTestSessions } = tablesOf(harness.db)
     return (
       await harness.db
         .select()
@@ -225,7 +232,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
       test(`repository mutation invalidates ${busy ? 'busy' : 'idle'} sessions when ${enabled ? 'config changes' : 'disabled'}`, async () => {
         await seedOwner()
         const original = await repository().create(record('session-mcp'))
-        await harness.db.insert(mcpRuntimeTestSessions).values(sessionInput(original.id, busy))
+        const { mcpRuntimeTestSessions } = tablesOf(harness.db)
+        await insertOne(harness.db, mcpRuntimeTestSessions, sessionInput(original.id, busy))
         const config = { command: ['node', 'updated.js'], env: { MODE: 'two' } }
         const changed = await repository().update({
           id: original.id,
@@ -284,7 +292,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
     await seedOwner()
     const currentRepository = repository()
     const original = await currentRepository.create(record('rollback-mcp'))
-    await harness.db.insert(mcpRuntimeTestSessions).values(sessionInput(original.id, false))
+    const { mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, mcpRuntimeTestSessions, sessionInput(original.id, false))
     const beforeSession = await session(original.id)
     await expect(
       harness.session.transaction(async (tx) => {
@@ -295,6 +304,7 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
           expectedConfigHash: mcpConfigHash(original),
           set: { enabled: false, updatedAt: T0 + 9 },
         })
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         expect((await tx.select().from(mcpRuntimeTestSessions))[0]).toMatchObject({
           status: 'ending',
           sessionVersion: 8,
@@ -310,7 +320,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
   test('a session transition error rolls back an already-written repository row', async () => {
     await seedOwner()
     const original = await repository().create(record('transition-error-mcp'))
-    await harness.db.insert(mcpRuntimeTestSessions).values(sessionInput(original.id, true))
+    const { mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, mcpRuntimeTestSessions, sessionInput(original.id, true))
     const beforeSession = await session(original.id)
     const lifecycle = createMcpTransactionLifecycle()
     const failing = createMcpRepository({
@@ -436,7 +447,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
       schemaVersion: 1,
     })
     if (original === null) throw new Error('created MCP missing')
-    await harness.db.insert(mcpRuntimeTestSessions).values(sessionInput(original.id, false))
+    const { mcpRuntimeTestSessions, resourceBundleApplies } = tablesOf(harness.db)
+    await insertOne(harness.db, mcpRuntimeTestSessions, sessionInput(original.id, false))
     expect(receipt.applied).toEqual([
       {
         opId: 'op-1',
@@ -502,13 +514,16 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
     now: T0,
   }
   async function stored() {
+    const { mcps } = tablesOf(harness.db)
     return (await harness.db.select().from(mcps).limit(1))[0]!
   }
   async function session() {
+    const { mcpRuntimeTestSessions } = tablesOf(harness.db)
     return (await harness.db.select().from(mcpRuntimeTestSessions).limit(1))[0]!
   }
   async function fixture(ownerUserId: string | null = OWNER, busy?: boolean) {
-    await harness.db.insert(users).values({
+    const { users, mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: OWNER,
       displayName: 'MCP Owner',
@@ -524,7 +539,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
       }),
     )
     if (busy !== undefined)
-      await harness.db.insert(mcpRuntimeTestSessions).values({
+      await insertOne(harness.db, mcpRuntimeTestSessions, {
         ...sessionInput(prepared.id, busy),
         id: 'legacy-session',
         clientCreateId: 'legacy-create',
@@ -580,6 +595,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
     await fixture()
     const original = await stored()
     const expectedConfigHash = mcpConfigHash(mcpFromPersistenceRow(original))
+    const { mcps } = tablesOf(harness.db)
     await harness.db.update(mcps).set({ description: 'winner' }).where(eq(mcps.id, prepared.id))
     const current = await stored()
     await expect(
@@ -614,6 +630,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
           id: prepared.id,
           set: { enabled: false, updatedAt: T0 + 9 },
         })
+        const { mcpRuntimeTestSessions } = tablesOf(tx)
         expect((await tx.select().from(mcpRuntimeTestSessions))[0]).toMatchObject({
           status: 'ending',
           sessionVersion: 8,
@@ -622,6 +639,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
         throw new Error('abort legacy MCP writes')
       }),
     ).rejects.toThrow('abort legacy MCP writes')
+    const { mcps } = tablesOf(harness.db)
     expect(await harness.db.select().from(mcps)).toEqual([original])
     expect(await session()).toEqual(beforeSession)
   })
@@ -698,7 +716,10 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
       expect(await stored()).toEqual({ ...original, ...set })
     })
 
-  const changes: readonly (readonly [string, Partial<typeof mcps.$inferInsert>])[] = [
+  const changes: readonly (readonly [
+    string,
+    Partial<PersistenceTables['mcps']['$inferInsert']>,
+  ])[] = [
     ['id', { id: 'different-id' }],
     ['name', { name: 'different-name' }],
     ['description', { description: 'newer description' }],
@@ -716,6 +737,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
     test(`captured-row match rejects changed ${field} without writing any other column`, async () => {
       await fixture()
       const original = await stored()
+      const { mcps } = tablesOf(harness.db)
       await harness.db.update(mcps).set(newer).where(eq(mcps.id, original.id))
       const changed = await harness.session.transaction((tx) =>
         updateMcpRowInTx(
@@ -730,6 +752,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
   test('captured-row match rejects null metadata becoming a value', async () => {
     await fixture(null)
     const original = await stored()
+    const { mcps } = tablesOf(harness.db)
     await harness.db.update(mcps).set({ ownerUserId: OWNER }).where(eq(mcps.id, original.id))
     const changed = await harness.session.transaction((tx) =>
       updateMcpRowInTx(tx, { kind: 'captured-row', row: original }, { description: 'loser' }),
@@ -740,6 +763,7 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
   test('id match preserves the established update of a newer row', async () => {
     await fixture()
     const original = await stored()
+    const { mcps } = tablesOf(harness.db)
     await harness.db
       .update(mcps)
       .set({ description: 'newer description' })
@@ -826,6 +850,12 @@ test('intent apply 侧的 MCP 写点在返回前 await 到数据库落库', () =
       while (
         ts.isPropertyAccessExpression(outermost.parent) ||
         (ts.isCallExpression(outermost.parent) && outermost.parent.expression === outermost)
+      )
+        outermost = outermost.parent
+      if (
+        ts.isCallExpression(outermost.parent) &&
+        ts.isIdentifier(outermost.parent.expression) &&
+        outermost.parent.expression.text === 'first'
       )
         outermost = outermost.parent
       writes.push(node.expression.name.text)

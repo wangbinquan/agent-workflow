@@ -10,6 +10,8 @@
 // 每一次都直接变成用户可见的 500，还顺带把连接留在失败事务里，后续复用该连接的
 // 事务再吃 36 次 `SET TRANSACTION ISOLATION LEVEL must be called before any query`。
 
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { nativeQueryFixture } from './helpers/nativeQueryFixture'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -63,6 +65,7 @@ function clientThatFails(errors: readonly unknown[]): {
       return await body({ async run() {} })
     },
   } as unknown as PostgresqlDatabaseClient
+  inheritDatabaseHandle(db, nativeQueryFixture('postgresql').db)
   return { db, attempts: () => attempts }
 }
 

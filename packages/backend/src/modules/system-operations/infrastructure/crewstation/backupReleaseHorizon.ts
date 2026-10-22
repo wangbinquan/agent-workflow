@@ -6,20 +6,21 @@
 // snapshot is established; a building backup's window is still open. The margin
 // absorbs clock skew between instances and transactions that commit after the
 // timestamp they wrote.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, inArray, isNull, lte, or, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedDatabaseBackups } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedBackupReleaseHorizon } from './objectPublicationContract'
 
 export const HOSTED_BACKUP_HORIZON_MARGIN_MS = 5 * 60_000
 
 export function createHostedBackupReleaseHorizon(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly marginMs?: number
 }): HostedBackupReleaseHorizon {
   const margin = input.marginMs ?? HOSTED_BACKUP_HORIZON_MARGIN_MS
   return {
     async protects({ createdAt, releasedAt }) {
+      const { hostedDatabaseBackups } = tablesOf(input.db)
       const rows = await input.db
         .select({ id: hostedDatabaseBackups.id })
         .from(hostedDatabaseBackups)

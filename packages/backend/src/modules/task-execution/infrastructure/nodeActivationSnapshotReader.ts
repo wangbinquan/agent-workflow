@@ -1,15 +1,16 @@
 // RFC-359 W4-B1 —— 节点激活快照读取：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunOutputs, nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { NodeActivationSnapshotReader } from '../application/ports/nodeActivationSnapshotReader'
 
 export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapshotReader {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async findRuns(taskId: string, nodeId: string) {
+    const { nodeRuns } = tablesOf(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,
@@ -25,6 +26,7 @@ export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapsh
   }
 
   async findRun(nodeRunId: string) {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
       .select({
         id: nodeRuns.id,
@@ -42,6 +44,7 @@ export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapsh
   }
 
   async findOutputActivation(nodeRunId: string): Promise<ReadonlyMap<string, boolean>> {
+    const { nodeRunOutputs } = tablesOf(this.db)
     const rows = await this.db
       .select({ portName: nodeRunOutputs.portName, active: nodeRunOutputs.active })
       .from(nodeRunOutputs)

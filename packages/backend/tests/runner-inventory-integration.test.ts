@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-029 T4 + T8 — runner.ts must:
 //   1. copy aw-inventory-dump.mjs into the per-run dir before spawning,
@@ -21,9 +23,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -49,27 +50,28 @@ function makeAgent(): Agent {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
   cleanup(): void
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-inv-runner-'))
   const worktreePath = join(appHome, 'worktree')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -92,9 +94,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function seedRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -166,6 +169,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     // 停写旧列（RFC-297 T22）；观测落在新列上，且富字段一个不少（AC-2）。
     expect(row.inventorySnapshotJson).toBeNull()
@@ -206,6 +210,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     expect(row.inventorySnapshotJson).toBeNull()
     // 插件没写出文件 → 观测缺失，reason 原样透传（不再是「假装有一份 captured:false
@@ -243,6 +248,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
           nodeKind: 'agent-single',
         }),
     )
+    const { nodeRuns } = tablesOf(h.db)
     // runner cleans up runRoot on success — assert via the dump plugin source
     // file that should have been copied in. We can't peek at runRoot anymore
     // because cleanup ran; the inventory landing (previous test) is the
@@ -299,6 +305,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     // 清单：无条件落库——「这一轮加载了什么」谁都想知道。
     expect(row.runtimeInventoryJson).not.toBeNull()
@@ -347,6 +354,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     expect(row.inventorySnapshotJson).toBeNull()
   })

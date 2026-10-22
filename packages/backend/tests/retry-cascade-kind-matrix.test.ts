@@ -14,14 +14,15 @@
 // the end-to-end continue semantics; the TARGET tests below pin the mint
 // matrix including the carve-out).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { describeEachProvider } from './helpers/eachProvider'
 import { POSTGRESQL_SERIALIZATION_ATTEMPTS } from '@/platform/persistence/postgresqlSerializationRetry'
@@ -50,13 +51,13 @@ const DOWNSTREAM_KINDS_SKIP = [
 ] as const satisfies readonly NodeKind[]
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-t1d-'))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
@@ -102,13 +103,14 @@ async function seedTaskWithEdge(
     ],
   }
   const workflowId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -124,7 +126,7 @@ async function seedTaskWithEdge(
     errorSummary: 'boom',
   })
   const agentRunId = ulid()
-  await h.db.insert(nodeRuns).values({
+  await insertOne(h.db, nodeRuns, {
     id: agentRunId,
     taskId,
     nodeId: 'agent_a',
@@ -137,7 +139,7 @@ async function seedTaskWithEdge(
   // Seed a previous row on the downstream node so existing.retryIndex
   // computation has a baseline (otherwise placeholders start at 0 — also
   // valid, but seeding makes intent explicit).
-  await h.db.insert(nodeRuns).values({
+  await insertOne(h.db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: downstreamNodeId,
@@ -165,9 +167,10 @@ async function seedLiveChildForCallRow(
   parentTaskId: string,
   callRunId: string,
 ): Promise<string> {
+  const { tasks, nodeRuns } = tablesOf(h.db)
   const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
   const childId = ulid()
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: childId,
     name: `child-${childId.slice(-6).toLowerCase()}`,
     workflowId: parent.workflowId,
@@ -202,11 +205,12 @@ async function seedLiveChildForCallRow(
  * 固定轮换会与 CAS 的期望值对上号，几轮之后反而让 CAS 赢了。
  */
 function starveTaskCancelCas(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   onAttempt: () => void,
 ): () => Promise<void> {
   return async () => {
+    const { tasks } = tablesOf(db)
     const current = (
       await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
     )[0]?.status
@@ -265,8 +269,9 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
       const downId = `down_${kind.replace(/-/g, '_')}`
       const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, kind)
 
-      await retryVia(h, { taskId: taskId, nodeRunId: agentRunId, cascade: true })
+      await retryVia(h, { taskId, nodeRunId: agentRunId, cascade: true })
 
+      const { nodeRuns } = tablesOf(h.db)
       const placeholders = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.errorMessage === 'queued for retry')
@@ -282,8 +287,9 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
       const downId = `down_${kind.replace(/-/g, '_')}`
       const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, kind)
 
-      await retryVia(h, { taskId: taskId, nodeRunId: agentRunId, cascade: true })
+      await retryVia(h, { taskId, nodeRunId: agentRunId, cascade: true })
 
+      const { nodeRuns } = tablesOf(h.db)
       const placeholders = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.errorMessage === 'queued for retry')
@@ -294,6 +300,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
   test('CALL target — CAS winner cancels its live child before minting the next generation', async () => {
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
+    const { nodeRuns, tasks } = tablesOf(h.db)
     const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.nodeId === downId,
     )!
@@ -304,7 +311,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
 
-    await retryVia(h, { taskId: taskId, nodeRunId: callRow.id, cascade: false })
+    await retryVia(h, { taskId, nodeRunId: callRow.id, cascade: false })
 
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(child.status).toBe('canceled')
@@ -320,6 +327,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
   test('upstream cascade — cancels the downstream CALL row live child before minting', async () => {
     const downId = 'down_call_workgroup'
     const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, 'call-workgroup')
+    const { nodeRuns, tasks } = tablesOf(h.db)
     const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.nodeId === downId,
     )!
@@ -330,7 +338,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
       .where(eq(nodeRuns.id, callRow.id))
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
 
-    await retryVia(h, { taskId: taskId, nodeRunId: agentRunId, cascade: true })
+    await retryVia(h, { taskId, nodeRunId: agentRunId, cascade: true })
 
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(child.status).toBe('canceled')
@@ -346,6 +354,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
   test('unexpected child cancellation error fails closed without rollback/mint or pending task', async () => {
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
+    const { nodeRuns, tasks } = tablesOf(h.db)
     const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.nodeId === downId,
     )!
@@ -370,11 +379,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     }
 
     await expect(
-      retryVia(
-        h,
-        { taskId: taskId, nodeRunId: callRow.id, cascade: false },
-        childCancelBeforeStatusCas,
-      ),
+      retryVia(h, { taskId, nodeRunId: callRow.id, cascade: false }, childCancelBeforeStatusCas),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -402,6 +407,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
   test('child cancel CAS starvation fails retry closed without rollback or mint', async () => {
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
+    const { nodeRuns, tasks } = tablesOf(h.db)
     const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.nodeId === downId,
     )!
@@ -417,11 +423,7 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     })
 
     await expect(
-      retryVia(
-        h,
-        { taskId: taskId, nodeRunId: callRow.id, cascade: false },
-        childCancelBeforeStatusCas,
-      ),
+      retryVia(h, { taskId, nodeRunId: callRow.id, cascade: false }, childCancelBeforeStatusCas),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
     // Four earlier ownership / intent transactions (retry status CAS, intent claim,
@@ -470,10 +472,11 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     const downId = 'rev_x'
     const { taskId } = await seedTaskWithEdge(h, downId, 'review')
 
+    const { nodeRuns } = tablesOf(h.db)
     // Find the seeded review row and "retry" it.
     const reviewRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, downId)))[0]!
 
-    await retryVia(h, { taskId: taskId, nodeRunId: reviewRow.id, cascade: false })
+    await retryVia(h, { taskId, nodeRunId: reviewRow.id, cascade: false })
 
     const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const reviewRows = all.filter((r) => r.nodeId === downId)
@@ -488,12 +491,13 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     test(`TARGET — wrapper '${status}' row gets NO placeholder (revival signal, ⑥-11)`, async () => {
       const downId = 'down_wrapper_loop'
       const { taskId } = await seedTaskWithEdge(h, downId, 'wrapper-loop')
+      const { nodeRuns } = tablesOf(h.db)
       // Re-stamp the seeded wrapper row into the revival status and target it.
       const wrapRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, downId)))[0]!
       // rfc053-allow-direct-status-write -- test seeding, not a production transition
       await h.db.update(nodeRuns).set({ status }).where(eq(nodeRuns.id, wrapRow.id))
 
-      await retryVia(h, { taskId: taskId, nodeRunId: wrapRow.id, cascade: true })
+      await retryVia(h, { taskId, nodeRunId: wrapRow.id, cascade: true })
 
       const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       const wrapRows = all.filter((r) => r.nodeId === downId)
@@ -509,13 +513,14 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     for (const status of ['done', 'failed'] as const) {
       const downId = 'down_wrapper_loop'
       const { taskId } = await seedTaskWithEdge(h, downId, 'wrapper-loop')
+      const { nodeRuns } = tablesOf(h.db)
       const wrapRow = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.nodeId === downId)[0]!
       // rfc053-allow-direct-status-write -- test seeding, not a production transition
       await h.db.update(nodeRuns).set({ status }).where(eq(nodeRuns.id, wrapRow.id))
 
-      await retryVia(h, { taskId: taskId, nodeRunId: wrapRow.id, cascade: false })
+      await retryVia(h, { taskId, nodeRunId: wrapRow.id, cascade: false })
 
       const wrapRows = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

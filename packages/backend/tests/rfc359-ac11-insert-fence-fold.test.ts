@@ -24,11 +24,12 @@
 // ③ **不该折的形状原路走**——`on conflict` / `returning` / 多行 `values` 一律不进快路径。
 //    这三类的行为必须与折叠前逐字相同。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { users } from '@/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_800_000_000_000
@@ -49,13 +50,15 @@ describeEachProvider('RFC-359 AC-11 · 单行 INSERT 围栏内联（双引擎）
   // 快路径要求本进程已给这一代记过首次写；先做一笔写把那个一次性标记走掉，
   // 否则测到的是「第一笔写」的形状而不是稳态形状。
   async function warmGenerationMark(): Promise<void> {
-    await harness.db.insert(users).values(userRow(`warm_${ulid()}`))
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, userRow(`warm_${ulid()}`))
   }
 
   test('① 写照样落库，两个引擎结果相同', async () => {
     await warmGenerationMark()
     const id = `u_${ulid()}`
-    await harness.db.insert(users).values(userRow(id))
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, userRow(id))
     const rows = await harness.db.select().from(users).where(eq(users.id, id))
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ id, role: 'user', status: 'active' })
@@ -65,7 +68,8 @@ describeEachProvider('RFC-359 AC-11 · 单行 INSERT 围栏内联（双引擎）
     await warmGenerationMark()
     const id = `u_${ulid()}`
     const recording = harness.recordStatements()
-    await harness.db.insert(users).values(userRow(id))
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, userRow(id))
     const statements = recording.statements.map((row) => String(row.sql))
     recording.stop()
 
@@ -81,11 +85,21 @@ describeEachProvider('RFC-359 AC-11 · 单行 INSERT 围栏内联（双引擎）
   test('③ 不该折的形状原路走且行为不变：on conflict 幂等、returning 取回行', async () => {
     await warmGenerationMark()
     const id = `u_${ulid()}`
-    await harness.db.insert(users).values(userRow(id))
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, userRow(id))
     // 同一主键再插一次：`on conflict do nothing` 必须是幂等的（不抛、不改行）。
     await harness.db.insert(users).values(userRow(id)).onConflictDoNothing()
     expect(await harness.db.select().from(users).where(eq(users.id, id))).toHaveLength(1)
 
+    const multi = [userRow(`multi_${ulid()}`), userRow(`multi_${ulid()}`)]
+    const recording = harness.recordStatements()
+    await harness.db.insert(users).values(multi)
+    recording.stop()
+    expect(await harness.db.select().from(users).where(eq(users.id, multi[0]!.id))).toHaveLength(1)
+    if (harness.capabilities.isolation === 'read-committed') {
+      expect(recording.statements.filter((row) => row.sql === 'BEGIN')).toHaveLength(1)
+      expect(recording.statements.filter((row) => row.sql === 'COMMIT')).toHaveLength(1)
+    }
     const returnedId = `u_${ulid()}`
     const returned = await harness.db
       .insert(users)
@@ -103,13 +117,11 @@ describeEachProvider('RFC-359 AC-11 · 单行 INSERT 围栏内联（双引擎）
     try {
       const blocked = `u_${ulid()}`
       const recording = harness.recordStatements()
-      const rejected = await harness.db
-        .insert(users)
-        .values(userRow(blocked))
-        .then(
-          () => null,
-          (error: unknown) => error,
-        )
+      const { users } = tablesOf(harness.db)
+      const rejected = await Promise.resolve(insertOne(harness.db, users, userRow(blocked))).then(
+        () => null,
+        (error: unknown) => error,
+      )
       const attempted = recording.statements.map((row) => String(row.sql))
       recording.stop()
       // 拒绝必须发生在**折叠后的那一条**上，而不是退回四往返路径顺便被老围栏拦住——
@@ -133,7 +145,8 @@ describeEachProvider('RFC-359 AC-11 · 单行 INSERT 围栏内联（双引擎）
     }
     // 恢复之后写照样落得下去——上面那条拒绝不是把库弄坏了。
     const after = `u_${ulid()}`
-    await harness.db.insert(users).values(userRow(after))
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, userRow(after))
     expect(await harness.db.select().from(users).where(eq(users.id, after))).toHaveLength(1)
   })
 })

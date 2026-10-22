@@ -12,6 +12,9 @@
 //   S9  migration 0108: per-column assertions on BOTH tables (a count-style
 //       assertion would stay green with a single column missing).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
@@ -24,7 +27,6 @@ import {
   redactedProvider,
   type OidcProvidersService,
 } from '../src/services/oidcProviders'
-import { users } from '../src/db/schema'
 import { createIdentity } from '../src/services/userIdentities'
 import { DomainError } from '../src/util/errors'
 
@@ -80,7 +82,8 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 }
 
 async function seedUserAndIdentity(h: Harness, providerId: string): Promise<void> {
-  await h.db.insert(users).values({
+  const { users } = tablesOf(h.db)
+  await insertOne(h.db, users, {
     id: 'user-1',
     username: 'alice',
     email: 'alice@corp.test',
@@ -298,9 +301,12 @@ describe('RFC-220 S2 — provider service', () => {
 describe('RFC-220 S9 — migration columns', () => {
   test('oidc_providers has endpoint and profile-selector columns with expected defaults', () => {
     const { db } = buildHarness()
-    const cols = db.all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(
-      sql`PRAGMA table_info(oidc_providers)`,
-    )
+    const cols = rawRows<{
+      name: string
+      type: string
+      notnull: number
+      dflt_value: string | null
+    }>(db, sql`PRAGMA table_info(oidc_providers)`, { notnull: 'int' })
     const byName = new Map(cols.map((c) => [c.name, c]))
     for (const name of [
       'authorization_endpoint',
@@ -330,8 +336,10 @@ describe('RFC-220 S9 — migration columns', () => {
 
   test('user_identities gained nullable preferred_snapshot with no default', () => {
     const { db } = buildHarness()
-    const cols = db.all<{ name: string; notnull: number; dflt_value: string | null }>(
+    const cols = rawRows<{ name: string; notnull: number; dflt_value: string | null }>(
+      db,
       sql`PRAGMA table_info(user_identities)`,
+      { notnull: 'int' },
     )
     const snap = cols.find((c) => c.name === 'preferred_snapshot')
     expect(snap).toBeDefined()

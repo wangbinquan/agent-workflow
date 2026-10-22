@@ -1,10 +1,10 @@
 // RFC-370 H6: real DB phases around selected asynchronous identity effects.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills, skillVersions } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { SkillIdentityContentStore } from '@/modules/resource-catalog/application/skills/identityContentStore'
 import type { SkillIdentityInspector } from '@/modules/resource-catalog/application/skills/identityInspector'
@@ -96,6 +96,7 @@ describeEachProvider('RFC-370 skill identity content', (harness) => {
       },
     )
     skillId = row.id
+    const { skills, skillVersions } = tablesOf(harness.db)
     await harness.db
       .update(skills)
       .set({ managedPath: 'skills/identity-before/files' })
@@ -107,6 +108,7 @@ describeEachProvider('RFC-370 skill identity content', (harness) => {
   })
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
   async function managedPath() {
+    const { skills } = tablesOf(harness.db)
     return (
       await harness.db
         .select({ path: skills.managedPath })
@@ -275,6 +277,7 @@ describeEachProvider('RFC-370 skill identity content', (harness) => {
   })
 
   test('husk cleanup waits after DB deletion and uses the selected content receipt', async () => {
+    const { skillVersions, skills } = tablesOf(harness.db)
     await harness.db.delete(skillVersions).where(eq(skillVersions.skillId, skillId))
     await harness.db
       .update(skills)
@@ -319,6 +322,7 @@ describeEachProvider('RFC-370 skill identity content', (harness) => {
   })
 
   test('published reserve storage proof waits before its operation is retired', async () => {
+    const { skills, skillVersions } = tablesOf(harness.db)
     await harness.db
       .update(skills)
       .set({ managedPath: skillFilesRel(skillId) })

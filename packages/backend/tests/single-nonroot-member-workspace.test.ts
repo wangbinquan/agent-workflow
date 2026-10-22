@@ -6,6 +6,8 @@
 // Both providers exercise production operations; root and multi-member controls
 // also cover root sparse/explicit-directory layouts materialized as groups.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,7 +16,6 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { computeSummary, type StructuralDiff } from '@agent-workflow/shared'
 import { gitStashSnapshot } from '@/util/git'
-import { nodeRunOutputs, nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
 import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/public/participants'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
@@ -82,6 +83,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
     return singleMemberWorkspaceFixture(harness, { ...shape, tmp, appHome, cleanup })
   }
   async function settle(taskId: string, status: 'done' | 'interrupted') {
+    const { taskExecutionIntents, tasks } = tablesOf(harness.db)
     await harness.db
       .update(taskExecutionIntents)
       .set({ state: 'completed', completedAt: 1 })
@@ -126,9 +128,13 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
         const binding = { persistence: createTaskExecutionPersistence(harness.db) }
         const runId = ulid()
-        await harness.db
-          .insert(nodeRuns)
-          .values({ id: runId, taskId: task.id, nodeId: 'A', status: 'running' })
+        const { nodeRuns } = tablesOf(harness.db)
+        await insertOne(harness.db, nodeRuns, {
+          id: runId,
+          taskId: task.id,
+          nodeId: 'A',
+          status: 'running',
+        })
         const writeSem = new Semaphore(1)
         const handle = await createIsoUnderLock({
           binding,
@@ -191,7 +197,8 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         async () => {
           const { task } = await fixture(shape)
           const runId = ulid()
-          await harness.db.insert(nodeRuns).values({
+          const { nodeRuns } = tablesOf(harness.db)
+          await insertOne(harness.db, nodeRuns, {
             id: runId,
             taskId: task.id,
             nodeId: 'A',
@@ -226,7 +233,8 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
       async () => {
         const { task } = await fixture(shape)
         const runId = ulid()
-        await harness.db.insert(nodeRuns).values({
+        const { nodeRuns } = tablesOf(harness.db)
+        await insertOne(harness.db, nodeRuns, {
           id: runId,
           taskId: task.id,
           nodeId: 'G',
@@ -321,12 +329,19 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const { task } = await fixture(shape)
         const runId = ulid()
         writeFileSync(join(task.repos[0]!.worktreePath, 'notes.md'), 'artifact\n')
-        await harness.db
-          .insert(nodeRuns)
-          .values({ id: runId, taskId: task.id, nodeId: 'A', status: 'done' })
-        await harness.db
-          .insert(nodeRunOutputs)
-          .values({ nodeRunId: runId, portName: 'result', content: 'notes.md', kind: 'path<md>' })
+        const { nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
+        await insertOne(harness.db, nodeRuns, {
+          id: runId,
+          taskId: task.id,
+          nodeId: 'A',
+          status: 'done',
+        })
+        await insertOne(harness.db, nodeRunOutputs, {
+          nodeRunId: runId,
+          portName: 'result',
+          content: 'notes.md',
+          kind: 'path<md>',
+        })
         const found = await createTaskExecutionReadModels(harness.db).portArtifacts.find({
           taskId: task.id,
           nodeRunId: runId,
@@ -369,9 +384,13 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
               preSnapshot: shape.scalar ? snapshots['']! : null,
               preSnapshotReposJson: shape.scalar ? null : JSON.stringify(snapshots),
             }
-            await harness.db
-              .insert(nodeRuns)
-              .values({ ...run, taskId: task.id, nodeId: 'A', status: 'failed' })
+            const { nodeRuns } = tablesOf(harness.db)
+            await insertOne(harness.db, nodeRuns, {
+              ...run,
+              taskId: task.id,
+              nodeId: 'A',
+              status: 'failed',
+            })
             const target = (await loadRollbackTarget(harness.db, task.id))!
             if (operation === 'plan') {
               const plan = planNodeRunRollbackTargets(target, run, { resetOnEmptySnapshot })
@@ -482,6 +501,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
               await workspaceGit(repo.repoPath, ['for-each-ref', '--format=%(refname)', ref]),
             ).toBe('')
           }
+          const { tasks } = tablesOf(harness.db)
           expect(
             (await harness.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!
               .workspacePrunedAt,

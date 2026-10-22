@@ -2,16 +2,10 @@
 // prepareApprovalSaga 的幂等落 `employee_approval_sagas_idempotency_unique`（onConflictDoNothing + 回读同一笔事务）；
 // publishCandidateAndWorkspace 两张表的更新在统一事务里。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { desc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  employeeApprovalSagas,
-  employeeCaseWorkspaces,
-  employeeChangeCandidates,
-  employeeRoundWorkspaceStates,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   EmployeeApprovalSagaRecord,
@@ -21,29 +15,30 @@ import type {
 import type { EmployeeCaseWorkspaceRow } from '../application/ports/employeeWorkspacePersistence'
 
 function approvalRecord(
-  row: typeof employeeApprovalSagas.$inferSelect,
+  row: PersistenceTables['employeeApprovalSagas']['$inferSelect'],
 ): EmployeeApprovalSagaRecord {
   return row
 }
 
 function candidateRecord(
-  row: typeof employeeChangeCandidates.$inferSelect,
+  row: PersistenceTables['employeeChangeCandidates']['$inferSelect'],
 ): EmployeeChangeCandidateRecord {
   return row
 }
 
 function workspaceRecord(
-  row: typeof employeeCaseWorkspaces.$inferSelect,
+  row: PersistenceTables['employeeCaseWorkspaces']['$inferSelect'],
 ): EmployeeCaseWorkspaceRow {
   return row
 }
 
 export function createEmployeePlatformWorkItemPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): EmployeePlatformWorkItemPersistence {
   const session = databaseSessionFor(db)
   return {
     async currentWorkspace(caseId) {
+      const { employeeCaseWorkspaces, cachedRepos } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -65,6 +60,7 @@ export function createEmployeePlatformWorkItemPersistence(
     },
     async prepareApprovalSaga(input) {
       return await session.transaction(async (tx) => {
+        const { employeeApprovalSagas } = tablesOf(tx)
         await tx
           .insert(employeeApprovalSagas)
           .values(input)
@@ -80,6 +76,7 @@ export function createEmployeePlatformWorkItemPersistence(
       })
     },
     async approvalSaga(idempotencyKey) {
+      const { employeeApprovalSagas } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -90,6 +87,7 @@ export function createEmployeePlatformWorkItemPersistence(
       return row === undefined ? null : approvalRecord(row)
     },
     async recordApprovalSubmission(input) {
+      const { employeeApprovalSagas } = tablesOf(db)
       await db
         .update(employeeApprovalSagas)
         .set({
@@ -103,6 +101,7 @@ export function createEmployeePlatformWorkItemPersistence(
         .where(eq(employeeApprovalSagas.idempotencyKey, input.idempotencyKey))
     },
     async recordApprovalObservation(input) {
+      const { employeeApprovalSagas } = tablesOf(db)
       await db
         .update(employeeApprovalSagas)
         .set({
@@ -115,6 +114,7 @@ export function createEmployeePlatformWorkItemPersistence(
         .where(eq(employeeApprovalSagas.idempotencyKey, input.idempotencyKey))
     },
     async insertCandidate(input) {
+      const { employeeChangeCandidates } = tablesOf(db)
       await db
         .insert(employeeChangeCandidates)
         .values({
@@ -126,6 +126,7 @@ export function createEmployeePlatformWorkItemPersistence(
         .onConflictDoNothing()
     },
     async candidate(candidateRef) {
+      const { employeeChangeCandidates } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -136,6 +137,7 @@ export function createEmployeePlatformWorkItemPersistence(
       return row === undefined ? null : candidateRecord(row)
     },
     async recordCandidateCommit(input) {
+      const { employeeChangeCandidates } = tablesOf(db)
       await db
         .update(employeeChangeCandidates)
         .set({ state: 'committed', commitSha: input.commitSha, updatedAt: input.updatedAt })
@@ -143,6 +145,7 @@ export function createEmployeePlatformWorkItemPersistence(
     },
     async publishCandidateAndWorkspace(input) {
       await session.transaction(async (tx) => {
+        const { employeeChangeCandidates, employeeCaseWorkspaces } = tablesOf(tx)
         await tx
           .update(employeeChangeCandidates)
           .set({
@@ -164,6 +167,7 @@ export function createEmployeePlatformWorkItemPersistence(
       })
     },
     async updateWorkspaceHead(input) {
+      const { employeeCaseWorkspaces } = tablesOf(db)
       await db
         .update(employeeCaseWorkspaces)
         .set({
@@ -175,6 +179,7 @@ export function createEmployeePlatformWorkItemPersistence(
         .where(eq(employeeCaseWorkspaces.caseId, input.caseId))
     },
     async latestRoundValidation(roundId) {
+      const { employeeRoundWorkspaceStates } = tablesOf(db)
       const row = (
         await db
           .select({ validationJson: employeeRoundWorkspaceStates.validationJson })

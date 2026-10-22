@@ -9,11 +9,12 @@
 //     envelope-followup retries (RFC-042); NULL stays NULL.
 //   - parseInjectedSnapshotJson defends against corrupt rows.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { parseInjectedSnapshotJson } from '../src/modules/memory/domain/injectionRendering'
 import {
   injectMemoryForRun,
@@ -42,11 +43,10 @@ function mkAgent(id: string, name = id): Agent {
   } as unknown as Agent
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-): Promise<{ taskId: string; workflowId: string }> {
+async function seedTask(db: PersistenceDb): Promise<{ taskId: string; workflowId: string }> {
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -55,7 +55,7 @@ async function seedTask(
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -73,7 +73,7 @@ async function seedTask(
 }
 
 async function seedApproved(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     scopeType: 'agent' | 'workflow' | 'repo' | 'global'
     scopeId: string | null
@@ -87,7 +87,8 @@ async function seedApproved(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id,
     scopeType: opts.scopeType,
     scopeId: opts.scopeId,
@@ -104,7 +105,7 @@ async function seedApproved(
 }
 
 describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db
@@ -225,7 +226,7 @@ describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness
 })
 
 describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -245,7 +246,8 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
     status?: 'done' | 'failed' | 'pending' | 'running' | 'interrupted'
   }): Promise<string> {
     const id = opts.id ?? ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id,
       taskId: opts.taskId,
       nodeId: opts.nodeId,

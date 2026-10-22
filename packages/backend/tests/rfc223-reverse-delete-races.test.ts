@@ -4,6 +4,8 @@
 // blocks deletion. Managed-skill deletion additionally proves the fs-staged
 // root/trash/op/lock rollback is complete before the ACL-safe error escapes.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,9 +13,8 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, mcps, plugins, skillOperationLocks, skills } from '../src/db/schema'
 import {
   composeMcpServiceBindingForTest,
   createMcpForTest as createMcp,
@@ -45,10 +46,11 @@ const ACTOR = buildActor({
 })
 
 async function insertReferencingAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { name: string; mcp?: string[]; plugins?: string[]; skillId?: string },
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name: input.name,
     mcp: JSON.stringify(input.mcp ?? []),
@@ -74,7 +76,7 @@ function assertHiddenReference(error: unknown, code: string, privateName: string
 }
 
 describeEachProvider('RFC-223 reverse-reference delete transaction races', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
 
   beforeEach(() => {
@@ -119,6 +121,7 @@ describeEachProvider('RFC-223 reverse-reference delete transaction races', (harn
     const mcpBinding = composeMcpServiceBindingForTest(db, {
       actor: ACTOR,
       beforeDelete: async () => {
+        const { mcps } = tablesOf(db)
         await db
           .update(mcps)
           .set({ ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 })
@@ -137,6 +140,7 @@ describeEachProvider('RFC-223 reverse-reference delete transaction races', (harn
     await expect(deleteMcp(mcpBinding, mcp.id)).rejects.toMatchObject({
       code: 'resource-operation-stale',
     })
+    const { mcps } = tablesOf(db)
     expect((await db.select().from(mcps).where(eq(mcps.id, mcp.id)).limit(1))[0]).toMatchObject({
       id: mcp.id,
       ownerUserId: 'u-other',
@@ -147,7 +151,8 @@ describeEachProvider('RFC-223 reverse-reference delete transaction races', (harn
 
   test('plugin: an agent reference saved after the preliminary scan blocks the full-row-fenced DELETE', async () => {
     const pluginId = ulid()
-    await db.insert(plugins).values({
+    const { plugins } = tablesOf(db)
+    await insertOne(db, plugins, {
       id: pluginId,
       name: 'race-plugin',
       spec: 'file:/tmp/race-plugin.js',
@@ -213,6 +218,7 @@ describeEachProvider('RFC-223 reverse-reference delete transaction races', (harn
 
     assertHiddenReference(caught, 'skill-in-use', 'private-skill-user')
     expect(await getSkillById(db, skill.id)).not.toBeNull()
+    const { skills, skillOperationLocks } = tablesOf(db)
     expect(
       (await db.select({ id: skills.id }).from(skills).where(eq(skills.id, skill.id))).length,
     ).toBe(1)

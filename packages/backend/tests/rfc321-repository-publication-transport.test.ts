@@ -3,6 +3,7 @@
 // personal > global selection, deterministic SSH -> HTTP(S), one fixed
 // exact-target lease per publication attempt, and no fallback after selection.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 import {
@@ -18,9 +19,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { userRepositoryTransportCredentials } from '../src/db/schema'
 import { missionPublicationSubject } from '../src/modules/development-automation/application/missionDeliveryChain'
 import type { RepositoryGit } from '../src/modules/source-control/application/repositoryCommit'
 import type { CandidatePublicationTransport } from '../src/modules/source-control/application/deliverCandidate'
@@ -61,7 +61,7 @@ function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
 }
 
-function repositoryOf(db: ProviderNeutralDatabase) {
+function repositoryOf(db: PersistenceDb) {
   return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
@@ -578,6 +578,7 @@ describeEachProvider('RFC-321 repository publication transport', (harness) => {
       connectionGeneration: 'github-generation',
       endpointBindingDigest: DIGEST,
     })
+    const { userRepositoryTransportCredentials } = tablesOf(db)
     await db
       .update(userRepositoryTransportCredentials)
       .set({ endpointBindingDigest: 'b'.repeat(64) })

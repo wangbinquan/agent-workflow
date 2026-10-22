@@ -17,16 +17,16 @@
 // 共用那份走两段式交棒（准入 CAS 落 `interrupted` 并打 `continuationHandoff` 标记，随后才交给
 // 复活端口，由它 CAS 回 `pending`）。对外可见的终态仍是 `pending`——下面 AC-1 / AC-3 断的就是它。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { selectSyncRollbackTargets, buildSyncRunSummary } from '../src/services/task'
-import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -79,7 +79,7 @@ interface Fixture {
 }
 
 async function seedFixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: TaskStatus,
   snapshot: WorkflowDefinition = DEF_A,
 ): Promise<Fixture> {
@@ -95,13 +95,14 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
+  const { users, workflows, tasks } = tablesOf(db)
   const existing = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.id, USER_ID))
     .limit(1)
   if (existing.length === 0) {
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id: USER_ID,
       username: USER_ID,
       displayName: USER_ID,
@@ -112,14 +113,14 @@ async function seedFixture(
     })
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `w-${workflowId}`,
     definition: JSON.stringify(DEF_A),
     version: 1,
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -146,11 +147,12 @@ async function seedFixture(
 
 /** Bump the live workflow to a new definition + version (mirrors a PUT). */
 async function bumpWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
   definition: WorkflowDefinition,
   version: number,
 ): Promise<void> {
+  const { workflows } = tablesOf(db)
   await db
     .update(workflows)
     .set({ definition: JSON.stringify(definition), version })
@@ -217,6 +219,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     const after = await syncVia(harness, f, 2)
     expect(after.status).toBe('pending')
     expect(after.workflowVersion).toBe(2)
+    const { tasks } = tablesOf(harness.db)
     const row = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
     expect(JSON.parse(row.workflowSnapshot)).toEqual(migrateWorkflowDefinitionToLatest(DEF_B))
     expect(row.workflowVersion).toBe(2)
@@ -255,6 +258,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
 
   test('AC-8: workflow deleted → workflow-deleted (defensive; RFC-285 起 workflow_id 是软链)', async () => {
     f = await seedFixture(harness.db, 'failed')
+    const { workflows } = tablesOf(harness.db)
     await harness.db.delete(workflows).where(eq(workflows.id, f.workflowId))
     expect(await codeOf(() => syncVia(harness, f!, 1))).toBe('workflow-deleted')
   })
@@ -263,6 +267,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     f = await seedFixture(harness.db, 'failed')
     await bumpWorkflow(harness.db, f.workflowId, defWith([inputNode('a'), inputNode('b')]), 2)
     expect(await codeOf(() => syncVia(harness, f!, 1))).toBe('workflow-sync-preview-stale')
+    const { tasks } = tablesOf(harness.db)
     const row = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
     expect(row.workflowVersion).toBe(1) // unchanged
     expect(row.status).toBe('failed')
@@ -272,6 +277,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     f = await seedFixture(harness.db, 'done')
     await bumpWorkflow(harness.db, f.workflowId, DEF_A, 2) // identical content, new version
     expect(await codeOf(() => syncVia(harness, f!, 2))).toBe('workflow-sync-noop')
+    const { tasks } = tablesOf(harness.db)
     const row = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
     expect(row.status).toBe('done') // not churned
   })
@@ -292,6 +298,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
       edges: [],
     }
     const finishedAt = Date.now() - 10
+    const { tasks } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({
@@ -337,6 +344,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
 
   test('AC-10: worktree missing → worktree-missing', async () => {
     f = await seedFixture(harness.db, 'failed')
+    const { tasks } = tablesOf(harness.db)
     await harness.db.update(tasks).set({ worktreePath: '' }).where(eq(tasks.id, f.taskId))
     await bumpWorkflow(harness.db, f.workflowId, defWith([inputNode('a'), inputNode('b')]), 2)
     expect(await codeOf(() => syncVia(harness, f!, 2))).toBe('worktree-missing')
@@ -356,8 +364,9 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
 
   test('AC-2: a node added to a done task is dispatched after sync', async () => {
     f = await seedFixture(harness.db, 'done')
+    const { nodeRuns } = tablesOf(harness.db)
     // seed the original node as a completed run
-    await harness.db.insert(nodeRuns).values({
+    await insertOne(harness.db, nodeRuns, {
       id: ulid(),
       taskId: f.taskId,
       nodeId: 'a',
@@ -420,7 +429,7 @@ describe('RFC-109 selectSyncRollbackTargets (Codex F4)', () => {
 })
 
 describe('RFC-109 buildSyncRunSummary — live wrapper state (Codex re-review P2)', () => {
-  type Row = typeof nodeRunsTable.$inferSelect
+  type Row = PersistenceTables['nodeRuns']['$inferSelect']
   const wrun = (over: Partial<Row>): Row =>
     ({
       id: ulid(),

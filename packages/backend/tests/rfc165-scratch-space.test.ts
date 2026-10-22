@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
@@ -41,7 +43,6 @@ import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { WORKSPACE_ORPHAN_MIN_AGE_MS } from '@/modules/source-control/application/workspaceMaintenance'
-import { taskRepos, tasks, workflows, users } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -56,15 +57,14 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-scratch-'))
   const db = createInMemoryDb(MIGRATIONS)
-  db.insert(workflows)
-    .values({
-      id: 'wf-scratch',
-      name: 'wf',
-      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows } = tablesOf(db)
+  insertOne(db, workflows, {
+    id: 'wf-scratch',
+    name: 'wf',
+    definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   return {
     db,
     appHome,
@@ -108,6 +108,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const head = await runGit(scratchDir, ['rev-parse', 'HEAD'])
     expect(task.baseCommit).toBe(head.stdout.trim())
 
+    const { taskRepos } = tablesOf(h.db)
     // Single task_repos row mirrors the scratch layout.
     const rows = await h.db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id))
     expect(rows.length).toBe(1)
@@ -137,7 +138,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     ])
     expect(plainAuthor.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
 
-    await h.db.insert(users).values({
+    const { users } = tablesOf(h.db)
+    await insertOne(h.db, users, {
       id: 'scratch-owner',
       username: 'scratch-owner',
       email: 'a@example.com',
@@ -209,6 +211,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(task.worktreePath).toBe('')
     expect(task.errorMessage ?? '').toContain('scratch-')
 
+    const { tasks } = tablesOf(h.db)
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!
     expect(row.spaceKind).toBe('scratch')
     // R3-2-r4: no revivable workspace ⇒ tombstoned atomically with the row.
@@ -268,6 +271,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(existsSync(details.path)).toBe(true)
     expect((await runGit(details.path, ['rev-parse', '--git-dir'])).exitCode).toBe(0)
     expect(materializingSpaces.has(details.taskId)).toBe(false)
+    const { tasks } = tablesOf(h.db)
     expect(await h.db.select().from(tasks)).toHaveLength(0)
 
     // No row is committed on this 500 path. Recovery therefore uses the
@@ -322,6 +326,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       get(target, prop, receiver) {
         if (prop === 'insert') {
           return (table: unknown) => {
+            const { taskRepos } = tablesOf(h.db)
             if (table === taskRepos) throw new Error('boom-task-repos-insert')
             return (target as unknown as { insert: (t: unknown) => unknown }).insert(table)
           }
@@ -344,6 +349,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       ),
     ).rejects.toThrow('boom-task-repos-insert')
 
+    const { tasks } = tablesOf(realDb)
     // The transaction rolled back — no task row survives, the per-task
     // scratch dir is cleaned (the empty `scratch/` parent may remain),
     // lease freed.
@@ -419,6 +425,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     )
     expect(task.id).toBe(space.taskId)
     expect(task.status).toBe('failed')
+    const { tasks } = tablesOf(h.db)
     const rows = await h.db.select().from(tasks).where(eq(tasks.id, space.taskId))
     expect(rows.length).toBe(1)
     expect(rows[0]!.workspacePrunedAt).not.toBe(null)

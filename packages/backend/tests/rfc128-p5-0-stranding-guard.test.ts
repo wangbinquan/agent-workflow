@@ -29,14 +29,15 @@
 // rfc128-p2-per-question-endpoint.test.ts 的 P5-0 块）。任一断言变红 = guard 行为被改，
 // 须确认是 P5-B/C 有意放开（届时把锁迁移到逐题重跑语义），而非误删。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -98,13 +99,11 @@ function crossDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  def: WorkflowDefinition,
-): Promise<{ taskId: string }> {
+async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -112,7 +111,7 @@ async function seedTask(
     version: 1,
     schemaVersion: def.$schema_version,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,
@@ -133,12 +132,13 @@ async function seedTask(
 }
 
 async function seedSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
   const sourceRunId = `nr_src_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -162,11 +162,12 @@ async function seedSelfRound(
 }
 
 async function seedCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
   const questionerRunId = `nr_q_${Math.random().toString(36).slice(2, 8)}`
+  const { nodeRuns } = tablesOf(db)
   await db.insert(nodeRuns).values([
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     {
@@ -192,11 +193,13 @@ async function seedCrossRound(
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
-function roundOf(db: ProviderNeutralDatabase, taskId: string) {
+function roundOf(db: PersistenceDb, taskId: string) {
+  const { clarifyRounds } = tablesOf(db)
   return db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
 }
 
-function nodeRunStatusOf(db: ProviderNeutralDatabase, id: string) {
+function nodeRunStatusOf(db: PersistenceDb, id: string) {
+  const { nodeRuns } = tablesOf(db)
   return db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, id))
 }
 
@@ -205,7 +208,7 @@ function nodeRunStatusOf(db: ProviderNeutralDatabase, id: string) {
  *  flag audit W0, design/flag-audit-2026-07-07.md §3 — so this is now the plain primitive.
  *  RFC-162: the per-question `scopes` arg is gone too — scope deleted, cross unified with self.) */
 async function sealGuarded(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   originNodeRunId: string,
   answers: ClarifyAnswer[],
 ): Promise<{ error?: unknown; result?: Awaited<ReturnType<typeof sealRoundQuestions>> }> {

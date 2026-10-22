@@ -2,7 +2,7 @@
 //
 // 事件的 payload / identity / consumers 形状是纯函数（`*CommittedEventInput`）；同步的 dbTxSync
 // 参与者（`collaborationCommittedEventParticipant.ts`，过渡期保留给尚未迁移的同步调用方）与这里的
-// `DatabaseTransaction` 版本共用同一份形状。替代此前 PostgreSQL 侧的
+// `PersistenceTx` 版本共用同一份形状。替代此前 PostgreSQL 侧的
 // `postgresqlCollaborationCommittedEvents.ts`。
 
 import { appendCommittedEvent } from '@/platform/events/committed/append'
@@ -11,7 +11,7 @@ import {
   type AppendCommittedEventInput,
   type CommittedEventRef,
 } from '@/platform/events/committed/types'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   collaborationDurableConsumers,
   type CollaborationCommittedEventType,
@@ -190,35 +190,35 @@ export function questionDispatchCommittedEventInput(input: QuestionDispatchCommi
 }
 
 export async function appendHumanGateOpenedCommittedEvent(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: HumanGateOpenedCommittedEventInput,
 ): Promise<CommittedEventRef | null> {
   return (await appendCommittedEvent(tx, humanGateOpenedCommittedEventInput(input))).eventRef
 }
 
 export async function appendHumanGateDecisionCommittedEvent(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: HumanGateDecisionCommittedEventInput,
 ): Promise<CommittedEventRef | null> {
   return (await appendCommittedEvent(tx, humanGateDecisionCommittedEventInput(input))).eventRef
 }
 
 export async function appendReviewCommentsChangedCommittedEvent(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: ReviewCommentsChangedCommittedEventInput,
 ): Promise<CommittedEventRef | null> {
   return (await appendCommittedEvent(tx, reviewCommentsChangedCommittedEventInput(input))).eventRef
 }
 
 export async function appendReviewSelectionChangedCommittedEvent(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: ReviewSelectionChangedCommittedEventInput,
 ): Promise<CommittedEventRef | null> {
   return (await appendCommittedEvent(tx, reviewSelectionChangedCommittedEventInput(input))).eventRef
 }
 
 export async function appendQuestionDispatchCommittedEvent(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: QuestionDispatchCommittedEventInput,
 ): Promise<CommittedEventRef | null> {
   return (await appendCommittedEvent(tx, questionDispatchCommittedEventInput(input))).eventRef

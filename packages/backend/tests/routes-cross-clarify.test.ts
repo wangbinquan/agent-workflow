@@ -18,16 +18,17 @@
 //   5. If-Match mismatch returns 409 cross-clarify-iteration-mismatch.
 //   6. POST fails for cross-clarify with non-admin / non-target actor (auth gate).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { eq } from 'drizzle-orm'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -76,13 +77,14 @@ function defaultDef(): WorkflowDefinition {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { taskId?: string } = {},
   lineage?: typeof providerTaskLineage,
 ): Promise<{ taskId: string }> {
   const taskId = opts.taskId ?? `task_${ulid()}`
   const def = defaultDef()
   const workflowId = `wf_${taskId}`
+  const { workflows, tasks } = tablesOf(db)
   await db
     .insert(workflows)
     .values({
@@ -116,15 +118,16 @@ async function seedTask(
 }
 
 async function seedCrossClarifySession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { taskId?: string } = {},
   lineage?: typeof providerTaskLineage,
 ): Promise<{ taskId: string; intermediaryNodeRunId: string; sessionId: string }> {
   const { taskId } = await seedTask(db, opts.taskId ? { taskId: opts.taskId } : {}, lineage)
   const questionerRunId = ulid()
+  const { nodeRuns } = tablesOf(db)
   // Seed prior designer + questioner node_runs so the answer's auto-dispatch has
   // runs to inherit when the test submits with directive='continue'.
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: questionerRunId,
     taskId,
     nodeId: 'questioner',
@@ -132,7 +135,7 @@ async function seedCrossClarifySession(
     retryIndex: 0,
     iteration: 0,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: 'designer',
@@ -179,7 +182,8 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         edges: [],
         outputs: [],
       }
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: `wf_${taskA}`,
         name: 'wf',
         description: '',
@@ -187,7 +191,7 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         version: 1,
         schemaVersion: 3,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskA,
         name: 't',
         workflowId: `wf_${taskA}`,
@@ -201,7 +205,7 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         startedAt: Date.now() - 100, // earlier
       })
       const sourceRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: sourceRunId,
         taskId: taskA,
         nodeId: 'designer',
@@ -318,6 +322,7 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
       const body = (await res.json()) as { ok: boolean; kind: string; roundKind: string }
       expect(body.kind).toBe('autodispatch')
       expect(body.roundKind).toBe('cross')
+      const { nodeRuns } = tablesOf(db)
       const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       // The asker (questioner) re-runs; RFC-162 creates no designer entry → no designer rerun.
       expect(
@@ -355,6 +360,7 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
       const body = (await res.json()) as { kind: string; roundKind: string }
       expect(body.kind).toBe('autodispatch')
       expect(body.roundKind).toBe('cross')
+      const { nodeRuns, clarifyRounds } = tablesOf(db)
       const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       // stop → the questioner re-runs (with the STOP anchor); NO designer rerun.
       expect(
@@ -416,7 +422,7 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedTaskFixture: typeof seedTask,
     seedCrossClarifySessionFixture: typeof seedCrossClarifySession,
   ) => void,

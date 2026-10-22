@@ -2,11 +2,11 @@
 // visibility and persisted output/repository rows come from the selected
 // TaskExecution read model, including the external PostgreSQL implementation.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -30,7 +30,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql: query, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -58,10 +61,6 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 port-artifact provider cutover', () => {
   test('PostgreSQL freezes visibility, run ownership, output and repo prefix in one closed result', async () => {

@@ -97,10 +97,10 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(adapter).toContain('createChildExecutionLaunchOperations')
     expect(adapter).toContain('withSerializableTaskExecution')
     for (const write of [
-      'tx.insert(tasks)',
+      'insertOne(tx, tasks,',
       'tx.insert(taskRepos)',
-      'tx.insert(taskExecutionIntents)',
-      'tx.insert(workgroupTaskState)',
+      'insertOne(tx, taskExecutionIntents,',
+      'insertOne(tx, workgroupTaskState,',
       'appendTaskCreatedCommittedEvent',
     ]) {
       expect(adapter).toContain(write)

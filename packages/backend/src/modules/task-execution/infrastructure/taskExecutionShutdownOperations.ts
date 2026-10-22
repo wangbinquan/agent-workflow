@@ -4,11 +4,11 @@
 // lifecycle committed event。两边都**不过 owner 围栏**：幸存者正是预算用尽后驱动仍活着的任务，owner 行还是
 // `claimed`，这里是控制面的越权收场（下一次启动的孤儿收割也做同样的事），围栏在这条路上没有意义。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionOwners, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { TaskExecutionShutdownOperations } from '../application/ports/taskExecutionShutdownOperations'
 import { withTaskExecutionWrite } from './ownedTaskExecution'
@@ -16,9 +16,10 @@ import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTermin
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 export class DrizzleTaskExecutionShutdownOperations implements TaskExecutionShutdownOperations {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async listRunningTaskIds(): Promise<readonly string[]> {
+    const { tasks } = tablesOf(this.db)
     return (
       await this.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.status, 'running'))
     ).map((row) => row.id)
@@ -28,6 +29,7 @@ export class DrizzleTaskExecutionShutdownOperations implements TaskExecutionShut
     input: Parameters<TaskExecutionShutdownOperations['interruptSurvivor']>[0],
   ): Promise<boolean> {
     const eventRefs = await withTaskExecutionWrite(this.db, async (tx) => {
+      const { tasks } = tablesOf(tx)
       const current = (
         await tx
           .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
@@ -83,6 +85,7 @@ export class DrizzleTaskExecutionShutdownOperations implements TaskExecutionShut
   ): Promise<void> {
     // 取 SQLite 的形状：按精确 owner 元组 + revision 做 CAS 并推进 revision（PG 此前是按状态过滤的裸 UPDATE）。
     await withTaskExecutionWrite(this.db, async (tx) => {
+      const { taskExecutionOwners } = tablesOf(tx)
       const owner = (
         await tx
           .select({
@@ -116,7 +119,6 @@ export class DrizzleTaskExecutionShutdownOperations implements TaskExecutionShut
             inArray(taskExecutionOwners.state, ['claimed', 'revoked']),
           ),
         )
-        .run()
     })
   }
 }

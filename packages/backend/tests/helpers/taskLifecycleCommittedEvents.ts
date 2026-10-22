@@ -1,6 +1,6 @@
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   collaborationCommittedEventCodec,
   createCollaborationWsProjector,
@@ -18,13 +18,9 @@ import { registerAfterCommitEventPump } from '@/platform/events/committed/runtim
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
-  readonly onTerminalTask?: (db: ProviderNeutralDatabase, taskId: string, to: TaskStatus) => void
-  readonly onExecutionWatch?: (db: ProviderNeutralDatabase, taskId: string, to: TaskStatus) => void
-  readonly onWorkspacePrune?: (
-    db: ProviderNeutralDatabase,
-    taskId: string,
-    to: 'done' | 'canceled',
-  ) => void
+  readonly onTerminalTask?: (db: PersistenceDb, taskId: string, to: TaskStatus) => void
+  readonly onExecutionWatch?: (db: PersistenceDb, taskId: string, to: TaskStatus) => void
+  readonly onWorkspacePrune?: (db: PersistenceDb, taskId: string, to: 'done' | 'canceled') => void
 }
 
 /**
@@ -34,7 +30,7 @@ export interface TaskLifecycleAfterCommitTestCallbacks {
  * without resurrecting lifecycle's removed ambient hook slots.
  */
 export function installTaskLifecycleAfterCommitTestPump(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   callbacks: TaskLifecycleAfterCommitTestCallbacks,
 ): () => void {
   const pump = createAfterCommitEventPump({

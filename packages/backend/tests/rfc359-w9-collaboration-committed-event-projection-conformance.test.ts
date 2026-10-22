@@ -20,22 +20,15 @@
 //     SQLite 上排最后，PG 默认排最前，于是 `rerunNodeRunId` **指向一个还没下发的条目的重跑**。
 // 两条都只在真库上才分得出来，纸面读代码看不出，所以先补对拍再谈合一。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  committedEvents,
-  docVersions,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CollaborationCommittedEventProjection } from '@/modules/collaboration/application/ports/collaborationCommittedEventProjection'
 import { createCollaborationCommittedEventProjection } from '@/modules/collaboration/infrastructure/collaborationCommittedEventWsProjector'
 import type {
@@ -122,13 +115,11 @@ function definition(): WorkflowDefinition {
   } as unknown as WorkflowDefinition
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  name = 'rfc359 w9 projection',
-): Promise<string> {
+async function seedTask(db: PersistenceDb, name = 'rfc359 w9 projection'): Promise<string> {
   const taskId = `t_${ulid()}`
   const snapshot = JSON.stringify(definition())
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: `rfc359-w9-${taskId}`,
     description: '',
@@ -136,7 +127,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 6,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name,
     workflowId: `wf_${taskId}`,
@@ -156,20 +147,15 @@ async function seedTask(
   return taskId
 }
 
-async function seedRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  nodeId: string,
-): Promise<string> {
+async function seedRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${ulid()}`
-  await db
-    .insert(nodeRuns)
-    .values({ id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
   return id
 }
 
 async function seedDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     taskId: string
     reviewNodeRunId: string
@@ -183,7 +169,8 @@ async function seedDocVersion(
   const absolute = join(APP_HOME, bodyPath)
   mkdirSync(dirname(absolute), { recursive: true })
   writeFileSync(absolute, `# ${id}\n`)
-  await db.insert(docVersions).values({
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
     id,
     taskId: input.taskId,
     reviewNodeId: REVIEW,
@@ -214,9 +201,10 @@ interface RoundInput {
   truncationWarningsJson?: string | null
 }
 
-async function seedRound(db: ProviderNeutralDatabase, input: RoundInput): Promise<string> {
+async function seedRound(db: PersistenceDb, input: RoundInput): Promise<string> {
   const id = `cr_${ulid()}`
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id,
     taskId: input.taskId,
     kind: input.kind,
@@ -240,7 +228,7 @@ async function seedRound(db: ProviderNeutralDatabase, input: RoundInput): Promis
 }
 
 async function seedQuestionEntry(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     taskId: string
     originNodeRunId: string
@@ -250,7 +238,8 @@ async function seedQuestionEntry(
   },
 ): Promise<string> {
   const id = `tq_${ulid()}`
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId: input.taskId,
     originNodeRunId: input.originNodeRunId,
@@ -355,7 +344,7 @@ function decisionEvent(input: {
 
 /** 落一条 `question-dispatch-committed.v1` 到 committed_events（投影按 entryIds 反查重跑目标）。 */
 async function seedDispatchCommittedEvent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     taskId: string
     gateNodeRunId: string
@@ -393,7 +382,8 @@ async function seedDispatchCommittedEvent(
     },
   }
   const payloadJson = JSON.stringify(payload)
-  await db.insert(committedEvents).values({
+  const { committedEvents } = tablesOf(db)
+  await insertOne(db, committedEvents, {
     id: payload.eventId,
     eventGroupId: payload.eventGroupId,
     eventGroupOrdinal: 0,

@@ -7,20 +7,14 @@
 // tasks. These tests lock the fixes end-to-end at the service layer. If a
 // refactor turns any of these red, one of those audit P0/P1s is back.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRuns,
-  scheduledTasks,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
@@ -36,23 +30,24 @@ import { deleteWorkflow, scheduledRowsReferencingWorkflow } from '../src/service
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'
 
-type TaskStatusCol = (typeof tasks.$inferInsert)['status']
-type NodeRunStatusCol = (typeof nodeRuns.$inferInsert)['status']
+type TaskStatusCol = PersistenceTables['tasks']['$inferInsert']['status']
+type NodeRunStatusCol = PersistenceTables['nodeRuns']['$inferInsert']['status']
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { status?: TaskStatusCol; ownerUserId?: string | null } = {},
 ): Promise<{ taskId: string; workflowId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `wf-${taskId.slice(-6)}`,
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: `task-${taskId.slice(-6)}`,
     workflowId,
@@ -70,13 +65,14 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   status: NodeRunStatusCol,
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -90,11 +86,11 @@ async function seedRun(
 }
 
 async function seedClarifyRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   kind: 'self' | 'cross',
   intermediaryNodeRunId: string,
-  status: (typeof clarifyRounds.$inferInsert)['status'] = 'awaiting_human',
+  status: PersistenceTables['clarifyRounds']['$inferInsert']['status'] = 'awaiting_human',
 ): Promise<string> {
   const id = ulid()
   await insertClarifyRoundRaw(db, {
@@ -116,7 +112,7 @@ async function seedClarifyRound(
 }
 
 describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let uninstallAfterCommitPump: (() => void) | null = null
   beforeEach(() => {
     db = provider.db
@@ -134,10 +130,11 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     await seedClarifyRound(db, taskId, 'cross', crossRun)
 
     const sweep = createHumanGateTerminalSweepCommand(db)
-    const result = await sweep.run({ taskId: taskId, cause: 'task-canceled' })
+    const result = await sweep.run({ taskId, cause: 'task-canceled' })
     expect(result.sealedSelfRounds).toBe(1)
     expect(result.abandonedCrossRounds).toBe(1)
 
+    const { clarifyRounds, nodeRuns } = tablesOf(db)
     const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(rounds.find((r) => r.kind === 'self')?.status).toBe('canceled')
     const cross = rounds.find((r) => r.kind === 'cross')
@@ -164,7 +161,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     expect(xsessions[0]?.status).toBe('abandoned')
 
     // idempotent: second sweep is a no-op
-    const again = await sweep.run({ taskId: taskId, cause: 'task-canceled' })
+    const again = await sweep.run({ taskId, cause: 'task-canceled' })
     expect(again.sealedSelfRounds).toBe(0)
     expect(again.abandonedCrossRounds).toBe(0)
     expect(again.canceledRuns.length).toBe(0)
@@ -187,6 +184,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
       reason: 'test',
     })
     expect(won).toBe(true)
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, a.taskId)))[0]!
     expect(row.status).toBe('canceled')
     expect(calls).toEqual([{ taskId: a.taskId, to: 'canceled' }])
@@ -205,7 +203,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
 })
 
 describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let uninstallAfterCommitPump: (() => void) | null = null
   // RFC-359 W4-B3：终态清扫只有一份异步实现（统一事务原语），提交后钩子里是 fire-and-forget；
   // 用例要断言清扫结果就得等它落定，而不是假设 SQLite 侧仍是同步完成。
@@ -217,7 +215,7 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
       onTerminalTask(hookDb, taskId) {
         terminalSweeps.push(
           createHumanGateTerminalSweepCommand(hookDb).run({
-            taskId: taskId,
+            taskId,
             cause: 'task-canceled',
           }),
         )
@@ -235,6 +233,7 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
     const out = await cancelViaEngine(db, taskId)
     expect(out.status).toBe('canceled')
     await Promise.all(terminalSweeps)
+    const { clarifyRounds, nodeRuns } = tablesOf(db)
     const round = (
       await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
@@ -261,7 +260,7 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
 })
 
 describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = provider.db
   })
@@ -284,6 +283,7 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
         ],
       }),
     ).rejects.toMatchObject({ code: 'task-terminal' })
+    const { clarifyRounds } = tablesOf(db)
     // answers were NOT persisted
     const round = (
       await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -295,7 +295,8 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
   test('submitReviewDecision refuses decisions on a canceled task', async () => {
     const { taskId } = await seedTask(db, { status: 'canceled' })
     const run = await seedRun(db, taskId, 'rev_x', 'awaiting_review')
-    await db.insert(docVersions).values({
+    const { docVersions } = tablesOf(db)
+    await insertOne(db, docVersions, {
       id: ulid(),
       taskId,
       reviewNodeId: 'rev_x',
@@ -322,7 +323,7 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
 })
 
 describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination)', (provider) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = provider.db
   })
@@ -351,7 +352,8 @@ describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination
     const mk = async (status: TaskStatusCol) => {
       const t = await seedTask(db, { status })
       const run = await seedRun(db, t.taskId, 'rev_x', 'awaiting_review')
-      await db.insert(docVersions).values({
+      const { docVersions } = tablesOf(db)
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId: t.taskId,
         reviewNodeId: 'rev_x',
@@ -381,14 +383,15 @@ describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination
 })
 
 describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (provider) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = provider.db
   })
 
   async function seedSchedule(workflowId: string, owner: string, name: string): Promise<string> {
     const id = ulid()
-    await db.insert(scheduledTasks).values({
+    const { scheduledTasks } = tablesOf(db)
+    await insertOne(db, scheduledTasks, {
       id,
       name,
       ownerUserId: owner,
@@ -417,7 +420,8 @@ describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (prov
     const owner = 'user-owner'
     const { workflowId } = await (async () => {
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'wf-guarded',
         definition: '{}',
@@ -458,13 +462,15 @@ describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (prov
       expect(details.visibleScheduled.map((v) => v.name)).toEqual(['mine-daily'])
       expect(details.hiddenCount).toBe(1)
     }
+    const { workflows } = tablesOf(db)
     // workflow still present
     expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(1)
   })
 
   test('no referencing schedules → delete proceeds', async () => {
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'wf-free',
       definition: '{}',

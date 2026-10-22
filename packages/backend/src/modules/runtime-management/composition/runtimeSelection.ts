@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FrozenRuntimeRef } from '../public/participants'
 import type { ResolvedRuntime } from '../domain/runtimeProfile'
 import {
@@ -10,7 +10,7 @@ import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryE
 import { createRuntimeSelectionPersistence } from '../infrastructure/runtimeSelectionPersistence'
 
 export function composeRuntimeSelectionParticipantInTx(
-  transaction: ProviderNeutralDatabase,
+  transaction: PersistenceDb,
   assertTaskScope: () => void,
 ) {
   const reader = createRuntimeSelectionPersistence(transaction)

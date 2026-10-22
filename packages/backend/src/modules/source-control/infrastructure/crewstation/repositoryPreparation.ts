@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
@@ -53,7 +53,7 @@ interface HostedGroupPreparationPlan {
 type HostedPreparationPlan = HostedSinglePreparationPlan | HostedGroupPreparationPlan
 
 export function createHostedRepositoryPreparation(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly secretBox: SecretBox
   readonly helper: WorkspaceHelper
   readonly recoverMaterialization: (

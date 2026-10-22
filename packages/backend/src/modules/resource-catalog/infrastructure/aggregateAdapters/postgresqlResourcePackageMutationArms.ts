@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type {
   ResourcePackageSkillPublication as PostgresqlResourcePackageSkillPublication,
   ResourcePackagePluginPublication as PostgresqlResourcePackagePluginPublication,
@@ -41,16 +44,6 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
-import {
-  agents,
-  mcps,
-  plugins,
-  skillVersions,
-  skills,
-  workflows,
-  workgroupMembers,
-  workgroups,
-} from '@/db/schema'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
@@ -215,13 +208,10 @@ async function assertAgentResourceRows(input: {
 }): Promise<void> {
   const mcpIds = uniqueStrings(input.mcpIds)
   if (mcpIds.length > 0) {
+    const { mcps } = tablesOf(input.transaction)
     const known = new Set(
       (
-        await input.transaction
-          .select({ id: mcps.id })
-          .from(mcps)
-          .where(inArray(mcps.id, mcpIds))
-          .all()
+        await input.transaction.select({ id: mcps.id }).from(mcps).where(inArray(mcps.id, mcpIds))
       ).map((row) => row.id),
     )
     const missing = mcpIds.filter((id) => !known.has(id))
@@ -236,11 +226,11 @@ async function assertAgentResourceRows(input: {
 
   const pluginIds = uniqueStrings(input.pluginIds)
   if (pluginIds.length > 0) {
+    const { plugins } = tablesOf(input.transaction)
     const rows = await input.transaction
       .select({ id: plugins.id, enabled: plugins.enabled })
       .from(plugins)
       .where(inArray(plugins.id, pluginIds))
-      .all()
     const byId = new Map(rows.map((row) => [row.id, row.enabled]))
     const missing = pluginIds.filter((id) => !byId.has(id))
     if (missing.length > 0) {
@@ -264,13 +254,13 @@ async function assertAgentResourceRows(input: {
     input.skillRefs.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
   )
   if (skillIds.length > 0) {
+    const { skills } = tablesOf(input.transaction)
     const known = new Set(
       (
         await input.transaction
           .select({ id: skills.id })
           .from(skills)
           .where(and(inArray(skills.id, skillIds), eq(skills.reservationState, 'ready')))
-          .all()
       ).map((row) => row.id),
     )
     const missing = skillIds.filter((id) => !known.has(id))
@@ -293,11 +283,13 @@ async function assertAgentDependencyGraph(
     throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
   }
   await assertAgentDependencyTraversal(agentId, uniqueStrings(dependencyIds), async (id) => {
-    const row = await transaction
-      .select({ id: agents.id, dependsOn: agents.dependsOn })
-      .from(agents)
-      .where(eq(agents.id, id))
-      .get()
+    const { agents } = tablesOf(transaction)
+    const row = await first(
+      transaction
+        .select({ id: agents.id, dependsOn: agents.dependsOn })
+        .from(agents)
+        .where(eq(agents.id, id)),
+    )
     return row === undefined ? undefined : stringArray(row.dependsOn)
   })
 }
@@ -364,7 +356,12 @@ async function resolvedAgentInput(input: {
 }
 
 function ownerScopedNameWhere(
-  table: typeof agents | typeof skills | typeof mcps | typeof plugins | typeof workgroups,
+  table:
+    | PersistenceTables['agents']
+    | PersistenceTables['skills']
+    | PersistenceTables['mcps']
+    | PersistenceTables['plugins']
+    | PersistenceTables['workgroups'],
   ownerUserId: string,
   name: string,
 ) {
@@ -524,11 +521,13 @@ export async function commitPostgresqlAgentPackageMutation(
       skillRefs: canonical.skills,
     })
     await assertAgentDependencyGraph(input.transaction, input.resourceId, canonical.dependsOn)
-    const collision = await input.transaction
-      .select({ id: agents.id })
-      .from(agents)
-      .where(ownerScopedNameWhere(agents, input.context.actor.user.id, canonical.name))
-      .get()
+    const { agents } = tablesOf(input.transaction)
+    const collision = await first(
+      input.transaction
+        .select({ id: agents.id })
+        .from(agents)
+        .where(ownerScopedNameWhere(agents, input.context.actor.user.id, canonical.name)),
+    )
     if (collision !== undefined) {
       throw new ConflictError('agent-name-in-use', `agent '${canonical.name}' already exists`)
     }
@@ -539,7 +538,7 @@ export async function commitPostgresqlAgentPackageMutation(
       now: input.now(),
     })
     try {
-      await input.transaction.insert(agents).values(values).run()
+      await insertOne(input.transaction, agents, values)
     } catch (error) {
       if (isPostgresqlUniqueViolation(error, ['agents_owner_name_unique'])) {
         throw new ConflictError('agent-name-in-use', `agent '${canonical.name}' already exists`)
@@ -556,11 +555,10 @@ export async function commitPostgresqlAgentPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const row = await input.transaction
-    .select()
-    .from(agents)
-    .where(eq(agents.id, input.resourceId))
-    .get()
+  const { agents } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction.select().from(agents).where(eq(agents.id, input.resourceId)),
+  )
   if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
   const current = agentFromPersistenceRow(row)
   const resolved = await resolvedAgentInput({
@@ -595,20 +593,21 @@ export async function commitPostgresqlAgentPackageMutation(
     skillRefs: next.skills,
   })
   await assertAgentDependencyGraph(input.transaction, current.id, next.dependsOn)
-  const changed = await input.transaction
-    .update(agents)
-    .set(updateAgentPersistenceValues(current, patch, monotonicNow(current.updatedAt)))
-    .where(
-      and(
-        eq(agents.id, input.resourceId),
-        eq(agents.updatedAt, input.mutation.expect.expectedUpdatedAt),
-        eq(agents.aclRevision, input.mutation.expect.expectedAclRevision),
-        eq(agents.ownerUserId, input.context.actor.user.id),
-        eq(agents.builtin, false),
-      ),
-    )
-    .returning({ id: agents.id })
-    .get()
+  const changed = await first(
+    input.transaction
+      .update(agents)
+      .set(updateAgentPersistenceValues(current, patch, monotonicNow(current.updatedAt)))
+      .where(
+        and(
+          eq(agents.id, input.resourceId),
+          eq(agents.updatedAt, input.mutation.expect.expectedUpdatedAt),
+          eq(agents.aclRevision, input.mutation.expect.expectedAclRevision),
+          eq(agents.ownerUserId, input.context.actor.user.id),
+          eq(agents.builtin, false),
+        ),
+      )
+      .returning({ id: agents.id }),
+  )
   if (changed === undefined) {
     throw staleConflictError('agent', `agent '${input.resourceId}' changed; reload and retry`)
   }
@@ -620,51 +619,47 @@ export async function commitPostgresqlSkillPackageMutation(
 ): Promise<ResourcePackageMutationReceipt<'skill'>> {
   const parsed = CreateManagedSkillSchema.parse(input.mutation.payload)
   if (input.mutation.kind === 'skill-create') {
-    const collision = await input.transaction
-      .select({ id: skills.id })
-      .from(skills)
-      .where(ownerScopedNameWhere(skills, input.context.actor.user.id, parsed.name))
-      .get()
+    const { skills, skillVersions } = tablesOf(input.transaction)
+    const collision = await first(
+      input.transaction
+        .select({ id: skills.id })
+        .from(skills)
+        .where(ownerScopedNameWhere(skills, input.context.actor.user.id, parsed.name)),
+    )
     if (collision !== undefined) {
       throw new ConflictError('skill-name-in-use', `skill '${parsed.name}' already exists`)
     }
     const now = input.now()
     try {
-      await input.transaction
-        .insert(skills)
-        .values({
-          id: input.resourceId,
-          name: parsed.name,
-          description: parsed.description,
-          managedPath: input.publication.managedPath,
-          ownerUserId: input.context.actor.user.id,
-          visibility: 'private',
-          aclRevision: 0,
-          contentVersion: 1,
-          metaRevision: 0,
-          reservationState: 'ready',
-          versionState: 'snapshot-authoritative',
-          schemaVersion: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
-      await input.transaction
-        .insert(skillVersions)
-        .values({
-          id: input.id(),
-          skillId: input.resourceId,
-          versionIndex: 1,
-          filesPath: input.publication.filesPath,
-          source: 'initial',
-          summary: 'Initial version',
-          fusionId: null,
-          restoredFromVersion: null,
-          authorUserId: input.context.actor.user.id,
-          contentHash: input.publication.contentHash,
-          createdAt: now,
-        })
-        .run()
+      await insertOne(input.transaction, skills, {
+        id: input.resourceId,
+        name: parsed.name,
+        description: parsed.description,
+        managedPath: input.publication.managedPath,
+        ownerUserId: input.context.actor.user.id,
+        visibility: 'private',
+        aclRevision: 0,
+        contentVersion: 1,
+        metaRevision: 0,
+        reservationState: 'ready',
+        versionState: 'snapshot-authoritative',
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
+      await insertOne(input.transaction, skillVersions, {
+        id: input.id(),
+        skillId: input.resourceId,
+        versionIndex: 1,
+        filesPath: input.publication.filesPath,
+        source: 'initial',
+        summary: 'Initial version',
+        fusionId: null,
+        restoredFromVersion: null,
+        authorUserId: input.context.actor.user.id,
+        contentHash: input.publication.contentHash,
+        createdAt: now,
+      })
     } catch (error) {
       if (isPostgresqlUniqueViolation(error, ['skills_owner_name_unique'])) {
         throw new ConflictError('skill-name-in-use', `skill '${parsed.name}' already exists`)
@@ -681,57 +676,54 @@ export async function commitPostgresqlSkillPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const row = await input.transaction
-    .select()
-    .from(skills)
-    .where(eq(skills.id, input.resourceId))
-    .get()
+  const { skills, skillVersions } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction.select().from(skills).where(eq(skills.id, input.resourceId)),
+  )
   if (row === undefined || row.reservationState !== 'ready') {
     throw new NotFoundError('skill-not-found', `skill '${input.resourceId}' not found`)
   }
   const nextVersion = row.contentVersion + 1
   const updatedAt = monotonicNow(row.updatedAt)
-  const changed = await input.transaction
-    .update(skills)
-    .set({
-      description: parsed.description,
-      contentVersion: nextVersion,
-      metaRevision:
-        parsed.description === row.description ? row.metaRevision : row.metaRevision + 1,
-      versionState: 'snapshot-authoritative',
-      updatedAt,
-    })
-    .where(
-      and(
-        eq(skills.id, input.resourceId),
-        eq(skills.contentVersion, input.mutation.expect.expectedContentVersion),
-        eq(skills.metaRevision, input.mutation.expect.expectedMetaRevision),
-        eq(skills.aclRevision, input.mutation.expect.expectedAclRevision),
-        eq(skills.ownerUserId, input.context.actor.user.id),
-        eq(skills.reservationState, 'ready'),
-      ),
-    )
-    .returning({ id: skills.id })
-    .get()
+  const changed = await first(
+    input.transaction
+      .update(skills)
+      .set({
+        description: parsed.description,
+        contentVersion: nextVersion,
+        metaRevision:
+          parsed.description === row.description ? row.metaRevision : row.metaRevision + 1,
+        versionState: 'snapshot-authoritative',
+        updatedAt,
+      })
+      .where(
+        and(
+          eq(skills.id, input.resourceId),
+          eq(skills.contentVersion, input.mutation.expect.expectedContentVersion),
+          eq(skills.metaRevision, input.mutation.expect.expectedMetaRevision),
+          eq(skills.aclRevision, input.mutation.expect.expectedAclRevision),
+          eq(skills.ownerUserId, input.context.actor.user.id),
+          eq(skills.reservationState, 'ready'),
+        ),
+      )
+      .returning({ id: skills.id }),
+  )
   if (changed === undefined) {
     throw staleConflictError('skill', `skill '${input.resourceId}' changed; reload and retry`)
   }
-  await input.transaction
-    .insert(skillVersions)
-    .values({
-      id: input.id(),
-      skillId: input.resourceId,
-      versionIndex: nextVersion,
-      filesPath: input.publication.filesPath,
-      source: 'import',
-      summary: null,
-      fusionId: null,
-      restoredFromVersion: null,
-      authorUserId: input.context.actor.user.id,
-      contentHash: input.publication.contentHash,
-      createdAt: updatedAt,
-    })
-    .run()
+  await insertOne(input.transaction, skillVersions, {
+    id: input.id(),
+    skillId: input.resourceId,
+    versionIndex: nextVersion,
+    filesPath: input.publication.filesPath,
+    source: 'import',
+    summary: null,
+    fusionId: null,
+    restoredFromVersion: null,
+    authorUserId: input.context.actor.user.id,
+    contentHash: input.publication.contentHash,
+    createdAt: updatedAt,
+  })
   return receipt('skill', input.mutation, input.resourceId)
 }
 
@@ -742,11 +734,13 @@ export async function commitPostgresqlMcpPackageMutation(
 ): Promise<ResourcePackageMutationReceipt<'mcp'>> {
   const parsed = CreateMcpSchema.parse(input.mutation.payload)
   if (input.mutation.kind === 'mcp-create') {
-    const collision = await input.transaction
-      .select({ id: mcps.id })
-      .from(mcps)
-      .where(ownerScopedNameWhere(mcps, input.context.actor.user.id, parsed.name))
-      .get()
+    const { mcps } = tablesOf(input.transaction)
+    const collision = await first(
+      input.transaction
+        .select({ id: mcps.id })
+        .from(mcps)
+        .where(ownerScopedNameWhere(mcps, input.context.actor.user.id, parsed.name)),
+    )
     if (collision !== undefined) {
       throw new ConflictError('mcp-name-in-use', `mcp '${parsed.name}' already exists`)
     }
@@ -776,7 +770,10 @@ export async function commitPostgresqlMcpPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const row = await input.transaction.select().from(mcps).where(eq(mcps.id, input.resourceId)).get()
+  const { mcps } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction.select().from(mcps).where(eq(mcps.id, input.resourceId)),
+  )
   if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
   const current = mcpFromPersistenceRow(row)
   const { name: _name, ...updateBody } = input.mutation.payload
@@ -811,11 +808,13 @@ export async function commitPostgresqlPluginPackageMutation(
 ): Promise<ResourcePackageMutationReceipt<'plugin'>> {
   const parsed = CreatePluginSchema.parse(input.mutation.payload)
   if (input.mutation.kind === 'plugin-create') {
-    const collision = await input.transaction
-      .select({ id: plugins.id })
-      .from(plugins)
-      .where(ownerScopedNameWhere(plugins, input.context.actor.user.id, parsed.name))
-      .get()
+    const { plugins } = tablesOf(input.transaction)
+    const collision = await first(
+      input.transaction
+        .select({ id: plugins.id })
+        .from(plugins)
+        .where(ownerScopedNameWhere(plugins, input.context.actor.user.id, parsed.name)),
+    )
     if (collision !== undefined) {
       throw new ConflictError('plugin-name-in-use', `plugin '${parsed.name}' already exists`)
     }
@@ -852,11 +851,10 @@ export async function commitPostgresqlPluginPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const row = await input.transaction
-    .select()
-    .from(plugins)
-    .where(eq(plugins.id, input.resourceId))
-    .get()
+  const { plugins } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction.select().from(plugins).where(eq(plugins.id, input.resourceId)),
+  )
   if (row === undefined) {
     throw new NotFoundError('plugin-not-found', `plugin '${input.resourceId}' not found`)
   }
@@ -1061,17 +1059,17 @@ export async function commitPostgresqlWorkflowPackageMutation(
   if (input.mutation.kind === 'workflow-create') {
     const candidate = await workflowCandidate(input)
     const now = input.now()
-    await input.transaction
-      .insert(workflows)
-      .values(
-        createWorkflowPersistenceValues({
-          id: input.resourceId,
-          workflow: candidate,
-          ownerUserId: input.context.actor.user.id,
-          now,
-        }),
-      )
-      .run()
+    const { workflows } = tablesOf(input.transaction)
+    await insertOne(
+      input.transaction,
+      workflows,
+      createWorkflowPersistenceValues({
+        id: input.resourceId,
+        workflow: candidate,
+        ownerUserId: input.context.actor.user.id,
+        now,
+      }),
+    )
     return receipt('workflow', input.mutation, input.resourceId)
   }
 
@@ -1082,11 +1080,10 @@ export async function commitPostgresqlWorkflowPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const row = await input.transaction
-    .select()
-    .from(workflows)
-    .where(eq(workflows.id, input.resourceId))
-    .get()
+  const { workflows } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction.select().from(workflows).where(eq(workflows.id, input.resourceId)),
+  )
   if (row === undefined) {
     throw new NotFoundError('workflow-not-found', `workflow '${input.resourceId}' not found`)
   }
@@ -1100,26 +1097,27 @@ export async function commitPostgresqlWorkflowPackageMutation(
     serializeWorkflowEditableSnapshotV1(workflowDraftSnapshotOf(current)) ===
     serializeWorkflowEditableSnapshotV1(candidate)
   if (!logicalSame || row.definition !== definitionStorage) {
-    const changed = await input.transaction
-      .update(workflows)
-      .set({
-        name: candidate.name,
-        description: candidate.description,
-        definition: definitionStorage,
-        version: row.version + 1,
-        updatedAt: monotonicNow(row.updatedAt),
-      })
-      .where(
-        and(
-          eq(workflows.id, input.resourceId),
-          eq(workflows.version, input.mutation.expect.expectedVersion),
-          eq(workflows.ownerUserId, input.context.actor.user.id),
-          eq(workflows.aclRevision, row.aclRevision),
-          eq(workflows.builtin, false),
-        ),
-      )
-      .returning({ id: workflows.id })
-      .get()
+    const changed = await first(
+      input.transaction
+        .update(workflows)
+        .set({
+          name: candidate.name,
+          description: candidate.description,
+          definition: definitionStorage,
+          version: row.version + 1,
+          updatedAt: monotonicNow(row.updatedAt),
+        })
+        .where(
+          and(
+            eq(workflows.id, input.resourceId),
+            eq(workflows.version, input.mutation.expect.expectedVersion),
+            eq(workflows.ownerUserId, input.context.actor.user.id),
+            eq(workflows.aclRevision, row.aclRevision),
+            eq(workflows.builtin, false),
+          ),
+        )
+        .returning({ id: workflows.id }),
+    )
     if (changed === undefined) {
       throw staleConflictError(
         'workflow',
@@ -1204,11 +1202,10 @@ async function resolvedWorkgroupMembers(input: {
         ? {}
         : { grandfatheredIds: input.grandfatheredAgentIds }),
     })
-    const agent = await input.transaction
-      .select({ id: agents.id })
-      .from(agents)
-      .where(eq(agents.id, agentId))
-      .get()
+    const { agents } = tablesOf(input.transaction)
+    const agent = await first(
+      input.transaction.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId)),
+    )
     if (agent === undefined) {
       throw new ValidationError(
         'workgroup-member-agent-invalid',
@@ -1240,12 +1237,13 @@ async function workgroupMemberValues(input: {
   readonly members: readonly WorkgroupDraftMember[]
   readonly now: number
   readonly id: () => string
-}): Promise<Array<typeof workgroupMembers.$inferInsert>> {
+}): Promise<Array<PersistenceTables['workgroupMembers']['$inferInsert']>> {
   const agentIds = uniqueStrings(
     input.members.flatMap((member) =>
       member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
     ),
   )
+  const { agents } = tablesOf(input.transaction)
   const names = new Map(
     (agentIds.length === 0
       ? []
@@ -1253,7 +1251,6 @@ async function workgroupMemberValues(input: {
           .select({ id: agents.id, name: agents.name })
           .from(agents)
           .where(inArray(agents.id, agentIds))
-          .all()
     ).map((row) => [row.id, row.name]),
   )
   return workgroupMemberPersistenceValues(input.workgroupId, input.members, input.now, names, () =>
@@ -1263,14 +1260,15 @@ async function workgroupMemberValues(input: {
 
 async function insertWorkgroupMembers(
   transaction: PostgresqlResourceCatalogTransaction,
-  values: readonly (typeof workgroupMembers.$inferInsert)[],
+  values: readonly PersistenceTables['workgroupMembers']['$inferInsert'][],
 ): Promise<void> {
-  for (const value of values) await transaction.insert(workgroupMembers).values(value).run()
+  const { workgroupMembers } = tablesOf(transaction)
+  for (const value of values) await insertOne(transaction, workgroupMembers, value)
 }
 
 function currentWorkgroupSnapshot(
-  row: typeof workgroups.$inferSelect,
-  memberRows: readonly (typeof workgroupMembers.$inferSelect)[],
+  row: PersistenceTables['workgroups']['$inferSelect'],
+  memberRows: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
 ): WorkgroupDraftSnapshot {
   const current = workgroupFromRows(row, memberRows)
   const ordered = [...current.members].sort(
@@ -1348,11 +1346,13 @@ export async function commitPostgresqlWorkgroupPackageMutation(
   if (input.mutation.kind === 'workgroup-create') {
     const members = await resolvedWorkgroupMembers(input)
     const candidate = workgroupCandidate({ mutation: input.mutation, members })
-    const collision = await input.transaction
-      .select({ id: workgroups.id })
-      .from(workgroups)
-      .where(ownerScopedNameWhere(workgroups, input.context.actor.user.id, candidate.name))
-      .get()
+    const { workgroups } = tablesOf(input.transaction)
+    const collision = await first(
+      input.transaction
+        .select({ id: workgroups.id })
+        .from(workgroups)
+        .where(ownerScopedNameWhere(workgroups, input.context.actor.user.id, candidate.name)),
+    )
     if (collision !== undefined) {
       throw new ConflictError(
         'workgroup-name-in-use',
@@ -1368,32 +1368,29 @@ export async function commitPostgresqlWorkgroupPackageMutation(
       id: input.id,
     })
     try {
-      await input.transaction
-        .insert(workgroups)
-        .values({
-          id: input.resourceId,
-          name: candidate.name,
-          description: candidate.description,
-          instructions: candidate.instructions,
-          mode: candidate.mode,
-          outputContract: resolveWorkgroupOutputContract(candidate.outputContract),
-          leaderMemberId: workgroupLeaderMemberId(candidate, memberValues),
-          shareOutputs: candidate.switches.shareOutputs,
-          directMessages: candidate.switches.directMessages,
-          blackboard: candidate.switches.blackboard,
-          maxRounds: candidate.maxRounds,
-          completionGate: candidate.completionGate,
-          clarifyBudget: candidate.clarifyBudget,
-          fanOut: candidate.fanOut,
-          version: 1,
-          ownerUserId: input.context.actor.user.id,
-          visibility: 'private',
-          aclRevision: 0,
-          schemaVersion: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(input.transaction, workgroups, {
+        id: input.resourceId,
+        name: candidate.name,
+        description: candidate.description,
+        instructions: candidate.instructions,
+        mode: candidate.mode,
+        outputContract: resolveWorkgroupOutputContract(candidate.outputContract),
+        leaderMemberId: workgroupLeaderMemberId(candidate, memberValues),
+        shareOutputs: candidate.switches.shareOutputs,
+        directMessages: candidate.switches.directMessages,
+        blackboard: candidate.switches.blackboard,
+        maxRounds: candidate.maxRounds,
+        completionGate: candidate.completionGate,
+        clarifyBudget: candidate.clarifyBudget,
+        fanOut: candidate.fanOut,
+        version: 1,
+        ownerUserId: input.context.actor.user.id,
+        visibility: 'private',
+        aclRevision: 0,
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
       await insertWorkgroupMembers(input.transaction, memberValues)
     } catch (error) {
       if (isPostgresqlUniqueViolation(error, ['workgroups_owner_name_unique'])) {
@@ -1414,11 +1411,10 @@ export async function commitPostgresqlWorkgroupPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const row = await input.transaction
-    .select()
-    .from(workgroups)
-    .where(eq(workgroups.id, input.resourceId))
-    .get()
+  const { workgroups, workgroupMembers } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction.select().from(workgroups).where(eq(workgroups.id, input.resourceId)),
+  )
   if (row === undefined) {
     throw new NotFoundError('workgroup-not-found', `workgroup '${input.resourceId}' not found`)
   }
@@ -1426,7 +1422,6 @@ export async function commitPostgresqlWorkgroupPackageMutation(
     .select()
     .from(workgroupMembers)
     .where(eq(workgroupMembers.workgroupId, input.resourceId))
-    .all()
   const current = currentWorkgroupSnapshot(row, currentMemberRows)
   const members = await resolvedWorkgroupMembers({
     ...input,
@@ -1442,11 +1437,12 @@ export async function commitPostgresqlWorkgroupPackageMutation(
     serializeWorkgroupEditableSnapshotV1(candidate)
   if (!logicalSame) {
     if (candidate.name !== current.name) {
-      const collision = await input.transaction
-        .select({ id: workgroups.id })
-        .from(workgroups)
-        .where(ownerScopedNameWhere(workgroups, input.context.actor.user.id, candidate.name))
-        .get()
+      const collision = await first(
+        input.transaction
+          .select({ id: workgroups.id })
+          .from(workgroups)
+          .where(ownerScopedNameWhere(workgroups, input.context.actor.user.id, candidate.name)),
+      )
       if (collision !== undefined && collision.id !== input.resourceId) {
         throw new ConflictError(
           'workgroup-name-in-use',
@@ -1473,38 +1469,39 @@ export async function commitPostgresqlWorkgroupPackageMutation(
           id: input.id,
         })
       : null
-    const changed = await input.transaction
-      .update(workgroups)
-      .set({
-        name: candidate.name,
-        description: candidate.description,
-        instructions: candidate.instructions,
-        mode: candidate.mode,
-        outputContract: resolveWorkgroupOutputContract(candidate.outputContract),
-        leaderMemberId:
-          replacements === null
-            ? row.leaderMemberId
-            : workgroupLeaderMemberId(candidate, replacements),
-        shareOutputs: candidate.switches.shareOutputs,
-        directMessages: candidate.switches.directMessages,
-        blackboard: candidate.switches.blackboard,
-        maxRounds: candidate.maxRounds,
-        completionGate: candidate.completionGate,
-        clarifyBudget: candidate.clarifyBudget,
-        fanOut: candidate.fanOut,
-        version: row.version + 1,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(workgroups.id, input.resourceId),
-          eq(workgroups.version, input.mutation.expect.expectedVersion),
-          eq(workgroups.ownerUserId, input.context.actor.user.id),
-          eq(workgroups.aclRevision, row.aclRevision),
-        ),
-      )
-      .returning({ id: workgroups.id })
-      .get()
+    const changed = await first(
+      input.transaction
+        .update(workgroups)
+        .set({
+          name: candidate.name,
+          description: candidate.description,
+          instructions: candidate.instructions,
+          mode: candidate.mode,
+          outputContract: resolveWorkgroupOutputContract(candidate.outputContract),
+          leaderMemberId:
+            replacements === null
+              ? row.leaderMemberId
+              : workgroupLeaderMemberId(candidate, replacements),
+          shareOutputs: candidate.switches.shareOutputs,
+          directMessages: candidate.switches.directMessages,
+          blackboard: candidate.switches.blackboard,
+          maxRounds: candidate.maxRounds,
+          completionGate: candidate.completionGate,
+          clarifyBudget: candidate.clarifyBudget,
+          fanOut: candidate.fanOut,
+          version: row.version + 1,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workgroups.id, input.resourceId),
+            eq(workgroups.version, input.mutation.expect.expectedVersion),
+            eq(workgroups.ownerUserId, input.context.actor.user.id),
+            eq(workgroups.aclRevision, row.aclRevision),
+          ),
+        )
+        .returning({ id: workgroups.id }),
+    )
     if (changed === undefined) {
       throw staleConflictError('workgroup', `workgroup '${input.resourceId}' changed; reload`)
     }
@@ -1512,7 +1509,6 @@ export async function commitPostgresqlWorkgroupPackageMutation(
       await input.transaction
         .delete(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, input.resourceId))
-        .run()
       await insertWorkgroupMembers(input.transaction, replacements)
     }
   }

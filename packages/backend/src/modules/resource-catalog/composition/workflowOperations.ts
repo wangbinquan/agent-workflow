@@ -1,5 +1,5 @@
 import type { Workflow } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
@@ -49,7 +49,7 @@ export interface WorkflowCatalogAdapterCompositionDependencies {
 }
 
 export interface WorkflowCatalogCompositionDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: WorkflowPersistenceSemantics
   readonly skillContent: SkillContentAvailability
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
@@ -189,7 +189,7 @@ export function composeSkillContentAvailability(input: {
  * （RFC-294 §3.1 的 offered 边只允许 bootstrap → composition）。
  */
 export function composeDatabaseWorkflowCatalog(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly skillContent: SkillContentAvailability
 }): WorkflowCatalogModule {
@@ -205,7 +205,7 @@ export function composeDatabaseWorkflowCatalog(input: {
 }
 
 /** RFC-382: both providers load the complete database-backed validation context. */
-export function composeDynamicWorkflowValidationContext(db: ProviderNeutralDatabase): Readonly<{
+export function composeDynamicWorkflowValidationContext(db: PersistenceDb): Readonly<{
   load(): Promise<ValidatorContext>
 }> {
   return Object.freeze({

@@ -1,8 +1,8 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, resourceGrants } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 import {
   hasResourceAclBypass,
@@ -25,6 +25,7 @@ async function grantedAgentIds(
   transaction: ResourceCatalogTransaction,
   actor: ResourceAclActorProjection,
 ): Promise<ReadonlySet<string>> {
+  const { resourceGrants } = tablesOf(transaction)
   const rows = await transaction
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
@@ -37,6 +38,7 @@ async function agentAccessRows(
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, AclRow>> {
   if (ids.length === 0) return new Map()
+  const { agents } = tablesOf(transaction)
   const rows = await transaction
     .select({
       id: agents.id,
@@ -61,7 +63,7 @@ export function assertNoMissingResourceRefs(
 
 /** 异步 D15 预检；解析不到的 id 仍归存在性校验器管。 */
 export async function resolveAgentIdsUsable(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ResourceAclActorProjection,
   ids: readonly string[],
   grandfatheredIds: ReadonlySet<string>,
@@ -107,6 +109,7 @@ export async function resolveAccessInTransaction(
   const audience = resourceAclAudienceAuthority(actor)
   let grant: ResourceGrantLevel | null = null
   if (!audience.bypass && audience.private) {
+    const { resourceGrants } = tablesOf(transaction)
     const result = (
       await transaction
         .select({ level: resourceGrants.level })
@@ -130,6 +133,7 @@ export async function listGrantedUserIdsInTransaction(
   type: 'workgroup',
   resourceId: string,
 ): Promise<readonly string[]> {
+  const { resourceGrants } = tablesOf(transaction)
   const rows = await transaction
     .select({ userId: resourceGrants.userId })
     .from(resourceGrants)

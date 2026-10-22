@@ -13,6 +13,7 @@
 //
 // 计数方式：给 db.$client.query / db.run 挂 spy 数 SQL，只统计打到 user_sessions 的语句。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -20,7 +21,6 @@ import { randomBytes } from 'node:crypto'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createSession } from './helpers/auth/sessionStore'
 import { resolveActorWithWsCredential } from '../src/auth/session'
-import { userSessions } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 
@@ -48,6 +48,7 @@ function countSessionUpdates(db: DbClient): { writes: () => number; restore: () 
   const target = db as unknown as { update: (table: unknown) => unknown }
   const original = target.update.bind(target)
   target.update = (table: unknown) => {
+    const { userSessions } = tablesOf(db)
     if (table === userSessions) writes += 1
     return original(table)
   }

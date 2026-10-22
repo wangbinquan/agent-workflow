@@ -2,14 +2,15 @@
 // 演示目录种子（占位 / 重名告警 / 幂等）、MCP 探测记录（插入 → 更新 → 列表 / 单读 / 缺父）、
 // agent 资源库存读取、插件世代 GC 的引用读取。写事务走 `resourceCatalogTransaction.ts`（SERIALIZABLE）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { mcps, plugins, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { createDatabaseAgentResourceInventoryReadPort } from '@/modules/resource-catalog/infrastructure/agentResourceInventory'
 import { createDemoResourceCatalogSeedPersistence } from '@/modules/resource-catalog/infrastructure/demoResourceCatalogSeed'
@@ -19,9 +20,10 @@ import { createDemoResourceCatalogSeedParticipant } from '@/modules/resource-cat
 import type { McpProbeWrite } from '@/modules/resource-catalog/public/types'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedOwner(db: ProviderNeutralDatabase): Promise<string> {
+async function seedOwner(db: PersistenceDb): Promise<string> {
   const id = `u_b2a_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -97,7 +99,8 @@ describeEachProvider('RFC-359 W4-B2a —— MCP 探测记录', (harness) => {
     const db = harness.db
     const owner = await seedOwner(db)
     const mcpId = `m_${ulid()}`
-    await db.insert(mcps).values({
+    const { mcps } = tablesOf(db)
+    await insertOne(db, mcps, {
       id: mcpId,
       name: `zeta-${mcpId.slice(-4).toLowerCase()}`,
       description: '',
@@ -142,7 +145,8 @@ describeEachProvider('RFC-359 W4-B2a —— agent 资源库存与插件 GC 引�
     const db = harness.db
     const owner = await seedOwner(db)
     const mcpId = `m_${ulid()}`
-    await db.insert(mcps).values({
+    const { mcps, plugins } = tablesOf(db)
+    await insertOne(db, mcps, {
       id: mcpId,
       name: `inv-${mcpId.slice(-4).toLowerCase()}`,
       description: '',
@@ -152,7 +156,7 @@ describeEachProvider('RFC-359 W4-B2a —— agent 资源库存与插件 GC 引�
       ownerUserId: owner,
     })
     const pluginId = `p_${ulid()}`
-    await db.insert(plugins).values({
+    await insertOne(db, plugins, {
       id: pluginId,
       name: `plugin-${pluginId.slice(-4).toLowerCase()}`,
       spec: 'demo@1.0.0',

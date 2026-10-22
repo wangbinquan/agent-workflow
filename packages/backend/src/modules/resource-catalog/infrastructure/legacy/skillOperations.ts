@@ -14,18 +14,19 @@
 // Locks are held until phase='done' (released in finishOperation's tx), so a
 // swap-committed-but-backup-not-cleaned window still excludes a new-id op.
 //
-// All mutators take a DatabaseTransaction so they compose into the caller's transaction;
+// All mutators take a PersistenceTx so they compose into the caller's transaction;
 // read helpers accept either a tx or the database handle.
 //
 // RFC-359 W4-D23b：这一层从 `dbTxSync` 的**同步** SQLite 面迁到中立事务原语
 // （`platform/persistence/databaseTransaction.ts`），两个 provider 才可能共用同一套崩溃安全机器。
 // 语义逐条不变：阶段边界仍是各自独立的一笔提交，锁仍与意图行同事务、活到 done 为止。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
-import { skillOperations, skillOperationLocks } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, ValidationError } from '@/util/errors'
 
 /**
@@ -64,7 +65,7 @@ export interface BeginOperationSpec {
   preconditionJson?: string
 }
 
-export type SkillOperationRow = typeof skillOperations.$inferSelect
+export type SkillOperationRow = PersistenceTables['skillOperations']['$inferSelect']
 
 /**
  * Acquire the exclusion locks for an op: one row per affected skillId. PK
@@ -72,14 +73,15 @@ export type SkillOperationRow = typeof skillOperations.$inferSelect
  * the SAME tx as the op-row INSERT (intent tx).
  */
 export async function acquireOpLocks(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   opId: string,
   skillIds: readonly string[],
 ): Promise<void> {
   const unique = [...new Set(skillIds)]
   for (const id of unique) {
     try {
-      await tx.insert(skillOperationLocks).values({ lockedSkillId: id, opId })
+      const { skillOperationLocks } = tablesOf(tx)
+      await insertOne(tx, skillOperationLocks, { lockedSkillId: id, opId })
     } catch (err) {
       // PRIMARY KEY / UNIQUE violation → the skill is busy under another op.
       if (isUniqueViolation(tx, err)) {
@@ -95,7 +97,8 @@ export async function acquireOpLocks(
 
 /** Release every lock held by this op (finish or rollback). Same-tx as the
  *  terminal state write. */
-export async function releaseOpLocks(tx: DatabaseTransaction, opId: string): Promise<void> {
+export async function releaseOpLocks(tx: PersistenceTx, opId: string): Promise<void> {
+  const { skillOperationLocks } = tablesOf(tx)
   await tx.delete(skillOperationLocks).where(eq(skillOperationLocks.opId, opId))
 }
 
@@ -106,13 +109,11 @@ export async function releaseOpLocks(tx: DatabaseTransaction, opId: string): Pro
  * the generated opId. Wrap in a session transaction; a busy-lock throw rolls the
  * whole tx back (no orphan op row).
  */
-export async function beginOperation(
-  tx: DatabaseTransaction,
-  spec: BeginOperationSpec,
-): Promise<string> {
+export async function beginOperation(tx: PersistenceTx, spec: BeginOperationSpec): Promise<string> {
   const opId = ulid()
   await acquireOpLocks(tx, opId, [spec.skillId])
-  await tx.insert(skillOperations).values({
+  const { skillOperations } = tablesOf(tx)
+  await insertOne(tx, skillOperations, {
     opId,
     skillId: spec.skillId,
     kind: spec.kind,
@@ -138,7 +139,7 @@ export async function beginOperation(
  * after capture). Throws if the op is absent or already inactive.
  */
 export async function advancePhase(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   opId: string,
   phase: SkillOpPhase,
   patch: Partial<
@@ -154,6 +155,7 @@ export async function advancePhase(
     >
   > = {},
 ): Promise<void> {
+  const { skillOperations } = tablesOf(tx)
   // Read-then-check inside the caller's tx (the update result carries no affected-row
   // count across both engines). Atomic within the surrounding transaction.
   const existing = (
@@ -179,7 +181,8 @@ export async function advancePhase(
  * §6a step ⑤: terminal success. Sets phase='done' + active=0 and releases the
  * op's locks in ONE tx (invariant: locks live until done, not db-committed).
  */
-export async function finishOperation(tx: DatabaseTransaction, opId: string): Promise<void> {
+export async function finishOperation(tx: PersistenceTx, opId: string): Promise<void> {
+  const { skillOperations } = tablesOf(tx)
   await tx
     .update(skillOperations)
     .set({ phase: 'done', active: 0 })
@@ -191,20 +194,22 @@ export async function finishOperation(tx: DatabaseTransaction, opId: string): Pr
  * Rollback terminal: mark the op inactive and release its locks. The row is
  * retained (active=0) for audit; recovery treats absent-or-inactive identically.
  */
-export async function abandonOperation(tx: DatabaseTransaction, opId: string): Promise<void> {
+export async function abandonOperation(tx: PersistenceTx, opId: string): Promise<void> {
+  const { skillOperations } = tablesOf(tx)
   await tx.update(skillOperations).set({ active: 0 }).where(eq(skillOperations.opId, opId))
   await releaseOpLocks(tx, opId)
 }
 
-function ops(dbOrTx: ProviderNeutralDatabase | DatabaseTransaction): DatabaseTransaction {
-  return dbOrTx as DatabaseTransaction
+function ops(dbOrTx: PersistenceDb | PersistenceTx): PersistenceTx {
+  return dbOrTx as PersistenceTx
 }
 
 /** The single active op for a skill (its own skill_id), if any. Recovery reads. */
 export async function getActiveOp(
-  dbOrTx: ProviderNeutralDatabase | DatabaseTransaction,
+  dbOrTx: PersistenceDb | PersistenceTx,
   skillId: string,
 ): Promise<SkillOperationRow | null> {
+  const { skillOperations } = tablesOf(ops(dbOrTx))
   const rows = await ops(dbOrTx)
     .select()
     .from(skillOperations)
@@ -215,16 +220,18 @@ export async function getActiveOp(
 
 /** All active ops (boot recovery iterates these while locks are still held). */
 export async function listActiveOps(
-  dbOrTx: ProviderNeutralDatabase | DatabaseTransaction,
+  dbOrTx: PersistenceDb | PersistenceTx,
 ): Promise<SkillOperationRow[]> {
+  const { skillOperations } = tablesOf(ops(dbOrTx))
   return await ops(dbOrTx).select().from(skillOperations).where(eq(skillOperations.active, 1))
 }
 
 /** Orphan locks whose op is done/absent — GC'd AFTER active-op recovery (§6a). */
 export async function listOrphanLocks(
-  dbOrTx: ProviderNeutralDatabase | DatabaseTransaction,
-): Promise<(typeof skillOperationLocks.$inferSelect)[]> {
+  dbOrTx: PersistenceDb | PersistenceTx,
+): Promise<PersistenceTables['skillOperationLocks']['$inferSelect'][]> {
   const t = ops(dbOrTx)
+  const { skillOperations, skillOperationLocks } = tablesOf(t)
   const active = await t
     .select({ opId: skillOperations.opId })
     .from(skillOperations)
@@ -235,9 +242,10 @@ export async function listOrphanLocks(
 }
 
 /** GC orphan locks (post-recovery). Deletes locks not owned by any active op. */
-export async function gcOrphanLocks(tx: DatabaseTransaction): Promise<number> {
+export async function gcOrphanLocks(tx: PersistenceTx): Promise<number> {
   const orphans = await listOrphanLocks(tx)
   if (orphans.length === 0) return 0
+  const { skillOperationLocks } = tablesOf(tx)
   await tx.delete(skillOperationLocks).where(
     inArray(
       skillOperationLocks.lockedSkillId,
@@ -248,6 +256,6 @@ export async function gcOrphanLocks(tx: DatabaseTransaction): Promise<number> {
 }
 
 /** 唯一冲突的判别交给引擎能力面——驱动错误形状是 provider 差异的唯一容身处（RFC-359）。 */
-function isUniqueViolation(tx: DatabaseTransaction, err: unknown): boolean {
+function isUniqueViolation(tx: PersistenceTx, err: unknown): boolean {
   return engineOf(tx).classifyError(err) === 'unique-violation'
 }

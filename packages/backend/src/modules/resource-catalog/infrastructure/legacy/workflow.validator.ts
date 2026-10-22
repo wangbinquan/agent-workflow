@@ -19,6 +19,7 @@
 // The validator is permissive about node shape (kind discriminators are loose
 // in the M1 schema), so per-kind fields are read defensively.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   Agent,
   ParsedKind,
@@ -104,12 +105,7 @@ import type {
   WorkflowValidationCandidateOverlays,
 } from '../../public/types'
 import { asc, inArray } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  mcps as mcpsTable,
-  workflows as workflowsTable,
-  workgroups as workgroupsTable,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { listAgents } from './agent'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
@@ -186,9 +182,10 @@ export interface WorkflowValidationCandidate {
  * child definition then degrade instead of false-failing (see §4f / rule 2).
  */
 export async function loadWorkflowValidationContext(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   candidate?: WorkflowValidationCandidate,
 ): Promise<ValidatorContext> {
+  const { mcps: mcpsTable } = tablesOf(db)
   const [agents, skills, mcps, plugins] = await Promise.all([
     listAgents(db),
     listSkills(db),
@@ -303,15 +300,16 @@ function closureFromFrozen(
  * keyed by BOTH name and id; on a key collision the name entry wins.
  */
 async function loadCallWorkgroupNames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   definition: WorkflowDefinition,
 ): Promise<ReadonlySet<string>> {
   const wanted = [...new Set(collectWorkgroupCallRefs(definition).map((r) => r.workgroupName))]
   if (wanted.length === 0) return new Set()
+  const { workgroups } = tablesOf(db)
   const rows = await db
-    .select({ name: workgroupsTable.name })
-    .from(workgroupsTable)
-    .where(inArray(workgroupsTable.name, wanted))
+    .select({ name: workgroups.name })
+    .from(workgroups)
+    .where(inArray(workgroups.name, wanted))
   return new Set(rows.map((r) => r.name))
 }
 
@@ -344,13 +342,14 @@ function resolverOverClosure(closure: ReadonlyMap<string, ValidatorWorkflowRef>)
 }
 
 async function loadCallWorkflowClosure(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   definition: WorkflowDefinition,
 ): Promise<ReadonlyMap<string, ValidatorWorkflowRef>> {
+  const { workflows } = tablesOf(db)
   const columns = {
-    id: workflowsTable.id,
-    name: workflowsTable.name,
-    definition: workflowsTable.definition,
+    id: workflows.id,
+    name: workflows.name,
+    definition: workflows.definition,
   }
 
   const byId = new Map<string, ValidatorWorkflowRef>()
@@ -383,9 +382,9 @@ async function loadCallWorkflowClosure(
     if (wantNames.length > 0) {
       const rows = await db
         .select(columns)
-        .from(workflowsTable)
-        .where(inArray(workflowsTable.name, wantNames))
-        .orderBy(asc(workflowsTable.id))
+        .from(workflows)
+        .where(inArray(workflows.name, wantNames))
+        .orderBy(asc(workflows.id))
       // Duplicate names resolve DETERMINISTICALLY: oldest row (lowest ULID)
       // wins, first-wins per name — the fallback rule freezeCallClosure applies
       // when a node carries no usable id hint.
@@ -396,7 +395,7 @@ async function loadCallWorkflowClosure(
       }
     }
     if (wantIds.length > 0) {
-      const rows = await db.select(columns).from(workflowsTable).where(inArray(columns.id, wantIds))
+      const rows = await db.select(columns).from(workflows).where(inArray(columns.id, wantIds))
       for (const row of rows) {
         const ref = workflowReferenceFromPersistenceRow(row)
         if (ref !== null) byId.set(ref.id, ref)
@@ -429,7 +428,7 @@ async function loadCallWorkflowClosure(
 export const buildWorkflowValidationContext = loadWorkflowValidationContext
 
 export async function validateWorkflowById(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<WorkflowValidationResult> {
   const wf = await getWorkflow(db, id)

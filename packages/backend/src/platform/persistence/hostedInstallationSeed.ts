@@ -8,13 +8,12 @@
 // migrated in-memory SQLite database — the exact starting point a standalone
 // install migrated to PostgreSQL would have. Later rows come from PostgreSQL
 // upgrade steps, never from this copy.
-import { getTableName, isTable } from 'drizzle-orm'
-import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
+import { getTableName, type Table } from 'drizzle-orm'
 import { createInMemoryDb } from '@/db/client'
-import { concreteDatabaseTable } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import * as schema from '@/db/schema'
-import { authLoginPolicy } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { persistenceSchema } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import { databaseSessionFor, engineOf } from './databaseTransaction'
 import type { LogicalSchemaContract } from './schemaContract'
@@ -24,7 +23,7 @@ const INSERT_CHUNK = 200
 
 interface SeedTable {
   readonly name: string
-  readonly table: SQLiteTable
+  readonly table: Table
   readonly rows: readonly Record<string, unknown>[]
   readonly references: readonly string[]
 }
@@ -35,25 +34,28 @@ interface SeedTable {
  * read through the SQLite projection; tables the target never creates
  * (PostgreSQL omits the archive-only ones) are left out.
  */
-function readSeedTables(migrationsFolder: string, omitted: ReadonlySet<string>): SeedTable[] {
+function readSeedTables(
+  target: PersistenceDb,
+  migrationsFolder: string,
+  omitted: ReadonlySet<string>,
+): SeedTable[] {
   const source = createInMemoryDb(migrationsFolder, { bootstrap: 'required' })
   try {
     const tables: SeedTable[] = []
-    for (const candidate of Object.values(schema)) {
-      if (!isTable(candidate)) continue
-      const table = candidate as SQLiteTable
-      const sqliteTable = concreteDatabaseTable(table, 'sqlite')
+    const sourceTables = tablesOf(source)
+    const targetTables = tablesOf(target)
+    for (const definition of persistenceSchema.tables) {
+      const sqliteTable = sourceTables[definition.schemaSymbol]
+      const table = targetTables[definition.schemaSymbol]
       const name = getTableName(sqliteTable)
       if (omitted.has(name)) continue
-      const rows = source.select().from(sqliteTable).all() as Record<string, unknown>[]
+      const rows = queryRows(source.select().from(sqliteTable)) as Record<string, unknown>[]
       if (rows.length === 0) continue
       tables.push({
         name,
         table,
         rows,
-        references: getTableConfig(sqliteTable).foreignKeys.map((fk) =>
-          getTableName(fk.reference().foreignTable),
-        ),
+        references: definition.foreignKeys.map((key) => key.foreignTable),
       })
     }
     return tables
@@ -64,7 +66,7 @@ function readSeedTables(migrationsFolder: string, omitted: ReadonlySet<string>):
 
 /** Source tables the target provider does not hold. */
 function tablesOmittedOn(
-  target: ProviderNeutralDatabase,
+  target: PersistenceDb,
   contract: LogicalSchemaContract,
 ): ReadonlySet<string> {
   if (engineOf(target).provider !== 'postgresql') return new Set()
@@ -117,33 +119,41 @@ export interface HostedInstallationSeedReceipt {
  */
 export async function seedHostedInstallation(input: {
   readonly contract: LogicalSchemaContract
-  readonly target: ProviderNeutralDatabase
+  readonly target: PersistenceDb
   readonly migrationsFolder: string
   readonly now: number
 }): Promise<HostedInstallationSeedReceipt> {
-  const seededAlready = async (handle: ProviderNeutralDatabase): Promise<boolean> =>
-    (
-      await handle
-        .select({ id: authLoginPolicy.id })
-        .from(authLoginPolicy)
-        .where(eq(authLoginPolicy.id, SEED_MARKER_POLICY_ID))
-        .limit(1)
-    ).length > 0
+  const seededAlready = async (handle: PersistenceDb): Promise<boolean> => {
+    const { authLoginPolicy } = tablesOf(handle)
+    return (
+      (
+        await handle
+          .select({ id: authLoginPolicy.id })
+          .from(authLoginPolicy)
+          .where(eq(authLoginPolicy.id, SEED_MARKER_POLICY_ID))
+          .limit(1)
+      ).length > 0
+    )
+  }
   if (await seededAlready(input.target)) return { seeded: false, tables: 0, rows: 0 }
-  const provider = engineOf(input.target).provider
   const tables = orderSeedTables(
-    readSeedTables(input.migrationsFolder, tablesOmittedOn(input.target, input.contract)),
+    readSeedTables(
+      input.target,
+      input.migrationsFolder,
+      tablesOmittedOn(input.target, input.contract),
+    ),
   )
   return await databaseSessionFor(input.target).transaction(async (tx) => {
     if (await seededAlready(tx)) return { seeded: false, tables: 0, rows: 0 }
     let rows = 0
     for (const table of tables) {
-      const target = concreteDatabaseTable(table.table, provider)
+      const target = table.table
       for (let offset = 0; offset < table.rows.length; offset += INSERT_CHUNK) {
         await tx.insert(target).values(table.rows.slice(offset, offset + INSERT_CHUNK))
       }
       rows += table.rows.length
     }
+    const { authLoginPolicy } = tablesOf(tx)
     await tx
       .update(authLoginPolicy)
       .set({ bootstrapCompletedAt: input.now, updatedAt: input.now })

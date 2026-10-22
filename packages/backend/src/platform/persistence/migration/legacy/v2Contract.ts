@@ -7,7 +7,6 @@ import {
   SQLiteTable,
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
-import { concreteDatabaseTable } from '@/db/providerSchema'
 import { databaseProviderTraits } from '../../providerTraits'
 import { digestSchemaContract } from '../../schema/canonical'
 import { assertExactSchemaRoster } from '../../schema/roster'
@@ -321,7 +320,7 @@ export function projectLegacyV2(registry: SchemaRegistry): LogicalSchemaContract
         [table.schemaSymbol, materializeDrizzle(table).sqlite] as readonly [string, object],
     )
     .filter((entry): entry is [string, object] => typeof entry[1] === 'object' && entry[1] !== null)
-    .map(([symbol, table]) => ({ symbol, table: concreteDatabaseTable(table, 'sqlite') }))
+    .map(([symbol, table]) => ({ symbol, table }))
     .filter((entry): entry is { symbol: string; table: SQLiteTable } =>
       is(entry.table, SQLiteTable),
     )
@@ -414,8 +413,7 @@ export function projectLegacyV2(registry: SchemaRegistry): LogicalSchemaContract
         return {
           name: foreignKey.getName(),
           columns: reference.columns.map((column) => column.name),
-          foreignTable: getTableConfig(concreteDatabaseTable(reference.foreignTable, 'sqlite'))
-            .name,
+          foreignTable: getTableConfig(reference.foreignTable).name,
           foreignColumns: reference.foreignColumns.map((column) => column.name),
           onDelete: foreignKey.onDelete ?? 'no action',
           onUpdate: foreignKey.onUpdate ?? 'no action',

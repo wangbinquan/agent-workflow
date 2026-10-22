@@ -53,7 +53,7 @@ export interface MemoryMembershipParticipantInTx {
    * （或隔离哨兵）。同样走事务——调用方逐条修复时自带事务即可。
    *
    * 为什么挂在这个 tx-bound 合同上而不是另出一个「拿 db 的工厂」：后者会把
-   * provider 的原始 client 类型（drizzle 的 `SqliteRemoteDatabase`）暴到 public 面上，
+   * provider 的原始 client 类型（drizzle 的原生 database 对象）暴到 public 面上，
    * 等于给所有 public 面开一个「可以泄漏 provider client」的口子。
    */
   reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }): Promise<void>

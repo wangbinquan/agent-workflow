@@ -9,7 +9,7 @@ import {
 } from '@/modules/source-control/public/participants'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { CallObservations } from '@/modules/run-observability/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationRuntimeMechanics,
   TaskDagCollaborationOperations,
@@ -70,7 +70,7 @@ import { taskRunBindingPending, type TaskRunDriveBinding } from '../composition/
 export interface TaskExecutionRuntimeParticipantsInput {
   readonly workspacePresence: WorkspacePresenceQueries
   readonly observationInvocations: CallObservations
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly memoryInjectionQueries: MemoryInjectionQueries

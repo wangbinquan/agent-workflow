@@ -4,11 +4,11 @@
 // 各一份，查询逐字相同。PostgreSQL 那份由本文件替代；SQLite 的同步孪生在其余 dbTxSync
 // 调用方迁完前保留（W4 pair-deletion）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import { visibleTaskIdsFor, type ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { visibleTaskIdsFor } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   AsyncTaskAuthorizationParticipantInTx,
   TaskActingMembershipInput,
@@ -17,12 +17,13 @@ import type {
   VisibleTaskIdsInput,
 } from '../application/ports/taskAuthorization'
 
-type TaskAuthorizationReader = Pick<ProviderNeutralDatabase, 'select'>
+type TaskAuthorizationReader = Pick<PersistenceDb, 'select'>
 
 async function canActOnTask(
   db: TaskAuthorizationReader,
   input: TaskActingMembershipInput,
 ): Promise<boolean> {
+  const { taskCollaborators } = tablesOf(db)
   const rows = await db
     .select({ role: taskCollaborators.role })
     .from(taskCollaborators)
@@ -49,13 +50,11 @@ function bind(db: TaskAuthorizationReader) {
 
 /** 绑定到调用方已经开好的事务（两个引擎同一份判定）。 */
 export function createTaskAuthorizationParticipantInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
 ): AsyncTaskAuthorizationParticipantInTx {
   return bind(tx)
 }
 
-export function createTaskAuthorizationQueries(
-  db: ProviderNeutralDatabase,
-): TaskAuthorizationQueries {
+export function createTaskAuthorizationQueries(db: PersistenceDb): TaskAuthorizationQueries {
   return bind(db)
 }

@@ -12,9 +12,9 @@
 //     only then remove exact op-scoped residue. The generic boot reconciler cannot
 //     own this: it deliberately preserves an existing-but-stale live tree.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills, skillVersions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SkillOperationRow } from './skillOperations'
 import type { OpRecoveryHandler, SkillOpFsOptions } from './skillOpRecoveryDriver'
 import { decodeSkillOperationIdentity } from './skillIdentityPaths'
@@ -60,7 +60,7 @@ export const versionWriteRecoveryHandler: OpRecoveryHandler = {
 }
 
 async function assertVersionRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   content: SkillVersionRecoveryContentStore,
   plan: SkillVersionRecoveryPlan,
   op: SkillOperationRow,
@@ -69,6 +69,7 @@ async function assertVersionRow(
   if (op.targetVersion === null) {
     throw new Error(`version-write ${op.opId} has no target version`)
   }
+  const { skillVersions, skills } = tablesOf(db)
   const row = (
     await db
       .select({

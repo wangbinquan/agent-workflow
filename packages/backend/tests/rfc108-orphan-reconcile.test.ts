@@ -9,13 +9,15 @@
 // 判活口径（pid===null ⇒ 已消失）永远走不到真实代码，正是那次 wrapper 误收事故的测试
 // 盲区。判活语义本身由 rfc230-run-liveness.test.ts 直测真函数。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
 import {
@@ -29,12 +31,13 @@ const NOW = 1_000_000
 
 afterEach(() => __resetRecoveryCountersForTest())
 
-async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRunningTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -55,13 +58,14 @@ async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   status: string,
   startedAt: number | null,
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -86,6 +90,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     })
     expect(res.reapedRuns).toEqual([runId])
     expect(res.reapedTasks).toEqual([taskId])
+    const { tasks } = tablesOf(db)
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
     expect(t[0]!.status).toBe('interrupted')
     expect(
@@ -124,12 +129,14 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     })
 
     expect(res.reapedRuns).toEqual([runId])
+    const { runtimeSessionLeases } = tablesOf(db)
     expect(
-      await db
-        .select()
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.sessionId, 'periodic-reset-old'))
-        .get(),
+      await first(
+        db
+          .select()
+          .from(runtimeSessionLeases)
+          .where(eq(runtimeSessionLeases.sessionId, 'periodic-reset-old')),
+      ),
     ).toBeUndefined()
   })
 
@@ -137,7 +144,8 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const db = harness.db
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
-    await db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId)).run()
+    const { nodeRuns, tasks, runtimeSessionLeases } = tablesOf(db)
+    await db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId))
     await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(db), {
       protocol: 'claude-code',
       sessionId: 'periodic-unproven-native',
@@ -159,21 +167,20 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     expect(res.reapedRuns).toEqual([])
     expect(res.reapedTasks).toEqual([])
     expect(
-      await db
-        .select({ status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, runId))
-        .get(),
+      await first(
+        db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, runId)),
+      ),
     ).toEqual({ status: 'running' })
     expect(
-      await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+      await first(db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))),
     ).toEqual({ status: 'running' })
     expect(
-      await db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.sessionId, 'periodic-unproven-native'))
-        .get(),
+      await first(
+        db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(eq(runtimeSessionLeases.sessionId, 'periodic-unproven-native')),
+      ),
     ).toEqual({ holder: runId })
   })
 
@@ -203,22 +210,22 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
 
     expect(res.reapedRuns).toEqual([])
     expect(res.reapedTasks).toEqual([])
+    const { nodeRuns, tasks, runtimeSessionLeases } = tablesOf(db)
     expect(
-      await db
-        .select({ status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, runId))
-        .get(),
+      await first(
+        db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, runId)),
+      ),
     ).toEqual({ status: 'running' })
     expect(
-      await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+      await first(db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))),
     ).toEqual({ status: 'running' })
     expect(
-      await db
-        .select({ holder: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.sessionId, 'periodic-command-mismatch-native'))
-        .get(),
+      await first(
+        db
+          .select({ holder: runtimeSessionLeases.leaseNodeRunId })
+          .from(runtimeSessionLeases)
+          .where(eq(runtimeSessionLeases.sessionId, 'periodic-command-mismatch-native')),
+      ),
     ).toEqual({ holder: runId })
   })
 
@@ -265,6 +272,7 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     })
     expect(res.reapedRuns).toEqual([goneId])
     expect(res.reapedTasks).toHaveLength(0) // task kept running (pending run remains)
+    const { tasks } = tablesOf(db)
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
     expect(t[0]!.status).toBe('running')
   })

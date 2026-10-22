@@ -19,29 +19,23 @@
 // retry-index winner) and `nextRetryIndex` would be computed off the wrong
 // baseline, breaking the Prompt-tab attempts switcher's lineage.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
   interface Fixture {
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     appHome: string
     worktree: string
     taskId: string
@@ -53,7 +47,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
   }
 
   async function buildFixture(opts: {
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     appHome: string
     worktree: string
   }): Promise<Fixture> {
@@ -77,7 +71,8 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     const clarifySnapshot = await git(['rev-parse', 'HEAD'])
 
     const agentId = ulid()
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+    await insertOne(db, agents, {
       id: agentId,
       name: 'doc',
       description: '',
@@ -105,7 +100,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     }
 
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -114,7 +109,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     })
 
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 'iterate-clarify-rerun-task',
       id: taskId,
       executionLineageId: taskId,
@@ -137,7 +132,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     // — the clarify rerun (minted later) gets the larger id. (Plain ulid() is not
     // monotonic within a millisecond, so we pin explicit ordered ids.)
     const staleRunId = '01A_STALE'
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: staleRunId,
       taskId,
       nodeId: 'doc',
@@ -148,7 +143,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
       finishedAt: Date.now() - 1500,
       preSnapshot: staleSnapshot,
     })
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: staleRunId,
       portName: 'design',
       content: '# stale body — must NOT seed the new doc_version',
@@ -158,7 +153,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     // retryIndex=0, later than the stale row (larger id); this is the row whose
     // output the current pending doc_version (v1) was created from.
     const clarifyRunId = '01B_CLARIFY'
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: clarifyRunId,
       taskId,
       nodeId: 'doc',
@@ -169,7 +164,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
       finishedAt: Date.now() - 500,
       preSnapshot: clarifySnapshot,
     })
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: clarifyRunId,
       portName: 'design',
       content: '# clarify-rerun body — what the user just iterated on',
@@ -177,7 +172,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
 
     // Review node_run sitting in awaiting_review.
     const reviewNodeRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewNodeRunId,
       taskId,
       nodeId: 'rev_1',
@@ -194,7 +189,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     const bodyAbs = join(appHome, bodyRel)
     mkdirSync(join(appHome, `runs/${taskId}/review/rev_1/design`), { recursive: true })
     writeFileSync(bodyAbs, '# clarify-rerun body — what the user just iterated on', 'utf8')
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: pendingDocVersionId,
       taskId,
       reviewNodeId: 'rev_1',
@@ -223,7 +218,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
   }
 
   describe('submitReviewDecision iterate/reject inherits clarifyIteration from latest upstream', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let worktree: string
 
@@ -252,6 +247,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
         expectedReviewIteration: 0,
       })
 
+      const { nodeRuns, docVersions } = tablesOf(db)
       const upRuns = await db
         .select()
         .from(nodeRuns)
@@ -309,6 +305,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
         expectedReviewIteration: 0,
       })
 
+      const { nodeRuns } = tablesOf(db)
       const upRuns = await db
         .select()
         .from(nodeRuns)

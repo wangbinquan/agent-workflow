@@ -1,44 +1,44 @@
 // RFC-333/RFC-375 — pending continuations recover through the live managed worker.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   createHumanGateContinuationWorkerDefinition,
   type PendingHumanGateContinuation,
 } from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import { nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
 import { reapOrphanRuns } from '@/services/orphans'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 const NOW = 1_788_969_900_000
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: 'workflow-rfc333-recovery',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      workflowVersion: 1,
-      repoPath: '/tmp/rfc333-recovery',
-      worktreePath: '/tmp/rfc333-recovery',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: NOW,
-      executionLineageId: taskId,
-      lineageSlotPathJson: '[]',
-    })
-    .run()
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: taskId,
+    workflowId: 'workflow-rfc333-recovery',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    workflowVersion: 1,
+    repoPath: '/tmp/rfc333-recovery',
+    worktreePath: '/tmp/rfc333-recovery',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: NOW,
+    executionLineageId: taskId,
+    lineageSlotPathJson: '[]',
+  })
 }
 
 async function seedIntent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     id: string
     taskId: string
@@ -49,26 +49,24 @@ async function seedIntent(
   },
 ): Promise<void> {
   await seedTask(db, input.taskId)
-  await db
-    .insert(taskExecutionIntents)
-    .values({
-      id: input.id,
-      taskId: input.taskId,
-      kind: input.kind,
-      state: input.state,
-      source: 'internal',
-      requestHash: input.id.padEnd(64, '0').slice(0, 64),
-      payloadJson: input.payloadJson ?? '{"v":1}',
-      executionLineageId: input.taskId,
-      continuationSlotKey: `${input.taskId}:root`,
-      slotPathJson: '[]',
-      operationGeneration: 0,
-      expectedTaskRevision: 1,
-      createdAt: input.createdAt,
-      ...(input.state === 'claimed' ? { claimedAt: input.createdAt + 1, claimedEpoch: 1 } : {}),
-      updatedAt: input.createdAt,
-    })
-    .run()
+  const { taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, taskExecutionIntents, {
+    id: input.id,
+    taskId: input.taskId,
+    kind: input.kind,
+    state: input.state,
+    source: 'internal',
+    requestHash: input.id.padEnd(64, '0').slice(0, 64),
+    payloadJson: input.payloadJson ?? '{"v":1}',
+    executionLineageId: input.taskId,
+    continuationSlotKey: `${input.taskId}:root`,
+    slotPathJson: '[]',
+    operationGeneration: 0,
+    expectedTaskRevision: 1,
+    createdAt: input.createdAt,
+    ...(input.state === 'claimed' ? { claimedAt: input.createdAt + 1, claimedEpoch: 1 } : {}),
+    updatedAt: input.createdAt,
+  })
 }
 
 describeEachProvider('RFC-333 pending human-gate continuation recovery', (harness) => {
@@ -81,41 +79,42 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       state: 'pending',
       createdAt: NOW,
     })
-    await db
-      .insert(nodeRuns)
-      .values({
-        id: 'run-gate-before-wake',
-        taskId: 'task-gate-before-wake',
-        nodeId: 'designer',
-        status: 'pending',
-        retryIndex: 0,
-        iteration: 1,
-      })
-      .run()
+    const { nodeRuns, tasks, taskExecutionIntents } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
+      id: 'run-gate-before-wake',
+      taskId: 'task-gate-before-wake',
+      nodeId: 'designer',
+      status: 'pending',
+      retryIndex: 0,
+      iteration: 1,
+    })
 
     expect(await reapOrphanRuns(createTaskExecutionPersistence(db).recoveryAdministration)).toEqual(
       { tasks: 0, runs: 0 },
     )
     expect(
-      await db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, 'task-gate-before-wake'))
-        .get(),
+      await first(
+        db
+          .select({ status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.id, 'task-gate-before-wake')),
+      ),
     ).toEqual({ status: 'pending' })
     expect(
-      await db
-        .select({ status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, 'run-gate-before-wake'))
-        .get(),
+      await first(
+        db
+          .select({ status: nodeRuns.status })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, 'run-gate-before-wake')),
+      ),
     ).toEqual({ status: 'pending' })
     expect(
-      await db
-        .select({ state: taskExecutionIntents.state })
-        .from(taskExecutionIntents)
-        .where(eq(taskExecutionIntents.id, 'intent-gate-before-wake'))
-        .get(),
+      await first(
+        db
+          .select({ state: taskExecutionIntents.state })
+          .from(taskExecutionIntents)
+          .where(eq(taskExecutionIntents.id, 'intent-gate-before-wake')),
+      ),
     ).toEqual({ state: 'pending' })
   })
 
@@ -137,28 +136,26 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
         continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
       }),
     })
-    await db
-      .insert(nodeRuns)
-      .values([
-        {
-          id: 'run-gate-old-owner',
-          taskId,
-          nodeId: 'designer-old-owner',
-          status: 'running',
-          retryIndex: 0,
-          iteration: 0,
-          startedAt: NOW - 1,
-        },
-        {
-          id: 'run-gate-pending-successor',
-          taskId,
-          nodeId: 'designer-successor',
-          status: 'pending',
-          retryIndex: 0,
-          iteration: 1,
-        },
-      ])
-      .run()
+    const { nodeRuns, tasks, taskExecutionIntents } = tablesOf(db)
+    await db.insert(nodeRuns).values([
+      {
+        id: 'run-gate-old-owner',
+        taskId,
+        nodeId: 'designer-old-owner',
+        status: 'running',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: NOW - 1,
+      },
+      {
+        id: 'run-gate-pending-successor',
+        taskId,
+        nodeId: 'designer-successor',
+        status: 'pending',
+        retryIndex: 0,
+        iteration: 1,
+      },
+    ])
 
     expect(
       await reapOrphanRuns(createTaskExecutionPersistence(db).recoveryAdministration, {
@@ -166,25 +163,25 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       }),
     ).toEqual({ tasks: 0, runs: 1 })
     expect(
-      await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+      await first(db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))),
     ).toEqual({ status: 'pending' })
     expect(
       await db
         .select({ id: nodeRuns.id, status: nodeRuns.status })
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(nodeRuns.id)
-        .all(),
+        .orderBy(nodeRuns.id),
     ).toEqual([
       { id: 'run-gate-old-owner', status: 'interrupted' },
       { id: 'run-gate-pending-successor', status: 'pending' },
     ])
     expect(
-      await db
-        .select({ state: taskExecutionIntents.state })
-        .from(taskExecutionIntents)
-        .where(eq(taskExecutionIntents.id, continuationRef))
-        .get(),
+      await first(
+        db
+          .select({ state: taskExecutionIntents.state })
+          .from(taskExecutionIntents)
+          .where(eq(taskExecutionIntents.id, continuationRef)),
+      ),
     ).toEqual({ state: 'pending' })
   })
 
@@ -226,7 +223,8 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       createdAt: NOW,
       payloadJson: '{"event":"resume","v":1}',
     })
-    const before = await db.select().from(taskExecutionIntents).all()
+    const { taskExecutionIntents } = tablesOf(db)
+    const before = await db.select().from(taskExecutionIntents)
     const calls: PendingHumanGateContinuation[] = []
 
     const failures: Array<PendingHumanGateContinuation & { error: unknown }> = []
@@ -254,6 +252,6 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
         error: new Error('wake-b-failed'),
       },
     ])
-    expect(await db.select().from(taskExecutionIntents).all()).toEqual(before)
+    expect(await db.select().from(taskExecutionIntents)).toEqual(before)
   })
 })

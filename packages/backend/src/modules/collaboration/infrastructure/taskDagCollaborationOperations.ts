@@ -5,10 +5,10 @@
 // 生产上每次 tick 抛 `deferred-question-dispatcher-not-bound`（dual-provider-parity-audit P0-7）。
 // 派发管线（`taskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskDagCollaborationOperations,
   TaskDagOpenClarifyEvidence,
@@ -16,9 +16,10 @@ import type {
 import { partitionTaskDagParkTargets, type TaskDagParkEntry } from './taskDagCollaborationReads'
 
 async function loadOpenClarifyEvidence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<TaskDagOpenClarifyEvidence> {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select({
       nodeId: clarifyRounds.intermediaryNodeId,
@@ -43,9 +44,10 @@ async function loadOpenClarifyEvidence(
 }
 
 async function loadParkEntries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<readonly TaskDagParkEntry[]> {
+  const { taskQuestions, clarifyRounds } = tablesOf(db)
   const projection = {
     dispatchedAt: taskQuestions.dispatchedAt,
     triggerRunId: taskQuestions.triggerRunId,
@@ -98,11 +100,12 @@ async function loadParkEntries(
 }
 
 async function loadUndispatchedParkTargets(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<ReadonlySet<string>> {
   const entries = await loadParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
   const runs = await db
     .select({
       id: nodeRuns.id,
@@ -133,7 +136,7 @@ async function loadUndispatchedParkTargets(
 }
 
 export function createTaskDagCollaborationOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): TaskDagCollaborationOperations {
   return Object.freeze({
     // 动态 import：本文件从 collaboration 的 composition barrel 导出，而派发管线经

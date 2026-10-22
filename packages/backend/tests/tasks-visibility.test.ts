@@ -17,21 +17,21 @@
 //   - dave (unrelated user) → sees nothing;
 //   - GET /api/tasks/:id is gated by canViewTask (third-party → 403).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
-
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   aliceToken: string
   bobToken: string
@@ -78,7 +78,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
 
   // Seed a workflow + two tasks directly via the DB (PR4 wires the launcher).
   const wfId = 'wf01'
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -88,7 +89,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const bobTaskId = 'task-bob'
   const systemTaskId = 'task-system'
   const now = Date.now()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: bobTaskId,
@@ -119,7 +120,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     // RFC-099: the 'reviewer' role tag is gone — plain collaborator membership.
     { taskId: bobTaskId, userId: carol.id, role: 'collaborator', addedBy: bob.id, addedAt: now },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: systemTaskId,
@@ -292,7 +293,8 @@ describeEachProviderHttpApplication(
       // `owner_user_id IS NULL`（系统发起 / 存量）对 `<>` 不为真：修前这条任务在 carol 的
       // 「我的任务」里有、「与我共享」里没有——两档语义本该是「我参与的」⊇「参与但非我所有」。
       const now = Date.now()
-      await h.db.insert(tasks).values({
+      const { tasks, taskCollaborators } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
         id: 'task-null-owner',
         workflowId: 'wf01',

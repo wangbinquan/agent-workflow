@@ -3,6 +3,8 @@
 // 技能操作锁撞库经能力矩阵归类成同一个 ConflictError；CAS / 决策认领 / 取消认领的前置条件；
 // provenance 修复经 memory 的 participant 逐条改判；决策恢复把中断的 apply 前滚或回滚。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -11,15 +13,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  fusions,
-  memories,
-  skillOperationLocks,
-  skillOperations,
-  skills,
-  skillVersions,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
 import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
@@ -82,12 +76,13 @@ function fusionRecord(
 }
 
 async function seedSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   contentVersion = 1,
 ): Promise<string> {
   const id = `skill_d5_${ulid()}`
-  await db.insert(skills).values({
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
     id,
     name: `managed-${id}`,
     managedPath: `skills/${id}/files`,
@@ -98,9 +93,10 @@ async function seedSkill(
   return id
 }
 
-async function seedApprovedMemory(db: ProviderNeutralDatabase): Promise<string> {
+async function seedApprovedMemory(db: PersistenceDb): Promise<string> {
   const id = `memory_d5_${ulid()}`
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id,
     scopeType: 'global',
     scopeId: null,
@@ -183,6 +179,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
     expect(
       readFileSync(join(appHome, `skills/${skillId}/versions/v2/files/SKILL.md`), 'utf8'),
     ).toBe('new\n')
+    const { skills, memories, skillVersions, skillOperations, skillOperationLocks } = tablesOf(db)
     expect((await db.select().from(skills).where(eq(skills.id, skillId)))[0]?.contentVersion).toBe(
       2,
     )
@@ -231,7 +228,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
     ).toHaveLength(0)
 
     // 别人的操作正锁着这个技能：撞唯一键 → 同一个 ConflictError（两个引擎的驱动错误都经能力矩阵归类）。
-    await db.insert(skillOperationLocks).values({ lockedSkillId: skillId, opId: `op_${ulid()}` })
+    await insertOne(db, skillOperationLocks, { lockedSkillId: skillId, opId: `op_${ulid()}` })
     const third = `fusion_${ulid()}`
     const freshAccess = await persistence.loadSkillAccess(actor, skillId)
     await persistence.create(
@@ -325,6 +322,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
       ok: false,
     })
 
+    const { skills } = tablesOf(db)
     // 陈旧 token 的决策认领：技能被推进后 token 不再匹配。
     await db.update(skills).set({ contentVersion: 5 }).where(eq(skills.id, skillId))
     const stale = `fusion_${ulid()}`
@@ -359,7 +357,8 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
         { status: 'failed', appliedSkillVersion: 2 },
       ),
     )
-    await db.insert(skillVersions).values({
+    const { skillVersions, memories, fusions } = tablesOf(db)
+    await insertOne(db, skillVersions, {
       id: `version_${ulid()}`,
       skillId: ledgerSkill,
       versionIndex: 2,
@@ -426,7 +425,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
         { status: 'applying' },
       ),
     )
-    await db.insert(skillVersions).values({
+    await insertOne(db, skillVersions, {
       id: `version_${ulid()}`,
       skillId: ledgerSkill,
       versionIndex: 11,

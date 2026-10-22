@@ -5,10 +5,11 @@
 // one platform cancel and waits for the result, transient platform failures only
 // delay, and an unobservable outcome (410, rejected request, identity mismatch)
 // settles the binding as an explicit unknown so it never blocks a volume.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
 import type {
   BusinessEvent,
   BusinessEventPage,
@@ -802,14 +803,15 @@ describeEachProvider('RFC-370 hosted execution settlement in the background', (h
       current: () => current,
       assertHeld: (tx, value) => control.assertHeld(tx, value),
     }
-    await harness.db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
       id: 'workflow',
       name: 'hosted',
       definition: snapshot,
       version: 1,
       schemaVersion: 2,
     })
-    await harness.db.insert(tasks).values({
+    await insertOne(harness.db, tasks, {
       id: 'task-1',
       name: 'hosted',
       workflowId: 'workflow',

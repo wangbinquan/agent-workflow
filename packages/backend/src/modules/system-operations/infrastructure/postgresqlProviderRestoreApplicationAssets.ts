@@ -25,7 +25,7 @@ import { ConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { cpSync, existsSync, lstatSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { saveConfigRaw } from '@/config'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { reconstructWorktrees } from '@/platform/persistence/portableApplicationAssets'
 import type { PortableRestoreFilesystemAssets } from './portableDatabaseRestore'
 
@@ -43,7 +43,7 @@ function isRealDirectory(path: string): boolean {
 
 export function createPostgresqlProviderRestoreApplicationAssets(input: {
   /** Provider-neutral client over the restored target. */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   /** The already-verified target profile, never the profile stored in the backup. */
   readonly databaseConfig: PostgresqlDatabaseConfig

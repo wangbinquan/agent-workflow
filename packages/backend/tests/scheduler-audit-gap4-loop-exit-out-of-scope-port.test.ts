@@ -10,6 +10,8 @@
 //      的值——否则第 1 轮读到空串、`port-count-lt` 为真，静默绿掉（v5 时代的
 //      同一缺口，当年靠「先等隐式来源完成再按 last-value 读」兜底）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -18,9 +20,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -35,7 +36,7 @@ const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencod
 // "read the latest value" semantics 5 < 3 is false on EVERY iteration.
 const FINDINGS = 'f1\nf2\nf3\nf4\nf5'
 
-interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
   db: TDatabase
   postgresql: boolean
   appHome: string
@@ -77,12 +78,9 @@ function buildHarness(provider?: ProviderHarness): Harness {
   }
 }
 
-async function seedAgent(
-  db: ProviderNeutralDatabase,
-  name: string,
-  outputs: string[],
-): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgent(db: PersistenceDb, name: string, outputs: string[]): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: agentId(name),
     name,
     description: 'test',
@@ -134,14 +132,15 @@ function buildDefinition(): WorkflowDefinition {
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -258,6 +257,7 @@ function registerProviderCases2(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // The loop never gets to read `lister.findings` as if it were its own
     // return value: it is rejected before its first round, and the task fails.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

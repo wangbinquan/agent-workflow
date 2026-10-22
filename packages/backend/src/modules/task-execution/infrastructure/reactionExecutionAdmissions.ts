@@ -5,25 +5,28 @@
 // infrastructure（所以是端口 + 组合根注入，不是 application 直接 import 这里），
 // `rfc359-w5-t19f` 禁止模块顶层捕获 schema 表列（所以列选择写在函数体内）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { reactionExecutionAdmissions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ReactionAdmissionInsert,
   ReactionAdmissionRow,
   ReactionAdmissionStore,
 } from '../application/ports/reactionAdmissionStore'
 
-function rowColumns(): {
-  operationRef: typeof reactionExecutionAdmissions.operationRef
-  roundRef: typeof reactionExecutionAdmissions.roundRef
-  claimEpoch: typeof reactionExecutionAdmissions.claimEpoch
-  fenceRevision: typeof reactionExecutionAdmissions.fenceRevision
-  executionRef: typeof reactionExecutionAdmissions.executionRef
-  requestHash: typeof reactionExecutionAdmissions.requestHash
-  state: typeof reactionExecutionAdmissions.state
+function rowColumns(db: object): {
+  operationRef: PersistenceTables['reactionExecutionAdmissions']['operationRef']
+  roundRef: PersistenceTables['reactionExecutionAdmissions']['roundRef']
+  claimEpoch: PersistenceTables['reactionExecutionAdmissions']['claimEpoch']
+  fenceRevision: PersistenceTables['reactionExecutionAdmissions']['fenceRevision']
+  executionRef: PersistenceTables['reactionExecutionAdmissions']['executionRef']
+  requestHash: PersistenceTables['reactionExecutionAdmissions']['requestHash']
+  state: PersistenceTables['reactionExecutionAdmissions']['state']
 } {
+  const { reactionExecutionAdmissions } = tablesOf(db)
   return {
     operationRef: reactionExecutionAdmissions.operationRef,
     roundRef: reactionExecutionAdmissions.roundRef,
@@ -35,44 +38,44 @@ function rowColumns(): {
   }
 }
 
-export function createReactionAdmissionStore(db: ProviderNeutralDatabase): ReactionAdmissionStore {
+export function createReactionAdmissionStore(db: PersistenceDb): ReactionAdmissionStore {
   return Object.freeze({
     async find(operationRef: string): Promise<ReactionAdmissionRow | null> {
-      const row = await db
-        .select(rowColumns())
-        .from(reactionExecutionAdmissions)
-        .where(eq(reactionExecutionAdmissions.operationRef, operationRef))
-        .get()
+      const { reactionExecutionAdmissions } = tablesOf(db)
+      const row = await first(
+        db
+          .select(rowColumns(db))
+          .from(reactionExecutionAdmissions)
+          .where(eq(reactionExecutionAdmissions.operationRef, operationRef)),
+      )
       return row ?? null
     },
 
     async listByRound(roundRef: string): Promise<readonly ReactionAdmissionRow[]> {
+      const { reactionExecutionAdmissions } = tablesOf(db)
       return await db
-        .select(rowColumns())
+        .select(rowColumns(db))
         .from(reactionExecutionAdmissions)
         .where(eq(reactionExecutionAdmissions.roundRef, roundRef))
         .orderBy(reactionExecutionAdmissions.claimEpoch)
-        .all()
     },
 
     async insert(input: ReactionAdmissionInsert) {
-      await db
-        .insert(reactionExecutionAdmissions)
-        .values({
-          operationRef: input.operationRef,
-          caseId: input.caseId,
-          roundRef: input.roundRef,
-          claimEpoch: input.claimEpoch,
-          fenceRevision: input.fenceRevision,
-          requestHash: input.requestHash,
-          authoritySubject: input.authoritySubject,
-          authorityRevision: input.authorityRevision,
-          executionRef: input.executionRef,
-          state: 'admitted',
-          createdAt: input.now,
-          updatedAt: input.now,
-        })
-        .run()
+      const { reactionExecutionAdmissions } = tablesOf(db)
+      await insertOne(db, reactionExecutionAdmissions, {
+        operationRef: input.operationRef,
+        caseId: input.caseId,
+        roundRef: input.roundRef,
+        claimEpoch: input.claimEpoch,
+        fenceRevision: input.fenceRevision,
+        requestHash: input.requestHash,
+        authoritySubject: input.authoritySubject,
+        authorityRevision: input.authorityRevision,
+        executionRef: input.executionRef,
+        state: 'admitted',
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
     },
 
     async advanceFence(input: {
@@ -81,6 +84,7 @@ export function createReactionAdmissionStore(db: ProviderNeutralDatabase): React
       readonly fenceRevision: number
       readonly now: number
     }) {
+      const { reactionExecutionAdmissions } = tablesOf(db)
       await db
         .update(reactionExecutionAdmissions)
         .set({
@@ -89,18 +93,18 @@ export function createReactionAdmissionStore(db: ProviderNeutralDatabase): React
           updatedAt: input.now,
         })
         .where(eq(reactionExecutionAdmissions.operationRef, input.operationRef))
-        .run()
     },
 
     async close(operationRef: string, now: number) {
+      const { reactionExecutionAdmissions } = tablesOf(db)
       await db
         .update(reactionExecutionAdmissions)
         .set({ state: 'closed', updatedAt: now })
         .where(eq(reactionExecutionAdmissions.operationRef, operationRef))
-        .run()
     },
 
     async markLaunched(operationRef: string, now: number) {
+      const { reactionExecutionAdmissions } = tablesOf(db)
       await db
         .update(reactionExecutionAdmissions)
         .set({ state: 'launched', updatedAt: now })
@@ -110,7 +114,6 @@ export function createReactionAdmissionStore(db: ProviderNeutralDatabase): React
             eq(reactionExecutionAdmissions.state, 'admitted'),
           ),
         )
-        .run()
     },
   })
 }

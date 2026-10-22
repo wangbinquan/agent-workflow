@@ -14,7 +14,7 @@
 import { beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { isReviewableBodyKindString, type WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent } from '../src/services/agent'
 import { loadUpstreamPortKind } from '@/modules/collaboration/infrastructure/review'
 
@@ -45,7 +45,7 @@ function defWith(nodeId: string, agentId: string, agentName: string): WorkflowDe
 describeEachProvider(
   'loadUpstreamPortKind — path<md> recognition (review file-read fix)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })

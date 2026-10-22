@@ -3,20 +3,13 @@
 // interrupted verified copy -> resumed restore with owner normalization ->
 // release migrate -> CS RFC-042 verify receipt. Uses only the CI test
 // database, never the local CrewStation deployment.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { migrateForDeployment } from '@/bootstrap/deployment'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import {
-  hostedDatabaseBackups,
-  hostedExecutionBindings,
-  hostedExecutionControl,
-  hostedObjectPublications,
-  tasks,
-  workflows,
-} from '@/db/schema'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import {
   composeCrewStationWorkerFence,
@@ -50,7 +43,6 @@ const TASK = '01ARZ3NDEKTSV4RRFFQ69G5FAV'
 
 if (resolveTestProviders(process.env).includes('postgresql')) {
   test('a one-object backup restores through the standalone import with owner normalization and verifies', async () => {
-    const previousSchemaProvider = currentDatabaseSchemaProvider()
     const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
     if (!urlEnv || !process.env[urlEnv]) throw new Error('real PostgreSQL URL required')
     const environment = { project: 'rfc370-backup', service: 'aw' }
@@ -95,6 +87,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       let reference: string
       try {
         const db = serving.openBootstrapClient()
+        const { hostedExecutionControl, workflows, tasks, hostedExecutionBindings } = tablesOf(db)
         await db
           .insert(hostedExecutionControl)
           .values({
@@ -116,13 +109,13 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
               expiresAt: Date.now() + 600_000,
             },
           })
-        await db.insert(workflows).values({
+        await insertOne(db, workflows, {
           id: 'retained-workflow',
           name: 'From snapshot',
           // The backup exports workflows through the strict portable codec.
           definition: JSON.stringify({ $schema_version: 7, inputs: [], nodes: [], edges: [] }),
         })
-        await db.insert(tasks).values({
+        await insertOne(db, tasks, {
           id: TASK,
           name: 'Restored task',
           workflowId: 'retained-workflow',
@@ -135,7 +128,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           inputs: '{}',
           startedAt: 1,
         })
-        await db.insert(hostedExecutionBindings).values({
+        await insertOne(db, hostedExecutionBindings, {
           executionId: 'old-execution',
           taskId: TASK,
           kind: 'command',
@@ -285,6 +278,14 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       })
       try {
         const db = restored.openBootstrapClient()
+        const {
+          hostedExecutionControl,
+          workflows,
+          tasks,
+          hostedExecutionBindings,
+          hostedDatabaseBackups,
+          hostedObjectPublications,
+        } = tablesOf(db)
         expect((await db.select().from(hostedExecutionControl))[0]!).toMatchObject({
           phase: 'frozen',
           expiresAt: 0,
@@ -340,10 +341,8 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         await restored.runtime.close()
       }
     } finally {
-      try {
+      {
         await runtime.close()
-      } finally {
-        selectDatabaseSchemaProvider(previousSchemaProvider)
       }
     }
   }, 300_000)

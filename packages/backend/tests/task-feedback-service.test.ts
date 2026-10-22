@@ -1,10 +1,11 @@
 // RFC-041 — task feedback service + clarify/review enqueue hooks.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { memoryDistillJobs, taskFeedback, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { TaskFeedbackService } from '../src/modules/collaboration/application/taskFeedback'
 import { DrizzleTaskFeedbackStore } from '../src/modules/collaboration/infrastructure/taskFeedbackStore'
 import type { ReviewActor } from '../src/modules/collaboration/public/types'
@@ -18,48 +19,44 @@ const ACTOR: ReviewActor = {
   permissions: new Set(),
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: 'fixture-task',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: 'fixture-task',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return taskId
 }
 
-function createTestDistillEnqueuer(db: ProviderNeutralDatabase): MemoryDistillEnqueuer {
+function createTestDistillEnqueuer(db: PersistenceDb): MemoryDistillEnqueuer {
   return {
     async enqueue(input) {
       const jobId = ulid()
       const createdAt = Date.now()
       const debounceKey = `${input.taskId}:feedback`
       const nextRunAt = createdAt + 5_000
-      await db.insert(memoryDistillJobs).values({
+      const { memoryDistillJobs } = tablesOf(db)
+      await insertOne(db, memoryDistillJobs, {
         id: jobId,
         debounceKey,
         sourceKind: input.sourceKind,
@@ -78,7 +75,7 @@ function createTestDistillEnqueuer(db: ProviderNeutralDatabase): MemoryDistillEn
 }
 
 describeEachProvider('createTaskFeedback', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let service: TaskFeedbackService
   beforeEach(() => {
     db = harness.db
@@ -109,17 +106,16 @@ describeEachProvider('createTaskFeedback', (harness) => {
     expect(r.feedback.distilled).toBe(true)
     expect(r.feedback.distillJobId).toBe(r.distillJobId)
 
+    const { memoryDistillJobs, taskFeedback } = tablesOf(db)
     // Distill job row created
-    const jobs = await db.select().from(memoryDistillJobs).all()
+    const jobs = await db.select().from(memoryDistillJobs)
     expect(jobs.length).toBe(1)
     expect(jobs[0]!.sourceKind).toBe('feedback')
     expect(jobs[0]!.sourceEventId).toBe(r.feedback.id)
     expect(jobs[0]!.debounceKey).toBe(`${taskId}:feedback`)
 
     // Feedback row updated with distill_job_id
-    const fb = (
-      await db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)).all()
-    )[0]!
+    const fb = (await db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)))[0]!
     expect(fb.distillJobId).toBe(r.distillJobId)
     expect(fb.distilled).toBe(1)
   })
@@ -155,15 +151,14 @@ describeEachProvider('createTaskFeedback', (harness) => {
     expect(r.feedback.distilled).toBe(false)
     expect(r.feedback.distillJobId).toBeNull()
 
+    const { taskFeedback, memoryDistillJobs } = tablesOf(db)
     // 落库侧同样：markDistilled 一次都不该被调用。
-    const fb = (
-      await db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)).all()
-    )[0]!
+    const fb = (await db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)))[0]!
     expect(fb.distilled).toBe(0)
     expect(fb.distillJobId).toBeNull()
 
     // 而且确实没有任何 job 行被写出来。
-    expect(await db.select().from(memoryDistillJobs).all()).toHaveLength(0)
+    expect(await db.select().from(memoryDistillJobs)).toHaveLength(0)
   })
 
   test('listTaskFeedback returns asc by createdAt', async () => {

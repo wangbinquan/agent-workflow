@@ -15,6 +15,8 @@
 //      tolerates zero candidates (dangling name imports successfully), and a
 //      resolved import backfills THIS install's id (foreign ids never
 //      persist).
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -24,9 +26,8 @@ import { workflowDefinitionToNameSelectors } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, resourceGrants, users, workflows } from '../src/db/schema'
 import { resolveImportRefs } from '../src/modules/resource-catalog/infrastructure/legacy/importRefs'
 import { extractWorkflowWorkflowRefs } from '../src/services/resourceRefs'
 import { copyWorkflow, createWorkflow, getWorkflow, updateWorkflow } from '../src/services/workflow'
@@ -39,8 +40,9 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 'user') {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -69,7 +71,7 @@ function callDef(
 }
 
 async function seedWorkflowRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     id?: string
     name: string
@@ -79,7 +81,8 @@ async function seedWorkflowRow(
   },
 ): Promise<string> {
   const id = input.id ?? ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: input.name,
     description: '',
@@ -96,9 +99,10 @@ async function seedWorkflowRow(
 }
 
 async function storedDefinition(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
 ): Promise<WorkflowDefinition> {
+  const { workflows } = tablesOf(db)
   const row = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]
   if (row === undefined) throw new Error(`missing workflow ${workflowId}`)
   return JSON.parse(row.definition) as WorkflowDefinition
@@ -126,7 +130,7 @@ describe('RFC-243 — extractWorkflowWorkflowRefs', () => {
 
 // ---------------------------------------------------------------------------
 describeEachProvider('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   const editor = actor('editor')
 
   beforeEach(async () => {
@@ -158,8 +162,9 @@ describeEachProvider('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15
   test('create accepts a public target, a granted private target, and a dangling name', async () => {
     await expect(createFor(['target-pub'])).resolves.toMatchObject({ name: 'caller' })
 
+    const { workflows, resourceGrants } = tablesOf(db)
     const privRow = (await db.select().from(workflows).where(eq(workflows.name, 'target-priv')))[0]!
-    await db.insert(resourceGrants).values({
+    await insertOne(db, resourceGrants, {
       resourceType: 'workflow',
       resourceId: privRow.id,
       userId: 'editor',
@@ -322,9 +327,10 @@ describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache'
     expect((fast.nodes[0] as Record<string, unknown>).workflowId).toBeUndefined()
     expect((fast.nodes[0] as Record<string, unknown>).workflowName).toBe('child-wf')
 
+    const { agents } = tablesOf(db)
     // With an agent node the main mapping path runs; the call node still loses
     // only its id cache while the agent node gains its portable selector.
-    await db.insert(agents).values({
+    await insertOne(db, agents, {
       id: 'agent-a',
       name: 'helper',
       ownerUserId: 'owner-a',
@@ -352,7 +358,7 @@ describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache'
 describeEachProvider(
   'RFC-243 §5.5 — YAML import resolves / dangles call-workflow names',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     const viewer = actor('viewer')
 
     beforeEach(async () => {
@@ -498,7 +504,7 @@ describeEachProvider(
 )
 
 describeEachProvider('RFC-359 W53 import reference resolution', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   const viewer = actor('viewer')
 

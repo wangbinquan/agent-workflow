@@ -4,10 +4,11 @@
 // `node-event-archive` publication (key = chunk id, scope = task id); marking it
 // ready, recording the object and deleting exactly the source range commit in
 // one transaction. Rows of deleted tasks are released by the task object sweep.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, gt, gte, lte } from 'drizzle-orm'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedNodeEventArchives, nodeRunEvents, nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type {
   EventsArchiveContent,
@@ -34,7 +35,7 @@ const EventRow = z
     parentSessionId: z.string().nullable(),
   })
   .strict()
-type Row = typeof hostedNodeEventArchives.$inferSelect
+type Row = PersistenceTables['hostedNodeEventArchives']['$inferSelect']
 const reference = (id: string) => `aw-event-archive:${id}`
 const objectOf = (row: Row): HostedStoredObject => {
   if (row.objectId === null) throw new Error('hosted-event-archive-not-published')
@@ -42,15 +43,17 @@ const objectOf = (row: Row): HostedStoredObject => {
 }
 const encode = (rows: readonly EventsArchiveRow[]) =>
   rows.map((row) => JSON.stringify(EventRow.parse(row)) + '\n').join('')
-const range = (row: Pick<Row, 'nodeRunId' | 'firstId' | 'lastId'>) =>
-  and(
+const range = (db: object, row: Pick<Row, 'nodeRunId' | 'firstId' | 'lastId'>) => {
+  const { nodeRunEvents } = tablesOf(db)
+  return and(
     eq(nodeRunEvents.nodeRunId, row.nodeRunId),
     gte(nodeRunEvents.id, row.firstId),
     lte(nodeRunEvents.id, row.lastId),
   )
+}
 
 export function createHostedNodeEventArchive(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
   readonly fence: CrewStationMutationFence
@@ -59,35 +62,39 @@ export function createHostedNodeEventArchive(input: {
     files(taskId: string): Promise<readonly { path: string; object: HostedStoredObject }[]>
   } {
   const session = databaseSessionFor(input.db)
-  const write = async <T>(operation: (tx: ProviderNeutralDatabase) => Promise<T>) => {
+  const write = async <T>(operation: (tx: PersistenceDb) => Promise<T>) => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
       return operation(tx)
     })
   }
-  const get = async (db: ProviderNeutralDatabase, id: string) =>
-    (
+  const get = async (db: PersistenceDb, id: string) => {
+    const { hostedNodeEventArchives } = tablesOf(db)
+    return (
       await db
         .select()
         .from(hostedNodeEventArchives)
         .where(eq(hostedNodeEventArchives.id, id))
         .limit(1)
     )[0]
+  }
   const sourceRows = async (
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     row: Pick<Row, 'nodeRunId' | 'firstId' | 'lastId'>,
-  ) =>
-    (await db.select().from(nodeRunEvents).where(range(row)).orderBy(asc(nodeRunEvents.id))).map(
-      (event) => ({
-        id: event.id,
-        ts: event.ts,
-        kind: event.kind,
-        payload: event.payload,
-        sessionId: event.sessionId,
-        parentSessionId: event.parentSessionId,
-      }),
-    )
+  ) => {
+    const { nodeRunEvents } = tablesOf(db)
+    return (
+      await db.select().from(nodeRunEvents).where(range(db, row)).orderBy(asc(nodeRunEvents.id))
+    ).map((event) => ({
+      id: event.id,
+      ts: event.ts,
+      kind: event.kind,
+      payload: event.payload,
+      sessionId: event.sessionId,
+      parentSessionId: event.parentSessionId,
+    }))
+  }
   const finish = async (row: Row) => {
     if (row.state === 'ready') return { file: reference(row.id), archived: 0 }
     const encoded = encode(await sourceRows(input.db, row))
@@ -105,6 +112,7 @@ export function createHostedNodeEventArchive(input: {
       ],
       {
         async commit(tx, [object]) {
+          const { nodeRuns, hostedNodeEventArchives, nodeRunEvents } = tablesOf(tx)
           await session.engine.lockAggregateRoot(tx, nodeRuns, nodeRuns.id, row.nodeRunId)
           const owner = (
             await tx
@@ -127,7 +135,7 @@ export function createHostedNodeEventArchive(input: {
             .update(hostedNodeEventArchives)
             .set({ state: 'ready', objectId: object!.id })
             .where(eq(hostedNodeEventArchives.id, row.id))
-          await tx.delete(nodeRunEvents).where(range(row))
+          await tx.delete(nodeRunEvents).where(range(tx, row))
           archived = actual.length
         },
       },
@@ -136,6 +144,7 @@ export function createHostedNodeEventArchive(input: {
   }
   return {
     async recover() {
+      const { hostedNodeEventArchives, nodeRuns } = tablesOf(input.db)
       // Rows of a deleted run are the task object sweep's to remove; they must
       // not starve the prepared chunks of live runs.
       const row = (
@@ -182,6 +191,7 @@ export function createHostedNodeEventArchive(input: {
         createdAt: Date.now(),
       }
       const prepared = await write(async (tx) => {
+        const { nodeRuns, hostedNodeEventArchives } = tablesOf(tx)
         await session.engine.lockAggregateRoot(tx, nodeRuns, nodeRuns.id, request.nodeRunId)
         const owner = (
           await tx
@@ -207,7 +217,7 @@ export function createHostedNodeEventArchive(input: {
         if (overlapping.length > 0) throw new Error('hosted-event-archive-pending-range')
         if (encode(await sourceRows(tx, candidate)) !== encoded)
           throw new Error('hosted-event-archive-source-changed')
-        await tx.insert(hostedNodeEventArchives).values(candidate)
+        await insertOne(tx, hostedNodeEventArchives, candidate)
         return candidate
       })
       return finish(prepared)
@@ -219,6 +229,7 @@ export function createHostedNodeEventArchive(input: {
       const out: EventsArchiveRow[] = []
       let after = since
       while (out.length < limit) {
+        const { hostedNodeEventArchives } = tablesOf(input.db)
         const chunks = await input.db
           .select()
           .from(hostedNodeEventArchives)
@@ -256,6 +267,7 @@ export function createHostedNodeEventArchive(input: {
       return out
     },
     async files(taskId) {
+      const { hostedNodeEventArchives } = tablesOf(input.db)
       const pending = await input.db
         .select({ id: hostedNodeEventArchives.id })
         .from(hostedNodeEventArchives)

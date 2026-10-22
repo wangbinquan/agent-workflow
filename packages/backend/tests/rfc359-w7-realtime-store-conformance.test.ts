@@ -16,26 +16,19 @@
 //   · listTaskEvents —— 跨 node_run 汇总、按 id 升序、`since` 是**严格**大于、别的任务的事件
 //     不得混入（这条是 innerJoin 到 node_runs 的过滤，两个引擎的 join 语义在此对拍）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  memories,
-  nodeRunEvents,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-  workgroups,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleRealtimeStore } from '@/modules/runtime-management/infrastructure/realtimeStore'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<string> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string): Promise<string> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -47,11 +40,12 @@ async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<string
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: { readonly ownerUserId: string | null },
 ): Promise<string> {
   const taskId = `task-${ulid()}`
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `workflow-${ulid()}`,
@@ -68,9 +62,10 @@ async function seedTask(
   return taskId
 }
 
-async function seedRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const runId = `run-${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'node-1',
@@ -89,7 +84,8 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
     const member = await seedUser(db, `member-${ulid()}`)
     const stranger = await seedUser(db, `stranger-${ulid()}`)
     const taskId = await seedTask(db, { ownerUserId: owner })
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId,
       userId: member,
       role: 'collaborator',
@@ -127,7 +123,8 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
     const owner = await seedUser(db, `owner-${ulid()}`)
     // 故意让两类资源用**同一个** id：只有真的按 type 分表查，两边结果才会不同。
     const sharedId = `res-${ulid()}`
-    await db.insert(workflows).values({
+    const { workflows, workgroups } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: sharedId,
       name: 'realtime workflow',
       definition: '{}',
@@ -136,7 +133,7 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(workgroups).values({
+    await insertOne(db, workgroups, {
       id: sharedId,
       name: 'realtime workgroup',
       ownerUserId: null,
@@ -165,6 +162,7 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
     const store = new DrizzleRealtimeStore(db)
     const repoMemory = `mem-${ulid()}`
     const globalMemory = `mem-${ulid()}`
+    const { memories } = tablesOf(db)
     await db.insert(memories).values([
       {
         id: repoMemory,
@@ -207,6 +205,7 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
     const runA = await seedRun(db, taskId)
     const runB = await seedRun(db, taskId)
     const runOther = await seedRun(db, otherTaskId)
+    const { nodeRunEvents } = tablesOf(db)
     // id 由 autoincrement / identity 指派（两个 provider 的插入渲染都走 DEFAULT），
     // 所以按插入顺序落 id，再读回来对号入座——测试不硬编码任何 id 数值。
     await db.insert(nodeRunEvents).values([

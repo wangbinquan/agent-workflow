@@ -5,7 +5,7 @@
 import { unhandledDatabaseProvider, type DatabaseProvider } from './databaseProviders'
 import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { openDb, type DbClient, type OpenDbOptions } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createPostgresqlDatabaseOperationalAdapter,
   createSqliteDatabaseOperationalAdapter,
@@ -326,7 +326,7 @@ type PreparedDatabaseProviderSchema =
       readonly runtime: SqliteDatabaseProviderRuntime
       readonly databaseConfig: DatabaseConfig
       readonly describeSchemaOutcome: () => string
-      readonly openBootstrapClient: () => ProviderNeutralDatabase
+      readonly openBootstrapClient: () => PersistenceDb
     }
   | {
       readonly provider: 'postgresql'
@@ -352,7 +352,7 @@ type PreparedDatabaseProviderSchema =
        * 已 adopt 的 SQLite runtime 里 `client` 非空，`openClient(input)` 根本不看 `input`）。
        * 由这里交出来之后，调用方连「哪个 provider 要传什么」都不必知道。
        */
-      readonly openBootstrapClient: () => ProviderNeutralDatabase
+      readonly openBootstrapClient: () => PersistenceDb
     }
 
 /**

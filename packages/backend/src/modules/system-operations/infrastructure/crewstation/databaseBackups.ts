@@ -4,9 +4,10 @@
 // retires it. Pruning is a pure catalog decision: physical unpinning happens in
 // the hosted object maintenance job behind the release horizon, so no platform
 // outage can block a backup, a prune or a later restore.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, inArray, lte, ne } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedDatabaseBackups } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
@@ -38,7 +39,7 @@ export class HostedBackupWorktreesUnsupportedError extends DomainError {
 }
 
 export function createHostedDatabaseBackups(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly publications: HostedObjectPublications
   readonly installation: string
@@ -58,7 +59,7 @@ export function createHostedDatabaseBackups(input: {
   const now = input.now ?? Date.now
   const buildArchive = input.buildArchive ?? createHostedDatabaseBackupArchive
   const session = databaseSessionFor(input.db)
-  const write = async <T>(operation: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> => {
+  const write = async <T>(operation: (tx: PersistenceDb) => Promise<T>): Promise<T> => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
@@ -66,12 +67,13 @@ export function createHostedDatabaseBackups(input: {
     })
   }
   const retireInTx = async (
-    tx: ProviderNeutralDatabase,
+    tx: PersistenceDb,
     ids: readonly string[],
     from: readonly ('building' | 'ready')[],
     to: 'failed' | 'released',
   ) => {
     if (ids.length === 0) return 0
+    const { hostedDatabaseBackups } = tablesOf(tx)
     const rows = await tx
       .update(hostedDatabaseBackups)
       .set({ state: to, activeSlot: null, updatedAt: now() })
@@ -93,6 +95,7 @@ export function createHostedDatabaseBackups(input: {
   /** A building row of an earlier execution epoch can never complete. */
   const recover = async (): Promise<number> =>
     write(async (tx) => {
+      const { hostedDatabaseBackups } = tablesOf(tx)
       const stale = await tx
         .select({ id: hostedDatabaseBackups.id })
         .from(hostedDatabaseBackups)
@@ -111,6 +114,7 @@ export function createHostedDatabaseBackups(input: {
     })
   const purgeHistory = async (): Promise<number> =>
     write(async (tx) => {
+      const { hostedDatabaseBackups } = tablesOf(tx)
       const rows = await tx
         .delete(hostedDatabaseBackups)
         .where(
@@ -131,6 +135,7 @@ export function createHostedDatabaseBackups(input: {
       const kind = options.kind ?? 'manual'
       const createdAt = now()
       await write(async (tx) => {
+        const { hostedDatabaseBackups } = tablesOf(tx)
         const active = await tx
           .select({ id: hostedDatabaseBackups.id })
           .from(hostedDatabaseBackups)
@@ -144,7 +149,7 @@ export function createHostedDatabaseBackups(input: {
             undefined,
           )
         // Committed before the snapshot: this opens the backup's horizon window.
-        await tx.insert(hostedDatabaseBackups).values({
+        await insertOne(tx, hostedDatabaseBackups, {
           id,
           epoch: input.fence.current().epoch,
           kind,
@@ -184,6 +189,7 @@ export function createHostedDatabaseBackups(input: {
             ],
             {
               async commit(tx, [receipt]) {
+                const { hostedDatabaseBackups } = tablesOf(tx)
                 const updated = await tx
                   .update(hostedDatabaseBackups)
                   .set({
@@ -228,6 +234,7 @@ export function createHostedDatabaseBackups(input: {
     async prune(options) {
       await recover()
       const protectedIds = new Set(await input.protectedBackupIds())
+      const { hostedDatabaseBackups } = tablesOf(input.db)
       const ready = await input.db
         .select()
         .from(hostedDatabaseBackups)

@@ -1,8 +1,9 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { employeeCases, employeeContextRecords } from '@/db/schema'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 
 describeEachProvider('RFC-310 digital-employee task catalog Case-state semantics', (harness) => {
@@ -70,7 +71,7 @@ describeEachProvider('RFC-310 digital-employee task catalog Case-state semantics
 })
 
 async function seedCase(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly id: string
     readonly state: 'active' | 'waiting' | 'blocked' | 'terminal'
@@ -79,7 +80,8 @@ async function seedCase(
   },
 ): Promise<void> {
   const contextId = `context-${input.id}`
-  await db.insert(employeeCases).values({
+  const { employeeCases, employeeContextRecords } = tablesOf(db)
+  await insertOne(db, employeeCases, {
     id: input.id,
     name: input.id,
     employeeId: 'employee-1',
@@ -100,7 +102,7 @@ async function seedCase(
     updatedAt: input.updatedAt,
     terminalAt: input.state === 'terminal' ? input.updatedAt : null,
   })
-  await db.insert(employeeContextRecords).values({
+  await insertOne(db, employeeContextRecords, {
     id: contextId,
     caseId: input.id,
     typeId: 'development.issue-handling',

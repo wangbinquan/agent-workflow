@@ -22,6 +22,7 @@
 // 行为证明层的事实并改用 dbTxSync。原语自身的行为锁定（提交/回滚/运行时守卫/
 // review 三步序列红绿对照）见 rfc093-db-tx-sync.test.ts。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -55,10 +56,10 @@ describe('S-10 platform semantics: drizzle + bun:sqlite async transaction is dec
     await db.transaction(async (tx) => {
       // 同步前奏仍在 BEGIN..COMMIT 内。
       observed.inTxAtBodyStart = raw.inTransaction
-      await tx.insert(t).values({ id: 1, v: 'a' })
+      await insertOne(tx, t, { id: 1, v: 'a' })
       // 第一个 await 已把控制权交还同步包装器 → 包装器已 COMMIT。
       observed.inTxAfterFirstAwait = raw.inTransaction
-      await tx.insert(t).values({ id: 2, v: 'b' }) // autocommit 单飞
+      await insertOne(tx, t, { id: 2, v: 'b' }) // autocommit 单飞
     })
 
     expect(observed.inTxAtBodyStart).toBe(true)
@@ -71,8 +72,8 @@ describe('S-10 platform semantics: drizzle + bun:sqlite async transaction is dec
 
     await expect(
       db.transaction(async (tx) => {
-        await tx.insert(t).values({ id: 1, v: 'a' })
-        await tx.insert(t).values({ id: 2, v: 'b' })
+        await insertOne(tx, t, { id: 1, v: 'a' })
+        await insertOne(tx, t, { id: 2, v: 'b' })
         // 模拟 review.ts:505-538 这类多写序列中途失败/崩溃点。
         throw new Error('mid-sequence failure')
       }),

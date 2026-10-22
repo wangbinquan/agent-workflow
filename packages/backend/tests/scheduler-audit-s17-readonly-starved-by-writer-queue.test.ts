@@ -34,6 +34,8 @@
 //   - 用 3 个写者 + capacity 2：即使排队顺序出现 ±1 扰动，readonly 真并行的
 //     结论不变；写者两两不重叠的支撑断言保持原样。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -41,10 +43,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { initScratchRepo } from '../src/util/git'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -101,7 +102,7 @@ process.exit(0)
 `
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -130,8 +131,9 @@ function buildHarness(provider: ProviderHarness): Harness {
   }
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgent(db: PersistenceDb, name: string): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -225,14 +227,15 @@ function registerProviderCases1(provider: ProviderHarness) {
     const canonicalDef = await canonicalizeWorkflowAgentIds(h.db, def)
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(h.db)
+    await insertOne(h.db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(canonicalDef),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       name: 'fixture-task',
       id: taskId,
       workflowId,

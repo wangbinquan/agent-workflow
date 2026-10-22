@@ -27,7 +27,7 @@
 // instance's renewal notices it. Without this, an instance that lost a
 // handoff in the middle of a merge-back stamped `merge-failed` on a node whose
 // workspace command it had only detached (2026-10-17 hosted acceptance).
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DomainError } from '@/util/errors'
 import type { ExecutionAuthorityState } from '../../application/ports/executionAuthority'
 import {
@@ -50,7 +50,7 @@ export class HostedDatabaseWriteUnavailableError extends DomainError {
 
 export interface HostedDatabaseWriteBarrier {
   /** The client's per-transaction write guard: refuse while the window is closed. */
-  beforeWrite(tx: ProviderNeutralDatabase): Promise<void>
+  beforeWrite(tx: PersistenceDb): Promise<void>
   /** Govern every later write transaction (idempotent). */
   enforce(): void
   /** Follow this instance's own execution lease: refuse writes once it is
@@ -78,7 +78,7 @@ export function createHostedDatabaseWriteBarrier(
         lost ??= state.kind === 'active' ? 'lease lost' : (state.reason ?? state.kind)
       })
     },
-    async beforeWrite(tx: ProviderNeutralDatabase) {
+    async beforeWrite(tx: PersistenceDb) {
       if (!enforcing) return
       const row = await holdHostedExecutionControl(tx)
       if (row?.migrationOperationId != null) {

@@ -4,13 +4,14 @@
 // 看起来和健康的一模一样。本测试锁定：① recordRecoveryEvent 落持久行 + bump 计数器 +
 // 按 task 倒序可查；② 真实 actor（boot-reap）会记录事件（防接线漂移）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import {
   __resetRecoveryCountersForTest,
@@ -20,12 +21,13 @@ import {
 } from '../src/services/recovery'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
-async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRunningTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -83,6 +85,7 @@ describeEachProvider('RFC-108 T3 — actors record recovery_events', (harness) =
     const rows = await listRecoveryEventsForTask(operations, taskId)
     expect(rows.some((r) => r.kind === 'boot-reap')).toBe(true)
     expect(recoveryCountersSnapshot()['boot-reap']).toBeGreaterThanOrEqual(1)
+    const { tasks } = tablesOf(db)
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
     expect(t[0]!.status).toBe('interrupted')
   })

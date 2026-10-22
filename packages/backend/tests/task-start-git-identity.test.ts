@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
@@ -13,7 +15,6 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, users, nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { createWorkflow } from '../src/services/workflow'
@@ -155,7 +156,8 @@ async function seedUser(
   email: string | null,
   gitName: string = displayName,
 ): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     email,
@@ -249,6 +251,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     const h = await setup()
     await seedUser(h.db, 'alice', 'Alice A', 'alice-a@example.test')
     const first = await launch(h, 'first', 'alice')
+    const { users, tasks } = tablesOf(h.db)
     await h.db
       .update(users)
       .set({
@@ -283,6 +286,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     expect(error).toBeInstanceOf(UserAccessError)
     expect((error as UserAccessError).kind).toBe('validation')
     expect((error as UserAccessError).code).toBe('git-identity-email-missing')
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks)).length).toBe(0)
   })
 
@@ -293,6 +297,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     expect(error).toBeInstanceOf(UserAccessError)
     expect((error as UserAccessError).kind).toBe('validation')
     expect((error as UserAccessError).code).toBe('git-identity-name-missing')
+    const { tasks } = tablesOf(h.db)
     expect((await h.db.select().from(tasks)).length).toBe(0)
   })
 
@@ -369,6 +374,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     const h = await setup()
     await seedUser(h.db, 'alice', 'Parent Owner', 'parent@example.test')
     const parent = await launch(h, 'parent', 'alice')
+    const { users, tasks, nodeRuns } = tablesOf(h.db)
     await h.db
       .update(users)
       .set({
@@ -382,7 +388,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     const childId = ulid(),
       runId = ulid()
     await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, parent.id))
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: runId,
       taskId: parent.id,
       nodeId: 'call',

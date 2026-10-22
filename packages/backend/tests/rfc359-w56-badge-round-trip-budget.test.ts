@@ -21,13 +21,14 @@
 //
 // 判据是**语句数**而不是墙钟：确定性、可进每次 PR，不会因为机器忙就假红
 // （与 `rfc311-perf-guards` 同一哲学；RFC-244 的教训是墙钟测不出真回归）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { docVersions, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { countPendingReviews } from '../src/modules/collaboration/infrastructure/review'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
@@ -37,8 +38,9 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedOnePendingReview(db: ProviderNeutralDatabase): Promise<void> {
+async function seedOnePendingReview(db: PersistenceDb): Promise<void> {
   const now = 1_788_278_400_000
+  const { users, workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'carol', 'root'].map((id) => ({
       id,
@@ -49,12 +51,12 @@ async function seedOnePendingReview(db: ProviderNeutralDatabase): Promise<void> 
       updatedAt: now,
     })),
   )
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: 't-badge',
     name: 't-badge',
     workflowId: 'wf',
@@ -69,7 +71,7 @@ async function seedOnePendingReview(db: ProviderNeutralDatabase): Promise<void> 
     ownerUserId: 'alice',
   })
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId: 't-badge',
     nodeId: 'rev',
@@ -79,7 +81,7 @@ async function seedOnePendingReview(db: ProviderNeutralDatabase): Promise<void> 
     reviewIteration: 0,
     startedAt: now,
   })
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: ulid(),
     taskId: 't-badge',
     reviewNodeId: 'rev',

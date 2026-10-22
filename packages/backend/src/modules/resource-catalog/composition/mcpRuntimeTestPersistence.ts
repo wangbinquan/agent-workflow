@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { McpRuntimeTestPersistence } from '../application/mcps/runtimeTestPersistence'
 import { createMcpRuntimeTestPersistence } from '../infrastructure/mcpRuntimeTestPersistence'
 export { createMcpTransactionLifecycle } from '../infrastructure/mcpTransactionLifecycle'
@@ -12,15 +12,15 @@ export interface McpRuntimeTestProviderPersistence {
 
 /** 一份装配，两个 provider 共用（RFC-359 W4-D16）。 */
 export function composeMcpRuntimeTestPersistence(
-  db: ProviderNeutralDatabase,
-  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
+  db: PersistenceDb,
+  beforeWrite?: (tx: PersistenceDb) => Promise<void>,
 ): McpRuntimeTestPersistence {
   return createMcpRuntimeTestPersistence(db, beforeWrite)
 }
 
 export function composeMcpRuntimeTestProvider(
-  db: ProviderNeutralDatabase,
-  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
+  db: PersistenceDb,
+  beforeWrite?: (tx: PersistenceDb) => Promise<void>,
 ): McpRuntimeTestProviderPersistence {
   return Object.freeze({
     persistence: composeMcpRuntimeTestPersistence(db, beforeWrite),

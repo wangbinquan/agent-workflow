@@ -38,6 +38,7 @@
 //   - terminatedAs (T9): DTO-level discriminator normalizing the self
 //     'canceled' / cross 'abandoned' terminal statuses.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   validateClarifyMindmap,
   CLARIFY_INPUT_PORT_NAME,
@@ -68,8 +69,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { setNodeRunStatusTx } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
@@ -123,7 +123,7 @@ export interface ClarifyRoundDto {
 }
 
 /** The ONE row→DTO mapper (replaces the 3+4 pair-copied self/cross mappers). */
-export function rowToRound(r: typeof clarifyRounds.$inferSelect): ClarifyRoundDto {
+export function rowToRound(r: PersistenceTables['clarifyRounds']['$inferSelect']): ClarifyRoundDto {
   const out: ClarifyRoundDto = {
     id: r.id,
     taskId: r.taskId,
@@ -163,19 +163,24 @@ function safeParseArray<T>(json: string | null): T[] | undefined {
   }
 }
 
-const kindIs = (kind: ClarifyRoundKind) => eq(clarifyRounds.kind, kind)
+const kindIs = (db: object, kind: ClarifyRoundKind) => {
+  const { clarifyRounds } = tablesOf(db)
+  return eq(clarifyRounds.kind, kind)
+}
 // RFC-354 — rounds are keyed by frame: the generation row the asking run hangs off (null = top scope).
-const frameIs = (containerRunId: string | null) =>
-  containerRunId === null
+const frameIs = (db: object, containerRunId: string | null) => {
+  const { clarifyRounds } = tablesOf(db)
+  return containerRunId === null
     ? isNull(clarifyRounds.containerRunId)
     : eq(clarifyRounds.containerRunId, containerRunId)
+}
 
 // ---------------------------------------------------------------------------
 // createClarifyRound — kind-generalized runner-side entry point.
 // ---------------------------------------------------------------------------
 
 interface CreateRoundCommon {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   /** Preserve the running task's context across runtime callbacks. */
   executionContext?: TaskExecutionContextRef
@@ -264,7 +269,7 @@ export async function createClarifyRound(
 
   let iteration: number
   const createdAt = now()
-  let existingRun: typeof nodeRuns.$inferSelect | undefined
+  let existingRun: PersistenceTables['nodeRuns']['$inferSelect'] | undefined
 
   if (args.kind === 'self') {
     iteration = args.iteration
@@ -288,6 +293,7 @@ export async function createClarifyRound(
       )
     }
   } else {
+    const { clarifyRounds } = tablesOf(args.db)
     // Derived iteration: max(existing.iteration) + 1 in the same
     // (node, loopIter); 0 if no prior round for this loop_iter.
     const prior = await args.db
@@ -295,11 +301,11 @@ export async function createClarifyRound(
       .from(clarifyRounds)
       .where(
         and(
-          kindIs('cross'),
+          kindIs(args.db, 'cross'),
           eq(clarifyRounds.taskId, args.taskId),
           eq(clarifyRounds.intermediaryNodeId, args.intermediaryNodeId),
           eq(clarifyRounds.loopIter, args.loopIter),
-          frameIs(args.containerRunId ?? null),
+          frameIs(args.db, args.containerRunId ?? null),
         ),
       )
       .orderBy(desc(clarifyRounds.iteration))
@@ -311,6 +317,7 @@ export async function createClarifyRound(
     args.kind === 'self' && args.truncationWarnings && args.truncationWarnings.length > 0
       ? JSON.stringify(args.truncationWarnings)
       : null
+  const { tasks, clarifyRounds } = tablesOf(args.db)
   const taskRow = (
     await args.db
       .select({
@@ -430,13 +437,14 @@ export async function createClarifyRound(
 }
 
 async function findSelfGateRunForShard(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   intermediaryNodeId: string,
   shardKey: string | null,
   iteration: number,
   frame: { readonly containerRunId: string | null; readonly frameIteration: number },
-): Promise<typeof nodeRuns.$inferSelect | undefined> {
+): Promise<PersistenceTables['nodeRuns']['$inferSelect'] | undefined> {
+  const { clarifyRounds, nodeRuns } = tablesOf(db)
   // RFC-074 PR-C: the gate run carries no round counter, so this round's
   // existing run is located via the clarify_rounds row that owns it — keyed
   // by (intermediaryNodeId, askingShardKey, iteration). A re-emit within the
@@ -452,11 +460,11 @@ async function findSelfGateRunForShard(
     .from(clarifyRounds)
     .where(
       and(
-        kindIs('self'),
+        kindIs(db, 'self'),
         eq(clarifyRounds.taskId, taskId),
         eq(clarifyRounds.intermediaryNodeId, intermediaryNodeId),
         eq(clarifyRounds.iteration, iteration),
-        frameIs(frame.containerRunId),
+        frameIs(db, frame.containerRunId),
         shardKey === null
           ? isNull(clarifyRounds.askingShardKey)
           : eq(clarifyRounds.askingShardKey, shardKey),
@@ -480,7 +488,7 @@ async function findSelfGateRunForShard(
 // ---------------------------------------------------------------------------
 
 export interface EvaluateDesignerRerunReadinessArgs {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   designerNodeId: string
   definition: WorkflowDefinition
@@ -552,17 +560,18 @@ export async function evaluateDesignerRerunReadiness(
   const sources: DesignerRerunReadinessSource[] = []
   const pending: string[] = []
   for (const nodeId of siblingNodeIds) {
+    const { clarifyRounds } = tablesOf(args.db)
     // Latest round for this (nodeId, loop_iter).
     const rawRows = await args.db
       .select()
       .from(clarifyRounds)
       .where(
         and(
-          kindIs('cross'),
+          kindIs(args.db, 'cross'),
           eq(clarifyRounds.taskId, args.taskId),
           eq(clarifyRounds.intermediaryNodeId, nodeId),
           eq(clarifyRounds.loopIter, args.loopIter),
-          ...(args.containerRunId === undefined ? [] : [frameIs(args.containerRunId)]),
+          ...(args.containerRunId === undefined ? [] : [frameIs(args.db, args.containerRunId)]),
         ),
       )
       .orderBy(desc(clarifyRounds.iteration))
@@ -629,7 +638,7 @@ export interface DispatchCrossClarifyResult {
  * transition + reason string.
  */
 export async function dispatchCrossClarifyNode(args: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   crossClarifyNodeId: string
   /** node_runs.id being dispatched (must exist, typically 'pending'). */
@@ -682,7 +691,7 @@ export async function dispatchCrossClarifyNode(args: {
  * stop re-enables the questioner. No row or 'continue' ⇒ not stopped.
  */
 export async function resolveCrossNodeStopped(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   questionerNodeId: string,
 ): Promise<boolean> {

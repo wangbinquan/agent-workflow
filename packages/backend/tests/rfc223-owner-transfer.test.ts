@@ -1,22 +1,12 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import type { AclResourceType } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  capabilityTemplates,
-  employeeDefinitions,
-  employeeJobTemplates,
-  mcps,
-  plugins,
-  resourceGrants,
-  skills,
-  users,
-  workflows,
-  workgroups,
-} from '../src/db/schema'
 import { createDigitalEmployeeResourceCatalogAclProviders } from '../src/modules/digital-employee/composition/resourceCatalogAcl'
 import {
   composeForeignResourceAclFor,
@@ -46,12 +36,9 @@ function actor(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  id: string,
-  role: 'admin' | 'user',
-): Promise<void> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user'): Promise<void> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -63,25 +50,26 @@ async function seedUser(
 }
 
 async function seedResource(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   id: string,
   name: string,
   ownerUserId: string,
 ): Promise<AclRow> {
   const acl = { ownerUserId, visibility: 'public' as const, aclRevision: 0 }
+  const { agents, skills, mcps, plugins, workflows, workgroups, capabilityTemplates } = tablesOf(db)
   switch (type) {
     case 'agent':
-      await db.insert(agents).values({ id, name, ...acl })
+      await insertOne(db, agents, { id, name, ...acl })
       break
     case 'skill':
-      await db.insert(skills).values({ id, name, ...acl })
+      await insertOne(db, skills, { id, name, ...acl })
       break
     case 'mcp':
-      await db.insert(mcps).values({ id, name, type: 'local', ...acl })
+      await insertOne(db, mcps, { id, name, type: 'local', ...acl })
       break
     case 'plugin':
-      await db.insert(plugins).values({
+      await insertOne(db, plugins, {
         id,
         name,
         spec: 'pkg',
@@ -92,13 +80,13 @@ async function seedResource(
       })
       break
     case 'workflow':
-      await db.insert(workflows).values({ id, name, definition: '{}', ...acl })
+      await insertOne(db, workflows, { id, name, definition: '{}', ...acl })
       break
     case 'workgroup':
-      await db.insert(workgroups).values({ id, name, ...acl })
+      await insertOne(db, workgroups, { id, name, ...acl })
       break
     case 'capability_template':
-      await db.insert(capabilityTemplates).values({
+      await insertOne(db, capabilityTemplates, {
         id,
         name,
         capability: 'mr-review',
@@ -112,7 +100,7 @@ async function seedResource(
 }
 
 describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let admin: Actor
   let ownerA: Actor
 
@@ -141,6 +129,8 @@ describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) =>
         status: 409,
       })
 
+      const { agents, skills, mcps, plugins, capabilityTemplates, workgroups, resourceGrants } =
+        tablesOf(db)
       const table = {
         agent: agents,
         skill: skills,
@@ -150,14 +140,15 @@ describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) =>
         workgroup: workgroups,
       }[type]
       expect(
-        await db
-          .select({
-            ownerUserId: table.ownerUserId,
-            aclRevision: table.aclRevision,
-          })
-          .from(table)
-          .where(eq(table.id, source.id))
-          .get(),
+        await first(
+          db
+            .select({
+              ownerUserId: table.ownerUserId,
+              aclRevision: table.aclRevision,
+            })
+            .from(table)
+            .where(eq(table.id, source.id)),
+        ),
       ).toEqual({ ownerUserId: 'owner-a', aclRevision: 0 })
       expect(
         await db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, source.id)),
@@ -193,16 +184,18 @@ describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) =>
         expectedAclRevision: 1,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError)
+    const { agents } = tablesOf(db)
     expect(
-      await db
-        .select({
-          ownerUserId: agents.ownerUserId,
-          visibility: agents.visibility,
-          aclRevision: agents.aclRevision,
-        })
-        .from(agents)
-        .where(eq(agents.id, source.id))
-        .get(),
+      await first(
+        db
+          .select({
+            ownerUserId: agents.ownerUserId,
+            visibility: agents.visibility,
+            aclRevision: agents.aclRevision,
+          })
+          .from(agents)
+          .where(eq(agents.id, source.id)),
+      ),
     ).toEqual({ ownerUserId: 'owner-b', visibility: 'public', aclRevision: 1 })
   })
 
@@ -261,7 +254,7 @@ describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) =>
 //     唯一表：撞名转移是一次 raw UNIQUE 失败（500）而非 409。
 describeEachProvider('RFC-330 —— 分区化的 owner-name 唯一转移预检', (harness) => {
   const NOW = 1_700_000_000_000
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let admin: Actor
 
   beforeEach(async () => {
@@ -278,7 +271,8 @@ describeEachProvider('RFC-330 —— 分区化的 owner-name 唯一转移预检'
     typeRevision: number,
     name: string,
   ): Promise<AclRow> => {
-    await db.insert(employeeJobTemplates).values({
+    const { employeeJobTemplates } = tablesOf(db)
+    await insertOne(db, employeeJobTemplates, {
       id,
       typeId: 'design',
       typeRevision,
@@ -323,12 +317,14 @@ describeEachProvider('RFC-330 —— 分区化的 owner-name 唯一转移预检'
         },
       ),
     ).rejects.toMatchObject({ code: 'resource-name-conflict', status: 409 })
+    const { employeeJobTemplates } = tablesOf(db)
     expect(
-      await db
-        .select({ ownerUserId: employeeJobTemplates.ownerUserId })
-        .from(employeeJobTemplates)
-        .where(eq(employeeJobTemplates.id, second.id))
-        .get(),
+      await first(
+        db
+          .select({ ownerUserId: employeeJobTemplates.ownerUserId })
+          .from(employeeJobTemplates)
+          .where(eq(employeeJobTemplates.id, second.id)),
+      ),
     ).toEqual({ ownerUserId: 'owner-a' })
   })
 
@@ -336,7 +332,8 @@ describeEachProvider('RFC-330 —— 分区化的 owner-name 唯一转移预检'
     const identityPersistence =
       createDigitalEmployeeResourceCatalogAclProviders(db).employeeDefinition
     const seedDefinition = async (id: string, ownerUserId: string): Promise<AclRow> => {
-      await db.insert(employeeDefinitions).values({
+      const { employeeDefinitions } = tablesOf(db)
+      await insertOne(db, employeeDefinitions, {
         id,
         name: 'shared-employee',
         typeId: 'design',

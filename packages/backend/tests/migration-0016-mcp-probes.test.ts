@@ -14,13 +14,14 @@
 // §2.1) is broken — callers in services/mcp.ts deleteMcp would need an
 // explicit DELETE FROM mcp_probes before dropping the parent row.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite, queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { mcps, mcpProbes } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('migration 0013 (RFC-030 mcp_probes)', () => {
@@ -31,14 +32,13 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
 
   function seedMcp(name = 'postgres-prod'): string {
     const id = ulid()
-    db.insert(mcps)
-      .values({
-        id,
-        name,
-        type: 'local',
-        config: JSON.stringify({ command: ['true'] }),
-      })
-      .run()
+    const { mcps } = tablesOf(db)
+    insertOne(db, mcps, {
+      id,
+      name,
+      type: 'local',
+      config: JSON.stringify({ command: ['true'] }),
+    })
     return id
   }
 
@@ -46,29 +46,28 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
     const mcpId = seedMcp()
     const id = ulid()
     const now = Date.now()
-    db.insert(mcpProbes)
-      .values({
-        id,
-        mcpId,
-        status: 'ok',
-        latencyMs: 1832,
-        handshakeMs: 412,
-        serverInfoJson: JSON.stringify({ name: 'postgres-mcp', version: '1.2.0' }),
-        protocolVersion: '2024-11-05',
-        capabilitiesJson: JSON.stringify({ tools: { listChanged: true } }),
-        toolsJson: JSON.stringify([{ name: 'query' }]),
-        resourcesJson: JSON.stringify([]),
-        resourceTemplatesJson: JSON.stringify([]),
-        promptsJson: JSON.stringify([]),
-        errorCode: null,
-        errorMessage: null,
-        errorDetailJson: null,
-        startedAt: now,
-        finishedAt: now + 1832,
-      })
-      .run()
+    const { mcpProbes } = tablesOf(db)
+    insertOne(db, mcpProbes, {
+      id,
+      mcpId,
+      status: 'ok',
+      latencyMs: 1832,
+      handshakeMs: 412,
+      serverInfoJson: JSON.stringify({ name: 'postgres-mcp', version: '1.2.0' }),
+      protocolVersion: '2024-11-05',
+      capabilitiesJson: JSON.stringify({ tools: { listChanged: true } }),
+      toolsJson: JSON.stringify([{ name: 'query' }]),
+      resourcesJson: JSON.stringify([]),
+      resourceTemplatesJson: JSON.stringify([]),
+      promptsJson: JSON.stringify([]),
+      errorCode: null,
+      errorMessage: null,
+      errorDetailJson: null,
+      startedAt: now,
+      finishedAt: now + 1832,
+    })
 
-    const rows = db.select().from(mcpProbes).all()
+    const rows = queryRows(db.select().from(mcpProbes))
     expect(rows).toHaveLength(1)
     const r = rows[0]!
     expect(r.id).toBe(id)
@@ -82,73 +81,67 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
 
   test('mcp_probes.mcp_id is UNIQUE — second probe insert for same mcp rejected', () => {
     const mcpId = seedMcp()
-    db.insert(mcpProbes)
-      .values({
+    const { mcpProbes } = tablesOf(db)
+    insertOne(db, mcpProbes, {
+      id: ulid(),
+      mcpId,
+      status: 'ok',
+      latencyMs: 100,
+      startedAt: 1,
+      finishedAt: 2,
+    })
+
+    expect(() => {
+      return insertOne(db, mcpProbes, {
         id: ulid(),
         mcpId,
-        status: 'ok',
-        latencyMs: 100,
+        status: 'error',
+        latencyMs: 200,
         startedAt: 1,
         finishedAt: 2,
       })
-      .run()
-
-    expect(() =>
-      db
-        .insert(mcpProbes)
-        .values({
-          id: ulid(),
-          mcpId,
-          status: 'error',
-          latencyMs: 200,
-          startedAt: 1,
-          finishedAt: 2,
-        })
-        .run(),
-    ).toThrow()
+    }).toThrow()
   })
 
   test('ON DELETE CASCADE: deleting parent mcp removes probe row', () => {
     const mcpId = seedMcp()
-    db.insert(mcpProbes)
-      .values({
-        id: ulid(),
-        mcpId,
-        status: 'ok',
-        latencyMs: 50,
-        startedAt: 1,
-        finishedAt: 2,
-      })
-      .run()
-    expect(db.select().from(mcpProbes).all()).toHaveLength(1)
+    const { mcpProbes, mcps } = tablesOf(db)
+    insertOne(db, mcpProbes, {
+      id: ulid(),
+      mcpId,
+      status: 'ok',
+      latencyMs: 50,
+      startedAt: 1,
+      finishedAt: 2,
+    })
+    expect(queryRows(db.select().from(mcpProbes))).toHaveLength(1)
 
-    db.delete(mcps).where(eq(mcps.id, mcpId)).run()
+    queryWrite(db.delete(mcps).where(eq(mcps.id, mcpId)))
 
-    expect(db.select().from(mcpProbes).all()).toHaveLength(0)
+    expect(queryRows(db.select().from(mcpProbes))).toHaveLength(0)
   })
 
   test('error probe shape: all list columns nullable, errorCode + errorDetailJson populated', () => {
     const mcpId = seedMcp('broken')
-    db.insert(mcpProbes)
-      .values({
-        id: ulid(),
-        mcpId,
-        status: 'error',
-        latencyMs: 30_010,
-        handshakeMs: null,
-        serverInfoJson: null,
-        toolsJson: null,
-        resourcesJson: null,
-        resourceTemplatesJson: null,
-        promptsJson: null,
-        errorCode: 'connect-failed',
-        errorMessage: 'spawn uvx ENOENT',
-        errorDetailJson: JSON.stringify({ stderr: 'uvx: command not found' }),
-        startedAt: 1,
-        finishedAt: 30_011,
-      })
-      .run()
-    const rows = db.select().from(mcpProbes).all()
+    const { mcpProbes } = tablesOf(db)
+    insertOne(db, mcpProbes, {
+      id: ulid(),
+      mcpId,
+      status: 'error',
+      latencyMs: 30_010,
+      handshakeMs: null,
+      serverInfoJson: null,
+      toolsJson: null,
+      resourcesJson: null,
+      resourceTemplatesJson: null,
+      promptsJson: null,
+      errorCode: 'connect-failed',
+      errorMessage: 'spawn uvx ENOENT',
+      errorDetailJson: JSON.stringify({ stderr: 'uvx: command not found' }),
+      startedAt: 1,
+      finishedAt: 30_011,
+    })
+    const rows = queryRows(db.select().from(mcpProbes))
     expect(rows[0]!.errorCode).toBe('connect-failed')
     expect(rows[0]!.toolsJson).toBeNull()
     expect(JSON.parse(rows[0]!.errorDetailJson!)).toEqual({ stderr: 'uvx: command not found' })

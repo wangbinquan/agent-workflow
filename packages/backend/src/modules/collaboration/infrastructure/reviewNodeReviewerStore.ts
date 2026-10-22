@@ -1,8 +1,8 @@
 // RFC-359 W4-B3 —— 评审节点评审人存储：一份实现，两个 provider 共用（替换走统一事务原语）。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
-import { reviewNodeReviewers, users } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   ReviewNodeReviewerAssignmentInput,
@@ -11,7 +11,7 @@ import type {
 } from '../application/ports/reviewNodeReviewerStore'
 import type { UserPublic } from '@agent-workflow/shared'
 
-function publicUser(row: typeof users.$inferSelect): UserPublic {
+function publicUser(row: PersistenceTables['users']['$inferSelect']): UserPublic {
   return {
     id: row.id,
     username: row.username,
@@ -22,9 +22,10 @@ function publicUser(row: typeof users.$inferSelect): UserPublic {
 }
 
 export class DrizzleReviewNodeReviewerStore implements ReviewNodeReviewerStore {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async isAssigned(taskId: string, reviewNodeId: string, userId: string): Promise<boolean> {
+    const { reviewNodeReviewers } = tablesOf(this.db)
     const rows = await this.db
       .select({ reviewerUserId: reviewNodeReviewers.reviewerUserId })
       .from(reviewNodeReviewers)
@@ -44,6 +45,7 @@ export class DrizzleReviewNodeReviewerStore implements ReviewNodeReviewerStore {
     taskIds: readonly string[],
   ): Promise<ReadonlySet<string>> {
     if (taskIds.length === 0) return new Set()
+    const { reviewNodeReviewers } = tablesOf(this.db)
     const rows = await this.db
       .select({
         taskId: reviewNodeReviewers.taskId,
@@ -60,6 +62,7 @@ export class DrizzleReviewNodeReviewerStore implements ReviewNodeReviewerStore {
   }
 
   async listForTask(taskId: string): Promise<ReviewNodeReviewerRow[]> {
+    const { reviewNodeReviewers, users } = tablesOf(this.db)
     const rows = await this.db
       .select({ reviewNodeId: reviewNodeReviewers.reviewNodeId, user: users })
       .from(reviewNodeReviewers)
@@ -70,6 +73,7 @@ export class DrizzleReviewNodeReviewerStore implements ReviewNodeReviewerStore {
 
   async activeUserIds(userIds: readonly string[]): Promise<ReadonlySet<string>> {
     if (userIds.length === 0) return new Set()
+    const { users } = tablesOf(this.db)
     const rows = await this.db
       .select({ id: users.id })
       .from(users)
@@ -84,20 +88,18 @@ export class DrizzleReviewNodeReviewerStore implements ReviewNodeReviewerStore {
     assignedAt: number,
   ): Promise<void> {
     await databaseSessionFor(this.db).transaction(async (tx) => {
-      await tx.delete(reviewNodeReviewers).where(eq(reviewNodeReviewers.taskId, taskId)).run()
+      const { reviewNodeReviewers } = tablesOf(tx)
+      await tx.delete(reviewNodeReviewers).where(eq(reviewNodeReviewers.taskId, taskId))
       if (assignments.length === 0) return
-      await tx
-        .insert(reviewNodeReviewers)
-        .values(
-          assignments.map((assignment) => ({
-            taskId,
-            reviewNodeId: assignment.reviewNodeId,
-            reviewerUserId: assignment.reviewerUserId,
-            assignedByUserId,
-            assignedAt,
-          })),
-        )
-        .run()
+      await tx.insert(reviewNodeReviewers).values(
+        assignments.map((assignment) => ({
+          taskId,
+          reviewNodeId: assignment.reviewNodeId,
+          reviewerUserId: assignment.reviewerUserId,
+          assignedByUserId,
+          assignedAt,
+        })),
+      )
     })
   }
 }

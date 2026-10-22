@@ -1,9 +1,9 @@
 // RFC-349 — provider-neutral legacy code facades are backed by live
 // PostgreSQL queries/writes, not a SQLite shadow or a cast client.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { CapabilityTemplateRecord } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityParamRead } from '@/modules/code-capability/infrastructure/capabilityParamRead'
 import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
@@ -38,7 +38,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     if (sql.includes('database_generations')) return rows([['dbg_code_legacy_pg']])
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -63,10 +66,6 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
   test('cell parameters and workspace/node snapshots read PostgreSQL projections', async () => {

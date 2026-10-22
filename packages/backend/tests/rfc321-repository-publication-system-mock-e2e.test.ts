@@ -30,7 +30,7 @@ import {
 } from '@agent-workflow/system-mocks'
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createRepositoryEndpointDiscovery } from '../src/modules/integration/application/repositoryEndpointDiscovery'
 import {
@@ -85,7 +85,7 @@ function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
 }
 
-function repositoryOf(db: ProviderNeutralDatabase) {
+function repositoryOf(db: PersistenceDb) {
   return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 

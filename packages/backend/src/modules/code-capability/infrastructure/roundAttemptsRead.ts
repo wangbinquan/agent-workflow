@@ -1,14 +1,15 @@
 // RFC-359 W4-B5 —— 轮次 AI 尝试历史的有界投影：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { codeAiAttempts } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RoundAttemptsReadPort } from '../application/ports/roundAttemptsRead'
 
-export function createRoundAttemptsRead(db: ProviderNeutralDatabase): RoundAttemptsReadPort {
+export function createRoundAttemptsRead(db: PersistenceDb): RoundAttemptsReadPort {
   return {
     async load(roundId, limit) {
+      const { codeAiAttempts } = tablesOf(db)
       return await db
         .select({
           attemptId: codeAiAttempts.id,

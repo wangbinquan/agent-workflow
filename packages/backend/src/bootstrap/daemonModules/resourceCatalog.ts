@@ -1,6 +1,6 @@
 import type { AclResourceType, UpdateResourceAclBody } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { type ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeCapabilityTemplateOperations,
   createCapabilityTemplatePersistence,
@@ -55,7 +55,7 @@ type DigitalEmployeeAclResourceType = Extract<
 >
 
 export function composeDaemonResourceCatalogModules(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly skillContentRoot: string
   readonly skillContent?: Parameters<typeof selectSkillContentDependencies>[0]
   readonly pluginInstaller?: PluginInstallerPort

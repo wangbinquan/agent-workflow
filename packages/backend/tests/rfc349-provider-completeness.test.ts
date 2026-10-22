@@ -103,7 +103,7 @@ const PROVIDER_FORK_LEDGER = {
   // RFC-359 AC-10 第一波：`db/providerSchema.ts` 的条目退役。原来那处 fork 是
   // `concreteDatabaseColumn` 按 provider 在 `PgColumn` / `SQLiteColumn` 之间做类型判定，
   // 而它**全仓没有任何调用方**（只有自己的定义），所以处置是删除而不是改写；
-  // 同文件的孪生 `concreteDatabaseTable` 是活的（`schemaContract.ts` 在用），保留。
+  // RFC-395 I-b 已删除余下的全局表投影，规范契约直接读取原生 SQLite 元数据。
   // RFC-359 W4-D8 / D9：identity-access 与 auth 运行时的装配入口收中立句柄，main.ts 少了三个 provider 三元分支。
   // RFC-359（apply 引擎合一，plan §5dv）4 → 3：`package` 子命令的资源包装配此前是一个
   // `provider === 'sqlite' ? … : …`，现在两个 provider 装同一条组合根。

@@ -1,5 +1,7 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-384: pin one passive Intent graph, live defaults, maintenance activity and isolated run families on both providers.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { createHash } from 'node:crypto'
@@ -16,7 +18,6 @@ import {
   composeDaemonIntentModules,
   type DaemonIntentInput,
 } from '@/bootstrap/daemonModules/intent'
-import { intentDrafts, intentSessions, intentWorkingSetChanges } from '@/db/schema'
 import * as applyComposition from '@/modules/intent/composition/apply'
 import * as persistenceComposition from '@/modules/intent/composition/persistence'
 import * as resourceComposition from '@/modules/intent/composition/resourceCatalog'
@@ -327,7 +328,8 @@ describeEachProvider('RFC-384 intent bundle', (harness) => {
     })
     const draftHash = `sha256:${createHash('sha256').update(canonical).digest('hex')}`
     const draftId = ulid()
-    await harness.db.insert(intentDrafts).values({
+    const { intentDrafts, intentSessions } = tablesOf(harness.db)
+    await insertOne(harness.db, intentDrafts, {
       id: draftId,
       sessionId: session.id,
       revision: 1,
@@ -426,13 +428,15 @@ describeEachProvider('RFC-384 intent bundle', (harness) => {
       onIntentQueued: bundle.queuedResumption.enqueue,
     })
     let handle: ReturnType<typeof bundle.queuedResumption.runtimeFactory.start> | undefined
-    const state = async (id: string) =>
-      (
+    const state = async (id: string) => {
+      const { intentWorkingSetChanges } = tablesOf(harness.db)
+      return (
         await harness.db
           .select()
           .from(intentWorkingSetChanges)
           .where(eq(intentWorkingSetChanges.id, id))
       )[0]!.state
+    }
     const settled = (id: string) =>
       eventually(
         () => bundle.persistence.findSession(id),

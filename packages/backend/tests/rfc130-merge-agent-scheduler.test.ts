@@ -17,6 +17,8 @@
 // content per MERGE_SHOULD_FAIL). This is the only test that exercises the real
 // runNode dispatch of the merge agent through the scheduler.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -25,7 +27,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
@@ -102,7 +103,8 @@ process.exit(0)
 
 async function seedWriter(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -132,14 +134,15 @@ function twoWriterDef(w1Id: string, w2Id: string): WorkflowDefinition {
 async function seedTask(h: Harness, def: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'mas',
     workflowId,
@@ -195,6 +198,7 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
         maxConcurrentNodes: 4,
       }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -225,6 +229,7 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
         maxConcurrentNodes: 4,
       }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('awaiting_human')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

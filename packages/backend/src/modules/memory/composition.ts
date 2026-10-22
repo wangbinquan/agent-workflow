@@ -1,7 +1,6 @@
 import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createMemoryDistillQueries } from './application/distillQueries'
 import type { MemoryDistillReadStore } from './application/ports/distillReadStore'
 import type { MemoryInjectionReadStore } from './application/ports/injectionReadStore'
@@ -54,7 +53,7 @@ export { composeMemoryCatalogOperations, type MemoryCatalogTestHooks, type Memor
 // 一律在 bootstrap / system-operation 根上完成，模块之间只交换 provider 中性的端口。
 // RFC-359 W4-D5：融合提交的成员关系写入面只剩中立的 `composeSkillMemoryFusionParticipantFactory`。
 
-export function composeMemoryDistillQueries(db: ProviderNeutralDatabase) {
+export function composeMemoryDistillQueries(db: PersistenceDb) {
   return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
 }
 export {
@@ -109,9 +108,7 @@ function composeMemoryInjectionQueries(store: MemoryInjectionReadStore): MemoryI
   })
 }
 
-export function composeMemoryInjectionQueriesFor(
-  db: ProviderNeutralDatabase,
-): MemoryInjectionQueries {
+export function composeMemoryInjectionQueriesFor(db: PersistenceDb): MemoryInjectionQueries {
   return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
 }
 export {}
@@ -119,12 +116,12 @@ export {}
 /** 目录绑定：identity-access 的命令上下文工厂 + resource-catalog 的 scope 访问 participant（两个 provider 同一份）。 */
 export interface MemoryCatalogBinding {
   readonly contexts: DirectCommandContextFactory
-  readonly authorization: MemoryResourceScopeAccessParticipant<DatabaseTransaction>
+  readonly authorization: MemoryResourceScopeAccessParticipant<PersistenceTx>
   readonly testHooks?: MemoryCatalogTestHooks
 }
 
 export interface ComposeMemoryOperationsOptions {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly nodeRunPrompts: NodeRunPromptReader
   readonly systemAgentBinding: {

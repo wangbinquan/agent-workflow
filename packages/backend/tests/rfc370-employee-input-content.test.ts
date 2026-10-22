@@ -1,12 +1,13 @@
 // RFC-370: async selected object presence must settle before Case admission.
 // Actual authoring/runtime/codec and provider persistence are used; no worker is started.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
-import { employeeCases, employeeInputUploads, users } from '@/db/schema'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition/required-ports'
 import {
@@ -33,7 +34,8 @@ describeEachProvider('RFC-370 selected employee input presence', (harness) => {
       let ordinal = 0
       const id = () => `selected-input-${++ordinal}`
       const now = () => 20_000
-      await db.insert(users).values({
+      const { users, employeeCases, employeeInputUploads } = tablesOf(db)
+      await insertOne(db, users, {
         id: 'input-author',
         username: 'input-author',
         displayName: 'Input Author',

@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { BusinessExecutionFence } from './businessExecution'
 
 /** The composition root supplies the application lease. Network adapters
@@ -6,5 +6,5 @@ import type { BusinessExecutionFence } from './businessExecution'
  * same fence while holding the application's control row in their transaction. */
 export interface CrewStationMutationFence {
   current(): BusinessExecutionFence
-  assertHeld(tx: ProviderNeutralDatabase, fence: BusinessExecutionFence): Promise<void>
+  assertHeld(tx: PersistenceDb, fence: BusinessExecutionFence): Promise<void>
 }

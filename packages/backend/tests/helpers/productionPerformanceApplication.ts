@@ -12,7 +12,7 @@ import type { Hono } from 'hono'
 
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import {
@@ -63,7 +63,7 @@ import { createHttpRequestApp, type AppHttpProviderCore } from '@/server'
 import { createProductionOverviewQuery } from './productionOverview'
 
 export interface ProductionPerformanceApplicationInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly configPath: string
   readonly daemonToken: string

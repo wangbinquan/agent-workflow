@@ -20,6 +20,8 @@
 //
 // 若任一变红 = 双向单一事实源契约漂移，先查再放。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import {
   createClarifyRound,
@@ -36,10 +38,9 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, taskNodeClarifyDirectives, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   getNodeClarifyDirective,
@@ -65,10 +66,11 @@ function makeAns(qid = 'q1'): ClarifyAnswer {
   return { questionId: qid, selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' }
 }
 
-async function insertTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
+async function insertTask(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc123',
     description: '',
@@ -76,7 +78,7 @@ async function insertTask(db: ProviderNeutralDatabase, def: WorkflowDefinition):
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -146,7 +148,7 @@ function crossDef(): WorkflowDefinition {
 }
 
 async function seedSelfStopAnswered(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     directive: 'stop' | 'continue'
@@ -157,7 +159,8 @@ async function seedSelfStopAnswered(
   },
 ): Promise<void> {
   const srcId = opts.srcId ?? 'nr_src'
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: srcId,
     taskId,
     nodeId: 'designer',
@@ -188,12 +191,13 @@ async function seedSelfStopAnswered(
 }
 
 async function seedCrossStopAnswered(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   directive: 'stop' | 'continue',
 ): Promise<void> {
+  const { nodeRuns } = tablesOf(db)
   // designer run needed for the 'continue' path's designer rerun (the auto-dispatch inherits it).
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr_designer',
     taskId,
     nodeId: 'designer',
@@ -202,7 +206,7 @@ async function seedCrossStopAnswered(
     iteration: 0,
     preSnapshot: 'snap-rfc123',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr_qA',
     taskId,
     nodeId: 'qA',
@@ -247,6 +251,7 @@ describeEachProvider(
         await seedSelfStopAnswered(db, taskId, { directive: 'stop', answeredBy: 'user_x' })
 
         expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBe('stop')
+        const { taskNodeClarifyDirectives } = tablesOf(db)
         const row = (
           await db
             .select()
@@ -303,15 +308,16 @@ describeEachProvider(
     // C. 重启用 B2（cross 节点短路）— questioner node 级 directive last-write-wins（RFC-132 T7）
     // ---------------------------------------------------------------------------
     describe('RFC-123 C: questioner node 级 directive 决定 cross 节点短路（RFC-132 T7 last-write-wins）', () => {
-      async function seedRejectedCross(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+      async function seedRejectedCross(db: PersistenceDb, taskId: string): Promise<void> {
         await seedCrossStopAnswered(db, taskId, 'stop')
         // sanity: the questioner node's node-level directive is 'stop'.
         expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
       }
 
-      async function dispatchFresh(db: ProviderNeutralDatabase, taskId: string) {
+      async function dispatchFresh(db: PersistenceDb, taskId: string) {
         const freshId = `nr_cross1_${Math.random().toString(36).slice(2, 6)}`
-        await db.insert(nodeRuns).values({
+        const { nodeRuns } = tablesOf(db)
+        await insertOne(db, nodeRuns, {
           id: freshId,
           taskId,
           nodeId: 'cross1',
@@ -376,7 +382,7 @@ describeEachProvider(
     // ---------------------------------------------------------------------------
 
     describe('RFC-207 — 逐提问方的停止反问', () => {
-      let db2: ProviderNeutralDatabase
+      let db2: PersistenceDb
       let T: string
 
       beforeEach(async () => {

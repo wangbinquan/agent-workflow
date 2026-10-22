@@ -16,11 +16,12 @@
 // the same observable values. Every case also asserts the recorded `consumed`
 // provenance map — the new return field driving read-time freshness.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
-import { nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { createLogger } from '../src/util/log'
@@ -28,12 +29,13 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const log = createLogger('test-picker-baseline')
 
-const nodePersistence = (db: ProviderNeutralDatabase) => new DrizzleNodeExecutionPersistence(db)
+const nodePersistence = (db: PersistenceDb) => new DrizzleNodeExecutionPersistence(db)
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'pick',
     description: '',
@@ -41,7 +43,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -66,7 +68,7 @@ let seq = 0
 // Seed a top-level node_run plus one output port, returning the run id. `id` is
 // passed explicitly so tests control ULID ordering deterministically.
 async function seedRunWithOutput(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   fields: {
@@ -79,7 +81,8 @@ async function seedRunWithOutput(
   },
   outputs: Record<string, string>,
 ): Promise<string> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: fields.id,
     taskId,
     nodeId,
@@ -89,7 +92,7 @@ async function seedRunWithOutput(
     parentNodeRunId: fields.parentNodeRunId ?? null,
   })
   for (const [portName, content] of Object.entries(outputs)) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: fields.id, portName, content })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: fields.id, portName, content })
   }
   return fields.id
 }

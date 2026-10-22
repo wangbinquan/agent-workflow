@@ -9,6 +9,7 @@
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { TaskArchivedEventsReader } from '../public/types'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import {
@@ -56,22 +57,9 @@ import { and, asc, count, desc, eq, gt, inArray, isNull, sql, type SQL } from 'd
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
-import {
-  clarifyRounds,
-  docVersions,
-  lifecycleAlerts,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  workflows,
-} from '@/db/schema'
-
 // RFC-328：跨 context 走 facade，不直接 import 别人的 infrastructure
 //（`@/services/taskCollab` 就是 collaboration 那套成员 / 可见性判据的既有 facade，
 // SQLite 那一侧一直走的也是它）。
@@ -191,14 +179,14 @@ const RETRYABLE_TASK_STATUSES = [
  *
  * 本文件里有三个共用函数（`loadVisibleWorkflow` / `syncWorkflow` /
  * `rollbackRunsForContinuation`）收整个依赖对象。它们此前收的是 PG 那个具名类型，
- * 而它们一行 PG 私有面都不碰——句柄只当 `ProviderNeutralDatabase` 用。
+ * 而它们一行 PG 私有面都不碰——句柄只当 `PersistenceDb` 用。
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
   readonly archivedEvents?: TaskArchivedEventsReader
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly nodeRunPrompts?: NodeRunPromptOperations
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   /**
    * RFC-359 AC-1（plan §5hn 批次二 ⑥）：**启动参与者**（两个引擎共用的那一个）。
@@ -240,8 +228,8 @@ export interface TaskRouteOperationsDependencies {
   readonly id?: () => string
 }
 
-type TaskRow = typeof tasks.$inferSelect
-type NodeRunRow = typeof nodeRuns.$inferSelect
+type TaskRow = PersistenceTables['tasks']['$inferSelect']
+type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
 
 function parseJson(raw: string | null | undefined, fallback: unknown): unknown {
   if (raw === null || raw === undefined || raw === '') return fallback
@@ -283,7 +271,7 @@ function minimalNodePaths(mountPaths: readonly string[]): readonly string[] {
   )
 }
 
-function repoProjection(row: typeof taskRepos.$inferSelect): TaskRepo {
+function repoProjection(row: PersistenceTables['taskRepos']['$inferSelect']): TaskRepo {
   return {
     repoIndex: row.repoIndex,
     repoPath: row.repoPath,
@@ -328,10 +316,11 @@ function fallbackRepo(row: TaskRow): TaskRepo {
 }
 
 async function failedCode(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   task: Pick<TaskRow, 'id' | 'status' | 'failedNodeId'>,
 ): Promise<string | null | undefined> {
   if (task.status !== 'failed' || task.failedNodeId === null) return undefined
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({
       id: nodeRuns.id,
@@ -356,11 +345,12 @@ async function failedCode(
  * 详情页照常渲染悬空引用。
  */
 async function workflowIdentities(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowIds: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean; version: number }>>> {
   const wanted = [...new Set(workflowIds)]
   if (wanted.length === 0) return new Map()
+  const { workflows } = tablesOf(db)
   const rows = await db
     .select({
       id: workflows.id,
@@ -389,13 +379,14 @@ async function workflowIdentities(
  * SQLite 一致地不拦。
  */
 export async function builtinCandidateWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
 ): Promise<Readonly<{ builtin: boolean; version: number }> | null> {
   return (await workflowIdentities(db, [workflowId])).get(workflowId) ?? null
 }
 
-async function taskProjection(db: ProviderNeutralDatabase, row: TaskRow): Promise<Task> {
+async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
+  const { taskRepos, taskSpaceNodes } = tablesOf(db)
   const [repoRows, nodeRows, failureCode, identities] = await Promise.all([
     db
       .select()
@@ -484,22 +475,18 @@ async function taskProjection(db: ProviderNeutralDatabase, row: TaskRow): Promis
  * RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）—— `GET /api/tasks/:id` 的行投影，
  * 两个引擎共用一份。等价性由 `rfc359-w7-task-route-conformance` 的 A1 / A2 作证。
  */
-export async function loadTaskProjection(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<Task | null> {
+export async function loadTaskProjection(db: PersistenceDb, taskId: string): Promise<Task | null> {
   return await loadTask(db, taskId)
 }
 
-export async function loadTask(db: ProviderNeutralDatabase, taskId: string): Promise<Task | null> {
+export async function loadTask(db: PersistenceDb, taskId: string): Promise<Task | null> {
+  const { tasks } = tablesOf(db)
   const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   return rows[0] === undefined ? null : await taskProjection(db, rows[0])
 }
 
-export async function requireTaskRow(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<TaskRow> {
+export async function requireTaskRow(db: PersistenceDb, taskId: string): Promise<TaskRow> {
+  const { tasks } = tablesOf(db)
   const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   const row = rows[0]
   if (row === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
@@ -550,12 +537,12 @@ function summaryProjection(
  * 而不是真，所以必须并上 `isNull`）。三态由 `rfc357-task-list-authorization` 钉住。
  */
 function visibilityCondition(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   visibility: NonNullable<TaskRouteListFilters['visibility']>,
 ): SQL<unknown> {
   return taskListOwnershipScopeCondition(
     db,
-    defaultTaskListRowRef(),
+    defaultTaskListRowRef(db),
     visibility.actorUserId,
     visibility.scope,
   )
@@ -571,40 +558,44 @@ function visibilityCondition(
  * 适配器把它原样重新引入了一遍。列清单 = `summaryProjection` 消费的那些，加上函数体自己
  * 要用的 `failedNodeId` / `ownerUserId`。
  */
-const TASK_LIST_COLUMNS = {
-  id: tasks.id,
-  name: tasks.name,
-  workflowId: tasks.workflowId,
-  repoPath: tasks.repoPath,
-  repoUrl: tasks.repoUrl,
-  cachedRepoId: tasks.cachedRepoId,
-  status: tasks.status,
-  startedAt: tasks.startedAt,
-  finishedAt: tasks.finishedAt,
-  errorSummary: tasks.errorSummary,
-  repoCount: tasks.repoCount,
-  scheduledTaskId: tasks.scheduledTaskId,
-  workgroupId: tasks.workgroupId,
-  workgroupConfigJson: tasks.workgroupConfigJson,
-  spaceKind: tasks.spaceKind,
-  parentTaskId: tasks.parentTaskId,
-  invocationDepth: tasks.invocationDepth,
-  sourceAgentName: tasks.sourceAgentName,
-  sourceAgentId: tasks.sourceAgentId,
-  codeRoundId: tasks.codeRoundId,
-  failedNodeId: tasks.failedNodeId,
-  ownerUserId: tasks.ownerUserId,
-} as const
+const TASK_LIST_COLUMNS = (db: object) => {
+  const { tasks } = tablesOf(db)
+  return {
+    id: tasks.id,
+    name: tasks.name,
+    workflowId: tasks.workflowId,
+    repoPath: tasks.repoPath,
+    repoUrl: tasks.repoUrl,
+    cachedRepoId: tasks.cachedRepoId,
+    status: tasks.status,
+    startedAt: tasks.startedAt,
+    finishedAt: tasks.finishedAt,
+    errorSummary: tasks.errorSummary,
+    repoCount: tasks.repoCount,
+    scheduledTaskId: tasks.scheduledTaskId,
+    workgroupId: tasks.workgroupId,
+    workgroupConfigJson: tasks.workgroupConfigJson,
+    spaceKind: tasks.spaceKind,
+    parentTaskId: tasks.parentTaskId,
+    invocationDepth: tasks.invocationDepth,
+    sourceAgentName: tasks.sourceAgentName,
+    sourceAgentId: tasks.sourceAgentId,
+    codeRoundId: tasks.codeRoundId,
+    failedNodeId: tasks.failedNodeId,
+    ownerUserId: tasks.ownerUserId,
+  } as const
+}
 
 type TaskListRow = {
-  [K in keyof typeof TASK_LIST_COLUMNS]: (typeof tasks.$inferSelect)[K]
+  [K in keyof ReturnType<typeof TASK_LIST_COLUMNS>]: PersistenceTables['tasks']['$inferSelect'][K]
 } & { workflowName: string | null }
 
 async function listRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListRow[]> {
   const predicates: SQL<unknown>[] = []
+  const { tasks, workflows } = tablesOf(db)
   if (filters.status !== undefined) predicates.push(eq(tasks.status, filters.status))
   if (filters.workflowId !== undefined) predicates.push(eq(tasks.workflowId, filters.workflowId))
   if (filters.repoPath !== undefined) predicates.push(eq(tasks.repoPath, filters.repoPath))
@@ -625,7 +616,7 @@ async function listRows(
   // 工作流名与行**同一次查询**取回（此前 PostgreSQL 侧是行一次、名字再一次批量）。
   // 列表上界 10k、首页每 10s 轮一次，少一次往返在 PG 上是实打实的；SQLite 侧本来就是这么写的。
   return await db
-    .select({ ...TASK_LIST_COLUMNS, workflowName: workflows.name })
+    .select({ ...TASK_LIST_COLUMNS(db), workflowName: workflows.name })
     .from(tasks)
     .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(predicates.length === 0 ? undefined : and(...predicates))
@@ -634,12 +625,13 @@ async function listRows(
 }
 
 async function listSummaries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   filters: TaskRouteListFilters,
 ): Promise<readonly Readonly<{ summary: TaskSummary; ownerUserId: string | null }>[]> {
   const rows = await listRows(db, filters)
   if (rows.length === 0) return []
   const ids = rows.map((row) => row.id)
+  const { lifecycleAlerts } = tablesOf(db)
   // RFC-108 T22：整页告警数一次分组查询，列表才能不按行探测就渲染「卡住」徽标。
   const alertRows = await db
     .select({ taskId: lifecycleAlerts.taskId, value: count() })
@@ -677,9 +669,7 @@ async function listSummaries(
  */
 const taskListFlights = new WeakMap<object, InFlightCoalescer<string, readonly TaskSummary[]>>()
 
-function taskListFlight(
-  db: ProviderNeutralDatabase,
-): InFlightCoalescer<string, readonly TaskSummary[]> {
+function taskListFlight(db: PersistenceDb): InFlightCoalescer<string, readonly TaskSummary[]> {
   const owner = db as unknown as object
   const existing = taskListFlights.get(owner)
   if (existing !== undefined) return existing
@@ -710,7 +700,7 @@ function taskListFlightKey(filters: TaskRouteListFilters): string {
  * 等价性由 `rfc359-w7-task-route-conformance` 的 A3 / A4 作证。
  */
 export async function taskListSummariesProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskSummary[]> {
   return await taskListFlight(db)(taskListFlightKey(filters), async () =>
@@ -720,14 +710,14 @@ export async function taskListSummariesProjection(
 
 /** RFC-359 AC-1（同上）—— `GET /api/tasks?include_owner=true` 的行投影，两个引擎共用一份。 */
 export async function taskListItemsProjection(
-  dependencies: Readonly<{ db: ProviderNeutralDatabase; owners: OwnerIdentityQueries }>,
+  dependencies: Readonly<{ db: PersistenceDb; owners: OwnerIdentityQueries }>,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListItem[]> {
   return await listItems(dependencies, filters)
 }
 
 export async function listItems(
-  dependencies: Readonly<{ db: ProviderNeutralDatabase; owners: OwnerIdentityQueries }>,
+  dependencies: Readonly<{ db: PersistenceDb; owners: OwnerIdentityQueries }>,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListItem[]> {
   const rows = await listSummaries(dependencies.db, filters)
@@ -735,6 +725,7 @@ export async function listItems(
   const ownerIds = rows.map((row) => row.ownerUserId)
   const owners = await dependencies.owners.loadOwnerIdentities(ownerIds)
   const parentIds = rows.map((row) => row.summary.id)
+  const { tasks } = tablesOf(dependencies.db)
   const childPredicates: SQL<unknown>[] = [inArray(tasks.parentTaskId, parentIds)]
   if (filters.visibility !== undefined) {
     childPredicates.push(visibilityCondition(dependencies.db, filters.visibility))
@@ -778,9 +769,10 @@ export async function listItems(
  * 一道对不存在的 id 说「行」的门，在别的调用方手里就是个谎。
  */
 async function taskAccessRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<Readonly<{ id: string; ownerUserId: string | null }>> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
     .from(tasks)
@@ -795,7 +787,7 @@ async function taskAccessRow(
 
 /** 可见性门：全读权限直接放行；否则不存在与不可见同形（都 404）。 */
 export async function assertTaskVisibleProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   taskId: string,
 ): Promise<void> {
@@ -808,7 +800,7 @@ export async function assertTaskVisibleProjection(
 
 /** 操作权门：owner / collaborator / bypass 放行，observer 拿 RFC-324 的只读文案。 */
 export async function requireTaskOperatorProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   taskId: string,
 ): Promise<void> {
@@ -817,7 +809,7 @@ export async function requireTaskOperatorProjection(
 
 /** 成员面板的读投影。 */
 export async function taskMembersProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   taskId: string,
 ): Promise<TaskMembers> {
@@ -826,7 +818,7 @@ export async function taskMembersProjection(
 
 /** 成员面板的全量替换。 */
 export async function replaceTaskMembersProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   taskId: string,
   body: Parameters<TaskRouteOperations['replaceMembers']>[2],
@@ -849,7 +841,7 @@ function workflowLaunchSnapshot(snapshots: readonly FrozenTaskExecutionResourceS
  * SQLite 的路由依赖是另一个类型，收窄之后两侧都交得起，不必为了共用而把类型硬凑成一个。
  */
 export interface TaskRouteMultipartLaunchDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly launches: TaskExecutionLaunchParticipant
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
 }
@@ -934,12 +926,13 @@ function commitPush(raw: string | null) {
  * （变异实证：把 PG 侧 `reviewNavKind = 'awaiting'` 改成 `null`，当场红）。
  */
 export async function taskNodeRunsProjection(
-  dependencies: Readonly<{ db: ProviderNeutralDatabase; nodeRunPrompts?: NodeRunPromptOperations }>,
+  dependencies: Readonly<{ db: PersistenceDb; nodeRunPrompts?: NodeRunPromptOperations }>,
   taskId: string,
 ) {
   const nodeRunPrompts = selectNodeRunPromptOperations(dependencies.nodeRunPrompts)
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  const { nodeRuns, docVersions, clarifyRounds, nodeRunOutputs } = tablesOf(dependencies.db)
   const [runRows, versions, rounds] = await Promise.all([
     dependencies.db
       .select()
@@ -1087,10 +1080,11 @@ export async function taskNodeRunsProjection(
 }
 
 async function assertNodeRunOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeRunId: string,
 ): Promise<void> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ taskId: nodeRuns.taskId })
     .from(nodeRuns)
@@ -1113,7 +1107,7 @@ async function assertNodeRunOwner(
  */
 export interface TaskReadProjectionDependencies {
   readonly archivedEvents?: TaskArchivedEventsReader
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly logsDir?: string
 }
 
@@ -1148,6 +1142,7 @@ export async function nodeRunEventsProjection(
   const remaining = limit - events.length
   if (remaining > 0) {
     const lowerBound = events.at(-1)?.id ?? since
+    const { nodeRunEvents } = tablesOf(dependencies.db)
     const rows = await dependencies.db
       .select()
       .from(nodeRunEvents)
@@ -1191,6 +1186,7 @@ export async function nodeRunStdoutProjection(
     bytes += size
     return true
   }
+  const { nodeRunEvents } = tablesOf(dependencies.db)
   const rows = await dependencies.db
     .select({ payload: nodeRunEvents.payload, kind: nodeRunEvents.kind })
     .from(nodeRunEvents)
@@ -1257,7 +1253,7 @@ export async function nodeRunStdoutProjection(
  */
 export async function taskDiffProjection(
   dependencies: Readonly<{
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     workspaceReads?: RepositoryWorkspaceReadQueries
   }>,
   taskId: string,
@@ -1354,7 +1350,8 @@ function definitionOf(value: unknown): WorkflowDefinition {
   return migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(value))
 }
 
-async function syncRunSummary(db: ProviderNeutralDatabase, taskId: string) {
+async function syncRunSummary(db: PersistenceDb, taskId: string) {
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const byNode = new Map<string, NodeRunRow[]>()
   for (const run of runs) {
@@ -1435,7 +1432,7 @@ async function syncRunSummary(db: ProviderNeutralDatabase, taskId: string) {
  */
 export async function assertManualExecutionAllowedProjection(
   dependencies: Readonly<{
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   }>,
   actor: Actor,
@@ -1503,7 +1500,7 @@ export async function loadVisibleWorkflow(
  */
 export async function taskWorkflowSyncPreviewProjection(
   dependencies: Readonly<{
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly activity: ActiveTaskExecutionParticipant
     readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
   }>,
@@ -1732,7 +1729,7 @@ async function rollbackRunsForContinuation(
  */
 export async function assertTaskWorkflowSyncable(
   dependencies: Readonly<{
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly activity: ActiveTaskExecutionParticipant
   }>,
   actor: Actor,
@@ -1782,7 +1779,7 @@ export async function assertTaskWorkflowSyncable(
  *     （`retryNodeProjection` 早就是这个形状）。
  */
 export interface TaskWorkflowSyncDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly activity: ActiveTaskExecutionParticipant
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
@@ -1867,6 +1864,7 @@ export async function syncWorkflow(
   const frozenWrapperNodeIds = new Set(
     frozenDefinition.nodes.filter((node) => isWrapperKind(node.kind)).map((node) => node.id),
   )
+  const { nodeRuns, workflows } = tablesOf(dependencies.db)
   const syncRuns = await dependencies.db
     .select()
     .from(nodeRuns)
@@ -1901,6 +1899,7 @@ export async function syncWorkflow(
 
   const now = dependencies.now?.() ?? Date.now()
   const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    const { tasks } = tablesOf(tx)
     const changed = await tx
       .update(tasks)
       .set({
@@ -2036,11 +2035,12 @@ function inheritanceSourceInFrame(
  * （被删 / 老数据）都算可驱动。
  */
 async function finalizedParentCallRowStatus(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   task: Pick<TaskRow, 'parentTaskId' | 'parentNodeRunId'>,
 ): Promise<string | null> {
   const callRowId = task.parentNodeRunId ?? null
   if ((task.parentTaskId ?? null) === null || callRowId === null) return null
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ status: nodeRuns.status })
     .from(nodeRuns)
@@ -2061,7 +2061,7 @@ async function finalizedParentCallRowStatus(
  * ——否则这一刀在那条路上根本落不了地。与第 8 刀给修复做的收窄同形。
  */
 export interface TaskRetryDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly activity: ActiveTaskExecutionParticipant
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
@@ -2102,6 +2102,7 @@ export async function retryNodeProjection(
         `('${finalizedCallRow}'); retry the parent's call node instead`,
     )
   }
+  const { nodeRuns } = tablesOf(dependencies.db)
   const runs = await dependencies.db
     .select()
     .from(nodeRuns)
@@ -2227,6 +2228,7 @@ export async function retryNodeProjection(
   // 事务因此拆成两笔——事件组 id 不变、ordinal 仍是 0 / 1（`appendProgram` 按
   // `(eventGroupId, eventGroupOrdinal)` 幂等，投递按同一对排序），跨两次提交不影响消费端。
   const admitted = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    const { tasks } = tablesOf(tx)
     const changed = await tx
       .update(tasks)
       .set({

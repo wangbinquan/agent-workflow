@@ -16,6 +16,7 @@
 //
 // 这些用例一旦转红，就是上面某一堵墙被重新砌了回去。
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 import {
   openPostgresqlLogicalTarget,
@@ -143,7 +144,7 @@ const EXPECTED = [
 function fixture(input: { readonly onInvariantQuery?: () => SqlRows } = {}) {
   const statements: string[] = []
   let stage = 'copying'
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql) {
       statements.push(sql)
       if (sql.includes('pg_try_advisory_lock')) return rows([{ acquired: true }])
@@ -177,7 +178,7 @@ function fixture(input: { readonly onInvariantQuery?: () => SqlRows } = {}) {
       return rows([])
     },
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -250,12 +251,12 @@ describe('RFC-349 migration session outlives the daemon online timeouts', () => 
 describe('RFC-349 a failed verification query is not a verification verdict', () => {
   test('the business-invariant oracle lets the driver failure through untouched', async () => {
     const driverFailure = new Error('connection must be a PostgresSQLConnection')
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe() {
         throw driverFailure
       },
       release() {},
-    }
+    })
 
     let failure: unknown
     try {
@@ -274,12 +275,12 @@ describe('RFC-349 a failed verification query is not a verification verdict', ()
     const driverFailure = Object.assign(new Error('canceling statement due to statement timeout'), {
       code: '57014',
     })
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe() {
         throw driverFailure
       },
       release() {},
-    }
+    })
 
     let failure: unknown
     try {

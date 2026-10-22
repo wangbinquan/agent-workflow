@@ -3,12 +3,19 @@ import { CODECS } from './codecs'
 import type { SchemaContribution, TableDefinition } from './contribution'
 import { renderSchemaExpression } from './expressions'
 
-export interface SchemaRegistry {
-  readonly contributions: readonly SchemaContribution[]
-  readonly tables: readonly TableDefinition[]
+export interface SchemaRegistry<
+  T extends readonly SchemaContribution[] = readonly SchemaContribution[],
+> {
+  readonly contributions: T
+  readonly tables: readonly T[number]['tables'][number][]
 }
-export function createSchemaRegistry(contributions: readonly SchemaContribution[]): SchemaRegistry {
-  const registry = { contributions, tables: contributions.flatMap((entry) => entry.tables) }
+export function createSchemaRegistry<const T extends readonly SchemaContribution[]>(
+  contributions: T,
+): SchemaRegistry<T> {
+  const registry = {
+    contributions,
+    tables: contributions.flatMap((entry) => entry.tables) as T[number]['tables'][number][],
+  }
   validateSchemaRegistry(registry)
   return Object.freeze(registry)
 }

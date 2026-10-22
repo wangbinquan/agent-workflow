@@ -1,20 +1,21 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-041 — admin REST surface for distill queue control.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { memoryDistillJobs } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   daemonToken: string
   userToken: string
@@ -36,11 +37,12 @@ async function buildHarness(
 }
 
 async function seedJob(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: 'pending' | 'running' | 'done' | 'failed' | 'canceled' = 'pending',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'k',
     sourceKind: 'clarify',

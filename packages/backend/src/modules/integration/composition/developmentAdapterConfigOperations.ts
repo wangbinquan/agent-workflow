@@ -4,7 +4,7 @@
 
 import type { ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   archiveDevelopmentAdapter,
@@ -91,7 +91,7 @@ export interface DevelopmentAdapterGrantReads {
 }
 
 export interface DevelopmentAdapterConfigCompositionInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly access: DevelopmentAdapterAccess
   readonly grants: DevelopmentAdapterGrantReads
   readonly now?: () => number

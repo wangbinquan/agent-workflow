@@ -5,10 +5,11 @@
 // (auto_recovery_suspended=1)，并记 quarantine recovery_event；② 已隔离再调不二次累加；
 // ③ 人工 clear 重置；④ 窗口滚过后计数重置为 1。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { tasks, workflows } from '../src/db/schema'
 import { listRecoveryEventsForTask } from '../src/services/recovery'
 import {
   clearAutoRecoverySuspension,
@@ -16,15 +17,16 @@ import {
   recordAutoRecoveryAttempt,
 } from '../src/services/recoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,

@@ -10,6 +10,7 @@
 //     to the same full-snapshot save service as editor autosave
 //   - new: discards an incoming id and inserts a fresh workflow
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   ImportRefSelection,
   ImportWorkflowRequest,
@@ -30,8 +31,7 @@ import {
 import { inArray } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   canViewResource,
   filterVisibleRows,
@@ -139,7 +139,7 @@ export function previewWorkflowYaml(yamlText: string): Omit<YamlImportPreview, '
  * name and owner hint; installation-local ids never leave this boundary.
  */
 export async function workflowDefinitionToSelectors(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinitionSelector> {
@@ -171,6 +171,7 @@ export async function workflowDefinitionToSelectors(
     return WorkflowDefinitionSelectorSchema.parse(definition)
   }
 
+  const { agents, users } = tablesOf(db)
   const rows = await db
     .select({
       id: agents.id,
@@ -249,7 +250,7 @@ export async function workflowDefinitionToSelectors(
 }
 
 export async function importWorkflowYaml(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   request: ImportWorkflowRequest,
   principal: WorkflowWritePrincipal,
   hooks: WorkflowImportHooks = {},
@@ -384,7 +385,7 @@ function callWorkgroupSelectorOf(
 }
 
 async function resolveImportedWorkflowNodeRefs(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Extract<WorkflowWritePrincipal, { kind: 'actor' }>['actor'],
   def: WorkflowDefinitionSelector,
   selections: readonly ImportRefSelection[],

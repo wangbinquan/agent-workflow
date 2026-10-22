@@ -11,12 +11,13 @@
 // 红→绿对：把 memory domain `scopeAuthorization.ts` 的管理判据从 `write | own` 收回 `own`，
 // 「write 档可管」立刻红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, resourceGrants, workflows } from '../src/db/schema'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from './helpers/userFixture'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
@@ -31,7 +32,7 @@ function actorFor(id: string, role: 'user' | 'manager' = 'user'): Actor {
 }
 
 describeEachProvider('RFC-324 D9 —— 记忆管理权随资源写权分档', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let owner = ''
   let reader = ''
   let editor = ''
@@ -55,7 +56,8 @@ describeEachProvider('RFC-324 D9 —— 记忆管理权随资源写权分档', (
     editor = await mk('editor', 'user')
     manager = await mk('manager', 'manager')
 
-    await db.insert(agents).values({
+    const { agents, workflows, resourceGrants } = tablesOf(db)
+    await insertOne(db, agents, {
       id: agentId,
       name: `rfc324-agent-${agentId.slice(-6)}`,
       description: '',
@@ -65,7 +67,7 @@ describeEachProvider('RFC-324 D9 —— 记忆管理权随资源写权分档', (
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: `rfc324-wf-${workflowId.slice(-6)}`,
       description: '',

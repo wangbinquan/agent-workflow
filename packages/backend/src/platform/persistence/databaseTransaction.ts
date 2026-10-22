@@ -40,26 +40,25 @@
 //     事件循环观测，抛会把它变成时序相关的假红。
 
 import { sql } from 'drizzle-orm'
+import {
+  tablesOf,
+  engineForHandle,
+  inheritDatabaseHandle,
+  type PersistenceTables,
+} from './sessionTables'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { observeDbTransaction, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from './persistenceDb'
 import { retryPostgresqlSerialization } from '@/platform/persistence/postgresqlSerializationRetry'
 import { retrySqliteWrite } from '@/platform/persistence/sqliteWriteRetry'
 import { runInExplicitTransactionScope } from '@/db/transactionScope'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import {
-  createPostgresqlCapabilities,
-  createSqliteCapabilities,
-  type EngineCapabilities,
-} from './capabilities'
+import type { EngineCapabilities } from './capabilities'
 import { unhandledDatabaseProvider } from './databaseProviders'
 import type { DatabaseProvider } from './schemaContract'
 import { acquireWriterLease } from './writerLease'
-
-/** 事务句柄。两个 provider 上都是 drizzle 的同一套 query builder。 */
-export type DatabaseTransaction = ProviderNeutralDatabase
 
 const log = createLogger('db-tx')
 
@@ -92,38 +91,20 @@ function watchEventLoopYield(): { readonly stop: () => void } {
 }
 
 // 每个引擎一份能力矩阵单例：`session.engine` 与 `engineOf(tx)` 拿到的是同一个对象。
-const SQLITE_ENGINE = createSqliteCapabilities()
-const POSTGRESQL_ENGINE = createPostgresqlCapabilities()
 
 /**
  * 事务句柄（或客户端）背后的引擎能力。一份实现在事务体里只拿得到 `tx`，按能力提需求时从这里取。
  *
- * 判据是 drizzle 的 `resultKind`：bun:sqlite 驱动是 `'sync'`，sqlite-proxy 是 `'async'`——而本仓
- * 唯一的 async SQLite-dialect 客户端就是 PostgreSQL 客户端（`postgresqlDatabaseClient.ts`）。
- * 这比品牌字段更稳：事务句柄是 drizzle 的 `SQLiteTransaction`，不带 `$provider`。
+ * 能力随原生句柄绑定；事务与 savepoint 继承同一份会话元数据，不再根据 SQLite 的 resultKind 推断引擎。
  */
-export function engineOf(handle: DatabaseTransaction): EngineCapabilities {
-  const kind = (handle as unknown as { readonly resultKind?: unknown }).resultKind
-  // Database clients expose the registered session; only transaction handles
-  // carry resultKind. A plain PG client must never borrow SQLite JSON shims.
-  return kind === undefined
-    ? databaseSessionFor(handle as ProviderNeutralDatabase).engine
-    : kind === 'async'
-      ? POSTGRESQL_ENGINE
-      : SQLITE_ENGINE
+export function engineOf(handle: PersistenceTx): EngineCapabilities {
+  return engineForHandle(handle)
 }
 
-/**
- * `.run()` 结果的受影响行数。bun:sqlite 返回 `{ changes, lastInsertRowid }`；本仓的 sqlite-proxy
- * 回调对 `run` 也回 `{ rows: [], changes }`（`postgresqlDatabaseClient.ts` 的 executeArrays）。
- * 两边都在 `changes`，缺失按 0 计——CAS 判据「必须恰好 1 行」因此在缺失时失败得大声。
- */
-export function affectedRows(result: unknown): number {
-  const changes = (result as { readonly changes?: unknown } | null | undefined)?.changes
-  return typeof changes === 'number' && Number.isSafeInteger(changes) && changes >= 0 ? changes : 0
-}
+export { affectedRows } from './queryHelpers'
 
 export interface DatabaseSession {
+  readonly tables: PersistenceTables
   /**
    * 引擎能力矩阵（RFC-359 §5）：一份实现按能力提需求（行锁 / 认领锁子句 / advisory lock / NULL 排序 /
    * 大小写不敏感 LIKE / 错误分类……），由边界按引擎渲染最优 SQL。实现里永远不出现 provider 名。
@@ -135,7 +116,7 @@ export interface DatabaseSession {
    *
    * **重入是安全的**：同一客户端上嵌套调用会复用外层事务句柄，不会再开一层、也不会自死锁。
    */
-  transaction<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
+  transaction<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T>
   /**
    * 显式 opt-in 的 SERIALIZABLE 事务。**默认不要用它**——`docs/dev-gotchas.md` 第 6 条实测：小表上
    * SERIALIZABLE 的 predicate lock 是索引页粒度，8 并发满速冲突率 81.2%；READ COMMITTED + 聚合根
@@ -143,34 +124,34 @@ export interface DatabaseSession {
    * PG：SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001/40P01 退避重试；SQLite：与 `transaction`
    * 相同（BEGIN IMMEDIATE 本就完全串行）。重入时复用外层事务，不再抬升隔离级别。
    */
-  serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
+  serializable<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T>
   /**
    * 只读快照事务：体内的多次读要互相一致（典型是「冻结调用闭包」这类递归取数）。
    * PG：`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`；
    * SQLite：与 `transaction` 相同（`BEGIN IMMEDIATE` 本来就是全库独占的一致视图，
    * 也正是合一前 `dbTxSync` 给这些读路径的同一条边界）。重入时复用外层事务。
    */
-  snapshotRead<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
+  snapshotRead<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T>
 }
 
 interface TransactionFrame {
   readonly client: object
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
 }
 
 /** 当前 async 上下文里已打开的事务帧。用于重入检出。 */
 const frames = new AsyncLocalStorage<readonly TransactionFrame[]>()
 
-function reuseFrame(client: object): DatabaseTransaction | undefined {
+function reuseFrame(client: object): PersistenceTx | undefined {
   return frames.getStore()?.find((frame) => frame.client === client)?.tx
 }
 
 /** A durable receipt cannot be returned from an outer transaction that has not committed. */
-export function databaseTransactionIsActive(handle: DatabaseTransaction): boolean {
+export function databaseTransactionIsActive(handle: PersistenceTx): boolean {
   return frames.getStore()?.some((frame) => frame.client === handle || frame.tx === handle) ?? false
 }
 
-function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promise<T>): Promise<T> {
+function withFrame<T>(client: object, tx: PersistenceTx, run: () => Promise<T>): Promise<T> {
   const next: readonly TransactionFrame[] = [...(frames.getStore() ?? []), { client, tx }]
   // 同时登记进 `db/transactionScope`：`dbTxSync` 据此判断「有事务开着且我不在它的上下文里」，
   // 把过渡期最危险的那个形态（旁观者写入被静默卷入并回滚）变成一条明确的错误。
@@ -198,11 +179,11 @@ const SQLITE_TRANSACTION_MAX_ATTEMPTS = 3
 
 export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   const client: object = db
-  const transaction = async <T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> => {
+  const transaction = async <T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T> => {
     const reused = reuseFrame(client)
     if (reused !== undefined) return await body(reused)
     const release = await acquireWriterLease(client)
-    const tx = db as unknown as DatabaseTransaction
+    const tx: PersistenceTx = db
     // 计时从 BEGIN 起：租约、让出与重试退避的等待都不占写锁，RFC-311 的事务时长守卫看的是持锁时间。
     let startedAt = performance.now()
     let lockHeldMs = 0
@@ -250,7 +231,8 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   // （写成同一个局部函数而不是 `this.transaction(...)` 自调：S-10 / RFC-317 T37 守卫按词法扫
   // `.transaction(`，自调会被误记成一处绕过 dbTxSync 的裸 drizzle 事务。）
   return Object.freeze({
-    engine: SQLITE_ENGINE,
+    engine: engineForHandle(db),
+    tables: tablesOf(db),
     transaction,
     serializable: transaction,
     // BEGIN IMMEDIATE 已经是全库独占的一致视图；合一前这些读路径走的 `dbTxSync` 也是同一条边界。
@@ -262,36 +244,41 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
 export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): DatabaseSession {
   const client: object = db
   return Object.freeze({
-    engine: POSTGRESQL_ENGINE,
-    async transaction<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+    engine: engineForHandle(db),
+    tables: tablesOf(db),
+    async transaction<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T> {
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
       return await db.transaction(async (tx) => {
-        const handle = tx as unknown as DatabaseTransaction
+        const handle = inheritDatabaseHandle(tx, db)
         return await withFrame(client, handle, async () => await body(handle))
       })
     },
-    async snapshotRead<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+    async snapshotRead<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T> {
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
-      return await db.transaction(async (tx) => {
-        await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
-        const handle = tx as unknown as DatabaseTransaction
-        return await withFrame(client, handle, async () => await body(handle))
-      })
+      return await db.transaction(
+        async (tx) => {
+          const handle = inheritDatabaseHandle(tx, db) as unknown as PersistenceTx
+          return await withFrame(client, handle, async () => await body(handle))
+        },
+        { isolationLevel: 'repeatable read', accessMode: 'read only' },
+      )
     },
-    async serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+    async serializable<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T> {
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
       // 蓝本：modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts 的
       // withSerializableTaskExecution。整笔事务作为重试单元——body 必须可重放。
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return await db.transaction(async (tx) => {
-            await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
-            const handle = tx as unknown as DatabaseTransaction
-            return await withFrame(client, handle, async () => await body(handle))
-          })
+          return await db.transaction(
+            async (tx) => {
+              const handle = inheritDatabaseHandle(tx, db) as unknown as PersistenceTx
+              return await withFrame(client, handle, async () => await body(handle))
+            },
+            { isolationLevel: 'serializable' },
+          )
         } catch (error) {
           if (await retryPostgresqlSerialization(attempt, error)) continue
           throw error
@@ -320,7 +307,7 @@ function databaseProviderOf(client: object): DatabaseProvider {
  * 传**客户端**，不要传事务句柄——重入靠 AsyncLocalStorage 帧按客户端识别，事务句柄不是帧的 key，
  * 拿它开会话会在一笔开着的事务里再发一次 BEGIN。
  */
-export function databaseSessionFor(db: ProviderNeutralDatabase): DatabaseSession {
+export function databaseSessionFor(db: PersistenceDb): DatabaseSession {
   const client = db as object
   const cached = sessions.get(client)
   if (cached !== undefined) return cached

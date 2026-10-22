@@ -173,8 +173,12 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       'projectReviewGateOpen',
     )
     expect(participant).toContain('nodeRunMint.mint({')
-    expect(participant).toContain('.insert(docVersions)')
-    expect(participant).toContain('.insert(nodeRunEvents)')
+    expect(participant).toMatch(
+      /(?:\.insert\(\s*docVersions\s*\)|\binsertOne\([^,]+,\s*docVersions\s*,)/,
+    )
+    expect(participant).toMatch(
+      /(?:\.insert\(\s*nodeRunEvents\s*\)|\binsertOne\([^,]+,\s*nodeRunEvents\s*,)/,
+    )
 
     const parkCommand = read(
       'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
@@ -232,9 +236,15 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       'projectClarifyGateOpen',
     )
     expect(participant).toContain('nodeRunMint.mint({')
-    expect(participant).toContain('.insert(clarifyRounds)')
-    expect(participant).toContain('.insert(taskQuestions)')
-    expect(participant).toContain('.insert(nodeRunEvents)')
+    expect(participant).toMatch(
+      /(?:\.insert\(\s*clarifyRounds\s*\)|\binsertOne\([^,]+,\s*clarifyRounds\s*,)/,
+    )
+    expect(participant).toMatch(
+      /(?:\.insert\(\s*taskQuestions\s*\)|\binsertOne\([^,]+,\s*taskQuestions\s*,)/,
+    )
+    expect(participant).toMatch(
+      /(?:\.insert\(\s*nodeRunEvents\s*\)|\binsertOne\([^,]+,\s*nodeRunEvents\s*,)/,
+    )
     expect(
       countNamedCalls(
         'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
@@ -256,7 +266,9 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     const participant = read(
       'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
     )
-    expect(participant).toContain('.insert(taskQuestions)')
+    expect(participant).toMatch(
+      /(?:\.insert\(\s*taskQuestions\s*\)|\binsertOne\([^,]+,\s*taskQuestions\s*,)/,
+    )
     expect(seal).toContain('reconcileRoundEntriesTx(tx, {')
     expect(questions).toContain('export async function reconcileRoundEntriesTx(')
   })
@@ -278,7 +290,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       'packages/backend/src/modules/collaboration/infrastructure/manualQuestionOpenWriter.ts',
     )
     expect(creation).toContain('this.journal.beginTx({')
-    expect(creation).toContain('tx.insert(taskQuestions).values(question).run()')
+    expect(creation).toContain('insertOne(tx, taskQuestions, question)')
     expect(creation).toContain('this.journal.markPreparedTx({')
 
     const engine = read(
@@ -311,7 +323,7 @@ describe('RFC-333 T2 canonical continuation authority lock', () => {
 
     expect(bridge).toContain("export * from '@/modules/task-execution/public/participants'")
     // RFC-359：`setTaskStatus` 的写事务搬到中立的显式边界之后，resume 准入的 `onTransitionTx`
-    // 回调拿到的是 `DatabaseTransaction`，因此走的是同一套判据的**异步孪生**
+    // 回调拿到的是 `PersistenceTx`，因此走的是同一套判据的**异步孪生**
     // （`submitTaskContinuationInTransaction`）。本判据锁的东西没变——「legacy resume helper
     // 必须经 public 合同抵达 RFC-328 的准入参与者，而不是自己拼一份」——只是锚点跟着实现走。
     // 同步那份（`sqliteTaskExecutionIntentAdmission.ts`）已随它唯一的调用方

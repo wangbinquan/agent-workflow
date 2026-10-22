@@ -1,6 +1,7 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { intentSessions, intentTurns, users } from '@/db/schema'
 import { composeCrewStationIntentScratchStore } from '@/modules/intent/composition/crewstationScratch'
 import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
 import { createHostedExecutionStore } from '@/modules/task-execution/infrastructure/crewstation/executionStore'
@@ -10,7 +11,8 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-370 retained scratch and remote writers', (harness) => {
   test('retention waits for remote cleanup ACK and leaves failed or running turns retained', async () => {
-    await harness.db.insert(users).values({
+    const { users, intentSessions, intentTurns } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'owner',
       username: 'owner',
       displayName: 'Owner',
@@ -19,9 +21,13 @@ describeEachProvider('RFC-370 retained scratch and remote writers', (harness) =>
       createdAt: 1,
       updatedAt: 1,
     })
-    await harness.db
-      .insert(intentSessions)
-      .values({ id: 'session', ownerUserId: 'owner', title: 'Scratch', createdAt: 1, updatedAt: 1 })
+    await insertOne(harness.db, intentSessions, {
+      id: 'session',
+      ownerUserId: 'owner',
+      title: 'Scratch',
+      createdAt: 1,
+      updatedAt: 1,
+    })
     await harness.db.insert(intentTurns).values([
       {
         id: 'done',

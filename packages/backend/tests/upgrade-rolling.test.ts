@@ -22,6 +22,8 @@
 //   - journal idx 13 (0014_rfc031_plugins)      — mid-period plugins
 //   - journal idx 19 (0020_rfc036_task_collab)  — late, just pre RFC-037
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -40,7 +42,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -164,7 +165,8 @@ function buildHarness(label: string): Harness {
 
 async function seedToyAgent(db: DbClient, name = 'rolling-agent'): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'rolling-upgrade test stub',
@@ -190,12 +192,13 @@ async function seedToyTask(
     nodes: [{ id: 'a1', kind: 'agent-single', agentId, agentName: 'rolling-agent' }],
     edges: [],
   }
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rolling-wf',
     definition: JSON.stringify(def),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rolling-task',
     workflowId,
@@ -633,7 +636,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
       // 3. Open with full migrations folder → drizzle applies the rest.
       const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
 
-      try {
+      {
         // 4. Post-upgrade verification: full journal applied.
         expect(countAppliedMigrations(dbPath)).toBe(HEAD_TOTAL_MIGRATIONS)
 
@@ -665,15 +668,13 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
             }),
         )
 
+        const { tasks, nodeRuns } = tablesOf(db)
         const finalTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
         expect(finalTask?.status).toBe('done')
 
         const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
         const a1 = runs.find((r) => r.nodeId === 'a1')
         expect(a1?.status).toBe('done')
-      } finally {
-        /* db isn't explicitly closed — Bun teardown handles it; the home
-           rmSync in afterEach removes the .sqlite + WAL files. */
       }
     })
   }

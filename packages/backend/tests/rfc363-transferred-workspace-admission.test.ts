@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { afterEach, expect, test } from 'bun:test'
@@ -6,7 +8,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { workflows, users } from '@/db/schema'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { admitTransferredWorkspace } from '@/modules/task-execution/infrastructure/transferredWorkspaceAdmission'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
@@ -67,7 +68,8 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
     const ownerUserId = ulid(),
       workflowId = ulid(),
       taskId = ulid()
-    await harness.db.insert(users).values({
+    const { users, workflows } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: ownerUserId,
       username: ownerUserId,
       displayName: 'Fusion',
@@ -78,7 +80,7 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       createdAt: 1,
       updatedAt: 1,
     })
-    await harness.db.insert(workflows).values({
+    await insertOne(harness.db, workflows, {
       id: workflowId,
       name: workflowId,
       definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),

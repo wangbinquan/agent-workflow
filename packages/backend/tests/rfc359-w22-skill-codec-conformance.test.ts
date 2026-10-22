@@ -2,6 +2,9 @@
 // sharing their scalar mapping. The cb0403 originals below intentionally keep
 // their different managedPath placement; JSON bytes and property reads matter.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,7 +12,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { Skill } from '@agent-workflow/shared'
 
-import { skills } from '@/db/schema'
 import { createDatabaseAgentResourceInventoryReadPort } from '@/modules/resource-catalog/infrastructure/agentResourceInventory'
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import {
@@ -151,8 +153,9 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
 
   async function insertRow(index: number, managedPath: string | null) {
     const values = skillRow(index, managedPath)
-    await harness.db.insert(skills).values(values).run()
-    const stored = await harness.db.select().from(skills).where(eq(skills.id, values.id)).get()
+    const { skills } = tablesOf(harness.db)
+    await insertOne(harness.db, skills, values)
+    const stored = await first(harness.db.select().from(skills).where(eq(skills.id, values.id)))
     expect(stored).toEqual(values)
     if (stored === undefined) throw new Error('skill codec fixture row missing')
     return stored
@@ -178,7 +181,8 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
       if (listedSkill === undefined) throw new Error('stored skill not listed by the catalog')
       assertProjection(listedSkill, originalCatalogProjection(row))
       expect(await repository.get('missing-skill')).toBeNull()
-      expect(await harness.db.select().from(skills).all()).toEqual([row])
+      const { skills } = tablesOf(harness.db)
+      expect(await harness.db.select().from(skills)).toEqual([row])
     })
   }
 
@@ -214,7 +218,8 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
         available: true,
       })
     }
-    expect(await harness.db.select().from(skills).orderBy(skills.id).all()).toEqual(rows)
+    const { skills } = tablesOf(harness.db)
+    expect(await harness.db.select().from(skills).orderBy(skills.id)).toEqual(rows)
   })
 
   test('the real workflow loader preserves the projected Skill and validation context', async () => {
@@ -254,6 +259,7 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
     }
     expect(result.validationContextHash).toBe(workflowValidationContextHashOf(context))
     expect(result.result).toEqual(validateWorkflowDefinition(candidate.definition, context))
-    expect(await harness.db.select().from(skills).orderBy(skills.id).all()).toEqual(rows)
+    const { skills } = tablesOf(harness.db)
+    expect(await harness.db.select().from(skills).orderBy(skills.id)).toEqual(rows)
   })
 })

@@ -25,24 +25,13 @@
 //
 // 合一后这份文件不再对拍「两个类」，它对拍的是**同一份实现在两个引擎上的同一行为**。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionLineageOperationRecords,
-  taskExecutionOwners,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
@@ -97,9 +86,10 @@ interface Fixture {
   reset(): void
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<Fixture> {
+async function seed(db: PersistenceDb): Promise<Fixture> {
   const taskId = `w8_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-w8',
     description: '',
@@ -107,7 +97,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<Fixture> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -394,6 +384,11 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       receiptJson: JSON.stringify({ v: 1, ok: true }),
     })
 
+    const {
+      taskExecutionEffects,
+      taskExecutionEffectFences,
+      taskExecutionLineageOperationRecords,
+    } = tablesOf(db)
     const effect = (
       await db
         .select()
@@ -457,6 +452,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       failureCode: 'w8-threw',
       receiptJson: JSON.stringify({ v: 1, error: 'boom' }),
     })
+    const { taskExecutionEffectAttempts, taskExecutionEffectFences } = tablesOf(db)
     const attempt = (
       await db
         .select()
@@ -510,6 +506,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       }),
     )
     expect(rejected).toBeInstanceOf(Error)
+    const { taskExecutionEffectAttempts } = tablesOf(db)
     const attempt = (
       await db
         .select()
@@ -543,6 +540,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
         outputs: [{ portName: 'pr_url', content: 'https://example.invalid/pr/12' }],
       },
     })
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.runId)))[0]!
     expect(run.status).toBe('done')
     expect(run.finishedAt).toBe(finishedAt)
@@ -559,6 +557,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('settleCodeHostNode：已终态的 node_run 拒绝被覆写，整笔回滚（gap 03）', async () => {
     const db = harness.db
     const fixture = await seed(db)
+    const { nodeRuns, nodeRunOutputs, taskExecutionEffects } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ status: 'failed', errorMessage: 'earlier terminal' })
@@ -628,6 +627,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       }),
     )
     expect(codeOf(refused)).toBe('node-run-not-found')
+    const { taskExecutionEffects } = tablesOf(db)
     const effect = (
       await db
         .select()
@@ -695,6 +695,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
         nodePaths: ['w8-node'],
       },
     })
+    const { tasks, taskRepos, taskSpaceNodes, nodeRuns } = tablesOf(db)
     const task = (await db.select().from(tasks).where(eq(tasks.id, fixture.taskId)))[0]!
     expect(task.worktreePath).toBe('/tmp/wt/w8')
     expect(task.baseCommit).toBe('deadbeef')
@@ -715,6 +716,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('settleWorkspacePreparation：prep node_run 已终态时整笔回滚', async () => {
     const db = harness.db
     const fixture = await seed(db)
+    const { nodeRuns, tasks, taskSpaceNodes } = tablesOf(db)
     await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, fixture.prepRunId))
     const prepared = await fixture.effects.prepareAndAcquire(preparation(fixture))
     const refused = await errorOf(() =>
@@ -769,6 +771,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       launchNonce: 'nonce-w8',
       runtimeParamsJson: JSON.stringify({ model: 'w8' }),
     })
+    const { taskExecutionEffectAttempts, nodeRuns } = tablesOf(db)
     const attempt = (
       await db
         .select()
@@ -807,6 +810,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       }),
     )
     expect(codeOf(missingRun)).toBe('task-execution-stale-owner')
+    const { taskExecutionEffectAttempts } = tablesOf(db)
     const untouched = (
       await db
         .select()
@@ -841,6 +845,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('settleGateRollback：completed 结算并按成功集合改写来源 node_run', async () => {
     const db = harness.db
     const fixture = await seed(db)
+    const { nodeRuns, taskExecutionEffects } = tablesOf(db)
     await db
       .update(nodeRuns)
       .set({ status: 'failed', errorMessage: 'superseded-by-review-rejected: earlier' })
@@ -891,6 +896,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       sourceNodeRunIds: [fixture.runId],
       outcome: { kind: 'threw', error: 'boom' },
     })
+    const { taskExecutionEffectAttempts, nodeRuns } = tablesOf(db)
     const attempt = (
       await db
         .select()
@@ -928,6 +934,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       }),
     )
     expect(codeOf(refused)).toBe('task-continuation-stale')
+    const { taskExecutionEffects, nodeRuns } = tablesOf(db)
     const effect = (
       await db
         .select()
@@ -943,6 +950,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('owner 围栏：effect 写入按统一原语推进 owner revision', async () => {
     const db = harness.db
     const fixture = await seed(db)
+    const { taskExecutionOwners } = tablesOf(db)
     const before = (
       await db
         .select()

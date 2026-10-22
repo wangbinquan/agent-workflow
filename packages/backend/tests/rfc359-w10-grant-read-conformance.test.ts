@@ -35,20 +35,22 @@
 // 另有一条**函数同一性锁**（不进双引擎块，纯静态）：legacy 那份必须**就是**中立那份，
 // 谁再 fork 一份逐字相同的回来，`toBe` 立刻红——这比任何行为断言都早一步拦住漂移。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import * as neutralGrants from '@/modules/resource-catalog/infrastructure/resourceVisibility'
 import * as sqliteGrants from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_w10_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -68,7 +70,7 @@ function actorFor(userId: string): Actor {
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: Readonly<{
     type: 'agent' | 'workflow' | 'skill'
     resourceId: string
@@ -76,7 +78,8 @@ async function grant(
     level: 'read' | 'write'
   }>,
 ): Promise<void> {
-  await db.insert(resourceGrants).values({
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
     resourceType: input.type,
     resourceId: input.resourceId,
     userId: input.userId,
@@ -167,6 +170,7 @@ describeEachProvider('RFC-359 W10 —— 授权集读法的双引擎对拍', (ha
       (_, index) => `a_w10_${String(index).padStart(4, '0')}`,
     )
     for (let index = 0; index < grantedIds.length; index += 100) {
+      const { resourceGrants } = tablesOf(db)
       await db.insert(resourceGrants).values(
         grantedIds.slice(index, index + 100).map((resourceId) => ({
           resourceType: 'agent' as const,

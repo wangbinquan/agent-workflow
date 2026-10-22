@@ -1,12 +1,13 @@
 // RFC-359 AC1: the two established archive owners must retain their actual
 // numeric rows, state watermarks and inclusive/exclusive deletion boundaries.
 // The original events-archive suite separately exercises all four DB/FS faults.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { maintenanceState, nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
@@ -14,29 +15,30 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_001_734_000
 
-function isPostgresql(db: ProviderNeutralDatabase): db is PostgresqlDatabaseClient {
+function isPostgresql(db: PersistenceDb): db is PostgresqlDatabaseClient {
   return '$provider' in db && db.$provider === 'postgresql'
 }
 
-function assertSqlite(db: ProviderNeutralDatabase): asserts db is DbClient {
+function assertSqlite(db: PersistenceDb): asserts db is DbClient {
   if ('$provider' in db) throw new Error('unexpected-archive-fixture-provider')
 }
 
-function originalConstructor(db: ProviderNeutralDatabase) {
+function originalConstructor(db: PersistenceDb) {
   if (isPostgresql(db)) return createPostgresqlEventsArchiveStore(db)
   assertSqlite(db)
   return createEventsArchiveStore(db)
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(workflows).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'archive-wf',
     name: 'archive-wf',
     definition: '{}',
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: 'archive-task',
     name: 'archive-task',
     workflowId: 'archive-wf',
@@ -93,6 +95,7 @@ describeEachProvider('RFC-359 events archive store preserves original owner beha
     await store.writeState('archive-fixture', '7', NOW)
     await store.writeState('archive-fixture', '{"throughId":9}', NOW + 1)
     expect(await store.readState('archive-fixture')).toBe('{"throughId":9}')
+    const { maintenanceState } = tablesOf(h.db)
     expect(
       await h.db.select().from(maintenanceState).where(eq(maintenanceState.key, 'archive-fixture')),
     ).toEqual([{ key: 'archive-fixture', value: '{"throughId":9}', updatedAt: NOW + 1 }])

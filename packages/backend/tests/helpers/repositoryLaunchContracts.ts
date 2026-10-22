@@ -1,12 +1,12 @@
 /** RFC-362 test composition only. Maps are process-local characterization state,
  * never a durable seal/journal implementation or a production admission writer. */
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos, repoGroups } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DatabaseSession } from '@/platform/persistence/databaseTransaction'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import {
@@ -41,13 +41,13 @@ import {
   type CreateWorktreeOptions,
 } from '@/util/git'
 
-type RepositoryRow = typeof cachedRepos.$inferSelect
+type RepositoryRow = PersistenceTables['cachedRepos']['$inferSelect']
 export function repositoryRevision(row: RepositoryRow): string {
   // Characterization digest only. lastFetchedAt is not a durable revision.
   return createHash('sha256').update(JSON.stringify(row)).digest('hex')
 }
 export function repositoryLaunchContracts(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   session: DatabaseSession
   appHome: string
   authority: RequestAuthority
@@ -127,6 +127,7 @@ export function repositoryLaunchContracts(input: {
           if (source.kind === 'repository-group') {
             if (!(await scope.exists(tx, { kind: 'repo_group', id: source.group.id })))
               throw new Error('repo-group-not-found')
+            const { repoGroups } = tablesOf(tx)
             const row = (
               await tx.select().from(repoGroups).where(eq(repoGroups.id, source.group.id))
             )[0]
@@ -142,6 +143,7 @@ export function repositoryLaunchContracts(input: {
             source.kind === 'repository' ? source.repository.id : sealedSource!.cachedRepoId
           if (!(await scope.exists(tx, { kind: 'repo', id })))
             throw new Error('cached-repo-not-found')
+          const { cachedRepos } = tablesOf(tx)
           const row = (await tx.select().from(cachedRepos).where(eq(cachedRepos.id, id)))[0]
           if (!row) throw new Error('cached-repo-not-found')
           if (

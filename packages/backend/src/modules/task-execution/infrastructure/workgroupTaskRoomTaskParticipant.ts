@@ -1,5 +1,6 @@
 // RFC-349 — TaskExecution-owned half of Resource Catalog task-room atoms.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   CANCELABLE_TASK_STATUSES,
   type FailureCode,
@@ -9,7 +10,6 @@ import {
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { nodeRuns, taskCollaborators, tasks } from '@/db/schema'
 import type {
   WorkgroupTaskRoomClarifyParticipantInTx,
   WorkgroupTaskRoomHolderClose,
@@ -45,15 +45,18 @@ function hostRunSnapshot(
   })
 }
 
-const taskProjection = {
-  id: tasks.id,
-  name: tasks.name,
-  ownerUserId: tasks.ownerUserId,
-  status: tasks.status,
-  workgroupId: tasks.workgroupId,
-  workgroupConfigJson: tasks.workgroupConfigJson,
-  workflowSnapshot: tasks.workflowSnapshot,
-  triggerContextJson: tasks.triggerContextJson,
+const taskProjection = (db: object) => {
+  const { tasks } = tablesOf(db)
+  return {
+    id: tasks.id,
+    name: tasks.name,
+    ownerUserId: tasks.ownerUserId,
+    status: tasks.status,
+    workgroupId: tasks.workgroupId,
+    workgroupConfigJson: tasks.workgroupConfigJson,
+    workflowSnapshot: tasks.workflowSnapshot,
+    triggerContextJson: tasks.triggerContextJson,
+  }
 }
 
 async function closeHolders(
@@ -63,6 +66,7 @@ async function closeHolders(
   occurredAt: number,
 ): Promise<readonly { readonly id: string; readonly nodeId: string }[]> {
   if (close === undefined) return []
+  const { nodeRuns } = tablesOf(tx)
   return await tx
     .update(nodeRuns)
     .set({ status: 'done', finishedAt: occurredAt, errorMessage: null })
@@ -112,8 +116,9 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
    * 改回带参数的写法会让这个悬崖原样复发——判据见 `rfc359-ac11-generic-plan-probe`。
    */
   async function listActive(): Promise<readonly WorkgroupTaskRoomTaskSnapshot[]> {
+    const { tasks } = tablesOf(tx)
     const rows = await tx
-      .select(taskProjection)
+      .select(taskProjection(tx))
       .from(
         sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} IS NOT NULL LIMIT 1) AS nonempty_workgroup_scan`,
       )
@@ -126,8 +131,9 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
 
   return Object.freeze({
     async load(taskId: string) {
+      const { tasks } = tablesOf(tx)
       const row = (
-        await tx.select(taskProjection).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+        await tx.select(taskProjection(tx)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
       )[0]
       return row === undefined ? null : taskSnapshot(row)
     },
@@ -140,8 +146,9 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
         taskId,
       })
       if (!visible) return null
+      const { tasks } = tablesOf(tx)
       const row = (
-        await tx.select(taskProjection).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+        await tx.select(taskProjection(tx)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
       )[0]
       return row === undefined ? null : taskSnapshot(row)
     },
@@ -160,6 +167,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       return await clarify.loadProjection(taskId)
     },
     async listHostRuns(taskId: string) {
+      const { nodeRuns } = tablesOf(tx)
       const rows = await tx
         .select({
           id: nodeRuns.id,
@@ -182,6 +190,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
     async replaceConfig(
       input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['replaceConfig']>[0],
     ) {
+      const { tasks, taskCollaborators } = tablesOf(tx)
       const changed = await tx
         .update(tasks)
         .set({ workgroupConfigJson: input.nextConfigJson })
@@ -215,6 +224,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       const canceledParkRuns: Array<{ nodeRunId: string; nodeId: string }> = []
       const assignmentShardKeys = new Set<string>()
       for (const park of dismissed.parks) {
+        const { nodeRuns } = tablesOf(tx)
         const parked = (
           await tx
             .select({ status: nodeRuns.status })
@@ -245,6 +255,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
     },
     async continueTask(input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['continueTask']>[0]) {
       await assertTaskOwnerlessTx(tx, input.taskId)
+      const { tasks } = tablesOf(tx)
       const task = (
         await tx
           .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })
@@ -323,6 +334,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
     },
     async failTask(input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['failTask']>[0]) {
       await assertTaskOwnerlessTx(tx, input.taskId)
+      const { tasks } = tablesOf(tx)
       const task = (
         await tx
           .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })

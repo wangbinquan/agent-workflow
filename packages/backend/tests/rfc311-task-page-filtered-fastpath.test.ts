@@ -21,12 +21,13 @@
 // （`helpers/taskForestBackfill.ts`），SQLite 那侧另有一条「迁移 SQL == 复算」的对拍
 // （见 `rfc311-task-page-fastpath.test.ts`），所以「oracle 顺带验收回填算法」没有丢。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { TaskOperationsListItem } from '@agent-workflow/shared'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { lifecycleAlerts, taskRepos, tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   canUseFilteredFastPath,
   hasUnrootedTasks,
@@ -37,7 +38,7 @@ import { computeForestBackfill } from './helpers/taskForestBackfill'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -61,7 +62,8 @@ interface SeedTask {
 
 async function seedBase(db: Db): Promise<void> {
   for (const id of ['admin', 'alice', 'bob']) {
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id,
       username: id,
       displayName: id,
@@ -70,8 +72,9 @@ async function seedBase(db: Db): Promise<void> {
       updatedAt: 1,
     })
   }
-  await db.insert(workflows).values({ id: 'wf1', name: 'nightly-audit', definition: '{}' })
-  await db.insert(workflows).values({ id: 'wf2', name: 'release-train', definition: '{}' })
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'wf1', name: 'nightly-audit', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf2', name: 'release-train', definition: '{}' })
 }
 
 async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
@@ -80,7 +83,8 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
     rows.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
   )
   for (const r of rows) {
-    await db.insert(tasks).values({
+    const { tasks, taskRepos, lifecycleAlerts } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: r.id,
       name: `task ${r.id}`,
       workflowId: r.id.endsWith('3') ? 'wf2' : 'wf1',
@@ -108,7 +112,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
       branchStartedAt: backfill.branchStartedAt.get(r.id) ?? r.startedAt,
       rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
     })
-    await db.insert(taskRepos).values({
+    await insertOne(db, taskRepos, {
       taskId: r.id,
       repoIndex: 0,
       repoPath: r.repoPath,
@@ -117,7 +121,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
       branch: `agent-workflow/${r.id}`,
     })
     if (r.alert === true) {
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: `al-${r.id}`,
         taskId: r.id,
         rule: 'stuck',
@@ -320,10 +324,11 @@ describeEachProvider('RFC-311 G1 — filtered fast path === exhaustive pipeline'
     await insertForest(db, buildForest(20))
     expect(await hasUnrootedTasks(db as never)).toBe(false)
 
+    const { tasks } = tablesOf(db)
     // 模拟绕过服务层的写入:有父、但没落根。原写法用裸 SQL（无 schema 限定的 INSERT），
     // PostgreSQL 上找不到表；改成 query builder 后两个引擎同一条路径，语义不变。
     const parent = (await db.select({ id: tasks.id }).from(tasks).limit(1))[0]!.id
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: 'orphan',
       name: 'orphan',
       workflowId: 'wf1',

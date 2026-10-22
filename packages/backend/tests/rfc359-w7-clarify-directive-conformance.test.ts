@@ -14,17 +14,18 @@
 // `infrastructure/taskClarifyDirective.ts`（RFC-122 覆盖、RFC-123 recency、
 // RFC-207 per-asker 行与节点级 continue 的「解除全部静音」手势）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskNodeClarifyDirectives } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createClarifyDirectiveStore } from '@/modules/collaboration/infrastructure/clarifyDirectiveStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 
 /** 直读表：断言存了什么行，而不只是 store 读回什么。 */
-function rowsOf(db: ProviderNeutralDatabase, taskId: string, nodeId: string) {
+function rowsOf(db: PersistenceDb, taskId: string, nodeId: string) {
+  const { taskNodeClarifyDirectives } = tablesOf(db)
   return db
     .select()
     .from(taskNodeClarifyDirectives)

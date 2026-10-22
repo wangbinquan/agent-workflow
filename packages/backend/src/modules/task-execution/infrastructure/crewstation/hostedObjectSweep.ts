@@ -4,14 +4,9 @@
 // scope (task id) whose task and launch preparation are both gone releases all
 // of its publications and drops the task's own reference rows. Archived tasks
 // lose nothing: the archive linked its own pins before the rows were deleted.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, notExists } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  hostedNodeEventArchives,
-  hostedTaskArtifacts,
-  tasks,
-  taskWorkspacePreparations,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectOwnerSweep,
   HostedObjectPublications,
@@ -32,7 +27,7 @@ const OWNERS = [
 ] as const
 
 export function createHostedTaskObjectSweep(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly publications: HostedObjectPublications
   readonly graceMs?: number
@@ -41,7 +36,7 @@ export function createHostedTaskObjectSweep(input: {
   const session = databaseSessionFor(input.db)
   const grace = input.graceMs ?? HOSTED_TASK_OBJECT_GRACE_MS
   const pageSize = input.pageSize ?? 200
-  const write = <T>(run: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> => {
+  const write = <T>(run: (tx: PersistenceDb) => Promise<T>): Promise<T> => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
@@ -50,6 +45,7 @@ export function createHostedTaskObjectSweep(input: {
   }
   const liveTaskIds = async (ids: readonly string[]): Promise<Set<string>> => {
     if (ids.length === 0) return new Set()
+    const { tasks, taskWorkspacePreparations } = tablesOf(input.db)
     const [taskRows, preparationRows] = await Promise.all([
       input.db
         .select({ id: tasks.id })
@@ -69,6 +65,7 @@ export function createHostedTaskObjectSweep(input: {
   }
   const releaseTask = (owner: (typeof OWNERS)[number] | null, taskId: string) =>
     write(async (tx) => {
+      const { tasks, hostedTaskArtifacts, hostedNodeEventArchives } = tablesOf(tx)
       // Re-check inside the transaction: a task row is never resurrected, but a
       // launch can still create one for a preparation that just finished.
       const live = await tx
@@ -106,6 +103,7 @@ export function createHostedTaskObjectSweep(input: {
           after = scopes.at(-1)
         }
       }
+      const { hostedNodeEventArchives, tasks } = tablesOf(input.db)
       // Prepared chunks that never reached their publication have only rows.
       const orphans = await input.db
         .selectDistinct({ taskId: hostedNodeEventArchives.taskId })

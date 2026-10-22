@@ -20,6 +20,8 @@
 //
 // 所以两道复核分开：产物比较用「整行减 ACL 列」，授权复核重新查 grant 跑 `isVisibleRow`。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,14 +29,13 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { readFileSync } from 'node:fs'
-import { agents, plugins, resourceGrants, users, workflows } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import { removeTempDirSync } from './fixtures/tempDir'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 const actorOf = (id: string): Actor =>
   ({
@@ -49,8 +50,9 @@ const codeOf = async (p: Promise<unknown>): Promise<string | undefined> =>
     (e: unknown) => (e as { code?: string }).code,
   )
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string): Promise<void> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -63,13 +65,14 @@ async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> 
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   name: string,
   owner: string,
   visibility: 'private' | 'public',
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: '',
@@ -101,7 +104,8 @@ async function seedGrantedClosure(): Promise<{
 
   const childId = ulid()
   await seedAgent(db, childId, 'private-dep', 'owner', 'private')
-  await db.insert(resourceGrants).values({
+  const { resourceGrants, workflows } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
     resourceType: 'agent',
     resourceId: childId,
     userId: 'reader',
@@ -110,7 +114,7 @@ async function seedGrantedClosure(): Promise<{
   } as never)
 
   const rootId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: rootId,
     name: 'root',
     description: '',
@@ -133,7 +137,7 @@ async function seedGrantedClosure(): Promise<{
 
 interface MidExportWrite {
   /** 传给 `exportResourcePackage` 的句柄。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /**
    * 注入点实际触发的次数。**每条用例都要断言它**——注入一旦失效，「必须成功」那几条
    * （基线 / private→public / 插件重装 / 混类型闭包）会安静地变绿，正是本文件开头记的
@@ -157,10 +161,10 @@ interface MidExportWrite {
  * 而不是末端复核。第一版就是这么写的。
  */
 function dbWithMidExportWrite(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   table: unknown,
   nth: number,
-  mutate: (handle: ProviderNeutralDatabase) => Promise<void>,
+  mutate: (handle: PersistenceDb) => Promise<void>,
 ): MidExportWrite {
   let reads = 0
   let fired = 0
@@ -239,7 +243,7 @@ function dbWithMidExportWrite(
                 // 注入写走**这次读所在的那个句柄**：PG 上就是那笔事务的连接，写与读因此
                 // 天然有序，也不会与外层 SERIALIZABLE 事务互相冲突。
                 return deferExecution(next, () => {
-                  started ??= mutate(target as ProviderNeutralDatabase)
+                  started ??= mutate(target as PersistenceDb)
                   return started
                 })
               }
@@ -250,7 +254,7 @@ function dbWithMidExportWrite(
     })
 
   return Object.freeze({
-    db: wrapHandle(db as object) as unknown as ProviderNeutralDatabase,
+    db: wrapHandle(db as object) as unknown as PersistenceDb,
     fired: () => fired,
   })
 }
@@ -284,10 +288,12 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
     test('**撤权后**导出必须拒绝 —— 而不是带走一个已经不可见的资源', async () => {
       const { appHome, rootId, childId } = await seedGrantedClosure()
       try {
+        const { agents } = tablesOf(db)
         // 闭包已捕获（第 1 次读 agents）之后撤销 grant：删 grant + 推 aclRevision，
         // **version 不动**（ACL 写路径就是这样：只推 aclRevision / updatedAt）。
         // 旧实现在这里完全无感——它比的是 `expectTokenOf`，workflow 只看 version。
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
+          const { resourceGrants, agents } = tablesOf(handle)
           await handle.delete(resourceGrants).where(eq(resourceGrants.resourceId, childId))
           await handle
             .update(agents)
@@ -314,7 +320,9 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
     test('依赖被改成 private 且无 grant ⇒ 同样拒绝（不只 grant 一条路径）', async () => {
       const { appHome, rootId, childId } = await seedGrantedClosure()
       try {
+        const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
+          const { resourceGrants, agents } = tablesOf(handle)
           await handle.delete(resourceGrants).where(eq(resourceGrants.resourceId, childId))
           await handle
             .update(agents)
@@ -347,7 +355,9 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       // 而实际什么产物变化都没有。
       const { appHome, rootId, childId } = await seedGrantedClosure()
       try {
+        const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
+          const { agents } = tablesOf(handle)
           await handle
             .update(agents)
             .set({ visibility: 'public', aclRevision: 3, updatedAt: 5 })
@@ -371,7 +381,9 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
     test('真实内容变更仍然拒绝（产物复核没有被放宽掉）', async () => {
       const { appHome, rootId, childId } = await seedGrantedClosure()
       try {
+        const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
+          const { agents } = tablesOf(handle)
           await handle
             .update(agents)
             .set({ bodyMd: 'CHANGED', updatedAt: 7 })
@@ -409,7 +421,8 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       try {
         await seedUser(db, 'u1')
         const pluginId = ulid()
-        await db.insert(plugins).values({
+        const { plugins, agents } = tablesOf(db)
+        await insertOne(db, plugins, {
           id: pluginId,
           name: 'fmt',
           description: '',
@@ -435,6 +448,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
         // 闭包捕获插件行之后、末端复核读它之前，模拟一次正常重装：**只**换安装态三列，
         // `spec` / `enabled` / `description` 一个字都不动。
         const raced = dbWithMidExportWrite(db, plugins, 2, async (handle) => {
+          const { plugins } = tablesOf(handle)
           await handle
             .update(plugins)
             .set({ cachedPath: '/cache/b', resolvedVersion: '1.0.1', installedAt: 2 })
@@ -506,7 +520,8 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
         const agentId = ulid()
         await seedAgent(db, agentId, 'worker', 'u1', 'private')
         const childId = ulid()
-        await db.insert(workflows).values({
+        const { workflows } = tablesOf(db)
+        await insertOne(db, workflows, {
           id: childId,
           name: 'child',
           description: '',
@@ -518,7 +533,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
           updatedAt: 1,
         } as never)
         const rootId = ulid()
-        await db.insert(workflows).values({
+        await insertOne(db, workflows, {
           id: rootId,
           name: 'root',
           description: '',
@@ -555,7 +570,9 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       // 后果不只是漏检：manifest 会**写旧名字**，产出一个与库不一致的包。
       const { appHome, rootId, childId } = await seedGrantedClosure()
       try {
+        const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
+          const { agents } = tablesOf(handle)
           await handle.update(agents).set({ name: 'renamed' }).where(eq(agents.id, childId))
         })
         // 报的是 `package-root-changed` 而不是 closure：改名会改 slug，root 工作流的

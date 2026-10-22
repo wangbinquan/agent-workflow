@@ -1,6 +1,6 @@
 import { canonicalJson } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '@/auth/secretBox'
 import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
 import { ConflictError } from '@/util/errors'
@@ -13,7 +13,7 @@ import { composeRepositoryWorkspaceStore } from './repositoryWorkspaceStore'
 
 /** No clone/fetch. The existing cache identity owner still seals credentials as before. */
 export function createPublicRepositorySourceSeal(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly secretBox?: SecretBox
 }): PublicRepositorySourceSealPort {

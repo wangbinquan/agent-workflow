@@ -5,22 +5,20 @@
 // planDigest 命名——mission 行存的 uploadPlacementRef 是 seedTreeDigest，
 // 不是目录名）与 validator/candidate 的上传合同对拍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentRepositoryUploadPlanEntries,
-  developmentRepositoryUploadPlans,
-} from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { PersistUploadPlanInput } from '../application/uploadPlan'
 
 /** 在调用方的事务里落 plan + 有序 entries（launch 事务的一部分）。 */
 export async function insertUploadPlan(
-  tx: DatabaseTransaction | ProviderNeutralDatabase,
+  tx: PersistenceTx | PersistenceDb,
   input: PersistUploadPlanInput,
 ): Promise<void> {
-  await tx.insert(developmentRepositoryUploadPlans).values({
+  const { developmentRepositoryUploadPlans, developmentRepositoryUploadPlanEntries } = tablesOf(tx)
+  await insertOne(tx, developmentRepositoryUploadPlans, {
     id: input.planId,
     missionId: input.missionId,
     missionRevision: input.missionRevision,
@@ -82,9 +80,10 @@ function dispositionOf(kind: string): 'create' | 'replace' | 'already-present' {
 }
 
 export async function readUploadPlan(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   planId: string,
 ): Promise<UploadPlanRead | null> {
+  const { developmentRepositoryUploadPlans, developmentRepositoryUploadPlanEntries } = tablesOf(db)
   const plan = (
     await db
       .select({

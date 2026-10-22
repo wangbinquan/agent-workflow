@@ -13,7 +13,7 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Hono } from 'hono'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
@@ -26,7 +26,7 @@ import { ensureDigitalEmployeeAgentTemplates } from '../src/services/digitalEmpl
 const backendRoot = resolve(import.meta.dir, '..')
 
 describeEachProvider('RFC-349 digital employee platform tool wiring', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let composition: ProviderHttpApplication
   let app: Hono

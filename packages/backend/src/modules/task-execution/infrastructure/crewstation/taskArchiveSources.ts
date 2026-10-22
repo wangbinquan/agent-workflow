@@ -2,9 +2,9 @@
 // and `logs/<task>`: object-backed task artifacts, review documents and node
 // event chunks (linked by object id), plus the task's work-volume files
 // (enumerated in the task image, uploaded once).
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskArtifacts, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CrewStationStreamObjectStorage,
   HostedStoredObject,
@@ -13,7 +13,7 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { HostedArchiveFile, HostedArchiveSources } from './taskArchiveContent'
 
 export function createHostedTaskArchiveSources(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly helper: WorkspaceHelper
   readonly locate: (reference: string) => { taskId: string }
@@ -42,6 +42,7 @@ export function createHostedTaskArchiveSources(input: {
       })
     }
     if (kind === 'runs') {
+      const { hostedTaskArtifacts } = tablesOf(input.db)
       for (const row of await input.db
         .select()
         .from(hostedTaskArtifacts)
@@ -52,6 +53,7 @@ export function createHostedTaskArchiveSources(input: {
     if (kind === 'logs')
       for (const file of (await input.eventFiles?.(taskId)) ?? [])
         addObject(`${prefix}${file.path}`, file.object)
+    const { tasks } = tablesOf(input.db)
     const task = (
       await input.db
         .select({ workspace: tasks.worktreePath })

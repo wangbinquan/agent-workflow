@@ -13,6 +13,8 @@
 //      runScope re-runs the swapped DAG to done — the recovery path Codex
 //      impl-gate P1-3 unlocked, exercised end to end.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -30,7 +32,6 @@ import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
-import { nodeRuns, tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
@@ -132,6 +133,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         user: { id: 'u-e2e', username: 'e2e', displayName: 'e2e', role: 'admin', status: 'active' },
         source: 'daemon',
       })
+      const { users, tasks, nodeRuns } = tablesOf(db)
       // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
       // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
       await db
@@ -161,7 +163,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
               createTestTaskExecutionLaunchParticipant({
                 db,
                 appHome,
-                schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+                schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
                   .schedulerDriver,
                 runConfig: {
                   binaryOverride: OPENCODE_CMD,
@@ -214,7 +216,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             {
               db,
               taskRecoveryOperations: taskRecoveryOperations(db),
-              schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+              schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
                 .schedulerDriver,
               appHome,
               binaryOverride: OPENCODE_CMD,
@@ -294,13 +296,14 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         edges: [],
       }
       const taskId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks, workgroupTaskState, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: 'wf-anchor',
         name: 'anchor',
         definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
         builtin: true,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'rec',
         workflowId: 'wf-anchor',
@@ -339,7 +342,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       })
       // RFC-217 T2 — the dispatch oracle reads the phase from
       // workgroup_task_state; the fixture seeds it like startTaskImpl would.
-      await db.insert(workgroupTaskState).values({
+      await insertOne(db, workgroupTaskState, {
         taskId,
         gateStatus: 'idle',
         dwStateJson: JSON.stringify({ ...initialDwState(), phase: 'executing' }),
@@ -353,7 +356,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             breaker: { maxPerWindow: 3, windowMs: 3600_000 },
             resume: (id) =>
               createResumeEngine(db, {
-                schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+                schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
                   .schedulerDriver,
                 awaitScheduler: true,
                 runConfig: {

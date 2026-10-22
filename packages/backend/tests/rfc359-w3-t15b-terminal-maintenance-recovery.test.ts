@@ -8,6 +8,8 @@
 // 一份实现（boot 用 webhookClaims: 'all' 接管全部认领并回填 legacy tombstone）。场景移植自
 // rfc311-task-archive / rfc300-workspace-prune / rfc165-workspace-gc（SQLite 黄金锁仍保留）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -15,8 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionMaintenanceClaims, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { createTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/providerRuntime'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -39,12 +40,13 @@ function archiveDirs(root: string) {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-t15b',
     description: '',
@@ -52,7 +54,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -70,11 +72,13 @@ async function seedTask(
   })
 }
 
-async function taskExists(db: ProviderNeutralDatabase, taskId: string): Promise<boolean> {
+async function taskExists(db: PersistenceDb, taskId: string): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length > 0
 }
 
-async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
+async function taskRow(db: PersistenceDb, taskId: string) {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
 }
 
@@ -132,6 +136,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       expect(recovered.promoted).toEqual([taskId])
       expect(existsSync(join(dirs.archiveDir, taskId, 'manifest.json'))).toBe(true)
       expect(await taskExists(db, taskId)).toBe(false)
+      const { taskExecutionMaintenanceClaims } = tablesOf(db)
       const state = (
         await db
           .select({ state: taskExecutionMaintenanceClaims.state })
@@ -148,7 +153,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
 describeEachProvider(
   'RFC-359 W3-T15-B —— 工作区恢复（workspaceMaintenance.recover）',
   (harness) => {
-    function command(db: ProviderNeutralDatabase, appHome: string) {
+    function command(db: PersistenceDb, appHome: string) {
       return composeWorkspaceMaintenanceCommand({
         db,
         appHome,

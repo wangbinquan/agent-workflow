@@ -16,7 +16,7 @@
 // 实现执行——单机在进程内，托管在开发卷内（`repository-facts-scan`）；cells 投影
 // 只在这里一份。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
 import type { RepositoryFactsCollectorPort } from '../application/ports/reconcilerPorts'
@@ -71,7 +71,7 @@ export function createRepositoryFactsCollectorFromLocations(
 
 /** 一份实现，两个 provider 共用（RFC-359 W4-D12）；托管装配交入卷内扫描。 */
 export function createRepositoryFactsCollector(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scan?: RepositoryFactsScanner,
 ): RepositoryFactsCollectorPort {
   return createRepositoryFactsCollectorFromLocations(createRepositoryLocationRead(db), scan)

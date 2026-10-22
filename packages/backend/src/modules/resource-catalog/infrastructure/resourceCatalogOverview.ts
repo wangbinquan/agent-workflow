@@ -1,8 +1,8 @@
 // RFC-359 W4-B2 —— 目录概览的可见计数：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, count, eq, sql, type SQL } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ResourceCatalogOverviewCountPort,
   ResourceCatalogOverviewCountRequest,
@@ -11,15 +11,20 @@ import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../domain/resourceKinds'
 import { ACL_TABLES, visibleRowsCondition } from './resourceVisibility'
 
-function builtinCondition(kind: CatalogSelectorKind, exclude: boolean): SQL<unknown> | undefined {
+function builtinCondition(
+  db: object,
+  kind: CatalogSelectorKind,
+  exclude: boolean,
+): SQL<unknown> | undefined {
   if (!exclude) return undefined
+  const { agents, workflows } = tablesOf(db)
   if (kind === 'agent') return eq(agents.builtin, false)
   if (kind === 'workflow') return eq(workflows.builtin, false)
   return undefined
 }
 
 export function createResourceCatalogOverviewCountPort(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ResourceCatalogOverviewCountPort {
   return Object.freeze({
     async countVisible(
@@ -27,14 +32,14 @@ export function createResourceCatalogOverviewCountPort(
       kind: CatalogSelectorKind,
       options: Readonly<{ excludeBuiltin: boolean }>,
     ): Promise<number> {
-      const table = ACL_TABLES[kind]
+      const table = ACL_TABLES(db)[kind]
       const rows = await db
         .select({ total: count() })
         .from(table)
         .where(
           and(
             visibleRowsCondition(db, actor, kind, table),
-            builtinCondition(kind, options.excludeBuiltin),
+            builtinCondition(db, kind, options.excludeBuiltin),
           ),
         )
       return Number(rows[0]?.total ?? 0)
@@ -54,14 +59,14 @@ export function createResourceCatalogOverviewCountPort(
       const totals = new Map<CatalogSelectorKind, number>()
       if (requests.length === 0) return totals
       const branchFor = (request: ResourceCatalogOverviewCountRequest) => {
-        const table = ACL_TABLES[request.kind]
+        const table = ACL_TABLES(db)[request.kind]
         return db
           .select({ kind: sql<string>`${request.kind}`.as('kind'), total: count().as('total') })
           .from(table)
           .where(
             and(
               visibleRowsCondition(db, actor, request.kind, table),
-              builtinCondition(request.kind, request.excludeBuiltin),
+              builtinCondition(db, request.kind, request.excludeBuiltin),
             ),
           )
       }

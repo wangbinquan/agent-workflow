@@ -11,6 +11,8 @@
 // scheduler source because it exercises the actual code path including any
 // future refactors.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -19,9 +21,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -36,7 +37,7 @@ function makeHarness(provider?: ProviderHarness) {
   mkdirSync(worktreePath, { recursive: true })
   const argvLog = join(appHome, 'argv.log')
   writeFileSync(argvLog, '')
-  const db = provider?.db ?? createInMemoryDb(MIGRATIONS)
+  const db: PersistenceDb = provider?.db ?? createInMemoryDb(MIGRATIONS)
   return {
     db,
     appHome,
@@ -46,9 +47,10 @@ function makeHarness(provider?: ProviderHarness) {
   }
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: '',
@@ -70,14 +72,15 @@ async function seedTask(
 ) {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -161,6 +164,7 @@ async function runScenario(retries: number | undefined, h: RuntimeHarness): Prom
         sessionRestartBudget: 0,
       }),
   )
+  const { tasks } = tablesOf(h.db)
   const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
   expect(t?.status).toBe('failed')
   return readFileSync(h.argvLog, 'utf8').trim().split('\n').filter(Boolean).length

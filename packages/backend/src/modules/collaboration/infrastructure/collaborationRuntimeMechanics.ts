@@ -18,7 +18,7 @@ import type { PortArtifactReader } from '@/modules/task-execution/public/queries
 // 保留惰性 import：评审 / 澄清域经 `services/humanGateComposition` 绕回 collaboration 的
 // composition barrel，静态 import 会形成值环。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
 import {
   dismissOpenClarifyParksForAutonomous,
@@ -26,7 +26,7 @@ import {
 } from './collaborationWorkgroupClarify'
 
 export function createCollaborationRuntimeMechanics(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   dependencies: Readonly<{
     portArtifactReaderFor?: (appHome: string) => PortArtifactReader
     reviewArtifacts?: ReviewArtifactSelection

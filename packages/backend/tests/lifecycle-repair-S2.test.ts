@@ -1,10 +1,10 @@
 // LOCKS: RFC-057 — S2 repair options (awaiting_human without open clarify_session).
 // 2 options × 3 cases = 6 tests.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 
 import {
@@ -92,6 +92,7 @@ describeEachProvider('RFC-057 — S2.reopen-session', (provider) => {
       actorUserId: null,
     })
     expect(res.outcome).toBe('success')
+    const { clarifyRounds } = tablesOf(h.db)
     const sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, sessId)).limit(1)
     )[0]!

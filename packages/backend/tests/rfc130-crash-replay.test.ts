@@ -7,6 +7,8 @@
 // canonical worktree and flip merge_state='merged' — WITHOUT re-running the agent — so
 // the frontier gate (which excludes non-'merged' done rows) then lets the task finish.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -15,7 +17,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createNodeIso,
   discardNodeIso,
@@ -116,7 +117,8 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
   })
 
   test('resume replays a pending-merge delta into canonical, then the task finishes', async () => {
-    await h.db.insert(agents).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, agents, {
       id: ulid(),
       name: 'a',
       description: '',
@@ -136,14 +138,14 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db.insert(workflows).values({
+    await insertOne(h.db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       id: taskId,
       name: 'fixture',
       workflowId,
@@ -174,7 +176,7 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
     await discardNodeIso(handle) // simulate the worktree being gone after a crash
 
     const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: nrId,
       taskId,
       nodeId: 'A',
@@ -184,9 +186,7 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
       isoNodeTree: nodeTrees[''],
       mergeState: 'pending-merge', // …but merge-back never ran
     })
-    await h.db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: nrId, portName: 'summary', content: 'ok' })
+    await insertOne(h.db, nodeRunOutputs, { nodeRunId: nrId, portName: 'summary', content: 'ok' })
 
     // canonical does NOT yet have the produced file (delta lives only in the pin).
     expect(existsSync(join(h.worktreePath, 'produced.txt'))).toBe(false)

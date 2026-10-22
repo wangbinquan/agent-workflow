@@ -20,9 +20,9 @@
 //   exclusive write-window lock: every admitted write drains before the
 //   platform is told the database is quiescent, and because advisory locks
 //   queue in order, no later write can overtake it.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedExecutionControl } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   affectedRows,
   databaseSessionFor,
@@ -42,7 +42,7 @@ const CONTROL_ID = 'global'
 /** Shared by every hosted write transaction; exclusive only while the window closes or reopens. */
 export const HOSTED_WRITE_WINDOW_LOCK = 'rfc370-hosted-database-write-window'
 
-type ControlRow = typeof hostedExecutionControl.$inferSelect
+type ControlRow = PersistenceTables['hostedExecutionControl']['$inferSelect']
 
 /** The platform fence an execution mutation carries. */
 export interface HostedExecutionLease {
@@ -87,17 +87,19 @@ export interface HostedExecutionWriteBarrier {
   /** Inside the caller's transaction, prove `lease` is still this instance's
    * unexpired active lease, and hold it until the transaction ends; throws
    * `HostedExecutionLeaseLostError` otherwise. */
-  assertHeld(tx: ProviderNeutralDatabase, lease: HostedExecutionLease): Promise<void>
+  assertHeld(tx: PersistenceDb, lease: HostedExecutionLease): Promise<void>
 }
 
-const readRow = async (db: ProviderNeutralDatabase): Promise<ControlRow | undefined> =>
-  (
+const readRow = async (db: PersistenceDb): Promise<ControlRow | undefined> => {
+  const { hostedExecutionControl } = tablesOf(db)
+  return (
     await db
       .select()
       .from(hostedExecutionControl)
       .where(eq(hostedExecutionControl.id, CONTROL_ID))
       .limit(1)
   )[0]
+}
 
 /**
  * Hold the control row for the rest of the caller's transaction and return it as
@@ -105,10 +107,11 @@ const readRow = async (db: ProviderNeutralDatabase): Promise<ControlRow | undefi
  * row), so a closing window and a holder can never deadlock.
  */
 export async function holdHostedExecutionControl(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
 ): Promise<ControlRow | undefined> {
   const engine = engineOf(tx)
   await engine.advisoryLockShared(tx, HOSTED_WRITE_WINDOW_LOCK)
+  const { hostedExecutionControl } = tablesOf(tx)
   await engine.holdAggregateRoot(tx, hostedExecutionControl, hostedExecutionControl.id, CONTROL_ID)
   return await readRow(tx)
 }
@@ -168,7 +171,7 @@ function assertProgress(row: ControlRow, record: HostedExecutionControlRecord): 
 }
 
 export function createDatabaseHostedExecutionControl(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly now?: () => number
 }): HostedExecutionControlStore & HostedExecutionWriteBarrier {
   const session = databaseSessionFor(input.db)
@@ -188,6 +191,7 @@ export function createDatabaseHostedExecutionControl(input: {
     }
     const { owner, leaseId, expiresAt } = record
     return await session.transaction(async (tx) => {
+      const { hostedExecutionControl } = tablesOf(tx)
       const result = await tx
         .update(hostedExecutionControl)
         .set({
@@ -207,7 +211,6 @@ export function createDatabaseHostedExecutionControl(input: {
             eq(hostedExecutionControl.leaseId, leaseId),
           ),
         )
-        .run()
       return affectedRows(result) === 1
     })
   }
@@ -221,6 +224,7 @@ export function createDatabaseHostedExecutionControl(input: {
       const movesWindow = window !== (observed?.migrationOperationId ?? null)
       // Same lock order as every holder: the window lock before the row.
       if (movesWindow) await engine.advisoryLock(tx, HOSTED_WRITE_WINDOW_LOCK)
+      const { hostedExecutionControl } = tablesOf(tx)
       await tx
         .insert(hostedExecutionControl)
         .values({
@@ -278,7 +282,7 @@ export function createDatabaseHostedExecutionControl(input: {
         throw new Error('hosted execution control write window changed concurrently')
       }
     },
-    async assertHeld(tx: ProviderNeutralDatabase, lease: HostedExecutionLease) {
+    async assertHeld(tx: PersistenceDb, lease: HostedExecutionLease) {
       const row = await holdHostedExecutionControl(tx)
       if (row === undefined) throw new HostedExecutionLeaseLostError('no lease recorded')
       if (row.epoch !== lease.epoch) throw new HostedExecutionLeaseLostError('epoch changed')

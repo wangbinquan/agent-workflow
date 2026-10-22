@@ -10,20 +10,21 @@
 //   3. Bookkeeping is idempotent (duplicate lifecycle notifications) and
 //      rebuildable from the DB after a restart.
 //   4. Abort rejects a queued waiter and deregisters it.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
 
-import { tasks, workflows } from '../src/db/schema'
 import { ChildTaskBudget } from '../src/services/execution/childBudget'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
-function budgetOf(db: ProviderNeutralDatabase, cap: number): ChildTaskBudget {
+function budgetOf(db: PersistenceDb, cap: number): ChildTaskBudget {
   return new ChildTaskBudget(db, () => cap)
 }
 
-const stubDb = null as unknown as ProviderNeutralDatabase // rebuildFromDb not used in pure tests
+const stubDb = null as unknown as PersistenceDb // rebuildFromDb not used in pure tests
 
 describe('RFC-243 §3.2 — grant rules', () => {
   test('under capacity grants immediately and bind converts hold → counted', async () => {
@@ -113,7 +114,8 @@ describeEachProvider('RFC-243 §3.2 — DB rebuild', (harness) => {
   test('rebuildFromDb seeds counted from pending/running child rows only', async () => {
     const db = harness.db
     const wfId = ulid()
-    await db.insert(workflows).values({ id: wfId, name: 'wf-budget', definition: '{}' })
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, { id: wfId, name: 'wf-budget', definition: '{}' })
     const base = {
       workflowId: wfId,
       workflowSnapshot: '{}',
@@ -124,12 +126,10 @@ describeEachProvider('RFC-243 §3.2 — DB rebuild', (harness) => {
       startedAt: Date.now(),
     }
     const parent = ulid()
-    await db
-      .insert(tasks)
-      .values({ id: parent, name: 'p', branch: 'b0', status: 'running', ...base })
+    await insertOne(db, tasks, { id: parent, name: 'p', branch: 'b0', status: 'running', ...base })
     const mk = async (status: string): Promise<string> => {
       const id = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id,
         name: `c-${status}`,
         branch: `b-${id.slice(-4)}`,

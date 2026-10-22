@@ -1,12 +1,13 @@
 // RFC-232 — owner projection batching + scheduled-list mapper parity.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
-import { scheduledTasks, tasks, users, workflows } from '../src/db/schema'
 import {
   listScheduledTaskItems,
   listScheduledTasks,
@@ -62,6 +63,7 @@ describeEachProvider('RFC-232 — scheduled-task owner list projection', (harnes
     }))
 
     for (let offset = 0; offset < total; offset += 100) {
+      const { users, scheduledTasks } = tablesOf(db)
       await db.insert(users).values(userRows.slice(offset, offset + 100))
       await db.insert(scheduledTasks).values(scheduleRows.slice(offset, offset + 100))
     }
@@ -75,7 +77,8 @@ describeEachProvider('RFC-232 — scheduled-task owner list projection', (harnes
   test('keeps canonical tolerant/redacting mapping and degrades missing owners', async () => {
     const db = harness.db
     const now = Date.now()
-    await db.insert(users).values({
+    const { users, scheduledTasks } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'owner-alice',
       username: 'alice',
       displayName: 'Alice',
@@ -141,7 +144,8 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
   test('keeps null and dangling owner ids stable while degrading identity to null', async () => {
     const db = harness.db
     const now = Date.now()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: 'workflow-task-owner-fallbacks',
       name: 'Owner fallback workflow',
       description: '',
@@ -193,10 +197,7 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
     ])
     if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = ON')
 
-    const rows = await taskListItemsProjection(
-      { db: db, owners: composeOwnerIdentityQueries(db) },
-      {},
-    )
+    const rows = await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {})
     expect(rows.find((row) => row.id === 'task-owner-null')).toMatchObject({
       ownerUserId: null,
       owner: null,

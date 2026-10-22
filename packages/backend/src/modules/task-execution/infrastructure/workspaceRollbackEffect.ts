@@ -2,11 +2,13 @@
 // 逻辑与 `sqliteTaskExecutionEffect.ts` 的 `linkWorkspaceRollbackTx` / 此前 PostgreSQL 侧的
 // `linkPostgresqlWorkspaceRollbackEffectTx` 逐字相同，这里是唯一的 async 版本。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { taskExecutionEffects, taskExecutionIntents } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { TaskExecutionError } from '../application/taskExecutionError'
 
 export type LinkWorkspaceRollbackEffectInput = Readonly<{
@@ -25,18 +27,20 @@ export type LinkWorkspaceRollbackEffectInput = Readonly<{
 export type LinkedWorkspaceRollbackEffect = Readonly<{ effectId: string; idempotent: boolean }>
 
 export async function linkWorkspaceRollbackEffect(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: LinkWorkspaceRollbackEffectInput,
 ): Promise<LinkedWorkspaceRollbackEffect> {
-  const intent = await tx
-    .select({
-      taskId: taskExecutionIntents.taskId,
-      kind: taskExecutionIntents.kind,
-      state: taskExecutionIntents.state,
-    })
-    .from(taskExecutionIntents)
-    .where(eq(taskExecutionIntents.id, input.intentId))
-    .get()
+  const { taskExecutionIntents, taskExecutionEffects } = tablesOf(tx)
+  const intent = await first(
+    tx
+      .select({
+        taskId: taskExecutionIntents.taskId,
+        kind: taskExecutionIntents.kind,
+        state: taskExecutionIntents.state,
+      })
+      .from(taskExecutionIntents)
+      .where(eq(taskExecutionIntents.id, input.intentId)),
+  )
   if (
     intent === undefined ||
     intent.taskId !== input.taskId ||
@@ -48,16 +52,17 @@ export async function linkWorkspaceRollbackEffect(
       `workspace rollback effect requires a pending gate continuation '${input.intentId}'`,
     )
   }
-  const existing = await tx
-    .select()
-    .from(taskExecutionEffects)
-    .where(
-      and(
-        eq(taskExecutionEffects.currentIntentId, input.intentId),
-        eq(taskExecutionEffects.kind, 'workspace-rollback'),
+  const existing = await first(
+    tx
+      .select()
+      .from(taskExecutionEffects)
+      .where(
+        and(
+          eq(taskExecutionEffects.currentIntentId, input.intentId),
+          eq(taskExecutionEffects.kind, 'workspace-rollback'),
+        ),
       ),
-    )
-    .get()
+  )
   if (existing !== undefined) {
     if (
       existing.taskId !== input.taskId ||
@@ -77,26 +82,23 @@ export async function linkWorkspaceRollbackEffect(
     return { effectId: existing.id, idempotent: true }
   }
   const effectId = ulid()
-  await tx
-    .insert(taskExecutionEffects)
-    .values({
-      id: effectId,
-      taskId: input.taskId,
-      originIntentId: input.intentId,
-      currentIntentId: input.intentId,
-      operationKey: input.operationKey,
-      executionLineageId: input.executionLineageId,
-      operationFamilyKey: input.operationFamilyKey,
-      operationGeneration: input.operationGeneration,
-      kind: 'workspace-rollback',
-      requestHash: input.requestHash,
-      slotPathJson: input.slotPathJson,
-      slotPathDigest: input.slotPathDigest,
-      state: 'open',
-      lastAttemptNo: 0,
-      preparedAt: input.now,
-      updatedAt: input.now,
-    })
-    .run()
+  await insertOne(tx, taskExecutionEffects, {
+    id: effectId,
+    taskId: input.taskId,
+    originIntentId: input.intentId,
+    currentIntentId: input.intentId,
+    operationKey: input.operationKey,
+    executionLineageId: input.executionLineageId,
+    operationFamilyKey: input.operationFamilyKey,
+    operationGeneration: input.operationGeneration,
+    kind: 'workspace-rollback',
+    requestHash: input.requestHash,
+    slotPathJson: input.slotPathJson,
+    slotPathDigest: input.slotPathDigest,
+    state: 'open',
+    lastAttemptNo: 0,
+    preparedAt: input.now,
+    updatedAt: input.now,
+  })
   return { effectId, idempotent: false }
 }

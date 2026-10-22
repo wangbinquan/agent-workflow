@@ -10,7 +10,7 @@ import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -22,7 +22,7 @@ import { ConflictError, ValidationError } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-170 F3 — file/restore composite-token OCC', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string

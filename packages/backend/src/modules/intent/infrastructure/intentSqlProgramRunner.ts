@@ -12,26 +12,13 @@
 // `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`，事务体因此可以 `await`，两侧语义相同。于是
 // `driveAsyncProgram` 一个驱动器就够了，`NotPromise<T>` 的强转随之消失。
 //
-// # `get` 为什么取 `all(query)[0]` 而不是 `db.get(query)`
-//
-// 这是两侧唯一的实现差异，取舍有硬判据（2026-09-07 实测）：
-//
-//   引擎        db.get(SQLWrapper)          db.all(SQLWrapper)[0]
-//   SQLite      ["u1","u1"]  ← 位置元组      {"id":"u1","username":"u1"}
-//   PostgreSQL  {…}                          {…}（同一个表达式：客户端的 get 就是 rawRows(...)[0]）
-//
-// Intent 程序消费的是**具名字段**的行（`sessionColumns` 这些都靠 `AS "alias"` 取名），所以只有
-// `all(query)[0]` 两侧都对：bun:sqlite 的原生 `get(SQLWrapper)` 回的是位置元组，别名全丢；而
-// `postgresqlDatabaseClient.ts` 的代理把 `all` / `get` 双双改写成 `rawRows(...)`，`get` 就是
-// `rawRows(...)[0]`——即与这里逐字同义。空集两侧都是 `undefined`，再由
-// `intentSqlProgram.ts` 的 `firstRow` 统一收成 `null`，因此「没查到」的语义两侧完全一致。
+// rawRows / rawFirst 使用对象模式，按程序提供的 contract codec 还原 int8 与布尔值；
+// 空集仍为 undefined，由 firstRow 收成 null。原生 drizzle 负责两侧 SQL 的编译。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { rawRows, rawFirst, rawExec, affectedRows } from '@/platform/persistence/queryHelpers'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { IntentContextResourceAuthorizationSession } from '@/modules/resource-catalog/public/participants'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { IntentContextResourceAuthorityPair } from '../application/ports/intentPersistence'
 
 import {
@@ -49,28 +36,20 @@ type IntentSqlDatabaseStatement = Exclude<
 /** Structural dependency satisfied by the RC transaction-bound session factory. */
 export interface IntentContextResourceAuthorizationFactoryDependency {
   inTransaction(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     pair: IntentContextResourceAuthorityPair,
   ): IntentContextResourceAuthorizationSession
 }
 
-function changes(result: unknown): number {
-  return (result as { readonly changes?: number }).changes ?? 0
-}
-
-async function execute(
-  db: ProviderNeutralDatabase,
-  statement: IntentSqlDatabaseStatement,
-): Promise<unknown> {
-  if (statement.kind === 'all') return await db.all(statement.query)
-  // 见头注释「`get` 为什么取 `all(query)[0]`」：具名字段 + 空集 undefined，两侧同义。
-  if (statement.kind === 'get') return (await db.all(statement.query))[0]
-  return changes(await db.run(statement.query))
+async function execute(db: PersistenceDb, statement: IntentSqlDatabaseStatement): Promise<unknown> {
+  if (statement.kind === 'all') return await rawRows(db, statement.query, statement.codecs)
+  if (statement.kind === 'get') return await rawFirst(db, statement.query, statement.codecs)
+  return affectedRows(await rawExec(db, statement.query))
 }
 
 /** Intent 程序驱动器。上下文授权指令在这里没有收件人，命中即是装配错误。 */
 export class PlainIntentSqlProgramRunner implements IntentSqlProgramRunner {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(readonly db: PersistenceDb) {}
 
   async read<T>(program: () => IntentSqlProgram<T>): Promise<T> {
     return await driveAsyncProgram(program(), async (statement) => {
@@ -100,7 +79,7 @@ export class PlainIntentSqlProgramRunner implements IntentSqlProgramRunner {
  */
 export class AuthorizedIntentSqlProgramRunner implements IntentSqlProgramRunner {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    readonly db: PersistenceDb,
     private readonly authorizationFactory: IntentContextResourceAuthorizationFactoryDependency,
   ) {}
 

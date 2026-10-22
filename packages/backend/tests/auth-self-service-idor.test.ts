@@ -31,14 +31,15 @@
 //
 // See design/test-guard-audit-2026-07-21 §1 (P0 list) / 逃逸机制③.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createPat } from './helpers/auth/patStore'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { oidcProviders } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -56,7 +57,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: Actor
   bob: Actor
@@ -107,7 +108,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
 
   const now = Date.now()
   const providerId = ulid()
-  await db.insert(oidcProviders).values({
+  const { oidcProviders } = tablesOf(db)
+  await insertOne(db, oidcProviders, {
     id: providerId,
     slug: 'idp',
     displayName: 'Test IdP',

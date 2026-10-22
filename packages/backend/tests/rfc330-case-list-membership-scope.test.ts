@@ -10,13 +10,14 @@
 // facets 与条目同口径。**红→绿对**：把 sqliteRuntimeStore.listCasesPage 的 membership 条件删掉，
 // 或让 adapter 重新对 shared 返回空页，本文件立刻红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { employeeCaseMembers, employeeCases, employeeContextRecords } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -31,11 +32,7 @@ interface Actor {
   token: string
 }
 
-async function mkUser(
-  db: ProviderNeutralDatabase,
-  username: string,
-  role: 'admin' | 'user',
-): Promise<Actor> {
+async function mkUser(db: PersistenceDb, username: string, role: 'admin' | 'user'): Promise<Actor> {
   const user = await createUser(db, {
     username,
     displayName: username,
@@ -47,12 +44,13 @@ async function mkUser(
 }
 
 async function seedCase(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string | null,
   state: 'active' | 'blocked' | 'terminal' = 'active',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(employeeCases).values({
+  const { employeeCases, employeeContextRecords } = tablesOf(db)
+  await insertOne(db, employeeCases, {
     id,
     name: `case-${id.slice(-6)}`,
     employeeId: 'employee-1',
@@ -71,7 +69,7 @@ async function seedCase(
     updatedAt: NOW,
   })
   // 列表查询 inner join 主上下文（`listCasesPage` 用它做全文过滤）：没有这一行案例根本不出现。
-  await db.insert(employeeContextRecords).values({
+  await insertOne(db, employeeContextRecords, {
     id: `context-${id}`,
     caseId: id,
     typeId: 'development',
@@ -87,14 +85,13 @@ async function seedCase(
 }
 
 async function seedMember(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   caseId: string,
   userId: string,
   role: 'collaborator' | 'observer',
 ): Promise<void> {
-  await db
-    .insert(employeeCaseMembers)
-    .values({ caseId, userId, role, addedBy: 'seed', addedAt: NOW })
+  const { employeeCaseMembers } = tablesOf(db)
+  await insertOne(db, employeeCaseMembers, { caseId, userId, role, addedBy: 'seed', addedAt: NOW })
 }
 
 interface CatalogPage {

@@ -8,6 +8,8 @@
 // 测试具名**，否则就是「一条可被客户端触达、却没人说明它行为的失败路径」上线。
 // 这条测试就是 `repo-group-invalid` 的具名处。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -15,8 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { type DbClient } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -49,21 +50,19 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
   })
 }
 
-async function seedRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
+async function seedRepo(db: PersistenceDb, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(cachedRepos)
-    .values({
-      id,
-      urlHash: `${slug}00000000`.slice(0, 8),
-      urlRedacted: `https://git.example/${slug}.git`,
-      localPath: join(tmpdir(), 'repos', slug),
-      defaultBranch: 'main',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
+    id,
+    urlHash: `${slug}00000000`.slice(0, 8),
+    urlRedacted: `https://git.example/${slug}.git`,
+    localPath: join(tmpdir(), 'repos', slug),
+    defaultBranch: 'main',
+    lastFetchedAt: now,
+    createdAt: now,
+  })
   return id
 }
 

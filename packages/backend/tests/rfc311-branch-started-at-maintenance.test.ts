@@ -11,6 +11,9 @@
 //      自愈规则尚未实现,所以没有任何兜底)。
 // 这里用真启动路径 + 真删除路径把两件事都锁住。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,7 +23,6 @@ import { ulid } from 'ulid'
 import type { StartTask } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
@@ -32,11 +34,13 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
 async function branchStartedAt(db: DbClient, id: string): Promise<number> {
-  const row = await db
-    .select({ v: tasks.branchStartedAt, started: tasks.startedAt })
-    .from(tasks)
-    .where(eq(tasks.id, id))
-    .get()
+  const { tasks } = tablesOf(db)
+  const row = await first(
+    db
+      .select({ v: tasks.branchStartedAt, started: tasks.startedAt })
+      .from(tasks)
+      .where(eq(tasks.id, id)),
+  )
   return row?.v ?? -1
 }
 
@@ -87,7 +91,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
   test('a child launched through launchTestTask lifts its ancestors, and deleting it converges them back', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    await db.insert(users).values({
+    const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
       displayName: 'u1',
@@ -96,11 +101,11 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       updatedAt: now,
     })
     const wf = ulid()
-    await db.insert(workflows).values({ id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
+    await insertOne(db, workflows, { id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
 
     const parentId = ulid()
     const parentStartedAt = now - 60_000
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: parentId,
       name: 'parent',
       workflowId: wf,
@@ -118,7 +123,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       branchStartedAt: parentStartedAt,
     })
     const callRun = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: callRun,
       taskId: parentId,
       nodeId: 'n1',
@@ -137,8 +142,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         { workflowId: wf, name: 'child', inputs: {} } as StartTask,
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           materializedSpace: spaceFor('placeholder', childRoot),
           // RFC-328: let the real scheduler release its durable owner before this
           // maintenance-path test overwrites terminal fixtures.
@@ -190,7 +194,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
   test('root_task_id is stamped through the real launch path and chains across depths', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    await db.insert(users).values({
+    const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
       displayName: 'u1',
@@ -199,7 +204,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       updatedAt: now,
     })
     const wf = ulid()
-    await db.insert(workflows).values({ id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
+    await insertOne(db, workflows, { id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
 
     const rootDir = mkdtempSync(join(tmpdir(), 'aw-rfc311-root-'))
     try {
@@ -207,8 +212,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const rootId = ulid()
       const root = await launchTestTask({ workflowId: wf, name: 'root', inputs: {} } as StartTask, {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
         materializedSpace: spaceFor(rootId, rootDir),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
@@ -222,7 +226,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       // RFC-359 W8-A：调用行必须预留它要铸的那个子任务 id，否则铸行准入门直接拒。
       const runOf = async (taskId: string, childTaskId: string): Promise<string> => {
         const id = ulid()
-        await db.insert(nodeRuns).values({
+        await insertOne(db, nodeRuns, {
           id,
           taskId,
           nodeId: 'n1',
@@ -239,8 +243,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         { workflowId: wf, name: 'child', inputs: {} } as StartTask,
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
           materializedSpace: spaceFor(childId, rootDir),
           callLaunch: {
@@ -262,8 +265,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         { workflowId: wf, name: 'grandchild', inputs: {} } as StartTask,
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
           materializedSpace: spaceFor(grandchildId, rootDir),
           callLaunch: {
@@ -288,6 +290,7 @@ async function rootTaskIdOf(
   db: ReturnType<typeof createInMemoryDb>,
   id: string,
 ): Promise<string | null> {
+  const { tasks } = tablesOf(db)
   const row = await db.select({ rootTaskId: tasks.rootTaskId }).from(tasks).where(eq(tasks.id, id))
   return row[0]?.rootTaskId ?? null
 }

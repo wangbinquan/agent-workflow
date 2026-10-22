@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '../../src/auth/secretBox'
 import type { Actor } from '../../src/auth/actor'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../../src/modules/code-capability/composition/capabilityTemplateOperations'
@@ -29,7 +29,7 @@ type ExportParameters = Parameters<typeof exportResourcePackageFromReadPort>
  * 必须说清「这条装配代表谁」：给 `actor` 就认它，多身份用例自带 `authorityResolver`。
  */
 export function composeSqliteResourcePackageCatalogForTest(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly box: SecretBox
   readonly actor?: Actor
@@ -66,7 +66,7 @@ export function composeSqliteResourcePackageCatalogForTest(input: {
 
 /** Test-only SQLite binding for the provider-neutral package closure. */
 export function walkExportClosure(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ClosureParameters[1],
   root: ClosureParameters[2],
 ): ReturnType<typeof walkExportClosureFromReadPort> {
@@ -75,7 +75,7 @@ export function walkExportClosure(
 
 /** Test-only SQLite binding for provider-neutral package preview. */
 export function buildPackagePreview(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: PreviewParameters[1],
   pkg: PreviewParameters[2],
   options: PreviewParameters[3],
@@ -85,7 +85,7 @@ export function buildPackagePreview(
 
 /** Test-only SQLite/filesystem binding for provider-neutral package export. */
 export function exportResourcePackage(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ExportParameters[2],
   root: ExportParameters[3],
   options: ExportParameters[4] & Readonly<{ appHome: string }>,

@@ -1,4 +1,5 @@
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 // RFC-311 T19 — 终态任务树归档出库(proposal §5 C1,用户拍板「归档到归档目录、
@@ -29,18 +30,9 @@ import { count, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import * as schema from '../src/db/schema'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { cascadeClosure, cascadeEdges, closureOverEdges } from './architecture/cascadeClosure'
-import {
-  nodeRunEvents,
-  nodeRuns,
-  taskArchiveAudit,
-  taskExecutionMaintenanceClaims,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
 // RFC-359 W8-A：归档管线合一后，级联对账的两张清单跟着**活着的那份实现**走
 // （`services/taskArchive.ts` 的同名导出已无任何生产引用，等 services/** 那一刀一起退役）。
 import {
@@ -54,7 +46,7 @@ const TOKEN = 'a'.repeat(64)
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 interface Dirs {
   archiveDir: string
@@ -74,7 +66,8 @@ function tmpDirs(): Dirs {
 }
 
 async function seedBase(db: Db): Promise<void> {
-  await db.insert(users).values({
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -82,7 +75,7 @@ async function seedBase(db: Db): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 interface TaskSeed {
@@ -97,7 +90,8 @@ async function addTask(
   seed: TaskSeed,
   lineage?: { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -117,7 +111,7 @@ async function addTask(
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
     ...lineage,
   })
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -152,7 +146,8 @@ function createProviderTaskSeed() {
 }
 
 async function addRunWithEvents(db: Db, taskId: string, runId: string, events: number) {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'n1',
@@ -161,7 +156,7 @@ async function addRunWithEvents(db: Db, taskId: string, runId: string, events: n
     finishedAt: NOW - 199 * DAY,
   })
   for (let i = 0; i < events; i += 1) {
-    await db.insert(nodeRunEvents).values({
+    await insertOne(db, nodeRunEvents, {
       nodeRunId: runId,
       ts: NOW - 200 * DAY + i,
       kind: 'text',
@@ -170,7 +165,8 @@ async function addRunWithEvents(db: Db, taskId: string, runId: string, events: n
   }
 }
 
-async function taskCount(db: ProviderNeutralDatabase): Promise<number> {
+async function taskCount(db: PersistenceDb): Promise<number> {
+  const { tasks } = tablesOf(db)
   const r = await db.select({ n: count() }).from(tasks)
   return r[0]?.n ?? 0
 }
@@ -248,7 +244,9 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     })
     await addRunWithEvents(db, 'root', 'run-root', 3)
     await addRunWithEvents(db, 'child', 'run-child', 2)
-    await db.insert(schema.reviewNodeReviewers).values({
+    const { reviewNodeReviewers, nodeRuns, nodeRunEvents, taskExecutionMaintenanceClaims } =
+      tablesOf(db)
+    await insertOne(db, reviewNodeReviewers, {
       taskId: 'root',
       reviewNodeId: 'review-node',
       reviewerUserId: 'u1',
@@ -316,8 +314,8 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     const durableClaim = (
       await db
         .select()
-        .from(schema.taskExecutionMaintenanceClaims)
-        .where(eq(schema.taskExecutionMaintenanceClaims.id, manifest.terminalMaintenance.claim.id))
+        .from(taskExecutionMaintenanceClaims)
+        .where(eq(taskExecutionMaintenanceClaims.id, manifest.terminalMaintenance.claim.id))
     )[0]
     expect(durableClaim?.state).toBe('completed')
 
@@ -382,6 +380,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     expect(result.skipped).toBe(0)
     // 有界:剩下的那棵留给下一拍。
     expect(await taskCount(db)).toBe(1)
+    const { tasks } = tablesOf(db)
     const rest = await db.select({ id: tasks.id }).from(tasks)
     expect(rest).toHaveLength(1)
     expect(
@@ -393,7 +392,8 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
 // design §7.1 的第二半:「另有 admin API + 设置页维护区『按条件批量归档』手动入口
 // (审计行记录操作者与数量)」。审计行是这条路径唯一的事后证据——归档把任务行删了,
 // 之后除了 task_archive_audit,库里再没有任何地方能回答「谁在什么时候删了什么」。
-async function auditRows(db: ProviderNeutralDatabase) {
+async function auditRows(db: PersistenceDb) {
+  const { taskArchiveAudit } = tablesOf(db)
   return db.select().from(taskArchiveAudit)
 }
 
@@ -414,7 +414,7 @@ describeEachProviderHttpApplication(
      */
     async function appWith(
       config?: Readonly<Record<string, unknown>>,
-    ): Promise<{ db: ProviderNeutralDatabase; app: Hono; home: string }> {
+    ): Promise<{ db: PersistenceDb; app: Hono; home: string }> {
       const opened = await scope.open(config === undefined ? undefined : { config })
       return { db: scope.harness.db, app: opened.app, home: opened.appHome }
     }
@@ -558,6 +558,7 @@ describeEachProvider('ordinary sweep audit persistence', (harness) => {
     expect(audit[0]!.source).toBe('sweep')
     expect(audit[0]!.actorUserId).toBeNull()
     expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
     expect(
       await db
         .select({
@@ -585,7 +586,7 @@ describe('RFC-311 T19 / RFC-317 R8 — 级联闭包与导出清单的对账', ()
   const ROOTS = ['tasks', 'node_runs'] as const
 
   test('每一张随 tasks/node_runs **传递**级联删除的表,要么被归档,要么显式豁免', () => {
-    const reachable = cascadeClosure(schema, ROOTS)
+    const reachable = cascadeClosure(tablesOf(schemaFixtureDb()), ROOTS)
     for (const root of ROOTS) reachable.delete(root)
 
     // 语料非空:闭包算出 0 张表说明 schema 反射或 roots 名字变了,本用例此刻零预言力。
@@ -605,10 +606,10 @@ describe('RFC-311 T19 / RFC-317 R8 — 级联闭包与导出清单的对账', ()
     // 这条是上面那条的**预言力证明**:它锁死「闭包 ⊋ 一跳」,并点名当初漏掉的那张表。
     // 如果哪天有人把 cascadeClosure 改回一跳,这里会红,而不是让守卫悄悄退化。
     const oneHop = new Set<string>()
-    for (const edge of cascadeEdges(schema)) {
+    for (const edge of cascadeEdges(tablesOf(schemaFixtureDb()))) {
       if ((ROOTS as readonly string[]).includes(edge.parent)) oneHop.add(edge.child)
     }
-    const closure = cascadeClosure(schema, ROOTS)
+    const closure = cascadeClosure(tablesOf(schemaFixtureDb()), ROOTS)
     for (const root of ROOTS) closure.delete(root)
 
     const onlyInClosure = [...closure].filter((name) => !oneHop.has(name)).sort()

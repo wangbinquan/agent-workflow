@@ -32,6 +32,8 @@
 // 也就是说不变量不但还在，而且前移了一道门。判据因此锁「**被哪一道门拦下**」这件事本身
 // （逐例写死实测到的码），而不是锁某一层的内部码——后者会把「拦得更早」误判成回归。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -41,7 +43,6 @@ import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { agents, mcps, users } from '@/db/schema'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -127,7 +128,8 @@ afterEach(() => {
 describeEachProvider('RFC-359 —— 资源包引用解析的 fail-closed（统一引擎）', (harness) => {
   async function fixture() {
     const db = harness.db
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: OWNER,
       username: OWNER,
       displayName: 'Refs Owner',
@@ -193,6 +195,7 @@ describeEachProvider('RFC-359 —— 资源包引用解析的 fail-closed（统�
     )
     // preview 期的环境前提检查先拦下：连 apply 都不会开始。
     expect(error.code).toBe('package-builtin-missing')
+    const { agents } = tablesOf(f.db)
     expect(await f.db.select().from(agents)).toEqual([])
   })
 
@@ -221,6 +224,7 @@ describeEachProvider('RFC-359 —— 资源包引用解析的 fail-closed（统�
         name,
         code: name === ' ' ? 'package-invalid' : 'package-builtin-missing',
       })
+      const { agents } = tablesOf(f.db)
       expect(await f.db.select().from(agents)).toEqual([])
     }
   })
@@ -243,6 +247,7 @@ describeEachProvider('RFC-359 —— 资源包引用解析的 fail-closed（统�
     )
     // `agent.skills` 的 wire 形态由 bundle schema 自己收窄，`builtin:` 在词法层就不合法。
     expect(error.code).toBe('package-invalid')
+    const { agents } = tablesOf(f.db)
     expect(await f.db.select().from(agents)).toEqual([])
   })
 
@@ -270,6 +275,7 @@ describeEachProvider('RFC-359 —— 资源包引用解析的 fail-closed（统�
     )
     // 同理：`dependsOn` 的槽位声明了它接受什么类型，类型不符在 parse 期就被拒。
     expect(error.code).toBe('package-invalid')
+    const { agents, mcps } = tablesOf(f.db)
     expect(await f.db.select().from(agents)).toEqual([])
     expect(await f.db.select().from(mcps)).toEqual([])
   })

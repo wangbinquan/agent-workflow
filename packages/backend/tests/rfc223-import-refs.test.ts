@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import ts from 'typescript'
 import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -7,9 +9,8 @@ import type { ImportRefSelection, WorkflowDefinition } from '@agent-workflow/sha
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, resourceGrants, skills, users, workflows } from '../src/db/schema'
 import {
   resolveAgentImportRefs,
   resolveImportRefs,
@@ -98,7 +99,8 @@ function assertImportRefTransactionAwaiting(source: string): void {
           ts.isIdentifier(node.expression) && asyncDelegates.has(node.expression.text)
         const queryTerminal =
           ts.isPropertyAccessExpression(node.expression) &&
-          ['all', 'get', 'run', 'execute', 'values'].includes(node.expression.name.text) &&
+          (['all', 'get', 'run', 'execute', 'values'].includes(node.expression.name.text) ||
+            ts.isAwaitExpression(node.parent)) &&
           chain.some((step) => step.startsWith('select/'))
         if (directDelegate || queryTerminal) {
           let scope: ts.Node | undefined = node.parent
@@ -124,7 +126,7 @@ function assertImportRefTransactionAwaiting(source: string): void {
     'assertSelectedIdsVisibleInTx:grantedIdsInTx(tx,actor,type)',
     'buildCandidateSnapshotsInTx:listAclResourceIdentityRowsByNames(tx,type,names)',
     'buildCandidateSnapshotsInTx:grantedIdsInTx(tx,actor,type)',
-    'buildCandidateSnapshotsInTx:tx.select/1.from/1.where/1.all/0',
+    'buildCandidateSnapshotsInTx:tx.select/1.from/1.where/1',
     'grantedIdsInTx:listGrantedResourceIds(tx,actor,type)',
   ])
 }
@@ -136,8 +138,9 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 'user') {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -149,13 +152,14 @@ async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' |
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   ownerUserId: string,
   name = 'shared',
   visibility: 'public' | 'private' = 'public',
 ) {
-  await db.insert(agents).values({ id, name, ownerUserId, visibility })
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, { id, name, ownerUserId, visibility })
 }
 
 function portableWorkflowYaml(input?: { id?: string; name?: string; agentName?: string }): string {
@@ -179,7 +183,7 @@ function portableWorkflowYaml(input?: { id?: string; name?: string; agentName?: 
 }
 
 describeEachProvider('RFC-223 AC10 portable import reference resolution', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let viewer: Actor
 
   beforeEach(async () => {
@@ -253,7 +257,8 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
     )
     assertImportRefTransactionAwaiting(source)
     expect(syncCore).not.toContain('filterVisibleRows')
-    expect(syncCore).toContain('.all()')
+    expect(syncCore).toMatch(/await tx\s*\.select\(/)
+    expect(syncCore).not.toContain('.all()')
   })
 
   test('second submit binds the selected id but hides a now-invisible selection as unresolved', async () => {
@@ -267,6 +272,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
     const resolved = await resolveImportRefs(db, viewer, [selection.selector], [selection])
     expect(resolved.bySelector.get(JSON.stringify(['agent', 'shared', null]))).toBe('agent-b')
 
+    const { agents } = tablesOf(db)
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, 'agent-b'))
     await expect(
       resolveImportRefs(db, viewer, [selection.selector], [selection]),
@@ -286,6 +292,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       resourceId: 'agent-a',
       expectedAclRevision: 0,
     }
+    const { agents } = tablesOf(db)
     await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
 
     await expect(
@@ -313,7 +320,8 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       details: { unresolved: [{ type: 'agent', name: 'private-only' }] },
     })
 
-    await db.insert(resourceGrants).values({
+    const { resourceGrants } = tablesOf(db)
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'private-a',
       userId: 'viewer',
@@ -331,13 +339,14 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
   })
 
   test('agent.md managed selectors resolve by owner hint; project skills remain portable names', async () => {
-    await db.insert(skills).values({
+    const { skills } = tablesOf(db)
+    await insertOne(db, skills, {
       id: 'skill-a',
       name: 'lint',
       ownerUserId: 'owner-a',
       visibility: 'public',
     })
-    await db.insert(skills).values({
+    await insertOne(db, skills, {
       id: 'skill-b',
       name: 'lint',
       ownerUserId: 'owner-b',
@@ -396,6 +405,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       { kind: 'actor', actor: viewer },
     )
     expect(result.outcome).toBe('created')
+    const { workflows } = tablesOf(db)
     const rows = await db.select().from(workflows)
     const node = JSON.parse(rows[0]!.definition).nodes[0] as Record<string, unknown>
     expect(node.agentId).toBe('agent-b')
@@ -439,6 +449,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       { kind: 'actor', actor: viewer },
     )
     expect(result.outcome).toBe('created')
+    const { workflows } = tablesOf(db)
     const row = (await db.select().from(workflows).where(eq(workflows.name, 'portable-owner')))[0]
     const importedNode = JSON.parse(row!.definition).nodes[0] as Record<string, unknown>
     expect(importedNode.agentId).toBe('agent-b')
@@ -466,6 +477,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         { kind: 'actor', actor: viewer },
         {
           afterResolve: async () => {
+            const { agents } = tablesOf(db)
             await db
               .update(agents)
               .set({ visibility: 'private', aclRevision: 1 })
@@ -478,6 +490,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       status: 422,
       details: { unresolved: [{ type: 'agent', name: 'shared' }] },
     })
+    const { workflows } = tablesOf(db)
     expect(await db.select().from(workflows)).toHaveLength(0)
   })
 
@@ -491,6 +504,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         { kind: 'actor', actor: viewer },
         {
           afterResolve: async () => {
+            const { agents } = tablesOf(db)
             await db
               .update(agents)
               .set({ ownerUserId: 'owner-b', aclRevision: 1 })
@@ -518,6 +532,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         ],
       },
     })
+    const { workflows } = tablesOf(db)
     expect(await db.select().from(workflows)).toHaveLength(0)
   })
 
@@ -531,6 +546,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         { kind: 'actor', actor: viewer },
         {
           afterResolve: async () => {
+            const { agents } = tablesOf(db)
             await db.update(agents).set({ name: 'renamed' }).where(eq(agents.id, 'agent-a'))
           },
         },
@@ -547,12 +563,14 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         ],
       },
     })
+    const { workflows } = tablesOf(db)
     expect(await db.select().from(workflows)).toHaveLength(0)
   })
 
   test('create import rejects private-grant revocation as unresolved and writes nothing', async () => {
     await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
-    await db.insert(resourceGrants).values({
+    const { resourceGrants, agents, workflows } = tablesOf(db)
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'agent-a',
       userId: 'viewer',
@@ -606,12 +624,14 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         ],
       },
     })
+    const { workflows } = tablesOf(db)
     expect(await db.select().from(workflows)).toHaveLength(0)
   })
 
   test('overwrite import rechecks grant visibility in its CAS transaction and preserves the target', async () => {
     await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
-    await db.insert(resourceGrants).values({
+    const { resourceGrants, workflows, agents } = tablesOf(db)
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'agent-a',
       userId: 'viewer',
@@ -624,7 +644,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       nodes: [],
       edges: [],
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: 'workflow-target',
       name: 'before-import',
       description: 'untouched',
@@ -672,7 +692,8 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
 
   test('stale-version logical-same overwrite cannot bypass the final reference guard', async () => {
     await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
-    await db.insert(resourceGrants).values({
+    const { resourceGrants, workflows, agents } = tablesOf(db)
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'agent-a',
       userId: 'viewer',
@@ -692,7 +713,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       ],
       edges: [],
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: 'logical-same-target',
       name: 'logical-same',
       description: '',

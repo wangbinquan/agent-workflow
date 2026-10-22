@@ -3,13 +3,14 @@
 // 此前只有 SQLite 同步 store（`sqliteTerminalMaintenance.ts` 的 `assertClaimTx` / `transitionTx`，
 // dbTxSync）带事务内参与者；PostgreSQL 适配器只有整笔 `transition`，没有能挂进调用方事务的原子——
 // 任何「先验认领、再改业务行、再推进认领」的原子（删除恢复、归档……）在 PG 上都拼不出来。
-// 这里按 `DatabaseTransaction` 写一次：同一张状态转移表、同一个 revision / memberSetDigest 围栏。
+// 这里按 `PersistenceTx` 写一次：同一张状态转移表、同一个 revision / memberSetDigest 围栏。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } from '@/db/schema'
-import { affectedRows, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { affectedRows } from '@/platform/persistence/databaseTransaction'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   assertTerminalMaintenanceClaim,
@@ -25,19 +26,21 @@ import {
  * The matching maintenance admission reads recovery reservations in that same
  * transaction, so neither operation can slip between the other's read and write. */
 export async function assertTaskOutsideTerminalMaintenance(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<void> {
-  const maintenance = await db
-    .select({ claimId: taskExecutionMaintenanceMembers.claimId })
-    .from(taskExecutionMaintenanceMembers)
-    .where(
-      and(
-        eq(taskExecutionMaintenanceMembers.taskId, taskId),
-        isNull(taskExecutionMaintenanceMembers.releasedAt),
+  const { taskExecutionMaintenanceMembers } = tablesOf(db)
+  const maintenance = await first(
+    db
+      .select({ claimId: taskExecutionMaintenanceMembers.claimId })
+      .from(taskExecutionMaintenanceMembers)
+      .where(
+        and(
+          eq(taskExecutionMaintenanceMembers.taskId, taskId),
+          isNull(taskExecutionMaintenanceMembers.releasedAt),
+        ),
       ),
-    )
-    .get()
+  )
   if (maintenance !== undefined) {
     throw new TaskExecutionError(
       'task-terminal-maintenance-conflict',
@@ -49,13 +52,14 @@ export async function assertTaskOutsideTerminalMaintenance(
 
 /** 认领行必须仍是这把 capability 描述的那一行，且处在调用方预期的状态。 */
 export async function assertTerminalMaintenanceClaimTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     readonly claim: TerminalMaintenanceClaim
     readonly expectedState: TerminalMaintenanceState
   },
 ): Promise<void> {
   assertTerminalMaintenanceClaim(input.claim)
+  const { taskExecutionMaintenanceClaims } = tablesOf(tx)
   const row = (
     await tx
       .select()
@@ -79,7 +83,7 @@ export async function assertTerminalMaintenanceClaimTx(
 
 /** 按转移表推进认领；`completed` 或显式 `releaseMembers` 时释放成员行的活动占位。 */
 export async function transitionTerminalMaintenanceClaimTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     readonly claim: TerminalMaintenanceClaim
     readonly to: TerminalMaintenanceState
@@ -87,6 +91,7 @@ export async function transitionTerminalMaintenanceClaimTx(
     readonly releaseMembers?: boolean
   },
 ): Promise<TerminalMaintenanceClaim> {
+  const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(tx)
   const row = (
     await tx
       .select({ state: taskExecutionMaintenanceClaims.state })
@@ -118,7 +123,6 @@ export async function transitionTerminalMaintenanceClaimTx(
         eq(taskExecutionMaintenanceClaims.state, row.state),
       ),
     )
-    .run()
   if (affectedRows(updated) !== 1) {
     throw new TaskExecutionError(
       'task-terminal-maintenance-conflict',
@@ -135,7 +139,6 @@ export async function transitionTerminalMaintenanceClaimTx(
           isNull(taskExecutionMaintenanceMembers.releasedAt),
         ),
       )
-      .run()
   }
   return createTerminalMaintenanceClaim({
     claimId: input.claim.claimId,

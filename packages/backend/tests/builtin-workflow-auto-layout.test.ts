@@ -5,6 +5,8 @@
 // gets the shared deterministic layout; ordinary user workflow geometry stays
 // byte-for-byte untouched.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import {
@@ -19,7 +21,6 @@ import {
   synthesizeReviewedDigitalEmployeeHostSnapshot,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { describeEachProvider } from './helpers/eachProvider'
-import { workflows } from '@/db/schema'
 import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
 import { buildAgentHostSnapshot } from '@/services/agentLaunch'
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
@@ -188,7 +189,8 @@ describeEachProvider('built-in workflow automatic layout', (harness) => {
       ...TEST_FUSION_PARTICIPANTS,
     })
     await seedFusionResources(fusion)
-    const first = (await db.select().from(workflows).where(eq(workflows.builtin, true)).get())!
+    const { workflows } = tablesOf(db)
+    const first = (await firstRow(db.select().from(workflows).where(eq(workflows.builtin, true))))!
     const firstDefinition = WorkflowDefinitionSchema.parse(JSON.parse(first.definition))
     expectNoNodeOverlap(firstDefinition)
 
@@ -200,16 +202,17 @@ describeEachProvider('built-in workflow automatic layout', (harness) => {
       .update(workflows)
       .set({ definition: JSON.stringify(legacyDefinition) })
       .where(eq(workflows.id, first.id))
-      .run()
 
     await seedFusionResources(fusion)
-    const repaired = (await db.select().from(workflows).where(eq(workflows.id, first.id)).get())!
+    const repaired = (await firstRow(
+      db.select().from(workflows).where(eq(workflows.id, first.id)),
+    ))!
     expect(repaired.version).toBe(first.version + 1)
     expectNoNodeOverlap(WorkflowDefinitionSchema.parse(JSON.parse(repaired.definition)))
 
     await seedFusionResources(fusion)
     expect(
-      (await db.select().from(workflows).where(eq(workflows.id, first.id)).get())!.version,
+      (await firstRow(db.select().from(workflows).where(eq(workflows.id, first.id))))!.version,
     ).toBe(repaired.version)
   })
 })

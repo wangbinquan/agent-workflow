@@ -27,13 +27,14 @@
 // 删掉会直接编译失败（必填字段缺失），这正是「让没装配在类型层不可表达」的落点。
 // 计数面的那一半由 `tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts` 的账本兜。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCollaborationCommandContext,
   requireReviewTaskAccess,
@@ -48,9 +49,10 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 /** 只用于「原样透传」的身份判据：`reviewNodeReviewerDependencies` 只搬运它、不调用它。 */
 const READ_MODELS_MARKER = Object.freeze({}) as unknown as TaskExecutionReadModels
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_t19b_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -69,10 +71,11 @@ function actorFor(userId: string): Actor {
   })
 }
 
-async function seedTask(db: ProviderNeutralDatabase, owner: string): Promise<string> {
+async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
   const id = `t_t19b_${ulid()}`
   const workflowId = `wf_t19b_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -80,7 +83,7 @@ async function seedTask(db: ProviderNeutralDatabase, owner: string): Promise<str
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -104,7 +107,8 @@ describeEachProvider('RFC-359 W5-T19b —— 协作上下文必带活的评审�
     const collaborator = await seedUser(db)
     const stranger = await seedUser(db)
     const taskId = await seedTask(db, owner)
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId,
       userId: collaborator,
       role: 'collaborator',

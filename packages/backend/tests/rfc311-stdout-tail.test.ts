@@ -12,14 +12,15 @@
 //   4. **读取有界**：尾巴被 DB 填满时根本不读归档（归档严格更旧）。第 4 条是
 //      "只省网络不省内存"与"真有界"的分界，也是这次改动的要点。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import {
   nodeRunStdoutProjection,
   STDOUT_OMITTED_MARKER,
@@ -28,8 +29,9 @@ import {
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
-async function seed(db: ProviderNeutralDatabase, payloads: string[]): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, payloads: string[]): Promise<void> {
+  const { users, workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -37,8 +39,8 @@ async function seed(db: ProviderNeutralDatabase, payloads: string[]): Promise<vo
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
-  await db.insert(tasks).values({
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, tasks, {
     id: 't1',
     name: 't1',
     workflowId: 'wf1',
@@ -62,7 +64,7 @@ async function seed(db: ProviderNeutralDatabase, payloads: string[]): Promise<vo
     branchStartedAt: 1,
     rootTaskId: 't1',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'nr1',
     taskId: 't1',
     nodeId: 'n1',
@@ -72,7 +74,7 @@ async function seed(db: ProviderNeutralDatabase, payloads: string[]): Promise<vo
   })
   let id = 1
   for (const payload of payloads) {
-    await db.insert(nodeRunEvents).values({
+    await insertOne(db, nodeRunEvents, {
       id: id++,
       nodeRunId: 'nr1',
       ts: id,
@@ -95,7 +97,8 @@ describeEachProvider('RFC-311 T13 — stdout 保尾且读取有界', (harness) =
   test('stderr 仍然被剔除（那条通道在 Events 页）', async () => {
     const db = harness.db
     await seed(db, ['keep me'])
-    await db.insert(nodeRunEvents).values({
+    const { nodeRunEvents } = tablesOf(db)
+    await insertOne(db, nodeRunEvents, {
       id: 99,
       nodeRunId: 'nr1',
       ts: 99,

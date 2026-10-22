@@ -1,4 +1,5 @@
 // RFC-387: validate the persisted preparation attempt, atomically admit, then drive in the background.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   REPO_PREP_NODE_ID,
@@ -8,8 +9,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
@@ -26,7 +26,7 @@ const RETRYABLE_TASK_STATUSES = ['failed', 'canceled', 'interrupted'] as const
 const RETRYABLE_PREP_STATUSES = ['failed', 'interrupted'] as const
 
 type TaskRow = Pick<
-  typeof tasks.$inferSelect,
+  PersistenceTables['tasks']['$inferSelect'],
   | 'id'
   | 'name'
   | 'workflowId'
@@ -51,10 +51,10 @@ type TaskRow = Pick<
   | 'workspacePrunedAt'
   | 'sourceTerminationFence'
 >
-type PrepRow = Pick<typeof nodeRuns.$inferSelect, 'id' | 'retryIndex' | 'status'>
+type PrepRow = Pick<PersistenceTables['nodeRuns']['$inferSelect'], 'id' | 'retryIndex' | 'status'>
 
 export interface RepositoryPreparationRetryDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly coordinator: TaskDriveCoordinator
   readonly isTaskActive: (taskId: string) => boolean
   readonly awaitTaskSettled: (taskId: string) => Promise<void>
@@ -119,6 +119,7 @@ async function loadRetrySnapshot(
   dependencies: RepositoryPreparationRetryDependencies,
   taskId: string,
 ): Promise<{ readonly task: TaskRow; readonly prep: PrepRow }> {
+  const { tasks, nodeRuns } = tablesOf(dependencies.db)
   const rows = await dependencies.db
     .select({
       id: tasks.id,
@@ -222,6 +223,7 @@ async function admitRetry(
   const intentId = nextId()
   const committed = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     await assertTaskOwnerlessTx(tx, snapshot.task.id)
+    const { tasks } = tablesOf(tx)
     const admittedRows = await tx
       .update(tasks)
       .set({

@@ -8,7 +8,7 @@
 import type { OverviewResponse } from '@agent-workflow/shared'
 
 import type { Actor } from '../../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeIdentityAccess,
   type IdentityAccessRuntime,
@@ -34,7 +34,7 @@ function unusedCapability(): never {
 
 /** Construct once before HTTP timing; each request still reads the current database. */
 export function createProductionOverviewQuery(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   identityAccess: IdentityAccessRuntime,
 ): SystemOverviewQuery {
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
@@ -62,10 +62,7 @@ export function createProductionOverviewQuery(
   })
 }
 
-export function runProductionOverview(
-  db: ProviderNeutralDatabase,
-  actor: Actor,
-): Promise<OverviewResponse> {
+export function runProductionOverview(db: PersistenceDb, actor: Actor): Promise<OverviewResponse> {
   const identityAccess = composeIdentityAccess(db)
   const context = identityAccess.contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },

@@ -1,11 +1,11 @@
 // RFC-359 W4-D3 —— resource-catalog 自有 ACL 类型的读端口：一份实现，两个 provider 共用。
 // 快照读在同一个目录写事务原语里（SERIALIZABLE：identity / grants / users 三张表一致），owner / name 预检直接读。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, UserPublic } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ResourceCatalogAclIdentityReadPort,
   ResourceCatalogAclReadPort,
@@ -18,16 +18,19 @@ import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 export type OwnedAclResourceType = ResourceCatalogOwnedAclType
 
-export function isOwnedAclResourceType(type: AclResourceType): type is OwnedAclResourceType {
-  return type in ACL_TABLES
+export function isOwnedAclResourceType(
+  db: object,
+  type: AclResourceType,
+): type is OwnedAclResourceType {
+  return type in ACL_TABLES(db)
 }
 
 /** 非目录自有的类型（development_adapter / employee_*）由各自 owner 的 identity persistence 承担，这里不认。 */
-export function ownedAclTable(type: AclResourceType) {
-  if (!isOwnedAclResourceType(type)) {
+export function ownedAclTable(db: object, type: AclResourceType) {
+  if (!isOwnedAclResourceType(db, type)) {
     throw new Error(`ACL identity persistence is required for ${type}`)
   }
-  return ACL_TABLES[type]
+  return ACL_TABLES(db)[type]
 }
 
 export interface AclResourceIdentitySnapshot extends AclRow {
@@ -36,12 +39,12 @@ export interface AclResourceIdentitySnapshot extends AclRow {
 }
 
 export async function findOwnedAclResourceIdsByName(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   ownerUserId: string,
   name: string,
 ): Promise<string[]> {
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   const rows = await db
     .select({ id: table.id })
     .from(table)
@@ -50,12 +53,12 @@ export async function findOwnedAclResourceIdsByName(
 }
 
 export async function loadAclResourceNamesByIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   ids: readonly string[],
 ): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map()
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   const rows = await db
     .select({ id: table.id, name: table.name })
     .from(table)
@@ -64,11 +67,11 @@ export async function loadAclResourceNamesByIds(
 }
 
 export async function getAclResourceOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   id: string,
 ): Promise<string | null | undefined> {
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   const rows = await db
     .select({ ownerUserId: table.ownerUserId })
     .from(table)
@@ -78,11 +81,11 @@ export async function getAclResourceOwner(
 }
 
 export async function listOwnedAclResourceNames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   ownerUserId: string,
 ): Promise<string[]> {
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   const rows = await db
     .select({ name: table.name })
     .from(table)
@@ -91,11 +94,11 @@ export async function listOwnedAclResourceNames(
 }
 
 export async function getAclResourceAccessRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   id: string,
 ): Promise<AclRow | null> {
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   const rows = await db
     .select({ id: table.id, ownerUserId: table.ownerUserId, visibility: table.visibility })
     .from(table)
@@ -105,12 +108,12 @@ export async function getAclResourceAccessRow(
 }
 
 export async function listAclResourceIdentityRowsByIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   ids: readonly string[],
 ): Promise<AclResourceIdentitySnapshot[]> {
   if (ids.length === 0) return []
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   return (await db
     .select({
       id: table.id,
@@ -124,12 +127,12 @@ export async function listAclResourceIdentityRowsByIds(
 }
 
 export async function listAclResourceIdentityRowsByNames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   names: readonly string[],
 ): Promise<AclResourceIdentitySnapshot[]> {
   if (names.length === 0) return []
-  const table = ownedAclTable(type)
+  const table = ownedAclTable(db, type)
   return (await db
     .select({
       id: table.id,
@@ -147,7 +150,7 @@ export async function listAclResourceIdentityRowsByNames(
  * fallback（路由已经加载并授权过的那一行）；目录自有类型直接读 ACL_TABLES。grants / users 两条路径同一份。
  */
 export function createResourceAclReadPort(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   identityPersistence?: ResourceAclIdentityPersistence,
 ): ResourceCatalogAclReadPort<AclResourceType> {
   const port: ResourceCatalogAclReadPort<AclResourceType> = {
@@ -157,7 +160,7 @@ export function createResourceAclReadPort(
           `ACL identity persistence type ${identityPersistence.type} cannot serve ${type}`,
         )
       }
-      const table = identityPersistence === undefined ? ownedAclTable(type) : null
+      const table = identityPersistence === undefined ? ownedAclTable(db, type) : null
       return runResourceCatalogTransaction(db, async (transaction) => {
         const identity =
           table === null
@@ -178,6 +181,7 @@ export function createResourceAclReadPort(
                   .limit(1)
               )[0]
         if (identity === undefined) return null
+        const { resourceGrants, users } = tablesOf(transaction)
         const grants = await transaction
           .select({ userId: resourceGrants.userId, level: resourceGrants.level })
           .from(resourceGrants)
@@ -221,7 +225,7 @@ export function createResourceAclReadPort(
 
 /** Internal owner/name preflight reads used by Intent apply preflight. */
 export function createResourceCatalogAclIdentityReadPort(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ResourceCatalogAclIdentityReadPort {
   const port: ResourceCatalogAclIdentityReadPort = {
     getOwner: (type, id) => getAclResourceOwner(db, type, id),

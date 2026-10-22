@@ -1,12 +1,13 @@
 // RFC-303: every node-run writer must honor the task-owned terminal fence.
 // Lock all three lifecycle APIs so review/human repair and retry paths cannot
 // revive external work after an MR / PR terminal fact committed.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { setNodeRunStatus, setNodeRunStatusTx, transitionNodeRunStatus } from '@/services/lifecycle'
 
@@ -14,8 +15,9 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function fixture(status: 'pending' | 'done') {
   const db = createInMemoryDb(MIGRATIONS)
-  await db.insert(workflows).values({ id: 'workflow-1', name: 'workflow', definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'workflow-1', name: 'workflow', definition: '{}' })
+  await insertOne(db, tasks, {
     id: 'task-1',
     name: 'task',
     workflowId: 'workflow-1',
@@ -29,7 +31,7 @@ async function fixture(status: 'pending' | 'done') {
     startedAt: 1,
     sourceTerminationFence: 'closed',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: 'run-1',
     taskId: 'task-1',
     nodeId: 'node-1',
@@ -53,6 +55,7 @@ describe('RFC-303 node-run terminal fence', () => {
     await expectClosed(() =>
       transitionNodeRunStatus({ db, nodeRunId: 'run-1', event: { kind: 'mark-running' } }),
     )
+    const { nodeRuns } = tablesOf(db)
     expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, 'run-1')))[0]?.status).toBe(
       'pending',
     )
@@ -84,6 +87,7 @@ describe('RFC-303 node-run terminal fence', () => {
 
   test('explicit reopen clearing the closed fence permits later lifecycle work', async () => {
     const db = await fixture('pending')
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ sourceTerminationFence: null }).where(eq(tasks.id, 'task-1'))
     await expect(
       transitionNodeRunStatus({ db, nodeRunId: 'run-1', event: { kind: 'mark-running' } }),

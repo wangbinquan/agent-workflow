@@ -25,6 +25,9 @@
 // 第三条（in-place 改名：v1 契约是只能经 finalName / copy，SQLite 那台只挡了 agent 一类）
 // 方向相反、强侧是 PG，判据在 `intent-privileged-node-capability` 里按契约钉着，不重复。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,8 +38,7 @@ import { ulid } from 'ulid'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { intentDrafts, intentSessions, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
@@ -79,7 +81,7 @@ const SCRIPT_NODE = Object.freeze({
 const { script: _script, env: _env, dependencies: _dependencies, ...SENT_SCRIPT_NODE } = SCRIPT_NODE
 
 let harness: ProviderHarness
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 
 function definitionOf(nodes: readonly unknown[]) {
@@ -89,13 +91,14 @@ function definitionOf(nodes: readonly unknown[]) {
 async function seedSession(): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(intentSessions).values({
+  const { intentSessions } = tablesOf(db)
+  await insertOne(db, intentSessions, {
     id,
     ownerUserId: OWNER,
     title: 'w41',
     createdAt: now,
     updatedAt: now,
-  } as typeof intentSessions.$inferInsert)
+  } as PersistenceTables['intentSessions']['$inferInsert'])
   return id
 }
 
@@ -108,7 +111,8 @@ async function installDraft(
   const changesetJson = JSON.stringify(changeset)
   const draftHash = `sha256:${createHash('sha256').update(changesetJson, 'utf8').digest('hex')}`
   const draftId = ulid()
-  await db.insert(intentDrafts).values({
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  await insertOne(db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -117,7 +121,7 @@ async function installDraft(
     draftHash,
     contextRevision: 0,
     createdAt: Date.now(),
-  } as typeof intentDrafts.$inferInsert)
+  } as PersistenceTables['intentDrafts']['$inferInsert'])
   await db
     .update(intentSessions)
     .set({
@@ -147,7 +151,8 @@ async function applyDraft(sessionId: string, draft: { draftRevision: number; dra
 async function seedWorkflow(name: string, nodes: readonly unknown[]): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name,
     description: '',
@@ -158,12 +163,13 @@ async function seedWorkflow(name: string, nodes: readonly unknown[]): Promise<st
     builtin: false,
     createdAt: now,
     updatedAt: now,
-  } as typeof workflows.$inferInsert)
+  } as PersistenceTables['workflows']['$inferInsert'])
   return id
 }
 
 async function storedDefinition(id: string): Promise<{ nodes: Record<string, unknown>[] }> {
-  const row = await db.select().from(workflows).where(eq(workflows.id, id)).get()
+  const { workflows } = tablesOf(db)
+  const row = await first(db.select().from(workflows).where(eq(workflows.id, id)))
   return JSON.parse(row!.definition) as { nodes: Record<string, unknown>[] }
 }
 
@@ -174,7 +180,8 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-w41-'))
     mkdirSync(join(appHome, 'skills'), { recursive: true })
     const now = Date.now()
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: OWNER,
       username: 'w41-owner',
       displayName: 'W41 owner',
@@ -183,7 +190,7 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       passwordHash: null,
       createdAt: now,
       updatedAt: now,
-    } as typeof users.$inferInsert)
+    } as PersistenceTables['users']['$inferInsert'])
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })
@@ -213,7 +220,8 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
     // 缺陷形态：PG 上此前当场 422 `resource-reference-not-found`，整包零落库。
     await applyDraft(sessionId, draft)
 
-    const created = await db.select().from(workflows).where(eq(workflows.name, 'w41-caller')).get()
+    const { workflows } = tablesOf(db)
+    const created = await first(db.select().from(workflows).where(eq(workflows.name, 'w41-caller')))
     expect(created, '悬空的名字不该阻止提交——那是启动期的事').not.toBeUndefined()
     const definition = JSON.parse(created!.definition) as { nodes: Record<string, unknown>[] }
     expect(definition.nodes[0]?.workflowName).toBe('does-not-exist-yet')
@@ -222,7 +230,8 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
   test('①b：按名字调用一个**别人私有**的工作流 —— 仍然拒绝（容忍的是「不存在」，不是「看不见」）', async () => {
     const other = 'user_rfc359_w41_other'
     const now = Date.now()
-    await db.insert(users).values({
+    const { users, workflows } = tablesOf(db)
+    await insertOne(db, users, {
       id: other,
       username: 'w41-other',
       displayName: 'W41 other',
@@ -231,8 +240,8 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       passwordHash: null,
       createdAt: now,
       updatedAt: now,
-    } as typeof users.$inferInsert)
-    await db.insert(workflows).values({
+    } as PersistenceTables['users']['$inferInsert'])
+    await insertOne(db, workflows, {
       id: ulid(),
       name: 'w41-secret',
       description: '',
@@ -243,7 +252,7 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       builtin: false,
       createdAt: now,
       updatedAt: now,
-    } as typeof workflows.$inferInsert)
+    } as PersistenceTables['workflows']['$inferInsert'])
 
     const sessionId = await seedSession()
     const draft = await installDraft(sessionId, {
@@ -271,7 +280,7 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       code: 'acl-missing-refs',
     })
     expect(
-      await db.select().from(workflows).where(eq(workflows.name, 'w41-peeker')).get(),
+      await first(db.select().from(workflows).where(eq(workflows.name, 'w41-peeker'))),
       '被拒之后整包零落库',
     ).toBeUndefined()
   })
@@ -281,7 +290,8 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       { id: 'in1', kind: 'input', inputKey: 'k' },
       SCRIPT_NODE,
     ])
-    const before = await db.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+    const { workflows } = tablesOf(db)
+    const before = await first(db.select().from(workflows).where(eq(workflows.id, workflowId)))
     const sessionId = await seedSession()
     const draft = await installDraft(
       sessionId,
@@ -321,7 +331,7 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
     // 缺陷形态：PG 上此前 403 `script-author-forbidden`——占位符 ≠ 正文。
     await applyDraft(sessionId, draft)
 
-    const after = await db.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+    const after = await first(db.select().from(workflows).where(eq(workflows.id, workflowId)))
     expect(after!.description, '普通编辑必须落地').toBe('edited by a permissionless author')
     const script = (await storedDefinition(workflowId)).nodes.find((n) => n.kind === 'script')
     expect(script?.script, '脚本正文按库里的现值回填，不是把占位符当正文写进去').toBe(

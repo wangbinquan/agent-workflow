@@ -3,23 +3,14 @@
 // SERIALIZABLE transaction) and the commit-before-drive boundary without
 // routing the provider client through the legacy SQLite launcher.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { afterEach, expect, test } from 'bun:test'
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
 import { eq } from 'drizzle-orm'
-import {
-  nodeRuns,
-  taskCollaborators,
-  taskExecutionIntents,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  users,
-  workflows,
-  committedEvents,
-} from '@/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
@@ -116,7 +107,18 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
     const fixture = { db: harness.db }
     inheritedSpace.cleanup.state = 'owned'
     const snapshot = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
-    await fixture.db.insert(users).values({
+    const {
+      users,
+      workflows,
+      tasks,
+      nodeRuns,
+      taskRepos,
+      taskSpaceNodes,
+      taskCollaborators,
+      taskExecutionIntents,
+      committedEvents,
+    } = tablesOf(fixture.db)
+    await insertOne(fixture.db, users, {
       id: actor.user.id,
       username: 'owner',
       displayName: 'Owner',
@@ -125,10 +127,12 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       createdAt: 1,
       updatedAt: 1,
     })
-    await fixture.db
-      .insert(workflows)
-      .values({ id: 'child-workflow', name: 'Child', definition: snapshot })
-    await fixture.db.insert(tasks).values({
+    await insertOne(fixture.db, workflows, {
+      id: 'child-workflow',
+      name: 'Child',
+      definition: snapshot,
+    })
+    await insertOne(fixture.db, tasks, {
       id: 'parent-task',
       name: 'Parent',
       workflowId: 'child-workflow',
@@ -153,7 +157,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       gitUserName: 'Owner',
       gitUserEmail: 'owner@example.test',
     })
-    await fixture.db.insert(nodeRuns).values({
+    await insertOne(fixture.db, nodeRuns, {
       id: 'parent-run',
       taskId: 'parent-task',
       nodeId: 'call-node',
@@ -165,7 +169,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       continuationSlotKey: 'call:node-1',
       operationGeneration: 2,
     })
-    let publishedTask: typeof tasks.$inferSelect | undefined
+    let publishedTask: PersistenceTables['tasks']['$inferSelect'] | undefined
     registerAfterCommitEventPump({
       async publishNow() {
         trace.push('event:after-commit')

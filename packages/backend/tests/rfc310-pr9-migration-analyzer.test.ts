@@ -11,19 +11,12 @@
 //     owner/visibility 沿 legacy 行；adapter/assignment 目标只提案不落库。
 // sourceDigest 复跑稳定是 cutover preflight 对账的前提，一并锁住。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  actionTemplates,
-  automationPolicies,
-  capabilityTemplates,
-  digitalEmployees,
-  maintenanceState,
-  repoCapabilityConfig,
-} from '../src/db/schema'
 import {
   analyzeLegacyAssets,
   legacyTemplateSourceDigest,
@@ -331,8 +324,9 @@ describe('rfc310 pr9 migration analyzer (T94)', () => {
 // T95：真 sqlite 落库（读 legacy 表 → 分析 → materialize draft）。
 // ---------------------------------------------------------------------------
 
-async function seedLegacy(db: ProviderNeutralDatabase): Promise<void> {
+async function seedLegacy(db: PersistenceDb): Promise<void> {
   const now = 1_700_000_000_000
+  const { capabilityTemplates } = tablesOf(db)
   await db.insert(capabilityTemplates).values([
     {
       id: 't-fix',
@@ -380,6 +374,7 @@ describeEachProvider('rfc310 pr9 migration materialize (T95)', (harness) => {
       'action-template:m-fix',
       'automation-policy:m-mon',
     ])
+    const { actionTemplates, automationPolicies, maintenanceState } = tablesOf(db)
     const templateRow = (
       await db.select().from(actionTemplates).where(eq(actionTemplates.name, 'm-fix'))
     )[0]!
@@ -429,6 +424,8 @@ describeEachProvider('rfc310 pr9 migration materialize (T95)', (harness) => {
   test('five-cell matrix closure materializes the employee draft; adapter/assignment targets stay proposals', async () => {
     const db = harness.db
     const now0 = 1_700_000_000_000
+    const { capabilityTemplates, repoCapabilityConfig, digitalEmployees, actionTemplates } =
+      tablesOf(db)
     await db.insert(capabilityTemplates).values(
       [
         {

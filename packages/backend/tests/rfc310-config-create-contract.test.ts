@@ -38,7 +38,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AGENT_CAPABILITY_IDS } from '../src/modules/development-automation/domain/capabilityDefinition'
 import {
   describeEachProviderHttpApplication,
@@ -49,7 +49,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'c'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   token: string
 }

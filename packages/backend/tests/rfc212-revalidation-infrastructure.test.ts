@@ -10,6 +10,7 @@
 // slide back into the rejected design (async revalidation inside the broadcast
 // fan-out). See design/RFC-212-ws-authorization-revalidation/design.md §1.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { ServerWebSocket } from 'bun'
 import { eq } from 'drizzle-orm'
@@ -18,9 +19,8 @@ import { readFileSync } from 'node:fs'
 import { describeCredential } from '../src/auth/session'
 import { createSession, hashToken, lookupActiveSessionByHash } from './helpers/auth/sessionStore'
 import { createPat, lookupActivePatByHash } from './helpers/auth/patStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { userPats, users, userSessions } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import {
   currentRevalidationEpoch,
@@ -153,7 +153,7 @@ describeEachProvider('RFC-212 T2 — credential fingerprint, never the raw token
 
 describeEachProvider('RFC-212 T3 — hash-keyed lookups are read-only when asked', (harness) => {
   async function seed(): Promise<{
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     userId: string
     sessionToken: string
     patToken: string
@@ -188,6 +188,7 @@ describeEachProvider('RFC-212 T3 — hash-keyed lookups are read-only when asked
     // and make /account report a credential as "just used" because a tab was
     // left open.
     const { db, sessionToken, patToken } = await seed()
+    const { userSessions, userPats } = tablesOf(db)
     const sessionBefore = (await db.select().from(userSessions).limit(1))[0]
     const patBefore = (await db.select().from(userPats).limit(1))[0]
 
@@ -206,6 +207,7 @@ describeEachProvider('RFC-212 T3 — hash-keyed lookups are read-only when asked
 
   test('the default still touches — the HTTP path must not change', async () => {
     const { db, sessionToken } = await seed()
+    const { userSessions } = tablesOf(db)
     const before = (await db.select().from(userSessions).limit(1))[0]?.lastUsedAt as number
     await lookupActiveSessionByHash(db, hashToken(sessionToken), before + 60_000)
     expect((await db.select().from(userSessions).limit(1))[0]?.lastUsedAt).toBe(before + 60_000)
@@ -215,6 +217,7 @@ describeEachProvider('RFC-212 T3 — hash-keyed lookups are read-only when asked
     const { db, sessionToken } = await seed()
     const hash = hashToken(sessionToken)
     expect(await lookupActiveSessionByHash(db, hash, Date.now(), { touch: false })).not.toBeNull()
+    const { userSessions } = tablesOf(db)
     await db
       .update(userSessions)
       .set({ revokedAt: Date.now() })
@@ -224,6 +227,7 @@ describeEachProvider('RFC-212 T3 — hash-keyed lookups are read-only when asked
 
   test('a disabled user resolves to null even with a live credential', async () => {
     const { db, userId, sessionToken } = await seed()
+    const { users } = tablesOf(db)
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, userId))
     expect(
       await lookupActiveSessionByHash(db, hashToken(sessionToken), Date.now(), { touch: false }),

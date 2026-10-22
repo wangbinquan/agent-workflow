@@ -3,13 +3,14 @@
 // contract on the helper itself (not the full scheduler tick) so red here
 // points squarely at the closure→plugin glue, not at fan-out timing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
@@ -19,7 +20,7 @@ import { createLogger } from '../src/util/log'
 let pluginsDir = ''
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   opts: { dependsOn?: string[]; plugins?: string[] } = {},
 ) {
@@ -39,7 +40,7 @@ async function seedAgent(
 }
 
 describeEachProvider('prepareNodeRunInjection — RFC-031 plugin union', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let pluginIdByName: Map<string, string>
   beforeEach(async () => {
     pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-sched-'))
@@ -48,17 +49,15 @@ describeEachProvider('prepareNodeRunInjection — RFC-031 plugin union', (harnes
     // Seed three plugins so the agents below can reference their canonical ids.
     for (const [index, name] of ['p-root', 'p-leaf', 'p-extra'].entries()) {
       const id = `plugin-${index + 1}`
-      await db
-        .insert(plugins)
-        .values({
-          id,
-          name,
-          spec: `${name}@1`,
-          sourceKind: 'npm',
-          cachedPath: join(pluginsDir, name),
-          installedAt: 1,
-        })
-        .run()
+      const { plugins } = tablesOf(db)
+      await insertOne(db, plugins, {
+        id,
+        name,
+        spec: `${name}@1`,
+        sourceKind: 'npm',
+        cachedPath: join(pluginsDir, name),
+        installedAt: 1,
+      })
       pluginIdByName.set(name, id)
     }
   })
@@ -128,8 +127,8 @@ describeEachProvider('prepareNodeRunInjection — RFC-031 plugin union', (harnes
 
   test('plugin deleted out from under the running task → fails closed before spawn', async () => {
     await seedAgent(db, 'a', { plugins: [pluginIdByName.get('p-root')!] })
+    const { plugins: pluginsTable } = tablesOf(db)
     // Bypass the cascade guard via raw DB delete to simulate "deleted mid-flight".
-    const { plugins: pluginsTable } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
     await db.delete(pluginsTable).where(eq(pluginsTable.id, pluginIdByName.get('p-root')!))
 

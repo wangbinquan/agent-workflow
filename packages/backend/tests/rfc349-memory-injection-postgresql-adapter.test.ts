@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -29,7 +29,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -68,10 +71,6 @@ function memoryRow(
 }
 
 const primaryAgent = { id: 'agent-1' } as Agent
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL runtime memory injection', () => {
   test('resolves every active scope and renders the same closed snapshot contract', async () => {

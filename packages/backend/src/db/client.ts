@@ -6,7 +6,9 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { chmodSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { createLogger } from '@/util/log'
-import * as schema from './schema'
+import { nativeTableSets } from '@/bootstrap/persistenceSchema'
+import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
 import {
   assertMigrationHistory,
   assertPhysicalSchema,
@@ -14,6 +16,8 @@ import {
 } from './schemaAdmission'
 import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
+
+const schema = nativeTableSets.sqlite
 
 export type DbClient = ReturnType<typeof drizzle<typeof schema>>
 
@@ -340,7 +344,7 @@ export function openDb(opts: OpenDbOptions): DbClient {
   }
 
   normalizeDirectStatementChanges(sqlite)
-  const db = drizzle(sqlite, { schema })
+  const db = bindDatabaseHandle(drizzle(sqlite, { schema }), schema, createSqliteCapabilities())
   guardForeignStatements(sqlite, db as object)
   try {
     if (!opts.skipMigrations) {
@@ -497,7 +501,7 @@ export function createInMemoryDb(
     }
   }
   normalizeDirectStatementChanges(sqlite)
-  const db = drizzle(sqlite, { schema })
+  const db = bindDatabaseHandle(drizzle(sqlite, { schema }), schema, createSqliteCapabilities())
   guardForeignStatements(sqlite, db as object)
   if (opts.bootstrap !== 'required') registerLegacyDaemonTestFixture(db)
   return db

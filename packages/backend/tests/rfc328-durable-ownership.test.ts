@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-328 core correctness matrix. These fixtures use the real migration and the
 // provider-neutral persistence adapters; no clock sleeps or process-global task
@@ -18,22 +21,9 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { submitCanonicalTaskExecutionIntent } from '@/modules/task-execution/infrastructure/taskContinuationAdmission'
-import {
-  nodeRuns,
-  nodeRunOutputs,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  taskExecutionOwners,
-  tasks,
-} from '@/db/schema'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
@@ -71,30 +61,28 @@ const rootPath = (taskId: string): readonly LineageSlot[] => [
 ]
 
 async function seedTask(
-  database: ProviderNeutralDatabase,
+  database: PersistenceDb,
   taskId: string,
   status: 'pending' | 'done' = 'pending',
 ): Promise<void> {
-  await database
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: 'workflow-rfc328',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      workflowVersion: 1,
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/worktree',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status,
-      inputs: '{}',
-      startedAt: 1,
-      finishedAt: status === 'done' ? 2 : null,
-      executionLineageId: taskId,
-      lineageSlotPathJson: canonicalJson(rootPath(taskId)),
-    })
-    .run()
+  const { tasks } = tablesOf(database)
+  await insertOne(database, tasks, {
+    id: taskId,
+    name: taskId,
+    workflowId: 'workflow-rfc328',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    workflowVersion: 1,
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/worktree',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status,
+    inputs: '{}',
+    startedAt: 1,
+    finishedAt: status === 'done' ? 2 : null,
+    executionLineageId: taskId,
+    lineageSlotPathJson: canonicalJson(rootPath(taskId)),
+  })
 }
 
 function continuation(
@@ -129,7 +117,7 @@ function continuation(
  * 所以这里直接换过来，同步那层随之删除。
  */
 function submitIntent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
 ): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
@@ -145,7 +133,7 @@ function submitIntent(
  * （`gateContinuationEffectPersistence.ts` 的两处 await 就是它）；挡着它们的只有测试夹具。
  * 两侧入参逐字相同（只少一个 `db`）、返回结构相同，所以夹具是**平移**不是改写。
  */
-function effectsOf(db: ProviderNeutralDatabase): DrizzleTaskExecutionEffectPersistence {
+function effectsOf(db: PersistenceDb): DrizzleTaskExecutionEffectPersistence {
   return new DrizzleTaskExecutionEffectPersistence(db)
 }
 
@@ -154,6 +142,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
     test('continuation admission compares migrated lineage JSON semantically', async () => {
       const database = harness.db
       await seedTask(database, 'task-migrated-lineage')
+      const { tasks } = tablesOf(database)
       // SQLite json_object() preserves this insertion order. The application
       // encoder sorts keys, so a raw-string comparison would reject the same
       // lineage after migration and break every manual continuation.
@@ -164,7 +153,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
             '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-migrated-lineage","workflowRevision":1}]',
         })
         .where(eq(tasks.id, 'task-migrated-lineage'))
-        .run()
 
       expect(
         (
@@ -230,15 +218,18 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           db: database,
           token: claimed.token,
           now: 14,
-          run: async (tx) =>
-            await tx
+          run: async (tx) => {
+            const { tasks } = tablesOf(tx)
+            return await tx
               .update(tasks)
               .set({ errorSummary: 'stale-write' })
-              .where(eq(tasks.id, 'task-owner')),
+              .where(eq(tasks.id, 'task-owner'))
+          },
         }),
       ).rejects.toEqual(expect.objectContaining({ code: 'task-execution-stale-owner' }))
+      const { tasks } = tablesOf(database)
       expect(
-        (await database.select({ value: tasks.errorSummary }).from(tasks).get())?.value,
+        (await firstRow(database.select({ value: tasks.errorSummary }).from(tasks)))?.value,
       ).toBeNull()
 
       const revoked = (await module.ownershipFor(database).read('task-owner'))!
@@ -423,12 +414,12 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       const first = prepare()
       await first.beforeAct()
       await first.succeed({ snapshot: 'snapshot-a' })
+      const { taskExecutionEffects } = tablesOf(database)
       expect(
         (
           await database
             .select({ generation: taskExecutionEffects.operationGeneration })
             .from(taskExecutionEffects)
-            .all()
         ).map((row) => row.generation),
       ).toEqual([0])
 
@@ -439,7 +430,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           await database
             .select({ generation: taskExecutionEffects.operationGeneration })
             .from(taskExecutionEffects)
-            .all()
         )
           .map((row) => row.generation)
           .sort(),
@@ -553,13 +543,13 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         resourceKeys: ['workspace:/tmp/worktree', 'repository:origin/main'],
         now: 20,
       })
+      const { taskExecutionEffectFences, nodeRuns, taskExecutionEffects } = tablesOf(database)
       expect(
         (
           await database
             .select({ key: taskExecutionEffectFences.fenceKey })
             .from(taskExecutionEffectFences)
             .where(eq(taskExecutionEffectFences.effectAttemptId, prepared.attemptId))
-            .all()
         )
           .map((row) => row.key)
           .sort(),
@@ -570,15 +560,12 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       // **故意**没有这个逃逸口：它把同事务投影表达成**具名变体**。所以改用已有的具名变体
       // `settleCodeHostNode` 去锁同一条性质，判据反而更贴生产路径（投影的是真实的 node_run 终态，
       // 不是一个只为测试存在的 `errorSummary` 字符串）。
-      await database
-        .insert(nodeRuns)
-        .values({
-          id: 'run-effect-projection',
-          taskId: 'task-effect',
-          nodeId: 'n1',
-          status: 'running',
-        })
-        .run()
+      await insertOne(database, nodeRuns, {
+        id: 'run-effect-projection',
+        taskId: 'task-effect',
+        nodeId: 'n1',
+        status: 'running',
+      })
       await effectsOf(database).settleCodeHostNode({
         settlement: {
           token: claim.token,
@@ -599,20 +586,22 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       })
       expect(
         (
-          await database
-            .select({ status: nodeRuns.status })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, 'run-effect-projection'))
-            .get()
+          await firstRow(
+            database
+              .select({ status: nodeRuns.status })
+              .from(nodeRuns)
+              .where(eq(nodeRuns.id, 'run-effect-projection')),
+          )
         )?.status,
       ).toBe('done')
       expect(
         (
-          await database
-            .select({ state: taskExecutionEffects.state })
-            .from(taskExecutionEffects)
-            .where(eq(taskExecutionEffects.id, prepared.effectId))
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionEffects.state })
+              .from(taskExecutionEffects)
+              .where(eq(taskExecutionEffects.id, prepared.effectId)),
+          )
         )?.state,
       ).toBe('succeeded')
       expect(
@@ -621,7 +610,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
             .select({ releasedAt: taskExecutionEffectFences.releasedAt })
             .from(taskExecutionEffectFences)
             .where(eq(taskExecutionEffectFences.effectAttemptId, prepared.attemptId))
-            .all()
         ).every((row) => row.releasedAt === 21),
       ).toBe(true)
       expect(
@@ -680,12 +668,16 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         })
       const winner = await prepare('first', 'first')
       await expect(prepare('second', 'second')).rejects.toThrow()
+      const {
+        taskExecutionEffectAttempts,
+        taskExecutionLineageOperationRecords,
+        taskExecutionEffectFences,
+      } = tablesOf(database)
       expect(
         await database
           .select({ id: taskExecutionEffectAttempts.id })
           .from(taskExecutionEffectAttempts)
-          .where(eq(taskExecutionEffectAttempts.state, 'acting'))
-          .all(),
+          .where(eq(taskExecutionEffectAttempts.state, 'acting')),
       ).toHaveLength(1)
       await effectsOf(database).settle({
         token: claim.token,
@@ -711,26 +703,27 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         now: 30,
       })
       expect((await module.ownershipFor(database).read('task-unknown'))?.state).toBe('released')
-      const decision = (await database
-        .select()
-        .from(taskExecutionLineageOperationRecords)
-        .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
-        .get())!
+      const decision = (await firstRow(
+        database
+          .select()
+          .from(taskExecutionLineageOperationRecords)
+          .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision')),
+      ))!
       expect(
         (
-          await database
-            .select({ state: taskExecutionLineageOperationRecords.decisionState })
-            .from(taskExecutionLineageOperationRecords)
-            .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'))
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionLineageOperationRecords.decisionState })
+              .from(taskExecutionLineageOperationRecords)
+              .where(eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision')),
+          )
         )?.state,
       ).toBe('requires-actor')
       expect(
         await database
           .select({ id: taskExecutionEffectFences.effectAttemptId })
           .from(taskExecutionEffectFences)
-          .where(isNull(taskExecutionEffectFences.releasedAt))
-          .all(),
+          .where(isNull(taskExecutionEffectFences.releasedAt)),
       ).toHaveLength(0)
       expect(mayAuthorizeReplay({ kind: 'retry-node', source: 'rest', actorUserId: 'actor' })).toBe(
         true,
@@ -762,6 +755,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           'intent-unknown-manual',
           31,
         )
+        const { taskExecutionLineageOperationRecords } = tablesOf(tx)
         await tx
           .update(taskExecutionLineageOperationRecords)
           .set({
@@ -781,7 +775,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
               eq(taskExecutionLineageOperationRecords.decisionState, 'requires-actor'),
             ),
           )
-          .run()
       })
       const manualClaim = await module.claim({
         db: database,
@@ -810,11 +803,12 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       expect(replay.attemptNo).toBe(1)
       expect(
         (
-          await database
-            .select({ state: taskExecutionLineageOperationRecords.decisionState })
-            .from(taskExecutionLineageOperationRecords)
-            .where(eq(taskExecutionLineageOperationRecords.id, decision.id))
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionLineageOperationRecords.decisionState })
+              .from(taskExecutionLineageOperationRecords)
+              .where(eq(taskExecutionLineageOperationRecords.id, decision.id)),
+          )
         )?.state,
       ).toBe('consumed')
     })
@@ -876,12 +870,12 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           'workspace:/tmp/worktree/iso-node-b',
         ],
       })
+      const { taskExecutionEffectAttempts } = tablesOf(database)
       expect(
         await database
           .select({ id: taskExecutionEffectAttempts.id })
           .from(taskExecutionEffectAttempts)
-          .where(eq(taskExecutionEffectAttempts.state, 'acting'))
-          .all(),
+          .where(eq(taskExecutionEffectAttempts.state, 'acting')),
       ).toHaveLength(2)
 
       await prepare({
@@ -950,25 +944,28 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           now: 202,
         }),
       ).toMatchObject({ releasedTaskIds: [taskId], outcomeUnknownTaskIds: [] })
+      const { taskExecutionIntents } = tablesOf(database)
       expect(
-        await database
-          .select({
-            state: taskExecutionIntents.state,
-            failureCode: taskExecutionIntents.failureCode,
-          })
-          .from(taskExecutionIntents)
-          .where(eq(taskExecutionIntents.id, launch.intentId))
-          .get(),
+        await firstRow(
+          database
+            .select({
+              state: taskExecutionIntents.state,
+              failureCode: taskExecutionIntents.failureCode,
+            })
+            .from(taskExecutionIntents)
+            .where(eq(taskExecutionIntents.id, launch.intentId)),
+        ),
       ).toEqual({ state: 'failed', failureCode: 'daemon-restart-recovered' })
       expect(
-        await database
-          .select({
-            state: taskExecutionIntents.state,
-            failureCode: taskExecutionIntents.failureCode,
-          })
-          .from(taskExecutionIntents)
-          .where(eq(taskExecutionIntents.id, successor.intentId))
-          .get(),
+        await firstRow(
+          database
+            .select({
+              state: taskExecutionIntents.state,
+              failureCode: taskExecutionIntents.failureCode,
+            })
+            .from(taskExecutionIntents)
+            .where(eq(taskExecutionIntents.id, successor.intentId)),
+        ),
       ).toEqual({ state: 'pending', failureCode: null })
     })
 
@@ -983,21 +980,19 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       ]) {
         await seedTask(database, input.taskId)
         const nodeRunId = `${input.taskId}-run`
-        await database
-          .insert(nodeRuns)
-          .values({
-            id: nodeRunId,
-            taskId: input.taskId,
-            nodeId: 'agent-node',
-            iteration: 0,
-            retryIndex: 0,
-            status: 'running',
-            startedAt: 100,
-            pid: input.receipt ? 42 : null,
-            spawnBinaryPath: input.receipt ? '/opt/opencode' : null,
-            spawnLaunchNonce: input.receipt ? `${input.taskId}-nonce` : null,
-          })
-          .run()
+        const { nodeRuns, taskExecutionEffectAttempts } = tablesOf(database)
+        await insertOne(database, nodeRuns, {
+          id: nodeRunId,
+          taskId: input.taskId,
+          nodeId: 'agent-node',
+          iteration: 0,
+          retryIndex: 0,
+          status: 'running',
+          startedAt: 100,
+          pid: input.receipt ? 42 : null,
+          spawnBinaryPath: input.receipt ? '/opt/opencode' : null,
+          spawnLaunchNonce: input.receipt ? `${input.taskId}-nonce` : null,
+        })
         const intent = await submitIntent(database, {
           request: continuation(input.taskId),
           intentId: `${input.taskId}-intent`,
@@ -1041,7 +1036,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
               }),
             })
             .where(eq(taskExecutionEffectAttempts.id, effect.attemptId))
-            .run()
         }
         processEffects.set(input.taskId, effect)
       }
@@ -1095,8 +1089,15 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           ).revokedTaskIds,
         ].sort(),
       ).toEqual(['task-process-activated', 'task-process-not-activated', 'task-remote-unknown'])
-      await database.update(tasks).set({ status: 'interrupted' }).run()
-      await database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 }).run()
+      const {
+        tasks,
+        nodeRuns,
+        taskExecutionIntents,
+        taskExecutionEffects,
+        taskExecutionEffectFences,
+      } = tablesOf(database)
+      await database.update(tasks).set({ status: 'interrupted' })
+      await database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 })
       // Boot's orphan reaper terminalizes the claimed intent before durable
       // effect recovery runs. Recovery must bind the historical epoch by
       // claimedEpoch, not require that its intent still be active.
@@ -1104,7 +1105,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         .update(taskExecutionIntents)
         .set({ state: 'failed', failureCode: 'daemon-restart', completedAt: 202, updatedAt: 202 })
         .where(eq(taskExecutionIntents.state, 'claimed'))
-        .run()
 
       const finalized = await new DrizzleTaskExecutionRecoveryPersistence(database).finalize({
         lockProof,
@@ -1126,44 +1126,46 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       )
       expect(
         (
-          await database
-            .select({ state: taskExecutionEffects.state })
-            .from(taskExecutionEffects)
-            .where(
-              eq(taskExecutionEffects.id, processEffects.get('task-process-activated')!.effectId),
-            )
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionEffects.state })
+              .from(taskExecutionEffects)
+              .where(
+                eq(taskExecutionEffects.id, processEffects.get('task-process-activated')!.effectId),
+              ),
+          )
         )?.state,
       ).toBe('succeeded')
       expect(
         (
-          await database
-            .select({ state: taskExecutionEffects.state })
-            .from(taskExecutionEffects)
-            .where(
-              eq(
-                taskExecutionEffects.id,
-                processEffects.get('task-process-not-activated')!.effectId,
+          await firstRow(
+            database
+              .select({ state: taskExecutionEffects.state })
+              .from(taskExecutionEffects)
+              .where(
+                eq(
+                  taskExecutionEffects.id,
+                  processEffects.get('task-process-not-activated')!.effectId,
+                ),
               ),
-            )
-            .get()
+          )
         )?.state,
       ).toBe('failed')
       expect(
         (
-          await database
-            .select({ state: taskExecutionEffects.state })
-            .from(taskExecutionEffects)
-            .where(eq(taskExecutionEffects.id, remoteEffect.effectId))
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionEffects.state })
+              .from(taskExecutionEffects)
+              .where(eq(taskExecutionEffects.id, remoteEffect.effectId)),
+          )
         )?.state,
       ).toBe('outcome-unknown')
       expect(
         await database
           .select({ id: taskExecutionEffectFences.effectAttemptId })
           .from(taskExecutionEffectFences)
-          .where(isNull(taskExecutionEffectFences.releasedAt))
-          .all(),
+          .where(isNull(taskExecutionEffectFences.releasedAt)),
       ).toHaveLength(0)
     })
 
@@ -1193,24 +1195,18 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         },
       ]) {
         await seedTask(database, spec.taskId)
-        await database
-          .update(tasks)
-          .set({ status: 'running' })
-          .where(eq(tasks.id, spec.taskId))
-          .run()
+        const { tasks, nodeRuns } = tablesOf(database)
+        await database.update(tasks).set({ status: 'running' }).where(eq(tasks.id, spec.taskId))
         const nodeRunId = `${spec.taskId}-run`
-        await database
-          .insert(nodeRuns)
-          .values({
-            id: nodeRunId,
-            taskId: spec.taskId,
-            nodeId: 'code-host-node',
-            iteration: 0,
-            retryIndex: 0,
-            status: 'running',
-            startedAt: 100,
-          })
-          .run()
+        await insertOne(database, nodeRuns, {
+          id: nodeRunId,
+          taskId: spec.taskId,
+          nodeId: 'code-host-node',
+          iteration: 0,
+          retryIndex: 0,
+          status: 'running',
+          startedAt: 100,
+        })
         const intent = await submitIntent(database, {
           request: continuation(spec.taskId),
           intentId: `${spec.taskId}-intent`,
@@ -1276,8 +1272,10 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           ).revokedTaskIds,
         ].sort(),
       ).toEqual(['task-codehost-recovered-applied', 'task-codehost-recovered-retry'])
-      await database.update(tasks).set({ status: 'interrupted' }).run()
-      await database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 }).run()
+      const { tasks, nodeRuns, taskExecutionEffects, nodeRunOutputs, taskExecutionEffectAttempts } =
+        tablesOf(database)
+      await database.update(tasks).set({ status: 'interrupted' })
+      await database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 })
 
       const finalized = await new DrizzleTaskExecutionRecoveryPersistence(database).finalize({
         lockProof,
@@ -1312,22 +1310,27 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       ])
       expect(
         (
-          await database
-            .select({ state: taskExecutionEffects.state })
-            .from(taskExecutionEffects)
-            .where(
-              eq(taskExecutionEffects.id, effects.get('task-codehost-recovered-applied')!.effectId),
-            )
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionEffects.state })
+              .from(taskExecutionEffects)
+              .where(
+                eq(
+                  taskExecutionEffects.id,
+                  effects.get('task-codehost-recovered-applied')!.effectId,
+                ),
+              ),
+          )
         )?.state,
       ).toBe('succeeded')
       expect(
         (
-          await database
-            .select({ status: nodeRuns.status })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, 'task-codehost-recovered-applied-run'))
-            .get()
+          await firstRow(
+            database
+              .select({ status: nodeRuns.status })
+              .from(nodeRuns)
+              .where(eq(nodeRuns.id, 'task-codehost-recovered-applied-run')),
+          )
         )?.status,
       ).toBe('done')
       expect(
@@ -1336,7 +1339,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
             .select({ port: nodeRunOutputs.portName, content: nodeRunOutputs.content })
             .from(nodeRunOutputs)
             .where(eq(nodeRunOutputs.nodeRunId, 'task-codehost-recovered-applied-run'))
-            .all()
         ).sort((left, right) => left.port.localeCompare(right.port)),
       ).toEqual([
         { port: 'response', content: '{"status":"canceled"}' },
@@ -1344,16 +1346,17 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       ])
       expect(
         (
-          await database
-            .select({ state: taskExecutionEffectAttempts.state })
-            .from(taskExecutionEffectAttempts)
-            .where(
-              eq(
-                taskExecutionEffectAttempts.id,
-                effects.get('task-codehost-recovered-retry')!.attemptId,
+          await firstRow(
+            database
+              .select({ state: taskExecutionEffectAttempts.state })
+              .from(taskExecutionEffectAttempts)
+              .where(
+                eq(
+                  taskExecutionEffectAttempts.id,
+                  effects.get('task-codehost-recovered-retry')!.attemptId,
+                ),
               ),
-            )
-            .get()
+          )
         )?.state,
       ).toBe('retry-authorized')
       expect(
@@ -1423,6 +1426,8 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         releaseMembers: true,
         now: 43,
       })
+      const { taskExecutionMaintenanceMembers, taskExecutionOwners, taskExecutionIntents } =
+        tablesOf(database)
       expect(
         await database
           .select({ releasedAt: taskExecutionMaintenanceMembers.releasedAt })
@@ -1432,11 +1437,10 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
               eq(taskExecutionMaintenanceMembers.taskId, 'task-maintenance'),
               isNull(taskExecutionMaintenanceMembers.releasedAt),
             ),
-          )
-          .all(),
+          ),
       ).toHaveLength(0)
-      expect(await database.select().from(taskExecutionOwners).all()).toHaveLength(0)
-      expect(await database.select().from(taskExecutionIntents).all()).toHaveLength(0)
+      expect(await database.select().from(taskExecutionOwners)).toHaveLength(0)
+      expect(await database.select().from(taskExecutionIntents)).toHaveLength(0)
     })
 
     test('boot recovery resumes the exact delete claim after the IO/DB barrier', async () => {
@@ -1468,14 +1472,16 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         cleanupPending: [],
         recoveryRequired: [],
       })
-      expect(await database.select().from(tasks).all()).toHaveLength(0)
+      const { tasks, taskExecutionMaintenanceClaims } = tablesOf(database)
+      expect(await database.select().from(tasks)).toHaveLength(0)
       expect(
         (
-          await database
-            .select({ state: taskExecutionMaintenanceClaims.state })
-            .from(taskExecutionMaintenanceClaims)
-            .where(eq(taskExecutionMaintenanceClaims.id, claim.claimId))
-            .get()
+          await firstRow(
+            database
+              .select({ state: taskExecutionMaintenanceClaims.state })
+              .from(taskExecutionMaintenanceClaims)
+              .where(eq(taskExecutionMaintenanceClaims.id, claim.claimId)),
+          )
         )?.state,
       ).toBe('completed')
     })
@@ -1526,6 +1532,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         receiptJson: '{"ok":true}',
         now: 62,
       })
+      const { tasks } = tablesOf(database)
       // RFC-359：这处 `onSettledTx` 原本只是**夹具**——把任务推到 done 好让下面的归档用例有料可归，
       // 它不断言任何同事务性质（那条断言在上面的 `settleCodeHostNode` 用例里）。所以直接平铺成
       // 结算之后的一笔普通写。
@@ -1533,7 +1540,6 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         .update(tasks)
         .set({ status: 'done', finishedAt: 62 })
         .where(eq(tasks.id, 'task-archive-ledger'))
-        .run()
       const owner = (await module.ownershipFor(database).read('task-archive-ledger'))!
       await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
         token: owned.token,

@@ -5,22 +5,15 @@
 // attempt_count 认领计数与预算封顶（达 DEFAULT_PROTOCOL_RETRY_BUDGET 停止重开）、
 // 批 shardKey 编码、崩溃恢复矩阵（§3.4：dispatched 失驱重配 / host 行 interrupted
 // ⇒ redispatch / host 行 done ⇒ 收 done 不重跑）、游标单一归属（批 run 不推）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET, parseBatchShardKey } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-  workgroupMemberCursors,
-  workgroupMessages,
-} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import type {
@@ -59,10 +52,7 @@ function fcCfg(): WorkgroupRuntimeConfig {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  config: WorkgroupRuntimeConfig,
-): Promise<string> {
+async function seedTask(db: PersistenceDb, config: WorkgroupRuntimeConfig): Promise<string> {
   const taskId = ulid()
   const agent = await createAgent(db, {
     name: 'wg-a',
@@ -83,14 +73,15 @@ async function seedTask(
       member.memberType === 'agent' ? { ...member, agentId: agent.id } : member,
     ),
   }
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: ulid(),
     name: `host-${taskId}`,
     definition: '{}',
     builtin: true,
   })
   const wf = (await db.select().from(workflows).limit(1))[0]
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'wg-batch-task',
     executionLineageId: taskId,
@@ -115,14 +106,11 @@ async function seedTask(
 /** 直插 open 卡（跳过 initial 规划轮：budgetUsed>0 由预置 host 行保证）。
  *  显式递增 id：同毫秒 ulid() 不保证序，而均分按 id 升序切片（rfc189 同款坑）。 */
 let cardSeq = 0
-async function seedOpenCard(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  title: string,
-): Promise<string> {
+async function seedOpenCard(db: PersistenceDb, taskId: string, title: string): Promise<string> {
   cardSeq += 1
   const id = `CARD${String(cardSeq).padStart(4, '0')}${ulid().slice(8)}`
-  await db.insert(workgroupAssignments).values({
+  const { workgroupAssignments } = tablesOf(db)
+  await insertOne(db, workgroupAssignments, {
     id,
     taskId,
     round: 0,
@@ -138,8 +126,9 @@ async function seedOpenCard(
 }
 
 /** 预置一个 done 的 member 行，让 nothingStarted=false（跳过 fc_initial 群唤）。 */
-async function seedPastRun(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(nodeRuns).values({
+async function seedPastRun(db: PersistenceDb, taskId: string): Promise<void> {
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: WG_MEMBER_NODE_ID,
@@ -176,7 +165,7 @@ const batchDone = (
   }) satisfies WorkgroupHostRunResult
 
 describeEachProvider('RFC-215 batch execution providers', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -202,6 +191,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       expect(requests[0]?.promptTemplate).toContain('Task 1: card one')
       expect(requests[0]?.promptTemplate).toContain('Task 2: card two')
 
+      const { workgroupAssignments, nodeRuns, workgroupMessages } = tablesOf(db)
       const cards = await db
         .select()
         .from(workgroupAssignments)
@@ -231,6 +221,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedOpenCard(db, taskId, 'solo')
       const { hooks } = scripted([batchDone({ task: 1, summary: 'ok' })])
       await runWorkgroupEngine({ db, taskId, log, hooks })
+      const { workgroupMemberCursors } = tablesOf(db)
       const cursors = await db
         .select()
         .from(workgroupMemberCursors)
@@ -262,6 +253,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       // 重试轮 prompt 点名缺卡 + 明示不用 wg_result。
       expect(requests[1]?.promptTemplate).toContain('missing entries for Task 2')
 
+      const { workgroupAssignments } = tablesOf(db)
       const byId = new Map(
         (
           await db
@@ -305,6 +297,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       // 清单 drained（failed 不算 open/active）⇒ 正常收敛。
       expect(result.kind).toBe('ok')
       expect(requests.length).toBe(DEFAULT_PROTOCOL_RETRY_BUDGET)
+      const { workgroupAssignments, workgroupMessages } = tablesOf(db)
       const card = (
         await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, c1))
       )[0]
@@ -327,6 +320,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       ])
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('ok')
+      const { workgroupAssignments } = tablesOf(db)
       const cards = await db
         .select()
         .from(workgroupAssignments)
@@ -347,7 +341,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       const taskId = await seedTask(db, fcCfg())
       await seedPastRun(db, taskId)
       const cardId = ulid()
-      await db.insert(workgroupAssignments).values({
+      const { workgroupAssignments } = tablesOf(db)
+      await insertOne(db, workgroupAssignments, {
         id: cardId,
         taskId,
         round: 0,
@@ -377,7 +372,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const cardId = ulid()
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, workgroupAssignments } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
@@ -386,7 +382,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
         shardKey: `batch:m-a:${cardId}`,
         startedAt: Date.now(),
       })
-      await db.insert(workgroupAssignments).values({
+      await insertOne(db, workgroupAssignments, {
         id: cardId,
         taskId,
         round: 0,
@@ -417,7 +413,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const cardId = ulid()
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, workgroupAssignments } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
@@ -426,7 +423,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
         shardKey: `batch:m-a:${cardId}`,
         startedAt: Date.now(),
       })
-      await db.insert(workgroupAssignments).values({
+      await insertOne(db, workgroupAssignments, {
         id: cardId,
         taskId,
         round: 0,
@@ -467,6 +464,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const c1 = await seedOpenCard(db, taskId, 'doomed one')
       const c2 = await seedOpenCard(db, taskId, 'doomed two')
+      const { agents, workgroupAssignments, workgroupMessages } = tablesOf(db)
       await db.delete(agents).where(eq(agents.name, 'wg-a'))
       const { hooks, requests } = scripted([])
       for (let pass = 0; pass < DEFAULT_PROTOCOL_RETRY_BUDGET + 2; pass++) {
@@ -505,7 +503,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const cardId = ulid()
       const runId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, workgroupAssignments } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: runId,
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
@@ -514,7 +513,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
         shardKey: cardId, // pre-215 single-card key
         startedAt: Date.now(),
       })
-      await db.insert(workgroupAssignments).values({
+      await insertOne(db, workgroupAssignments, {
         id: cardId,
         taskId,
         round: 0,
@@ -559,7 +558,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       const taskId = await seedTask(db, fcCfg())
       await seedPastRun(db, taskId)
       const cardId = await seedOpenCard(db, taskId, 'parallel card')
-      await db.insert(workgroupMessages).values({
+      const { workgroupMessages, nodeRuns, workgroupAssignments } = tablesOf(db)
+      await insertOne(db, workgroupMessages, {
         id: ulid(),
         taskId,
         round: 0,

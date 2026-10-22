@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ResourcePackageOwnedResourceLookupPort,
   ResourcePackageReadPort,
@@ -22,7 +22,7 @@ export interface ResourcePackageProviderComposition {
 /** Both mutation-session mechanisms share these exact readers and app-home
  * binding. Provider-specific artifact and transaction owners are added outside. */
 export function composeResourcePackageProvider(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly skillPackageContent?: SkillPackageContentReader
 }): ResourcePackageProviderComposition {

@@ -11,7 +11,7 @@
 // ⚠️ `stop` 不能按名字抓：SQLite 参与者工厂输入里那个 `runtimeRegistry` 是
 // `platform/runtime-registry` 的**运行时档案**注册表（`getRuntime(name)`），与这里要的
 // 停机票据注册表**同名不同物**。
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger } from '@/util/log'
 
 import { cancelTaskProjection } from '../infrastructure/childTaskLifecycleParticipant'
@@ -28,7 +28,7 @@ export interface TaskCancellation {
   cancel(taskId: string, cause?: TaskCancelCause): Promise<void>
 }
 
-export function composeTaskCancellation(db: ProviderNeutralDatabase): TaskCancellation {
+export function composeTaskCancellation(db: PersistenceDb): TaskCancellation {
   const dependencies = {
     db,
     persistence: createTaskExecutionPersistence(db),

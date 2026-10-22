@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, inArray, isNotNull, lt, ne, notInArray, sql, type SQLWrapper } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -17,18 +19,6 @@ import {
   type PostIntentWorkingSetChange,
 } from '@agent-workflow/shared'
 
-import {
-  agents,
-  intentApplyJournal,
-  intentDraftResolutions,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  intentTurnEvents,
-  intentTurns,
-  intentWorkingSetChanges,
-  runtimes,
-} from '@/db/schema'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
@@ -67,7 +57,9 @@ import {
   type IntentSqlStatement,
 } from './intentSqlProgram'
 
-const sessionColumns = sql`
+const sessionColumns = (db: object) => {
+  const { intentSessions } = tablesOf(db)
+  return sql`
   ${intentSessions.id} AS "id",
   ${intentSessions.ownerUserId} AS "ownerUserId",
   ${intentSessions.title} AS "title",
@@ -83,8 +75,11 @@ const sessionColumns = sql`
   ${intentSessions.createdAt} AS "createdAt",
   ${intentSessions.updatedAt} AS "updatedAt"
 `
+}
 
-const turnColumns = sql`
+const turnColumns = (db: object) => {
+  const { intentTurns } = tablesOf(db)
+  return sql`
   ${intentTurns.id} AS "id",
   ${intentTurns.sessionId} AS "sessionId",
   ${intentTurns.seq} AS "seq",
@@ -103,8 +98,11 @@ const turnColumns = sql`
   ${intentTurns.scratchRetained} AS "scratchRetained",
   ${intentTurns.createdAt} AS "createdAt"
 `
+}
 
-const workingSetColumns = sql`
+const workingSetColumns = (db: object) => {
+  const { intentWorkingSetChanges } = tablesOf(db)
+  return sql`
   ${intentWorkingSetChanges.id} AS "id",
   ${intentWorkingSetChanges.sessionId} AS "sessionId",
   ${intentWorkingSetChanges.clientMutationId} AS "clientMutationId",
@@ -120,8 +118,11 @@ const workingSetColumns = sql`
   ${intentWorkingSetChanges.createdAt} AS "createdAt",
   ${intentWorkingSetChanges.updatedAt} AS "updatedAt"
 `
+}
 
-const turnEventColumns = sql`
+const turnEventColumns = (db: object) => {
+  const { intentTurnEvents } = tablesOf(db)
+  return sql`
   ${intentTurnEvents.id} AS "id",
   ${intentTurnEvents.turnId} AS "turnId",
   ${intentTurnEvents.eventSeq} AS "eventSeq",
@@ -133,8 +134,11 @@ const turnEventColumns = sql`
   ${intentTurnEvents.source} AS "source",
   ${intentTurnEvents.externalEventId} AS "externalEventId"
 `
+}
 
-const draftColumns = sql`
+const draftColumns = (db: object) => {
+  const { intentDrafts } = tablesOf(db)
+  return sql`
   ${intentDrafts.id} AS "id",
   ${intentDrafts.sessionId} AS "sessionId",
   ${intentDrafts.revision} AS "revision",
@@ -145,8 +149,11 @@ const draftColumns = sql`
   ${intentDrafts.contextRevision} AS "contextRevision",
   ${intentDrafts.createdAt} AS "createdAt"
 `
+}
 
-const applyJournalColumns = sql`
+const applyJournalColumns = (db: object) => {
+  const { intentApplyJournal } = tablesOf(db)
+  return sql`
   ${intentApplyJournal.id} AS "id",
   ${intentApplyJournal.sessionId} AS "sessionId",
   ${intentApplyJournal.clientMutationId} AS "clientMutationId",
@@ -159,6 +166,7 @@ const applyJournalColumns = sql`
   ${intentApplyJournal.createdAt} AS "createdAt",
   ${intentApplyJournal.updatedAt} AS "updatedAt"
 `
+}
 
 interface SqlColumnIdentifier {
   readonly name: string
@@ -287,7 +295,9 @@ interface IntentRuntimeRow {
   readonly extraArgsJson: string | null
 }
 
-const runtimeColumns = sql`
+const runtimeColumns = (db: object) => {
+  const { runtimes } = tablesOf(db)
+  return sql`
   ${runtimes.id} AS "id",
   ${runtimes.name} AS "name",
   ${runtimes.probeFence} AS "probeFence",
@@ -304,6 +314,7 @@ const runtimeColumns = sql`
   ${runtimes.configDirName} AS "configDirName",
   ${runtimes.extraArgsJson} AS "extraArgsJson"
 `
+}
 
 function parseStringArray(json: string | null): readonly string[] | null {
   if (json === null || json.length === 0) return null
@@ -381,7 +392,8 @@ function portNames(raw: string): readonly string[] {
   }
 }
 
-function sessionInsert(record: IntentSessionRecord): SQLWrapper {
+function sessionInsert(db: object, record: IntentSessionRecord): SQLWrapper {
+  const { intentSessions } = tablesOf(db)
   return sql`INSERT INTO ${intentSessions} (
     ${insertColumnList(
       intentSessions.id,
@@ -407,7 +419,8 @@ function sessionInsert(record: IntentSessionRecord): SQLWrapper {
   )`
 }
 
-function turnInsert(record: IntentTurnRecord): SQLWrapper {
+function turnInsert(db: object, record: IntentTurnRecord): SQLWrapper {
+  const { intentTurns } = tablesOf(db)
   return sql`INSERT INTO ${intentTurns} (
     ${insertColumnList(
       intentTurns.id,
@@ -479,14 +492,25 @@ function assertWritable(session: IntentSessionRecord, ownerUserId: string): void
   }
 }
 
-function* loadSession(id: string) {
-  const row = yield* firstRow<IntentSessionRecord>(sql`
-    SELECT ${sessionColumns} FROM ${intentSessions} WHERE ${intentSessions.id} = ${id} LIMIT 1
-  `)
+function* loadSession(db: object, id: string) {
+  const { intentSessions } = tablesOf(db)
+  const row = yield* firstRow<IntentSessionRecord>(
+    sql`
+    SELECT ${sessionColumns(db)} FROM ${intentSessions} WHERE ${intentSessions.id} = ${id} LIMIT 1
+  `,
+    {
+      contextRevision: 'int',
+      turnSeq: 'int',
+      commitSeq: 'int',
+      createdAt: 'int',
+      updatedAt: 'int',
+    },
+  )
   return row === null ? null : sessionOf(row)
 }
 
-function* assertNoUnsettledApply(sessionId: string) {
+function* assertNoUnsettledApply(db: object, sessionId: string) {
+  const { intentApplyJournal } = tablesOf(db)
   const row = yield* firstRow<{ readonly id: string }>(sql`
     SELECT ${intentApplyJournal.id} AS "id"
     FROM ${intentApplyJournal}
@@ -521,16 +545,28 @@ function requestDigest(value: unknown): string {
 }
 
 function* findGenerationReplay(
+  db: object,
   sessionId: string,
   clientMutationId: string,
   digest: string,
 ): Generator<IntentSqlStatement, IntentGenerationReceipt | null, unknown> {
-  const userTurn = yield* firstRow<IntentTurnRecord>(sql`
-    SELECT ${turnColumns} FROM ${intentTurns}
+  const { intentTurns } = tablesOf(db)
+  const userTurn = yield* firstRow<IntentTurnRecord>(
+    sql`
+    SELECT ${turnColumns(db)} FROM ${intentTurns}
     WHERE ${intentTurns.sessionId} = ${sessionId}
       AND ${intentTurns.clientMutationId} = ${clientMutationId}
     LIMIT 1
-  `)
+  `,
+    {
+      seq: 'int',
+      contextRevision: 'int',
+      captureLastEventSeq: 'int',
+      captureEventBytes: 'int',
+      scratchRetained: 'bool',
+      createdAt: 'int',
+    },
+  )
   if (userTurn === null) return null
   let storedDigest: unknown
   try {
@@ -544,26 +580,39 @@ function* findGenerationReplay(
       'clientMutationId was already used for a different generation request',
     )
   }
-  const agentTurn = yield* firstRow<IntentTurnRecord>(sql`
-    SELECT ${turnColumns} FROM ${intentTurns}
+  const agentTurn = yield* firstRow<IntentTurnRecord>(
+    sql`
+    SELECT ${turnColumns(db)} FROM ${intentTurns}
     WHERE ${intentTurns.sessionId} = ${sessionId}
       AND ${intentTurns.seq} = ${numberOf(userTurn.seq) + 1}
       AND ${intentTurns.role} = 'agent'
     LIMIT 1
-  `)
+  `,
+    {
+      seq: 'int',
+      contextRevision: 'int',
+      captureLastEventSeq: 'int',
+      captureEventBytes: 'int',
+      scratchRetained: 'bool',
+      createdAt: 'int',
+    },
+  )
   if (agentTurn === null) throw new Error('generation mutation has no successor turn')
   return { userTurnId: userTurn.id, agentTurnId: agentTurn.id, replayed: true }
 }
 
-function* reserveAfterGenerationUserTurn(input: {
-  readonly session: IntentSessionRecord
-  readonly clientMutationId: string
-  readonly digest: string
-  readonly message: string
-  readonly content: Record<string, unknown>
-  readonly maxGenerateRounds: number
-  readonly clearCurrentDraft?: boolean
-}) {
+function* reserveAfterGenerationUserTurn(
+  db: object,
+  input: {
+    readonly session: IntentSessionRecord
+    readonly clientMutationId: string
+    readonly digest: string
+    readonly message: string
+    readonly content: Record<string, unknown>
+    readonly maxGenerateRounds: number
+    readonly clearCurrentDraft?: boolean
+  },
+) {
   const now = Date.now()
   const userTurnId = ulid()
   const agentTurnId = ulid()
@@ -571,7 +620,7 @@ function* reserveAfterGenerationUserTurn(input: {
   const budget = assertBudget(input.session, input.maxGenerateRounds)
   const userSeq = input.session.turnSeq + 1
   yield* mutation(
-    turnInsert({
+    turnInsert(db, {
       id: userTurnId,
       sessionId: input.session.id,
       seq: userSeq,
@@ -596,7 +645,7 @@ function* reserveAfterGenerationUserTurn(input: {
     }),
   )
   yield* mutation(
-    turnInsert({
+    turnInsert(db, {
       id: agentTurnId,
       sessionId: input.session.id,
       seq: userSeq + 1,
@@ -616,6 +665,7 @@ function* reserveAfterGenerationUserTurn(input: {
       createdAt: now,
     }),
   )
+  const { intentSessions } = tablesOf(db)
   yield* mutation(sql`
     UPDATE ${intentSessions}
     SET ${columnIdentifier(intentSessions.currentDraftId)} = ${input.clearCurrentDraft === true ? null : input.session.currentDraftId},
@@ -624,7 +674,7 @@ function* reserveAfterGenerationUserTurn(input: {
       ${columnIdentifier(intentSessions.updatedAt)} = ${now}
     WHERE ${intentSessions.id} = ${input.session.id}
   `)
-  const launchSession = yield* loadSession(input.session.id)
+  const launchSession = yield* loadSession(db, input.session.id)
   if (launchSession === null) throw new Error('intent session vanished after reservation')
   return {
     receipt: { userTurnId, agentTurnId, replayed: false } satisfies IntentGenerationReceipt,
@@ -713,13 +763,30 @@ function validateCurrentDecisions(
 export class IntentSqlPersistence implements IntentPersistence {
   constructor(private readonly runner: IntentSqlProgramRunner) {}
 
+  private get database(): PersistenceDb {
+    return this.runner.db
+  }
+
   async resolveIntentRuntime(name: string | null | undefined): Promise<IntentResolvedRuntime> {
+    const persistenceDb = this.database
+
     const selected = typeof name === 'string' && name.length > 0 ? name : 'opencode'
     const row = await this.runner.read(function* () {
-      return yield* firstRow<IntentRuntimeRow>(sql`
-        SELECT ${runtimeColumns} FROM ${runtimes}
+      const { runtimes } = tablesOf(persistenceDb)
+      return yield* firstRow<IntentRuntimeRow>(
+        sql`
+        SELECT ${runtimeColumns(persistenceDb)} FROM ${runtimes}
         WHERE ${runtimes.name} = ${selected} LIMIT 1
-      `)
+      `,
+        {
+          probeFence: 'int',
+          enabled: 'bool',
+          temperature: 'real',
+          steps: 'int',
+          maxSteps: 'int',
+          isSandbox: 'bool',
+        },
+      )
     })
     if (row !== null) return runtimeOf(row)
     if (selected === 'opencode' || selected === 'claude-code') return builtinRuntime(selected)
@@ -727,11 +794,24 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async listIntentRuntimeInventory(): Promise<readonly IntentRuntimeInventoryRow[]> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      const rows = yield* allRows<IntentRuntimeRow>(sql`
-        SELECT ${runtimeColumns} FROM ${runtimes}
+      const { runtimes } = tablesOf(persistenceDb)
+      const rows = yield* allRows<IntentRuntimeRow>(
+        sql`
+        SELECT ${runtimeColumns(persistenceDb)} FROM ${runtimes}
         ORDER BY ${runtimes.name}
-      `)
+      `,
+        {
+          probeFence: 'int',
+          enabled: 'bool',
+          temperature: 'real',
+          steps: 'int',
+          maxSteps: 'int',
+          isSandbox: 'bool',
+        },
+      )
       return rows.map((row) => ({
         name: row.name,
         protocol: row.protocol,
@@ -743,12 +823,15 @@ export class IntentSqlPersistence implements IntentPersistence {
   async loadIntentAgentPortNames(
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, IntentAgentPortNames>> {
+    const persistenceDb = this.database
+
     if (ids.length === 0) return new Map()
     return await this.runner.read(function* () {
       const values = sql.join(
         ids.map((id) => sql`${id}`),
         sql`, `,
       )
+      const { agents } = tablesOf(persistenceDb)
       const rows = yield* allRows<{
         readonly id: string
         readonly inputs: string
@@ -769,8 +852,10 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async findSession(id: string): Promise<IntentSessionRecord | null> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      return yield* loadSession(id)
+      return yield* loadSession(persistenceDb, id)
     })
   }
 
@@ -780,10 +865,15 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly before?: { readonly updatedAt: number; readonly id: string }
     readonly limit?: number
   }): Promise<readonly IntentSessionListRecord[]> {
+    const persistenceDb = this.database
+
     const conditions: SQLWrapper[] = []
     if (input.ownerUserId !== undefined) {
+      const { intentSessions } = tablesOf(persistenceDb)
       conditions.push(sql`${intentSessions.ownerUserId} = ${input.ownerUserId}`)
     }
+    const { intentSessions, intentDrafts, intentTurns, intentApplyJournal } =
+      tablesOf(persistenceDb)
     if (input.status !== undefined) conditions.push(sql`${intentSessions.status} = ${input.status}`)
     if (input.before !== undefined) {
       conditions.push(sql`(
@@ -802,8 +892,9 @@ export class IntentSqlPersistence implements IntentPersistence {
           readonly currentDraftContextRevision: number | null
           readonly currentDraftValidationJson: string | null
         }
-      >(sql`
-        SELECT ${sessionColumns},
+      >(
+        sql`
+        SELECT ${sessionColumns(persistenceDb)},
           ${intentDrafts.revision} AS "currentDraftRevision",
           ${intentDrafts.contextRevision} AS "currentDraftContextRevision",
           ${intentDrafts.validationJson} AS "currentDraftValidationJson"
@@ -812,7 +903,17 @@ export class IntentSqlPersistence implements IntentPersistence {
         ${where}
         ORDER BY ${intentSessions.updatedAt} DESC, ${intentSessions.id} DESC
         ${limit}
-      `)
+      `,
+        {
+          contextRevision: 'int',
+          turnSeq: 'int',
+          commitSeq: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+          currentDraftRevision: 'int',
+          currentDraftContextRevision: 'int',
+        },
+      )
       const ids = sessions.map((session) => session.id)
       if (ids.length === 0) return []
       const idList = sql.join(
@@ -823,26 +924,32 @@ export class IntentSqlPersistence implements IntentPersistence {
         readonly sessionId: string
         readonly kind: IntentTurnRecord['kind']
         readonly seq: number
-      }>(sql`
+      }>(
+        sql`
         SELECT ${intentTurns.sessionId} AS "sessionId", ${intentTurns.kind} AS "kind",
           ${intentTurns.seq} AS "seq"
         FROM ${intentTurns}
         WHERE ${intentTurns.sessionId} IN (${idList}) AND ${intentTurns.role} = 'agent'
         ORDER BY ${intentTurns.seq} DESC, ${intentTurns.id} DESC
-      `)
+      `,
+        { seq: 'int' },
+      )
       const commits = yield* allRows<{
         readonly sessionId: string
         readonly draftId: string
         readonly state: IntentApplyJournalRecord['state']
         readonly createdAt: number
-      }>(sql`
+      }>(
+        sql`
         SELECT ${intentApplyJournal.sessionId} AS "sessionId",
           ${intentApplyJournal.draftId} AS "draftId", ${intentApplyJournal.state} AS "state",
           ${intentApplyJournal.createdAt} AS "createdAt"
         FROM ${intentApplyJournal}
         WHERE ${intentApplyJournal.sessionId} IN (${idList})
         ORDER BY ${intentApplyJournal.createdAt} DESC, ${intentApplyJournal.id} DESC
-      `)
+      `,
+        { createdAt: 'int' },
+      )
       const latestTurn = new Map<string, IntentTurnRecord['kind']>()
       for (const turn of turns)
         if (!latestTurn.has(turn.sessionId)) latestTurn.set(turn.sessionId, turn.kind)
@@ -871,21 +978,40 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async listTurns(sessionId: string): Promise<readonly IntentTurnRecord[]> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      return (yield* allRows<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns } = tablesOf(persistenceDb)
+      return (yield* allRows<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.sessionId} = ${sessionId}
         ORDER BY ${intentTurns.seq}
-      `)).map(turnOf)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )).map(turnOf)
     })
   }
 
   async findDraft(id: string): Promise<IntentDraftRecord | null> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      const row = yield* firstRow<IntentDraftRecord>(sql`
-        SELECT ${draftColumns} FROM ${intentDrafts}
+      const { intentDrafts } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentDraftRecord>(
+        sql`
+        SELECT ${draftColumns(persistenceDb)} FROM ${intentDrafts}
         WHERE ${intentDrafts.id} = ${id} LIMIT 1
-      `)
+      `,
+        { revision: 'int', contextRevision: 'int', createdAt: 'int' },
+      )
       return row === null ? null : draftOf(row)
     })
   }
@@ -893,23 +1019,32 @@ export class IntentSqlPersistence implements IntentPersistence {
   async loadSessionDetailArtifacts(
     sessionId: string,
   ): ReturnType<IntentPersistence['loadSessionDetailArtifacts']> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      const drafts = yield* allRows<IntentDraftRecord>(sql`
-        SELECT ${draftColumns} FROM ${intentDrafts}
+      const { intentDrafts, intentDraftResolutions, intentApplyJournal } = tablesOf(persistenceDb)
+      const drafts = yield* allRows<IntentDraftRecord>(
+        sql`
+        SELECT ${draftColumns(persistenceDb)} FROM ${intentDrafts}
         WHERE ${intentDrafts.sessionId} = ${sessionId}
         ORDER BY ${intentDrafts.revision}
-      `)
+      `,
+        { revision: 'int', contextRevision: 'int', createdAt: 'int' },
+      )
       const resolutions = yield* allRows<IntentDraftResolutionRecord>(sql`
         SELECT ${intentDraftResolutions.draftId} AS "draftId",
           ${intentDraftResolutions.reason} AS "reason"
         FROM ${intentDraftResolutions}
         WHERE ${intentDraftResolutions.sessionId} = ${sessionId}
       `)
-      const commits = yield* allRows<IntentApplyJournalRecord>(sql`
-        SELECT ${applyJournalColumns} FROM ${intentApplyJournal}
+      const commits = yield* allRows<IntentApplyJournalRecord>(
+        sql`
+        SELECT ${applyJournalColumns(persistenceDb)} FROM ${intentApplyJournal}
         WHERE ${intentApplyJournal.sessionId} = ${sessionId}
         ORDER BY ${intentApplyJournal.createdAt}
-      `)
+      `,
+        { createdAt: 'int', updatedAt: 'int' },
+      )
       return {
         drafts: drafts.map(draftOf),
         resolutions,
@@ -921,8 +1056,10 @@ export class IntentSqlPersistence implements IntentPersistence {
   async beginTurn(
     input: Parameters<IntentPersistence['beginTurn']>[0],
   ): ReturnType<IntentPersistence['beginTurn']> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null || session.ownerUserId !== input.ownerUserId) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -933,10 +1070,21 @@ export class IntentSqlPersistence implements IntentPersistence {
         throw new ConflictError('intent-session-archived', 'session is archived')
       }
       if (input.reservation !== undefined) {
-        const turn = yield* firstRow<IntentTurnRecord>(sql`
-          SELECT ${turnColumns} FROM ${intentTurns}
+        const { intentTurns } = tablesOf(persistenceDb)
+        const turn = yield* firstRow<IntentTurnRecord>(
+          sql`
+          SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
           WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
-        `)
+        `,
+          {
+            seq: 'int',
+            contextRevision: 'int',
+            captureLastEventSeq: 'int',
+            captureEventBytes: 'int',
+            scratchRetained: 'bool',
+            createdAt: 'int',
+          },
+        )
         if (
           session.inFlightTurnId !== input.turnId ||
           turn === null ||
@@ -961,11 +1109,11 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       const budget = assertBudget(session, input.maxGenerateRounds)
       const seq = session.turnSeq + 1
       yield* mutation(
-        turnInsert({
+        turnInsert(persistenceDb, {
           id: input.turnId,
           sessionId: session.id,
           seq,
@@ -985,6 +1133,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           createdAt: input.now,
         }),
       )
+      const { intentSessions } = tablesOf(persistenceDb)
       yield* mutation(sql`
         UPDATE ${intentSessions}
         SET ${columnIdentifier(intentSessions.inFlightTurnId)} = ${input.turnId},
@@ -999,18 +1148,31 @@ export class IntentSqlPersistence implements IntentPersistence {
   async cancelReservedTurn(
     input: Parameters<IntentPersistence['cancelReservedTurn']>[0],
   ): Promise<boolean> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (
         session === null ||
         session.ownerUserId !== input.ownerUserId ||
         session.inFlightTurnId === null
       )
         return false
-      const turn = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns, intentSessions } = tablesOf(persistenceDb)
+      const turn = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${session.inFlightTurnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (
         turn === null ||
         turn.sessionId !== session.id ||
@@ -1038,12 +1200,25 @@ export class IntentSqlPersistence implements IntentPersistence {
   async settleReservedTurnStartFailure(
     input: Parameters<IntentPersistence['settleReservedTurnStartFailure']>[0],
   ): Promise<boolean> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
-      const turn = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const session = yield* loadSession(persistenceDb, input.sessionId)
+      const { intentTurns, intentSessions } = tablesOf(persistenceDb)
+      const turn = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (
         session === null ||
         session.ownerUserId !== input.ownerUserId ||
@@ -1078,14 +1253,17 @@ export class IntentSqlPersistence implements IntentPersistence {
   async refreshTurnManifest(
     input: Parameters<IntentPersistence['refreshTurnManifest']>[0],
   ): Promise<boolean> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (
         session === null ||
         session.inFlightTurnId !== input.turnId ||
         session.contextRevision !== input.launchRevision
       )
         return false
+      const { intentSessions } = tablesOf(persistenceDb)
       yield* mutation(sql`
         UPDATE ${intentSessions}
         SET ${columnIdentifier(intentSessions.contextManifestJson)} = ${JSON.stringify(input.manifest)},
@@ -1105,12 +1283,16 @@ export class IntentSqlPersistence implements IntentPersistence {
   async settleTurn(
     input: Parameters<IntentPersistence['settleTurn']>[0],
   ): ReturnType<IntentPersistence['settleTurn']> {
+    const persistenceDb = this.database
+
     const draftId = input.draft === undefined ? null : ulid()
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError('intent-session-not-found', 'session vanished')
       }
+      const { intentTurns, intentDrafts, intentDraftResolutions, intentSessions } =
+        tablesOf(persistenceDb)
       // RFC-358 T6 —— 「本轮是不是图修复轮」的判据**持久在 turn 行里**：铸修复轮时
       // 它的 content 就带上标记。不靠内存状态，因此进程重启、boot 恢复之后读到的仍是
       // 同一判断；也不需要让 11 个 settle 调用点各自注入。
@@ -1144,11 +1326,14 @@ export class IntentSqlPersistence implements IntentPersistence {
         input.draft !== undefined &&
         draftId !== null
       ) {
-        const previous = yield* firstRow<{ readonly revision: number | null }>(sql`
+        const previous = yield* firstRow<{ readonly revision: number | null }>(
+          sql`
           SELECT MAX(${intentDrafts.revision}) AS "revision"
           FROM ${intentDrafts}
           WHERE ${intentDrafts.sessionId} = ${session.id}
-        `)
+        `,
+          { revision: 'int' },
+        )
         draftRevision = numberOf(previous?.revision ?? 0) + 1
         if (session.currentDraftId !== null && session.currentDraftId !== draftId) {
           yield* mutation(sql`
@@ -1230,7 +1415,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       let repairReservation: ReservedIntentTurnRecord | undefined
       if (mintRepair && input.graphRepair !== undefined) {
         yield* mutation(
-          turnInsert({
+          turnInsert(persistenceDb, {
             id: input.graphRepair.turnId,
             sessionId: input.sessionId,
             seq: repairSeq,
@@ -1300,10 +1485,12 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly userTurn: IntentTurnRecord
     readonly agentTurn?: IntentTurnRecord
   }): Promise<void> {
+    const persistenceDb = this.database
+
     await this.runner.transaction(function* () {
-      yield* mutation(sessionInsert(input.session))
-      yield* mutation(turnInsert(input.userTurn))
-      if (input.agentTurn !== undefined) yield* mutation(turnInsert(input.agentTurn))
+      yield* mutation(sessionInsert(persistenceDb, input.session))
+      yield* mutation(turnInsert(persistenceDb, input.userTurn))
+      if (input.agentTurn !== undefined) yield* mutation(turnInsert(persistenceDb, input.agentTurn))
     })
   }
 
@@ -1314,11 +1501,13 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly authorization: IntentContextResourceAuthorization
     readonly resources: readonly IntentContextResourceReference[]
   }): Promise<void> {
+    const persistenceDb = this.database
+
     await this.runner.transaction(function* () {
       yield* assertAuthorizedResources(input.authorization, input.resources)
-      yield* mutation(sessionInsert(input.session))
-      yield* mutation(turnInsert(input.userTurn))
-      if (input.agentTurn !== undefined) yield* mutation(turnInsert(input.agentTurn))
+      yield* mutation(sessionInsert(persistenceDb, input.session))
+      yield* mutation(turnInsert(persistenceDb, input.userTurn))
+      if (input.agentTurn !== undefined) yield* mutation(turnInsert(persistenceDb, input.agentTurn))
     })
   }
 
@@ -1327,8 +1516,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly sessionId: string
     readonly turn: IntentTurnRecord
   }): Promise<{ readonly turnId: string; readonly seq: number }> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1339,9 +1530,12 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       const seq = session.turnSeq + 1
-      yield* mutation(turnInsert({ ...input.turn, seq, contextRevision: session.contextRevision }))
+      yield* mutation(
+        turnInsert(persistenceDb, { ...input.turn, seq, contextRevision: session.contextRevision }),
+      )
+      const { intentSessions } = tablesOf(persistenceDb)
       yield* mutation(sql`
         UPDATE ${intentSessions} SET ${columnIdentifier(intentSessions.turnSeq)} = ${seq},
           ${columnIdentifier(intentSessions.updatedAt)} = ${input.turn.createdAt}
@@ -1363,8 +1557,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly authorization: IntentContextResourceAuthorization
     readonly resources: readonly IntentContextResourceReference[]
   }): Promise<'committed' | 'stale'> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1375,16 +1571,27 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       if (
         session.turnSeq !== input.expectedTurnSeq ||
         session.contextRevision !== input.expectedContextRevision
       )
         return 'stale'
-      const source = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns, intentSessions } = tablesOf(persistenceDb)
+      const source = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.sourceTurnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (
         source === null ||
         source.sessionId !== input.sessionId ||
@@ -1395,7 +1602,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       )
         return 'stale'
       yield* assertAuthorizedResources(input.authorization, input.resources)
-      yield* mutation(turnInsert(input.approvalTurn))
+      yield* mutation(turnInsert(persistenceDb, input.approvalTurn))
       yield* mutation(sql`
         UPDATE ${intentSessions}
         SET ${columnIdentifier(intentSessions.contextManifestJson)} = ${JSON.stringify(input.manifest)},
@@ -1426,8 +1633,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly seq: number
     readonly reservation: ReservedIntentTurnRecord
   }> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1438,11 +1647,11 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       const budget = assertBudget(session, input.maxGenerateRounds)
       const seq = session.turnSeq + 1
       yield* mutation(
-        turnInsert({
+        turnInsert(persistenceDb, {
           id: input.userTurnId,
           sessionId: input.sessionId,
           seq,
@@ -1463,7 +1672,7 @@ export class IntentSqlPersistence implements IntentPersistence {
         }),
       )
       yield* mutation(
-        turnInsert({
+        turnInsert(persistenceDb, {
           id: input.agentTurnId,
           sessionId: input.sessionId,
           seq: seq + 1,
@@ -1483,6 +1692,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           createdAt: input.now,
         }),
       )
+      const { intentSessions } = tablesOf(persistenceDb)
       yield* mutation(sql`
         UPDATE ${intentSessions} SET ${columnIdentifier(intentSessions.inFlightTurnId)} = ${input.agentTurnId},
           ${columnIdentifier(intentSessions.turnSeq)} = ${seq + 1}, ${columnIdentifier(intentSessions.updatedAt)} = ${input.now}
@@ -1509,8 +1719,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly now: number
     readonly maxGenerateRounds: number
   }): Promise<ReservedIntentTurnRecord> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1521,7 +1733,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       const reservation = reservationOf({
         turnId: input.turnId,
         envelopeNonce: input.envelopeNonce,
@@ -1530,7 +1742,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       })
       const seq = session.turnSeq + 1
       yield* mutation(
-        turnInsert({
+        turnInsert(persistenceDb, {
           id: input.turnId,
           sessionId: input.sessionId,
           seq,
@@ -1550,6 +1762,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           createdAt: input.now,
         }),
       )
+      const { intentSessions } = tablesOf(persistenceDb)
       yield* mutation(sql`
         UPDATE ${intentSessions} SET ${columnIdentifier(intentSessions.inFlightTurnId)} = ${input.turnId},
           ${columnIdentifier(intentSessions.turnSeq)} = ${seq}, ${columnIdentifier(intentSessions.updatedAt)} = ${input.now}
@@ -1568,8 +1781,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly handleWatermarkJson?: string
     readonly updatedAt: number
   }): Promise<'updated' | 'stale'> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1580,13 +1795,14 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       if (
         session.contextRevision !== input.expectedContextRevision ||
         session.turnSeq !== input.expectedTurnSeq
       )
         return 'stale'
       const nextRevision = session.contextRevision + 1
+      const { intentSessions } = tablesOf(persistenceDb)
       const changed = yield* mutation(sql`
         UPDATE ${intentSessions}
         SET ${columnIdentifier(intentSessions.contextManifestJson)} = ${JSON.stringify(input.manifest)},
@@ -1612,8 +1828,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly authorization: IntentContextResourceAuthorization
     readonly resources: readonly IntentContextResourceReference[]
   }): Promise<'updated' | 'stale'> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1624,7 +1842,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       if (
         session.contextRevision !== input.expectedContextRevision ||
         session.turnSeq !== input.expectedTurnSeq
@@ -1632,6 +1850,7 @@ export class IntentSqlPersistence implements IntentPersistence {
         return 'stale'
       yield* assertAuthorizedResources(input.authorization, input.resources)
       const nextRevision = session.contextRevision + 1
+      const { intentSessions } = tablesOf(persistenceDb)
       const changed = yield* mutation(sql`
         UPDATE ${intentSessions}
         SET ${columnIdentifier(intentSessions.contextManifestJson)} = ${JSON.stringify(input.manifest)},
@@ -1652,8 +1871,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly status: IntentSessionStatus
     readonly updatedAt: number
   }): Promise<'updated' | 'unchanged'> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null || session.ownerUserId !== input.ownerUserId) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1664,7 +1885,8 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
+      const { intentSessions } = tablesOf(persistenceDb)
       yield* mutation(sql`
         UPDATE ${intentSessions} SET ${columnIdentifier(intentSessions.status)} = ${input.status},
           ${columnIdentifier(intentSessions.updatedAt)} = ${input.updatedAt}
@@ -1675,14 +1897,18 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async listProvenance(input: { readonly resourceType: string; readonly resourceId: string }) {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
+      const { intentProvenance, intentSessions } = tablesOf(persistenceDb)
       const rows = yield* allRows<{
         readonly commitId: string
         readonly sessionId: string
         readonly sessionTitle: string
         readonly sessionOwnerUserId: string
         readonly createdAt: number
-      }>(sql`
+      }>(
+        sql`
         SELECT ${intentProvenance.commitId} AS "commitId",
           ${intentProvenance.sessionId} AS "sessionId",
           ${intentSessions.title} AS "sessionTitle",
@@ -1693,13 +1919,18 @@ export class IntentSqlPersistence implements IntentPersistence {
         WHERE ${intentProvenance.resourceType} = ${input.resourceType}
           AND ${intentProvenance.resourceId} = ${input.resourceId}
         ORDER BY ${intentProvenance.createdAt} DESC
-      `)
+      `,
+        { createdAt: 'int' },
+      )
       return rows.map((row) => ({ ...row, createdAt: numberOf(row.createdAt) }))
     })
   }
 
   async listQueuedWorkingSetSessionIds(): Promise<readonly string[]> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
       const rows = yield* allRows<{ readonly sessionId: string }>(sql`
         SELECT ${intentWorkingSetChanges.sessionId} AS "sessionId"
         FROM ${intentWorkingSetChanges}
@@ -1712,7 +1943,10 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async listTurnIdsForBootRecovery(): Promise<readonly string[]> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
+      const { intentSessions } = tablesOf(persistenceDb)
       const rows = yield* allRows<{ readonly turnId: string | null }>(sql`
         SELECT ${intentSessions.inFlightTurnId} AS "turnId"
         FROM ${intentSessions}
@@ -1724,8 +1958,11 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async listRunningTurnIds(turnIds: readonly string[]): Promise<ReadonlySet<string>> {
+    const persistenceDb = this.database
+
     if (turnIds.length === 0) return new Set()
     return await this.runner.read(function* () {
+      const { intentTurns } = tablesOf(persistenceDb)
       const rows = yield* allRows<{ readonly id: string }>(sql`
         SELECT ${intentTurns.id} AS "id"
         FROM ${intentTurns}
@@ -1740,8 +1977,11 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly now: number
     readonly reason: string
   }): Promise<number> {
+    const persistenceDb = this.database
+
     if (input.turnIds.length === 0) return 0
     return await this.runner.transaction(function* () {
+      const { intentSessions, intentTurns } = tablesOf(persistenceDb)
       const orphaned = yield* allRows<{
         readonly id: string
         readonly turnId: string | null
@@ -1797,7 +2037,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly cutoff: number
     readonly excludedTurnIds: readonly string[]
   }): Promise<readonly string[]> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
+      const { intentTurns } = tablesOf(persistenceDb)
       const predicate = and(
         lt(intentTurns.createdAt, input.cutoff),
         ne(intentTurns.kind, 'running'),
@@ -1834,9 +2077,11 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly receipt: IntentGenerationReceipt
     readonly reservation: ReservedIntentTurnRecord | null
   }> {
+    const persistenceDb = this.database
+
     const digest = requestDigest(input.request)
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null || session.ownerUserId !== input.ownerUserId) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1844,6 +2089,7 @@ export class IntentSqlPersistence implements IntentPersistence {
         )
       }
       const replay = yield* findGenerationReplay(
+        persistenceDb,
         input.sessionId,
         input.request.clientMutationId,
         digest,
@@ -1853,7 +2099,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       if (
         session.turnSeq !== input.request.expectedTurnSeq ||
         session.contextRevision !== input.request.expectedContextRevision
@@ -1874,7 +2120,7 @@ export class IntentSqlPersistence implements IntentPersistence {
             'the latest committed checkpoint changed; refresh before continuing',
           )
         }
-        return yield* reserveAfterGenerationUserTurn({
+        return yield* reserveAfterGenerationUserTurn(persistenceDb, {
           session,
           clientMutationId: input.request.clientMutationId,
           digest,
@@ -1886,20 +2132,24 @@ export class IntentSqlPersistence implements IntentPersistence {
           maxGenerateRounds: input.maxGenerateRounds,
         })
       }
+      const { intentDrafts, intentDraftResolutions } = tablesOf(persistenceDb)
       const draft = yield* firstRow<{
         readonly id: string
         readonly sessionId: string
         readonly revision: number
         readonly draftHash: string
         readonly contextRevision: number
-      }>(sql`
+      }>(
+        sql`
         SELECT ${intentDrafts.id} AS "id", ${intentDrafts.sessionId} AS "sessionId",
           ${intentDrafts.revision} AS "revision", ${intentDrafts.draftHash} AS "draftHash",
           ${intentDrafts.contextRevision} AS "contextRevision"
         FROM ${intentDrafts}
         WHERE ${intentDrafts.id} = ${input.request.sourceDraftId}
         LIMIT 1
-      `)
+      `,
+        { revision: 'int', contextRevision: 'int' },
+      )
       if (
         draft === null ||
         draft.sessionId !== input.sessionId ||
@@ -1928,7 +2178,7 @@ export class IntentSqlPersistence implements IntentPersistence {
             )}
           ) VALUES (${draft.id}, ${input.sessionId}, 'discarded', ${Date.now()})
         `)
-        return yield* reserveAfterGenerationUserTurn({
+        return yield* reserveAfterGenerationUserTurn(persistenceDb, {
           session,
           clientMutationId: input.request.clientMutationId,
           digest,
@@ -1943,7 +2193,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           clearCurrentDraft: true,
         })
       }
-      return yield* reserveAfterGenerationUserTurn({
+      return yield* reserveAfterGenerationUserTurn(persistenceDb, {
         session,
         clientMutationId: input.request.clientMutationId,
         digest,
@@ -1967,9 +2217,11 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly receipt: IntentGenerationReceipt
     readonly reservation: ReservedIntentTurnRecord | null
   }> {
+    const persistenceDb = this.database
+
     const digest = requestDigest(input.request)
     return await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null || session.ownerUserId !== input.ownerUserId) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -1977,6 +2229,7 @@ export class IntentSqlPersistence implements IntentPersistence {
         )
       }
       const replay = yield* findGenerationReplay(
+        persistenceDb,
         input.sessionId,
         input.request.clientMutationId,
         digest,
@@ -1986,7 +2239,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session.inFlightTurnId !== null) {
         throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
       }
-      yield* assertNoUnsettledApply(input.sessionId)
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
       if (
         session.turnSeq !== input.request.expectedTurnSeq ||
         session.contextRevision !== input.request.expectedContextRevision
@@ -1996,12 +2249,23 @@ export class IntentSqlPersistence implements IntentPersistence {
           'the failed turn changed; refresh before retrying',
         )
       }
-      const latest = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns } = tablesOf(persistenceDb)
+      const latest = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.sessionId} = ${input.sessionId} AND ${intentTurns.role} = 'agent'
         ORDER BY ${intentTurns.seq} DESC, ${intentTurns.id} DESC
         LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (
         latest === null ||
         latest.id !== input.request.sourceTurnId ||
@@ -2014,7 +2278,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           'only the latest generation error can be retried',
         )
       }
-      return yield* reserveAfterGenerationUserTurn({
+      return yield* reserveAfterGenerationUserTurn(persistenceDb, {
         session,
         clientMutationId: input.request.clientMutationId,
         digest,
@@ -2035,26 +2299,40 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly receipt: IntentGenerationReceipt
     readonly reservation: ReservedIntentTurnRecord | null
   }> {
+    const persistenceDb = this.database
+
     const digest = requestDigest(input.request)
     const preflight = await this.runner.read(function* () {
       const replay = yield* findGenerationReplay(
+        persistenceDb,
         input.sessionId,
         input.request.clientMutationId,
         digest,
       )
       if (replay !== null) return { replay, session: null, source: null, additions: [] as const }
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null || session.ownerUserId !== input.ownerUserId) {
         throw new NotFoundError(
           'intent-session-not-found',
           `intent session '${input.sessionId}' not found`,
         )
       }
-      const source = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns } = tablesOf(persistenceDb)
+      const source = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.request.sourceTurnId}
         LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       return { replay: null, session, source, additions: [] as const }
     })
     if (preflight.replay !== null) return { receipt: preflight.replay, reservation: null }
@@ -2120,12 +2398,13 @@ export class IntentSqlPersistence implements IntentPersistence {
     }
     return await this.runner.transaction(function* () {
       const replay = yield* findGenerationReplay(
+        persistenceDb,
         input.sessionId,
         input.request.clientMutationId,
         digest,
       )
       if (replay !== null) return { receipt: replay, reservation: null }
-      const fresh = yield* loadSession(input.sessionId)
+      const fresh = yield* loadSession(persistenceDb, input.sessionId)
       if (
         fresh === null ||
         fresh.ownerUserId !== input.ownerUserId ||
@@ -2138,12 +2417,23 @@ export class IntentSqlPersistence implements IntentPersistence {
           'the current action changed; refresh first',
         )
       }
-      yield* assertNoUnsettledApply(input.sessionId)
-      const freshSource = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
+      const { intentTurns, intentSessions } = tablesOf(persistenceDb)
+      const freshSource = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.request.sourceTurnId}
         LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (
         freshSource === null ||
         freshSource.sessionId !== input.sessionId ||
@@ -2171,7 +2461,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       const contextRevision = fresh.contextRevision + (applied.changed ? 1 : 0)
       const userSeq = fresh.turnSeq + 1
       yield* mutation(
-        turnInsert({
+        turnInsert(persistenceDb, {
           id: userTurnId,
           sessionId: input.sessionId,
           seq: userSeq,
@@ -2197,7 +2487,7 @@ export class IntentSqlPersistence implements IntentPersistence {
         }),
       )
       yield* mutation(
-        turnInsert({
+        turnInsert(persistenceDb, {
           id: agentTurnId,
           sessionId: input.sessionId,
           seq: userSeq + 1,
@@ -2227,7 +2517,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           ${columnIdentifier(intentSessions.updatedAt)} = ${now}
         WHERE ${intentSessions.id} = ${input.sessionId}
       `)
-      const launchSession = yield* loadSession(input.sessionId)
+      const launchSession = yield* loadSession(persistenceDb, input.sessionId)
       if (launchSession === null) throw new Error('intent session vanished after current action')
       return {
         receipt: { userTurnId, agentTurnId, replayed: false },
@@ -2237,14 +2527,26 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async latestWorkingSetChange(sessionId: string): Promise<IntentWorkingSetChangeRecord | null> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      const row = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.sessionId} = ${sessionId}
         ORDER BY ${intentWorkingSetChanges.createdAt} DESC,
           ${intentWorkingSetChanges.id} DESC
         LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       return row === null ? null : workingSetOf(row)
     })
   }
@@ -2260,11 +2562,13 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly reservation: ReservedIntentTurnRecord | null
     readonly shouldInterrupt: boolean
   }> {
+    const persistenceDb = this.database
+
     const hash = workingSetRequestHash(input.request)
     const now = Date.now()
     const changeId = ulid()
     const admitted = await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -2272,13 +2576,23 @@ export class IntentSqlPersistence implements IntentPersistence {
         )
       }
       assertWritable(session, input.ownerUserId)
-      yield* assertNoUnsettledApply(input.sessionId)
-      const replay = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
+      const replay = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.sessionId} = ${input.sessionId}
           AND ${intentWorkingSetChanges.clientMutationId} = ${input.request.clientMutationId}
         LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       if (replay !== null) {
         const row = workingSetOf(replay)
         if (row.requestHash !== hash) {
@@ -2298,12 +2612,21 @@ export class IntentSqlPersistence implements IntentPersistence {
           'the session changed; refresh the working context before saving',
         )
       }
-      const unresolved = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const unresolved = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.sessionId} = ${input.sessionId}
           AND ${intentWorkingSetChanges.state} IN ('queued', 'applying', 'failed')
         LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       if (unresolved !== null) {
         if (input.request.replacesChangeId !== unresolved.id || unresolved.state === 'applying') {
           throw new ConflictError(
@@ -2349,10 +2672,19 @@ export class IntentSqlPersistence implements IntentPersistence {
           NULL, NULL, NULL, ${now}, ${now}
         )
       `)
-      const row = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const row = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.id} = ${changeId} LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       if (row === null) throw new Error('working-context change vanished after insert')
       return {
         row: workingSetOf(row),
@@ -2394,23 +2726,35 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly change: IntentWorkingSetChangeDto | null
     readonly reservation: ReservedIntentTurnRecord | null
   }> {
+    const persistenceDb = this.database
+
     const candidate = await this.runner.read(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) return null
       assertWritable(session, input.ownerUserId)
       if (session.inFlightTurnId !== null) return null
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
       const idCondition =
         input.changeId === undefined
           ? sql``
           : sql`AND ${intentWorkingSetChanges.id} = ${input.changeId}`
-      const row = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const row = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.sessionId} = ${input.sessionId}
           AND ${intentWorkingSetChanges.state} = 'queued'
           ${idCondition}
         ORDER BY ${intentWorkingSetChanges.createdAt}, ${intentWorkingSetChanges.id}
         LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       return row === null ? null : workingSetOf(row)
     })
     if (candidate === null) return { change: null, reservation: null }
@@ -2428,15 +2772,25 @@ export class IntentSqlPersistence implements IntentPersistence {
     }
     try {
       const activated = await this.runner.transaction(function* () {
-        const session = yield* loadSession(input.sessionId)
-        const row = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-          SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+        const session = yield* loadSession(persistenceDb, input.sessionId)
+        const { intentWorkingSetChanges, intentSessions } = tablesOf(persistenceDb)
+        const row = yield* firstRow<IntentWorkingSetChangeRecord>(
+          sql`
+          SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
           WHERE ${intentWorkingSetChanges.id} = ${candidate.id} LIMIT 1
-        `)
+        `,
+          {
+            expectedTurnSeq: 'int',
+            expectedContextRevision: 'int',
+            resultingContextRevision: 'int',
+            createdAt: 'int',
+            updatedAt: 'int',
+          },
+        )
         if (session === null || row === null || row.state !== 'queued') return null
         assertWritable(session, input.ownerUserId)
         if (session.inFlightTurnId !== null) return null
-        yield* assertNoUnsettledApply(input.sessionId)
+        yield* assertNoUnsettledApply(persistenceDb, input.sessionId)
         yield* assertAuthorizedResources(input.visibility, delta.additions)
         const applied = applyIntentWorkingSetDelta(
           JSON.parse(session.contextManifestJson) as IntentContextManifest,
@@ -2459,7 +2813,7 @@ export class IntentSqlPersistence implements IntentPersistence {
             AND ${intentWorkingSetChanges.state} = 'queued'
         `)
         yield* mutation(
-          turnInsert({
+          turnInsert(persistenceDb, {
             id: userTurnId,
             sessionId: input.sessionId,
             seq: userSeq,
@@ -2487,7 +2841,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           }),
         )
         yield* mutation(
-          turnInsert({
+          turnInsert(persistenceDb, {
             id: agentTurnId,
             sessionId: input.sessionId,
             seq: userSeq + 1,
@@ -2525,11 +2879,20 @@ export class IntentSqlPersistence implements IntentPersistence {
             ${columnIdentifier(intentWorkingSetChanges.updatedAt)} = ${now}
           WHERE ${intentWorkingSetChanges.id} = ${row.id}
         `)
-        const launchSession = yield* loadSession(input.sessionId)
-        const final = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-          SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+        const launchSession = yield* loadSession(persistenceDb, input.sessionId)
+        const final = yield* firstRow<IntentWorkingSetChangeRecord>(
+          sql`
+          SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
           WHERE ${intentWorkingSetChanges.id} = ${row.id} LIMIT 1
-        `)
+        `,
+          {
+            expectedTurnSeq: 'int',
+            expectedContextRevision: 'int',
+            resultingContextRevision: 'int',
+            createdAt: 'int',
+            updatedAt: 'int',
+          },
+        )
         if (launchSession === null || final === null)
           throw new Error('working-context activation vanished')
         return {
@@ -2551,6 +2914,8 @@ export class IntentSqlPersistence implements IntentPersistence {
     changeId: string,
     error: unknown,
   ): Promise<IntentWorkingSetChangeRecord | null> {
+    const persistenceDb = this.database
+
     const message =
       error instanceof DomainError
         ? error.message
@@ -2558,10 +2923,20 @@ export class IntentSqlPersistence implements IntentPersistence {
           ? error.message
           : String(error)
     return await this.runner.transaction(function* () {
-      const row = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.id} = ${changeId} LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       if (row === null || row.state !== 'queued') return row === null ? null : workingSetOf(row)
       yield* mutation(sql`
         UPDATE ${intentWorkingSetChanges}
@@ -2570,10 +2945,19 @@ export class IntentSqlPersistence implements IntentPersistence {
           ${columnIdentifier(intentWorkingSetChanges.updatedAt)} = ${Date.now()}
         WHERE ${intentWorkingSetChanges.id} = ${changeId}
       `)
-      const final = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const final = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.id} = ${changeId} LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       return final === null ? null : workingSetOf(final)
     })
   }
@@ -2583,8 +2967,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly sessionId: string
     readonly changeId: string
   }): Promise<IntentWorkingSetChangeDto> {
+    const persistenceDb = this.database
+
     const row = await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -2592,10 +2978,20 @@ export class IntentSqlPersistence implements IntentPersistence {
         )
       }
       assertWritable(session, input.ownerUserId)
-      const found = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
+      const found = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.id} = ${input.changeId} LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       if (found === null || found.sessionId !== input.sessionId) {
         throw new NotFoundError('intent-working-set-not-found', 'working-context update not found')
       }
@@ -2610,10 +3006,19 @@ export class IntentSqlPersistence implements IntentPersistence {
           WHERE ${intentWorkingSetChanges.id} = ${found.id}
         `)
       }
-      const final = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const final = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.id} = ${found.id} LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       return workingSetOf(final ?? found)
     })
     return projectWorkingSet(row)
@@ -2629,8 +3034,10 @@ export class IntentSqlPersistence implements IntentPersistence {
     readonly change: IntentWorkingSetChangeDto | null
     readonly reservation: ReservedIntentTurnRecord | null
   }> {
+    const persistenceDb = this.database
+
     await this.runner.transaction(function* () {
-      const session = yield* loadSession(input.sessionId)
+      const session = yield* loadSession(persistenceDb, input.sessionId)
       if (session === null) {
         throw new NotFoundError(
           'intent-session-not-found',
@@ -2638,10 +3045,20 @@ export class IntentSqlPersistence implements IntentPersistence {
         )
       }
       assertWritable(session, input.ownerUserId)
-      const row = yield* firstRow<IntentWorkingSetChangeRecord>(sql`
-        SELECT ${workingSetColumns} FROM ${intentWorkingSetChanges}
+      const { intentWorkingSetChanges } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentWorkingSetChangeRecord>(
+        sql`
+        SELECT ${workingSetColumns(persistenceDb)} FROM ${intentWorkingSetChanges}
         WHERE ${intentWorkingSetChanges.id} = ${input.changeId} LIMIT 1
-      `)
+      `,
+        {
+          expectedTurnSeq: 'int',
+          expectedContextRevision: 'int',
+          resultingContextRevision: 'int',
+          createdAt: 'int',
+          updatedAt: 'int',
+        },
+      )
       if (row === null || row.sessionId !== input.sessionId) {
         throw new NotFoundError('intent-working-set-not-found', 'working-context update not found')
       }
@@ -2664,11 +3081,24 @@ export class IntentSqlPersistence implements IntentPersistence {
   async appendTurnEvent(
     input: Parameters<IntentPersistence['appendTurnEvent']>[0],
   ): ReturnType<IntentPersistence['appendTurnEvent']> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const turn = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns, intentTurnEvents } = tablesOf(persistenceDb)
+      const turn = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (turn === null || turn.captureState === null) {
         throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
       }
@@ -2677,13 +3107,16 @@ export class IntentSqlPersistence implements IntentPersistence {
         return { eventSeq: current.captureLastEventSeq, duplicate: false, stopped: true }
       }
       if (input.externalEventId !== null) {
-        const duplicate = yield* firstRow<{ readonly id: number }>(sql`
+        const duplicate = yield* firstRow<{ readonly id: number }>(
+          sql`
           SELECT ${intentTurnEvents.id} AS "id" FROM ${intentTurnEvents}
           WHERE ${intentTurnEvents.turnId} = ${input.turnId}
             AND ${intentTurnEvents.source} = ${input.source}
             AND ${intentTurnEvents.externalEventId} = ${input.externalEventId}
           LIMIT 1
-        `)
+        `,
+          { id: 'int' },
+        )
         if (duplicate !== null) {
           return { eventSeq: current.captureLastEventSeq, duplicate: true, stopped: false }
         }
@@ -2732,11 +3165,24 @@ export class IntentSqlPersistence implements IntentPersistence {
   async replaceTurnRootSession(
     input: Parameters<IntentPersistence['replaceTurnRootSession']>[0],
   ): ReturnType<IntentPersistence['replaceTurnRootSession']> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const row = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns, intentTurnEvents } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (row === null || row.captureState === null) {
         throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
       }
@@ -2793,11 +3239,24 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async readTurnCapture(turnId: string): Promise<IntentTurnRecord | null> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      const row = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${turnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       return row === null ? null : turnOf(row)
     })
   }
@@ -2805,11 +3264,24 @@ export class IntentSqlPersistence implements IntentPersistence {
   async settleTurnCapture(
     input: Parameters<IntentPersistence['settleTurnCapture']>[0],
   ): ReturnType<IntentPersistence['settleTurnCapture']> {
+    const persistenceDb = this.database
+
     return await this.runner.transaction(function* () {
-      const row = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (row === null || row.captureState === null) {
         return { eventSeq: 0, captureState: null }
       }
@@ -2837,17 +3309,33 @@ export class IntentSqlPersistence implements IntentPersistence {
   }
 
   async readTurnSession(turnId: string): ReturnType<IntentPersistence['readTurnSession']> {
+    const persistenceDb = this.database
+
     return await this.runner.read(function* () {
-      const row = yield* firstRow<IntentTurnRecord>(sql`
-        SELECT ${turnColumns} FROM ${intentTurns}
+      const { intentTurns, intentTurnEvents } = tablesOf(persistenceDb)
+      const row = yield* firstRow<IntentTurnRecord>(
+        sql`
+        SELECT ${turnColumns(persistenceDb)} FROM ${intentTurns}
         WHERE ${intentTurns.id} = ${turnId} LIMIT 1
-      `)
+      `,
+        {
+          seq: 'int',
+          contextRevision: 'int',
+          captureLastEventSeq: 'int',
+          captureEventBytes: 'int',
+          scratchRetained: 'bool',
+          createdAt: 'int',
+        },
+      )
       if (row === null) return null
-      const events = yield* allRows<IntentTurnEventRecord>(sql`
-        SELECT ${turnEventColumns} FROM ${intentTurnEvents}
+      const events = yield* allRows<IntentTurnEventRecord>(
+        sql`
+        SELECT ${turnEventColumns(persistenceDb)} FROM ${intentTurnEvents}
         WHERE ${intentTurnEvents.turnId} = ${turnId}
         ORDER BY ${intentTurnEvents.eventSeq}
-      `)
+      `,
+        { id: 'int', eventSeq: 'int', ts: 'int' },
+      )
       return { turn: turnOf(row), events: events.map(eventOf) }
     })
   }

@@ -23,29 +23,18 @@
 // Preserved verbatim: queued → open (unconditional, 'revivable'); failed/interrupted/pending/
 // running handler → open (revival still owed); dual-queued reject (rfc128-p5-bc three cases).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  nodeRuns,
-  nodeRunOutputs,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import { isDispatchedEntryConsumed } from '../src/services/clarifyRerunLedger'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { RunLineageView, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type {
-  nodeRuns as nodeRunsTable,
-  taskQuestions as taskQuestionsTable,
-} from '../src/db/schema'
-
 const ulid = monotonicFactory()
 
 const D = 'D' // the designer / home node both ledgers land on (QMGP5's agent_m7p3n1)
@@ -63,9 +52,10 @@ function liveDef(): WorkflowDefinition {
   return { $schema_version: 4, inputs: [], nodes, edges: [], outputs: [] }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -73,7 +63,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -93,13 +83,14 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; iteration?: number; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -109,7 +100,7 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -118,12 +109,13 @@ async function seedRun(
  *  questions were asked BY the ledger's own handler run — seedAnsweredRound-style helpers mint a
  *  fresh asking run, which would pollute the handler lineage window on the same node). */
 async function seedSelfRoundAskedBy(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   askingRunId: string,
 ): Promise<{ intermediaryNodeRunId: string }> {
   const intRunId = await seedRun(db, taskId, CL, { status: 'awaiting_human' })
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -150,13 +142,10 @@ interface EntrySeed {
   triggerRunId?: string | null
 }
 
-async function insertEntry(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  e: EntrySeed,
-): Promise<string> {
+async function insertEntry(db: PersistenceDb, taskId: string, e: EntrySeed): Promise<string> {
   const id = ulid()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -185,8 +174,8 @@ afterAll(() => resetBroadcastersForTests())
 // ① pure oracle matrix — isDispatchedEntryConsumed, bound branch
 // ===========================================================================
 
-type NodeRunRow = typeof nodeRunsTable.$inferSelect
-type TaskQuestionRow = typeof taskQuestionsTable.$inferSelect
+type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
 type EntryPick = Pick<
   TaskQuestionRow,
   'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind' | 'sourceKind'

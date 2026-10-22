@@ -14,6 +14,8 @@
 //
 // 重试预算填不平：取证门同时要求 `httpErrors === 0` 与单请求 < 1000ms，加重试只会把尾延迟
 // 推高（托管 2 核上已量到 API max 1066.8ms）。
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { nativeQueryFixture } from './helpers/nativeQueryFixture'
 import { describe, expect, test } from 'bun:test'
 import { getTableName, is, Table } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
@@ -62,7 +64,7 @@ function recordingClient(): {
       order.push('begin')
       return await body({
         // RFC-359 W11：行锁的渲染权归能力矩阵，而矩阵按**事务句柄**自述的 `resultKind` 取引擎
-        // （`engineOf`：sqlite-proxy 是 `'async'`，bun:sqlite 是 `'sync'`）。判据一字未变——
+        // （`engineOf` 从原生句柄读取会话能力）。判据一字未变——
         // 假事务句柄同样要自报家门，否则它冒充的是 SQLite，行锁会被渲染成 no-op。
         resultKind: 'async',
         async run(query: unknown) {
@@ -72,6 +74,7 @@ function recordingClient(): {
       })
     },
   } as unknown as PostgresqlDatabaseClient
+  inheritDatabaseHandle(db, nativeQueryFixture('postgresql').db)
   return { db, statements, order }
 }
 

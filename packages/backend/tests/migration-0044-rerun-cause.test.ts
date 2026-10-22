@@ -12,11 +12,13 @@
 //   If a future table rebuild drops/renames the column, these go RED.
 //   (Conventions mirror migration-0043.)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { RERUN_CAUSES } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -24,7 +26,8 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'm44',
     description: '',
@@ -32,7 +35,7 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'm44',
     workflowId: wfId,
@@ -51,14 +54,15 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
 describe('RFC-098 migration 0044 — node_runs.rerun_cause', () => {
   test('node_runs has the rerun_cause column', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = db.all(sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
+    const cols = rawRows(db, sql`PRAGMA table_info(node_runs)`) as Array<{ name: string }>
     expect(cols.map((c) => c.name)).toContain('rerun_cause')
   })
 
   test('a row round-trips its rerun_cause through the drizzle schema', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: '01M44CAUSEROW',
       taskId,
       nodeId: 'agent-1',
@@ -75,10 +79,14 @@ describe('RFC-098 migration 0044 — node_runs.rerun_cause', () => {
   test('a historical-style row (no cause written) reads back NULL', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.run(sql`
+    await rawExec(
+      db,
+      sql`
       INSERT INTO node_runs (id, task_id, node_id, status, retry_index, iteration, started_at)
       VALUES ('01M44LEGACYROW', ${taskId}, 'agent-1', 'done', 0, 0, 1)
-    `)
+    `,
+    )
+    const { nodeRuns } = tablesOf(db)
     const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, '01M44LEGACYROW')))[0]!
     expect(row.rerunCause).toBeNull()
   })
@@ -88,7 +96,8 @@ describe('RFC-098 migration 0044 — node_runs.rerun_cause', () => {
     const taskId = await seedTask(db)
     for (const cause of RERUN_CAUSES) {
       const id = `01M44_${cause}`
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id,
         taskId,
         nodeId: 'agent-1',

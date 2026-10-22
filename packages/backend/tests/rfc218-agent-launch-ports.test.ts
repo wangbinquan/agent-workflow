@@ -23,6 +23,7 @@
 //   B7  scheduled save gate (design P2-2): ported agent + description payload
 //       / upload-port agent → 422 at save; text-port payload saves.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -49,7 +50,6 @@ import {
   createTestTaskExecutionLaunchParticipant,
   launchAgentTaskViaParticipant,
 } from './helpers/participantLaunch'
-import { users } from '../src/db/schema'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
@@ -92,6 +92,7 @@ const PORTS = [
 ] as const
 
 async function seedLaunchUser(db: DbClient): Promise<void> {
+  const { users } = tablesOf(db)
   // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
   // （用户存在、active、有 email、gitName 非空），旧的 `startAgentTask` 不看这些。
   await db
@@ -358,8 +359,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       createTestTaskExecutionLaunchParticipant({
         db,
         appHome,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         // 本用例只断言**返回的那一行**（端口值 / 快照），不需要等驱动跑完——
         // 旧调用面也没传 `awaitScheduler`。等它会让用例从毫秒级涨到 25 秒。
         completionMode: 'background',
@@ -389,8 +389,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       createTestTaskExecutionLaunchParticipant({
         db,
         appHome,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         // 本用例只断言**返回的那一行**（端口值 / 快照），不需要等驱动跑完——
         // 旧调用面也没传 `awaitScheduler`。等它会让用例从毫秒级涨到 25 秒。
         completionMode: 'background',
@@ -431,7 +430,7 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
   const app = (
     await openTestApplication(
-      { provider: 'sqlite', db: db },
+      { provider: 'sqlite', db },
       {
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
         token: TOKEN,

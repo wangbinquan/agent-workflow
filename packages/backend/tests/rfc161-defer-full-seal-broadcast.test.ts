@@ -6,6 +6,8 @@
 // click target) via useTaskSync. A PARTIAL seal keeps the round awaiting_human →
 // no event (canvas nav stays 'awaiting').
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,8 +15,7 @@ import { join } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import type { ClarifyQuestion, TaskWsMessage } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -59,7 +60,7 @@ const makeAns = (qid: string) => ({
 })
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string }
 }
@@ -87,20 +88,21 @@ async function req(app: Hono, token: string, path: string, body: unknown): Promi
 }
 
 async function seedSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(SELF_DEF),
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     ownerUserId,
@@ -115,7 +117,7 @@ async function seedSelfRound(
     startedAt: Date.now(),
   })
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',

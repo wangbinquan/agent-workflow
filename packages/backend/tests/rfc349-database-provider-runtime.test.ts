@@ -1,6 +1,7 @@
 // RFC-349 — config supplies mechanism settings, while the verified generation
 // pointer alone selects the live provider. Drift must fail closed.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -116,12 +117,12 @@ describe('RFC-349 database provider runtime resolution', () => {
       }
       let closed = 0
       let reserves = 0
-      const connection: PostgresqlReservedConnection = {
+      const connection: PostgresqlReservedConnection = withNativeTransactions({
         unsafe() {
           return rows()
         },
         release() {},
-      }
+      })
       const pool: PostgresqlPool = {
         async reserve() {
           reserves += 1

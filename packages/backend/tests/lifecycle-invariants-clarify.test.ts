@@ -6,8 +6,10 @@
 // node_run was never promoted out of awaiting_human, leaving the task
 // permanently parked.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { eq } from 'drizzle-orm'
@@ -18,17 +20,16 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-prd-clarify-'))
   mkdirSync(tmp, { recursive: true })
   const def: WorkflowDefinition = {
@@ -38,9 +39,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -63,12 +65,13 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
 }
 
 async function insertClarifyRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   status: 'awaiting_human' | 'running' | 'done' | 'canceled',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'clr_1',
@@ -83,7 +86,7 @@ async function insertClarifyRun(
 }
 
 async function insertClarifySession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     clarifyNodeRunId: string
@@ -195,6 +198,7 @@ describeEachProvider(
         scope: { taskId: h.taskId },
       })
       expect(r1.newAlerts).toBe(1)
+      const { nodeRuns } = tablesOf(h.db)
       await h.db
         .update(nodeRuns)
         .set({ status: 'done', finishedAt: Date.now() })

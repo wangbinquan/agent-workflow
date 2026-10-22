@@ -11,7 +11,7 @@
 
 import type { Actor } from '../../src/auth/actor'
 import type { SecretBox } from '../../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../../src/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'
 import { createMcpTransactionLifecycle } from '../../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
@@ -24,7 +24,7 @@ import type { ParsedPackage } from '../../src/services/resourcePackage/parse'
 type ProviderInput = Parameters<typeof composePostgresqlResourcePackageProvider>[0]
 
 export interface ResourcePackageApplyTestDeps {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly box: SecretBox
   /** 省略即用真实安装器（与生产同一条）；要挡住装插件的用例自己传一个会抛的。 */

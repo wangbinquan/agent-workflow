@@ -1,10 +1,10 @@
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { WorkgroupHostLedgerParticipantInTx } from '../public/commands'
 import { createWorkgroupHostLedgerParticipantInTx } from '../infrastructure/workgroupHostLedgerParticipant'
 import type { WorkgroupTaskRoomClarifyParticipantFactory } from './workgroupTaskRoomTask'
 
 export interface WorkgroupHostLedgerParticipantFactory {
-  inTransaction(transaction: DatabaseTransaction): WorkgroupHostLedgerParticipantInTx
+  inTransaction(transaction: PersistenceTx): WorkgroupHostLedgerParticipantInTx
 }
 
 /**
@@ -15,7 +15,7 @@ export function composeWorkgroupHostLedgerParticipantFactory(input: {
   readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
 }): WorkgroupHostLedgerParticipantFactory {
   return Object.freeze({
-    inTransaction: (transaction: DatabaseTransaction) =>
+    inTransaction: (transaction: PersistenceTx) =>
       createWorkgroupHostLedgerParticipantInTx(
         transaction,
         input.collaboration.inTransaction(transaction),

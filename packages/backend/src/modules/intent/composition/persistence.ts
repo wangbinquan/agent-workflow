@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createAuthorizedIntentPersistence,
   createIntentPersistence,
@@ -12,7 +12,7 @@ export { createIntentPersistence }
  * 授权会话与 Intent 程序跑在**同一笔**中立事务里。
  */
 export function composeIntentPersistence(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly contextAuthorization: IntentContextResourceAuthorizationFactoryDependency
 }) {
   return createAuthorizedIntentPersistence(input)

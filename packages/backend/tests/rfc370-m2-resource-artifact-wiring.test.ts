@@ -1,20 +1,13 @@
 // RFC-395 II-pre：hosted 工件恢复改接生产 journal convergence，保留远端内容断言。
 // Real Intent resource commits, durable recovery and the worker envelope share
 // selected content owners. Neither provider is allowed to touch a local root.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { INTENT_CHANGESET_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import {
-  hostedExecutionControl,
-  intentApplyJournal,
-  intentDrafts,
-  intentSessions,
-  plugins,
-  skills,
-  users,
-} from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
 import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
@@ -52,7 +45,10 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
       },
       source: 'session',
     })
-    await harness.db.insert(users).values({ ...actor.user, createdAt: 1, updatedAt: 1 })
+    const { users, intentSessions, intentDrafts, skills, plugins, intentApplyJournal } = tablesOf(
+      harness.db,
+    )
+    await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const authority = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
       { userId: actor.user.id, source: 'session' },
       'http',
@@ -130,14 +126,14 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
       ],
     })
     const draftHash = `sha256:${sha256Hex(changesetJson)}`
-    await harness.db.insert(intentSessions).values({
+    await insertOne(harness.db, intentSessions, {
       id: sessionId,
       ownerUserId: actor.user.id,
       title: 'Hosted resources',
       createdAt: 1,
       updatedAt: 1,
     })
-    await harness.db.insert(intentDrafts).values({
+    await insertOne(harness.db, intentDrafts, {
       id: draftId,
       sessionId,
       revision: 1,
@@ -231,7 +227,8 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
   test('worker borrows one frozen lease and cannot adopt a later main owner', async () => {
     const lease = { epoch: 7, leaseId: 'lease-seven', instanceId: 'owner-seven' }
     const fence = composeCrewStationWorkerFence(harness.db, lease)
-    await harness.db.insert(hostedExecutionControl).values({
+    const { hostedExecutionControl } = tablesOf(harness.db)
+    await insertOne(harness.db, hostedExecutionControl, {
       id: 'global',
       epoch: 7,
       leaseId: lease.leaseId,

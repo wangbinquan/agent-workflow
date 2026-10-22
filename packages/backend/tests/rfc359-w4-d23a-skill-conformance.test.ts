@@ -12,7 +12,7 @@
 import { afterAll, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { composeTestSkillCatalog } from './helpers/skillCatalog'
@@ -61,7 +61,7 @@ async function createSkill(
 
 describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harness) => {
   test('建 → 读 → 列：三条读面在两个引擎上给出同一形状', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const name = `skill-${ulid().slice(-8).toLowerCase()}`
@@ -82,7 +82,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('内容读面：正文与文件树都拿得到，主文件是受保护的 SKILL.md', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const created = await createSkill(catalog, authority, `skill-${ulid().slice(-8).toLowerCase()}`)
@@ -97,7 +97,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('重名新建按同一条判据拒绝（两个引擎同一个错误码）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const name = `dup-${ulid().slice(-8).toLowerCase()}`
@@ -113,7 +113,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('保存正文会推进版本：版本表拿得到第 2 版，且内容随之更新', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const created = await createSkill(catalog, authority, `ver-${ulid().slice(-8).toLowerCase()}`)
@@ -138,7 +138,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('陈旧 token 的保存一律拒绝（两个引擎同一条乐观并发判据）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const created = await createSkill(catalog, authority, `occ-${ulid().slice(-8).toLowerCase()}`)
@@ -172,7 +172,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('文件写入 → 列出 → 读回：受管技能目录里的新文件在两个引擎上一致', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const created = await createSkill(catalog, authority, `file-${ulid().slice(-8).toLowerCase()}`)
@@ -193,7 +193,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('受保护的主文件不许删（两个引擎同一条判据）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const created = await createSkill(catalog, authority, `prot-${ulid().slice(-8).toLowerCase()}`)
@@ -218,7 +218,7 @@ describeEachProvider('RFC-359 W4-D23a —— 技能目录端口一致性', (harn
   })
 
   test('删除技能：行消失，再读是 null（两个引擎同一条收场）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const { catalog } = composeTestSkillCatalog(db)
     const authority = authorityOf(OWNER)
     const created = await createSkill(catalog, authority, `del-${ulid().slice(-8).toLowerCase()}`)

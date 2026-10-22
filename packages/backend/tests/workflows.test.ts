@@ -2,6 +2,8 @@
 // In-memory SQLite; CRUD round-trips and references checks only — full
 // topology/port validation lands in P-2-01.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   DeleteWorkflow,
   UpdateWorkflow,
@@ -13,7 +15,6 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { tasks, workflows } from '../src/db/schema'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -24,7 +25,7 @@ import {
 import { validateWorkflowById } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 
@@ -33,7 +34,7 @@ const SYSTEM_PRINCIPAL = { kind: 'system', reason: 'workflow-service-test' } as 
 
 async function buildHarness(
   scope: ProviderHttpApplicationScope,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   return { db: scope.harness.db, app: (await scope.open()).app }
 }
 
@@ -168,7 +169,8 @@ describe('workflow service', () => {
         definition: sampleDefinition(),
       })
       const taskId = ulid()
-      await db.insert(tasks).values({
+      const { tasks } = tablesOf(db)
+      await insertOne(db, tasks, {
         name: 'fixture-task',
 
         id: taskId,
@@ -201,7 +203,8 @@ describe('workflow service', () => {
         definition: sampleDefinition(),
       })
       const taskId = ulid()
-      await db.insert(tasks).values({
+      const { tasks } = tablesOf(db)
+      await insertOne(db, tasks, {
         name: 'fixture-task',
 
         id: taskId,
@@ -226,7 +229,7 @@ describe('workflow service', () => {
 
   // RFC-359 AC-6（plan §5ek）：这一块原本单引擎，卡的是 `validateWorkflowById(db: DbClient)`
   // 那一行标注——它底下调的 `getWorkflow` / `loadWorkflowValidationContext` 早就是中立签名，
-  // 整个阻塞就是入口的参数类型。参数放宽到 `ProviderNeutralDatabase` 后本块转双引擎。
+  // 整个阻塞就是入口的参数类型。参数放宽到 `PersistenceDb` 后本块转双引擎。
   describeEachProvider('validation 服务装配（双引擎）', (harness) => {
     let db: ProviderDatabaseHarness['db']
 
@@ -426,6 +429,7 @@ describeEachProviderHttpApplication(
         }),
       })
       const created = (await post.json()) as WorkflowDetail
+      const { workflows } = tablesOf(hdb)
       // Simulate a row written before the slug rule existed. The current save
       // service correctly refuses to mint a new invalid name, so this fixture
       // must bypass it just like a historical migration state would.

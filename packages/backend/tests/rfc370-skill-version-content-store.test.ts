@@ -1,12 +1,12 @@
 // RFC-370 H6: storage completion must precede the existing database phase
 // transitions. Use real provider databases and a non-filesystem storage fixture,
 // plus actual file operations through an asynchronous adapter.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills, skillOperations, skillOperationLocks, skillVersions } from '@/db/schema'
 import type {
   SkillVersionContentStore,
   SkillVersionPublication,
@@ -89,6 +89,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   async function operation() {
+    const { skillOperations } = tablesOf(harness.db)
     return (
       await harness.db
         .select()
@@ -97,12 +98,15 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
     )[0]!
   }
   async function currentVersion() {
+    const { skills } = tablesOf(harness.db)
     return (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]!.contentVersion
   }
   async function versions() {
+    const { skillVersions } = tablesOf(harness.db)
     return await harness.db.select().from(skillVersions).where(eq(skillVersions.skillId, skillId))
   }
   async function locks() {
+    const { skillOperationLocks } = tablesOf(harness.db)
     return await harness.db
       .select()
       .from(skillOperationLocks)

@@ -1,21 +1,14 @@
 // RFC-359 W4-B6 —— 源码控制发布凭据持久化：一份实现，两个 provider 共用。
 // 多语句写走统一事务原语；application / public 面只拿到 Promise 形态的封闭记录。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { and, count, eq } from 'drizzle-orm'
 import { RepositoryTransportMappingV1Schema } from '@agent-workflow/shared'
 import type { CodeHostProvider, RepositoryTransportMappingV1 } from '@agent-workflow/shared'
 
-import {
-  codeHostConnections,
-  repositoryTransportConnections,
-  userRepositoryTransportCredentials,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  affectedRows,
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   RepositoryTransportConnectionProjectionInput,
   RepositoryTransportConnectionProjectionSource,
@@ -26,7 +19,7 @@ import type {
 } from '../ports/repositoryTransportCredentialRepository'
 
 function configuredConnectionOf(
-  row: typeof codeHostConnections.$inferSelect,
+  row: PersistenceTables['codeHostConnections']['$inferSelect'],
 ): RepositoryTransportConnectionProjectionSource {
   return {
     provider: row.provider,
@@ -66,7 +59,7 @@ function parseMappings(raw: string): RepositoryTransportMappingV1[] {
 }
 
 function connectionOf(
-  row: typeof repositoryTransportConnections.$inferSelect,
+  row: PersistenceTables['repositoryTransportConnections']['$inferSelect'],
 ): StoredRepositoryTransportConnection {
   return {
     provider: row.provider,
@@ -85,7 +78,7 @@ function connectionOf(
 }
 
 function personalOf(
-  row: typeof userRepositoryTransportCredentials.$inferSelect,
+  row: PersistenceTables['userRepositoryTransportCredentials']['$inferSelect'],
 ): StoredPersonalRepositoryTransportCredential {
   return {
     userId: row.userId,
@@ -102,15 +95,15 @@ function personalOf(
 }
 
 async function synchronizeProjection(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: RepositoryTransportConnectionProjectionInput,
 ): Promise<void> {
+  const { repositoryTransportConnections, userRepositoryTransportCredentials } = tablesOf(tx)
   const currentRows = await tx
     .select()
     .from(repositoryTransportConnections)
     .where(eq(repositoryTransportConnections.provider, input.provider))
     .limit(1)
-    .all()
   const current = currentRows[0] === undefined ? null : connectionOf(currentRows[0])
   const bindingChanged =
     current !== null &&
@@ -120,7 +113,6 @@ async function synchronizeProjection(
     await tx
       .delete(userRepositoryTransportCredentials)
       .where(eq(userRepositoryTransportCredentials.provider, input.provider))
-      .run()
   }
   const credentialRevision =
     current === null
@@ -160,27 +152,29 @@ async function synchronizeProjection(
         updatedBy: input.updatedBy,
       },
     })
-    .run()
 }
 
 async function mutationFenceMatches(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   provider: CodeHostProvider,
   expected: RepositoryTransportConnectionMutationFence,
 ): Promise<boolean> {
+  const { repositoryTransportConnections, userRepositoryTransportCredentials } = tablesOf(tx)
   const [currentRows, countRows] = await Promise.all([
-    tx
-      .select()
-      .from(repositoryTransportConnections)
-      .where(eq(repositoryTransportConnections.provider, provider))
-      .limit(1)
-      .all(),
-    tx
-      .select({ count: count() })
-      .from(userRepositoryTransportCredentials)
-      .where(eq(userRepositoryTransportCredentials.provider, provider))
-      .limit(1)
-      .all(),
+    queryRows(
+      tx
+        .select()
+        .from(repositoryTransportConnections)
+        .where(eq(repositoryTransportConnections.provider, provider))
+        .limit(1),
+    ),
+    queryRows(
+      tx
+        .select({ count: count() })
+        .from(userRepositoryTransportCredentials)
+        .where(eq(userRepositoryTransportCredentials.provider, provider))
+        .limit(1),
+    ),
   ])
   const current = currentRows[0]
   return (
@@ -191,21 +185,22 @@ async function mutationFenceMatches(
 }
 
 export class DrizzleRepositoryTransportCredentialRepository implements RepositoryTransportCredentialRepository {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async listConnections(): Promise<readonly StoredRepositoryTransportConnection[]> {
-    return (await this.db.select().from(repositoryTransportConnections).all()).map(connectionOf)
+    const { repositoryTransportConnections } = tablesOf(this.db)
+    return (await this.db.select().from(repositoryTransportConnections)).map(connectionOf)
   }
 
   async findConnection(
     provider: CodeHostProvider,
   ): Promise<StoredRepositoryTransportConnection | null> {
+    const { repositoryTransportConnections } = tablesOf(this.db)
     const rows = await this.db
       .select()
       .from(repositoryTransportConnections)
       .where(eq(repositoryTransportConnections.provider, provider))
       .limit(1)
-      .all()
     return rows[0] === undefined ? null : connectionOf(rows[0])
   }
 
@@ -213,6 +208,7 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
     userId: string,
     provider: CodeHostProvider,
   ): Promise<StoredPersonalRepositoryTransportCredential | null> {
+    const { userRepositoryTransportCredentials } = tablesOf(this.db)
     const rows = await this.db
       .select()
       .from(userRepositoryTransportCredentials)
@@ -223,19 +219,18 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
         ),
       )
       .limit(1)
-      .all()
     return rows[0] === undefined ? null : personalOf(rows[0])
   }
 
   async listPersonal(
     userId: string,
   ): Promise<readonly StoredPersonalRepositoryTransportCredential[]> {
+    const { userRepositoryTransportCredentials } = tablesOf(this.db)
     return (
       await this.db
         .select()
         .from(userRepositoryTransportCredentials)
         .where(eq(userRepositoryTransportCredentials.userId, userId))
-        .all()
     ).map(personalOf)
   }
 
@@ -249,6 +244,7 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
     readonly now: number
   }): Promise<StoredPersonalRepositoryTransportCredential> {
     return await databaseSessionFor(this.db).transaction(async (tx) => {
+      const { userRepositoryTransportCredentials } = tablesOf(tx)
       const existingRows = await tx
         .select()
         .from(userRepositoryTransportCredentials)
@@ -259,7 +255,6 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
           ),
         )
         .limit(1)
-        .all()
       const existing = existingRows[0]
       const credentialRevision = (existing?.credentialRevision ?? 0) + 1
       const createdAt = existing?.createdAt ?? input.now
@@ -290,7 +285,6 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
             updatedAt: input.now,
           },
         })
-        .run()
       const rows = await tx
         .select()
         .from(userRepositoryTransportCredentials)
@@ -301,7 +295,6 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
           ),
         )
         .limit(1)
-        .all()
       const row = rows[0]
       if (row === undefined) throw new Error('personal repository credential write disappeared')
       return personalOf(row)
@@ -309,6 +302,7 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
   }
 
   async removePersonal(userId: string, provider: CodeHostProvider): Promise<boolean> {
+    const { userRepositoryTransportCredentials } = tablesOf(this.db)
     const result = await this.db
       .delete(userRepositoryTransportCredentials)
       .where(
@@ -317,35 +311,35 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
           eq(userRepositoryTransportCredentials.provider, provider),
         ),
       )
-      .run()
     return affectedRows(result) === 1
   }
 
   async personalCount(provider: CodeHostProvider): Promise<number> {
+    const { userRepositoryTransportCredentials } = tablesOf(this.db)
     const rows = await this.db
       .select({ count: count() })
       .from(userRepositoryTransportCredentials)
       .where(eq(userRepositoryTransportCredentials.provider, provider))
       .limit(1)
-      .all()
     return Number(rows[0]?.count ?? 0)
   }
 
   async listConfiguredConnections(): Promise<
     readonly RepositoryTransportConnectionProjectionSource[]
   > {
-    return (await this.db.select().from(codeHostConnections).all()).map(configuredConnectionOf)
+    const { codeHostConnections } = tablesOf(this.db)
+    return (await this.db.select().from(codeHostConnections)).map(configuredConnectionOf)
   }
 
   async findConfiguredConnection(
     provider: CodeHostProvider,
   ): Promise<RepositoryTransportConnectionProjectionSource | null> {
+    const { codeHostConnections } = tablesOf(this.db)
     const rows = await this.db
       .select()
       .from(codeHostConnections)
       .where(eq(codeHostConnections.provider, provider))
       .limit(1)
-      .all()
     return rows[0] === undefined ? null : configuredConnectionOf(rows[0])
   }
 
@@ -356,11 +350,11 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
   ): Promise<boolean> {
     return await databaseSessionFor(this.db).transaction(async (tx) => {
       if (!(await mutationFenceMatches(tx, connection.provider, expected))) return false
+      const { codeHostConnections } = tablesOf(tx)
       await tx
         .insert(codeHostConnections)
         .values(connection)
         .onConflictDoUpdate({ target: codeHostConnections.provider, set: connection })
-        .run()
       await synchronizeProjection(tx, projection)
       return true
     })
@@ -372,14 +366,13 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
   ): Promise<'removed' | 'missing' | 'stale'> {
     return await databaseSessionFor(this.db).transaction(async (tx) => {
       if (!(await mutationFenceMatches(tx, provider, expected))) return 'stale'
+      const { codeHostConnections, repositoryTransportConnections } = tablesOf(tx)
       const result = await tx
         .delete(codeHostConnections)
         .where(eq(codeHostConnections.provider, provider))
-        .run()
       await tx
         .delete(repositoryTransportConnections)
         .where(eq(repositoryTransportConnections.provider, provider))
-        .run()
       return affectedRows(result) === 1 ? 'removed' : 'missing'
     })
   }
@@ -388,11 +381,11 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
     provider: CodeHostProvider,
     lastTestJson: string,
   ): Promise<void> {
+    const { codeHostConnections } = tablesOf(this.db)
     await this.db
       .update(codeHostConnections)
       .set({ lastTestJson })
       .where(eq(codeHostConnections.provider, provider))
-      .run()
   }
 
   async synchronizeConnection(input: RepositoryTransportConnectionProjectionInput): Promise<void> {
@@ -402,10 +395,10 @@ export class DrizzleRepositoryTransportCredentialRepository implements Repositor
   }
 
   async removeConnection(provider: CodeHostProvider): Promise<boolean> {
+    const { repositoryTransportConnections } = tablesOf(this.db)
     const result = await this.db
       .delete(repositoryTransportConnections)
       .where(eq(repositoryTransportConnections.provider, provider))
-      .run()
     return affectedRows(result) === 1
   }
 }

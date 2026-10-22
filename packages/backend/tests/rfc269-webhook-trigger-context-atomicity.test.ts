@@ -7,6 +7,8 @@
 // publication boundary: attribution + context are visible at task commit,
 // before scheduler kickoff; non-webhook NULL stays distinct from webhook `{}`;
 // and serialization failure cannot leave a schedulable task behind.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +18,6 @@ import { eq } from 'drizzle-orm'
 import type { TriggerContext } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, workflows } from '../src/db/schema'
 import { launchTestTask, type TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
 import type { ExecutionInvoker } from '../src/services/execution/types'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -67,13 +68,12 @@ function buildHarness(): Harness {
   const db = createInMemoryDb(MIGRATIONS)
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc269-trigger-context-'))
   const workflowId = 'wf-rfc269-trigger-context'
-  db.insert(workflows)
-    .values({
-      id: workflowId,
-      name: 'rfc269-trigger-context',
-      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-    })
-    .run()
+  const { workflows } = tablesOf(db)
+  insertOne(db, workflows, {
+    id: workflowId,
+    name: 'rfc269-trigger-context',
+    definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+  })
   return { db, appHome, workflowId }
 }
 
@@ -82,8 +82,8 @@ async function launchAndObserveCommit(
   invoker: ExecutionInvoker,
   name: string,
   actor: Actor = ACTOR,
-): Promise<typeof tasks.$inferSelect> {
-  let committedRow: typeof tasks.$inferSelect | undefined
+): Promise<PersistenceTables['tasks']['$inferSelect']> {
+  let committedRow: PersistenceTables['tasks']['$inferSelect'] | undefined
   const task = await launchTestTask(
     { workflowId: h.workflowId, name, inputs: {}, scratch: true },
     {
@@ -95,6 +95,7 @@ async function launchAndObserveCommit(
       awaitScheduler: true,
       coordinator: {
         async submit(event) {
+          const { tasks } = tablesOf(h.db)
           committedRow = (
             await h.db.select().from(tasks).where(eq(tasks.id, event.taskId)).limit(1)
           )[0]
@@ -171,7 +172,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
       name: string
       actor: Actor
       invoker: ExecutionInvoker
-      expected: (typeof tasks.$inferSelect)['launchOrigin']
+      expected: PersistenceTables['tasks']['$inferSelect']['launchOrigin']
     }> = [
       {
         name: 'session-json',
@@ -267,6 +268,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
           : null,
       ),
     ).toEqual(['task-launch-schedule-metadata-invalid', 'task-launch-webhook-metadata-invalid'])
+    const { tasks } = tablesOf(h.db)
     expect(await h.db.select().from(tasks)).toHaveLength(0)
     const scratchRoot = join(h.appHome, 'scratch')
     expect(existsSync(scratchRoot) ? readdirSync(scratchRoot) : []).toEqual([])
@@ -309,6 +311,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
     ).rejects.toThrow('the frozen task trigger context is invalid')
 
     expect(committed).toBe(false)
+    const { tasks } = tablesOf(h.db)
     expect(await h.db.select().from(tasks)).toHaveLength(0)
     const scratchRoot = join(h.appHome, 'scratch')
     expect(existsSync(scratchRoot) ? readdirSync(scratchRoot) : []).toEqual([])

@@ -13,6 +13,8 @@
 // `seed()` 对同名 `provider:projectPath` 直接抛「already seeded」，两个引擎复用同一个
 // projectPath 会让第二遍在第一行就炸（而且第一遍已经把 main 推到了 'target change'）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -26,7 +28,6 @@ import {
   type StartedSystemMockSuite,
 } from '@agent-workflow/system-mocks'
 
-import { cachedRepos, employeeOsOutbox } from '@/db/schema'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
@@ -125,7 +126,8 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           repository: new SQLiteRepositoryTransportCredentialRepository(db),
           appHome,
         })
-        await db.insert(cachedRepos).values({
+        const { cachedRepos, employeeOsOutbox } = tablesOf(db)
+        await insertOne(db, cachedRepos, {
           id: repositoryId,
           urlHash: 'rfc310-conflict-system-mock',
           urlEnc: null,

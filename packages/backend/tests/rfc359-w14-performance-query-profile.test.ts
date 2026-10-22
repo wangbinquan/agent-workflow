@@ -1,3 +1,4 @@
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { SQLQueryBindings } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -178,12 +179,13 @@ describe('RFC-359 query diagnosis after completed HTTP measurement', () => {
     }
     const pool: PostgresqlPool = {
       unsafe,
-      reserve: async () => ({
-        unsafe,
-        release: () => {
-          calls.push('release')
-        },
-      }),
+      reserve: async () =>
+        withNativeTransactions({
+          unsafe,
+          release: () => {
+            calls.push('release')
+          },
+        }),
       close: async () => {
         calls.push('close')
       },

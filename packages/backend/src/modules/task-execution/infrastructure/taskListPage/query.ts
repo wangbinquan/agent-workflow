@@ -1,7 +1,7 @@
 // RFC-357 —— 列表页的四种 SQL 形状：穷举管线（root / children）与 RFC-311 的两条快路径。
 //
 // 平移自 `services/taskOperations.ts`，SQL 文本逐字不变。可以逐字搬到两个 provider 上跑，
-// 依据见 `db.ts` 的调查记录（sqlite-proxy 客户端 / `search_path` 上的 SQLite 函数 shim /
+// RFC-395 I-b：方言函数由 EngineCapabilities 渲染；其余结构使用两个原生 builder 共用的 SQL（
 // `MATERIALIZED`、行值比较、递归 CTE 两方言同义 / 搜索两侧都已 `lower()`）。
 
 import {
@@ -12,6 +12,7 @@ import {
   type TaskOperationsFilters,
 } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 
 import {
   taskListOwnershipScopeCondition,
@@ -82,14 +83,14 @@ export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, v
       JOIN base child ON child.id = qw.id
       JOIN base parent ON parent.id = child.parent_task_id
       WHERE qw.depth < ${MAX_TREE_DEPTH}
-        AND instr(qw.path, ',' || parent.id || ',') = 0
+        AND ${engineOf(db).instr(sql`qw.path`, sql`',' || parent.id || ','`)} = 0
     ),
     qualified_ids AS MATERIALIZED (
       SELECT DISTINCT id FROM qualified_walk
     )
   `
 }
-export function branchCtes(rootIds: SQL): SQL {
+export function branchCtes(db: TaskListPageDb, rootIds: SQL): SQL {
   return sql`
     root_ids AS MATERIALIZED (${rootIds}),
     branch_walk(root_id, id, path, depth) AS (
@@ -100,7 +101,7 @@ export function branchCtes(rootIds: SQL): SQL {
       JOIN base child ON child.parent_task_id = bw.id
       JOIN qualified_ids q ON q.id = child.id
       WHERE bw.depth < ${MAX_TREE_DEPTH}
-        AND instr(bw.path, ',' || child.id || ',') = 0
+        AND ${engineOf(db).instr(sql`bw.path`, sql`',' || child.id || ','`)} = 0
     ),
     branch_stats AS (
       SELECT
@@ -172,7 +173,7 @@ export function rootQuery(
     LEFT JOIN authorized_ids parent ON parent.id = child.parent_task_id
     WHERE child.parent_task_id IS NULL OR parent.id IS NULL
   `
-  const branches = branchCtes(roots)
+  const branches = branchCtes(db, roots)
   const paged = projectedRows(parsed.limit, parsed.cursor)
   return sql`
     WITH RECURSIVE
@@ -224,7 +225,7 @@ export function childQuery(
     FROM tasks t
     JOIN authorized_ids subtree ON t.parent_task_id = subtree.id
     WHERE subtree.depth < ${MAX_TREE_DEPTH}
-      AND instr(subtree.path, ',' || t.id || ',') = 0
+      AND ${engineOf(db).instr(sql`subtree.path`, sql`',' || t.id || ','`)} = 0
       AND ${auth}
       AND ${catalogVisibilityCondition('t', catalogVisibility)}
   `
@@ -240,7 +241,7 @@ export function childQuery(
     JOIN base child ON child.id = q.id
     WHERE child.parent_task_id = ${parsed.parentId}
   `
-  const branches = branchCtes(roots)
+  const branches = branchCtes(db, roots)
   return sql`
     WITH RECURSIVE
     ${base},

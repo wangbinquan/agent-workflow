@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec, first } from '@/platform/persistence/queryHelpers'
 import {
   createCollaborationCommandContext,
   resolveCollaborationCommandContext,
@@ -6,14 +8,13 @@ import { createFileReviewArtifactContent } from '@/modules/collaboration/infrast
 import { ReviewGateOpenPreparation } from '@/modules/collaboration/application/prepareReviewGateOpen'
 import { CommittedHumanGateFinalizer } from '@/modules/collaboration/application/finalizeCommittedHumanGate'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
-import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
 import { HumanGateOperationRecovery } from '@/modules/collaboration/application/recoverHumanGateOperations'
 import type {
   HumanGateArtifactStore,
@@ -44,8 +45,10 @@ function absolute(appHome: string, relativePath: string): string {
   return join(appHome, ...relativePath.split('/'))
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<void> {
-  await db.run(sql`
+async function seedTask(db: PersistenceDb): Promise<void> {
+  await rawExec(
+    db,
+    sql`
     INSERT INTO tasks (
       id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
       base_branch, branch, status, inputs, started_at
@@ -55,7 +58,8 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<void> {
       '/tmp/rfc333', '/tmp/rfc333', 'main', 'agent-workflow/task-333',
       'running', '{}', ${NOW}
     )
-  `)
+  `,
+  )
 }
 
 function openRequest(manifestDigest = 'source-v1'): CanonicalHumanGateRequest {
@@ -73,7 +77,7 @@ function openRequest(manifestDigest = 'source-v1'): CanonicalHumanGateRequest {
 }
 
 async function prepareReviewOperation(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   operations: DatabaseHumanGateOperationJournal
   artifacts: FsHumanGateArtifactStore
   operationId: string
@@ -129,7 +133,7 @@ async function prepareReviewOperation(input: {
 }
 
 async function commitPrepared(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   operations: DatabaseHumanGateOperationJournal
   operationId: string
 }): Promise<void> {
@@ -440,22 +444,25 @@ describe('RFC-333 T4 review artifact recovery', () => {
           createFileReviewArtifactContent(appHome),
         ).read(plan.finalPath),
       ).toBe(body)
+      const { collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
       expect(
         (
-          await db
-            .select({ state: collaborationGateOperations.state })
-            .from(collaborationGateOperations)
-            .where(eq(collaborationGateOperations.id, 'operation-committed'))
-            .get()
+          await first(
+            db
+              .select({ state: collaborationGateOperations.state })
+              .from(collaborationGateOperations)
+              .where(eq(collaborationGateOperations.id, 'operation-committed')),
+          )
         )?.state,
       ).toBe('completed')
       expect(
         (
-          await db
-            .select({ state: collaborationGateArtifacts.state })
-            .from(collaborationGateArtifacts)
-            .where(eq(collaborationGateArtifacts.operationId, 'operation-committed'))
-            .get()
+          await first(
+            db
+              .select({ state: collaborationGateArtifacts.state })
+              .from(collaborationGateArtifacts)
+              .where(eq(collaborationGateArtifacts.operationId, 'operation-committed')),
+          )
         )?.state,
       ).toBe('finalized')
       expect((await recovery.runOnce()).claimed).toBe(0)
@@ -552,15 +559,17 @@ describe('RFC-333 T4 review artifact recovery', () => {
       })
       expect(await recovery.runOnce()).toMatchObject({ claimed: 1, cleaned: 1, failed: 0 })
       expect(existsSync(absolute(appHome, plan.stagedPath))).toBe(false)
+      const { collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
       expect(
-        await db
-          .select({
-            state: collaborationGateOperations.state,
-            failureJson: collaborationGateOperations.failureJson,
-          })
-          .from(collaborationGateOperations)
-          .where(eq(collaborationGateOperations.id, 'operation-stale'))
-          .get(),
+        await first(
+          db
+            .select({
+              state: collaborationGateOperations.state,
+              failureJson: collaborationGateOperations.failureJson,
+            })
+            .from(collaborationGateOperations)
+            .where(eq(collaborationGateOperations.id, 'operation-stale')),
+        ),
       ).toMatchObject({
         state: 'completed',
         failureJson: expect.stringContaining('prepared-gate-stale-cleaned'),
@@ -569,8 +578,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         await db
           .select()
           .from(collaborationGateArtifacts)
-          .where(eq(collaborationGateArtifacts.operationId, 'operation-stale'))
-          .all(),
+          .where(eq(collaborationGateArtifacts.operationId, 'operation-stale')),
       ).toEqual([])
 
       const reopened = await databaseSessionFor(db).transaction(
@@ -611,15 +619,17 @@ describe('RFC-333 T4 review artifact recovery', () => {
         now: () => now,
       })
       expect(await recovery.runOnce()).toMatchObject({ claimed: 1, retained: 1, failed: 0 })
+      const { collaborationGateOperations } = tablesOf(db)
       expect(
-        await db
-          .select({
-            state: collaborationGateOperations.state,
-            claimEpoch: collaborationGateOperations.claimEpoch,
-          })
-          .from(collaborationGateOperations)
-          .where(eq(collaborationGateOperations.id, 'operation-preparing'))
-          .get(),
+        await first(
+          db
+            .select({
+              state: collaborationGateOperations.state,
+              claimEpoch: collaborationGateOperations.claimEpoch,
+            })
+            .from(collaborationGateOperations)
+            .where(eq(collaborationGateOperations.id, 'operation-preparing')),
+        ),
       ).toEqual({ state: 'preparing', claimEpoch: 2 })
       expect((await recovery.runOnce()).claimed).toBe(0)
       now += DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1

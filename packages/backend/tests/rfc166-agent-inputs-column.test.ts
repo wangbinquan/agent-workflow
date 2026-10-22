@@ -12,12 +12,12 @@
 //  4. inputs never leaks into frontmatter_extra (it is NOT a sidecar).
 //  5. A malformed inputs column degrades to [] (parseInputsColumn guard).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { eq } from 'drizzle-orm'
 import type { CreateAgent } from '@agent-workflow/shared'
-import { agents as agentsTable } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 
@@ -39,15 +39,16 @@ function basePayload(name: string) {
   }
 }
 
-async function readRawRow(db: ProviderNeutralDatabase, name: string) {
-  const rows = await db.select().from(agentsTable).where(eq(agentsTable.name, name))
+async function readRawRow(db: PersistenceDb, name: string) {
+  const { agents } = tablesOf(db)
+  const rows = await db.select().from(agents).where(eq(agents.name, name))
   const row = rows[0]
   if (row === undefined) throw new Error(`no agent row '${name}'`)
   return row
 }
 
 describeEachProvider('RFC-166 — agents.inputs column round-trip', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -137,8 +138,9 @@ describeEachProvider('RFC-166 — agents.inputs column round-trip', (harness) =>
 
   test('malformed inputs column degrades to [] (parse guard)', async () => {
     await createAgent(db, basePayload('a'))
+    const { agents } = tablesOf(db)
     // corrupt the column out-of-band
-    await db.update(agentsTable).set({ inputs: 'not json' }).where(eq(agentsTable.name, 'a'))
+    await db.update(agents).set({ inputs: 'not json' }).where(eq(agents.name, 'a'))
     const fetched = await getAgent(db, 'a')
     expect(fetched?.inputs).toEqual([])
   })
@@ -155,8 +157,9 @@ describeEachProvider('RFC-166 — agents.inputs column round-trip', (harness) =>
         ] as unknown as CreateAgentInputs,
       }),
     ).rejects.toThrow()
+    const { agents } = tablesOf(db)
     // nothing was written (create threw before/at the insert)
-    const rows = await db.select().from(agentsTable).where(eq(agentsTable.name, 'a'))
+    const rows = await db.select().from(agents).where(eq(agents.name, 'a'))
     expect(rows.length).toBe(0)
   })
 })

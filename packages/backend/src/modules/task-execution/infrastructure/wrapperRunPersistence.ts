@@ -1,21 +1,22 @@
 // RFC-359 W4-B1 —— wrapper run 持久化：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { pickFrameSourceRun } from '@/services/freshness'
 import type { WrapperRunPersistence } from '../application/ports/wrapperRunPersistence'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import { clearReuseDisabledProgress, wrapperRunSnapshot } from './wrapperRunPersistenceShared'
 
 export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async findResumable(
     input: Parameters<WrapperRunPersistence['findResumable']>[0],
   ): ReturnType<WrapperRunPersistence['findResumable']> {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
       .select()
       .from(nodeRuns)
@@ -49,6 +50,7 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
   ): ReturnType<WrapperRunPersistence['resolveConsumed']> {
     const consumed: Record<string, string> = {}
     for (const source of input.sources) {
+      const { nodeRuns } = tablesOf(this.db)
       const rows = await this.db
         .select()
         .from(nodeRuns)
@@ -60,6 +62,7 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
   }
 
   async readStatus(nodeRunId: string) {
+    const { nodeRuns } = tablesOf(this.db)
     return (
       (
         await this.db
@@ -75,6 +78,7 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
     input: Parameters<WrapperRunPersistence['clearReuseDisabled']>[0],
   ): Promise<void> {
     await withTaskExecutionWrite(this.db, async (tx) => {
+      const { nodeRuns } = tablesOf(tx)
       const rows = await tx
         .select({
           taskId: nodeRuns.taskId,
@@ -92,7 +96,6 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
         .update(nodeRuns)
         .set({ wrapperProgressJson: next })
         .where(eq(nodeRuns.id, input.nodeRunId))
-        .run()
     })
   }
 }

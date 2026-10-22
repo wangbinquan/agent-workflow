@@ -12,7 +12,7 @@ import {
 } from '@agent-workflow/shared'
 import type { z } from 'zod'
 import { buildActor, type Actor } from '../../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'
 import type {
   PluginAccessPort,
@@ -74,7 +74,7 @@ function defaultActor(): Actor {
  * receives its already-composed module and authority from the real bootstrap.
  */
 export function composePluginServiceBindingForTest(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: PluginServiceTestCompositionOptions = {},
 ): PluginServiceBinding {
   const actor = options.actor ?? defaultActor()

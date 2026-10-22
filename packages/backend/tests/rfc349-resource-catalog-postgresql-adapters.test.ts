@@ -25,7 +25,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
   test('mcp repository and composition are one provider-neutral implementation (RFC-359 W4-D16)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/mcpRepository.ts')
     const composition = source('src/modules/resource-catalog/composition/mcpOperations.ts')
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
@@ -39,7 +39,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
   test('plugin repository and composition are one provider-neutral implementation (RFC-359 W4-D17)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/pluginRepository.ts')
     const composition = source('src/modules/resource-catalog/composition/pluginOperations.ts')
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
@@ -53,7 +53,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
   test('workgroup repository and composition are one provider-neutral implementation (RFC-359 W4-D18)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/workgroupRepository.ts')
     const composition = source('src/modules/resource-catalog/composition/workgroupOperations.ts')
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
@@ -160,7 +160,9 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(postgresqlMutationParticipants).toContain(`${implementation}({`)
     }
     for (const table of ['agents', 'skills', 'workflows', 'workgroups']) {
-      expect(postgresqlMutationArms).toContain(`.insert(${table})`)
+      expect(postgresqlMutationArms).toMatch(
+        new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
+      )
       expect(postgresqlMutationArms).toContain(`.update(${table})`)
     }
     // RFC-359 W12: MCP/plugin creation and publication share their persistence
@@ -172,9 +174,13 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       const atom = source(`src/modules/resource-catalog/infrastructure/${persistence}.ts`)
       expect(postgresqlMutationArms).toContain(`await ${insert}(`)
       expect(postgresqlMutationArms).toContain(`await ${update}(`)
-      expect(postgresqlMutationArms).not.toContain(`.insert(${table})`)
+      expect(postgresqlMutationArms).not.toMatch(
+        new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
+      )
       expect(postgresqlMutationArms).not.toContain(`.update(${table})`)
-      expect(atom).toContain(`.insert(${table})`)
+      expect(atom).toMatch(
+        new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
+      )
       expect(atom).toContain(`.update(${table})`)
     }
     expect(postgresqlMutationParticipants).toContain(
@@ -286,7 +292,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     // RFC-359 W4-D20：owner/name 查找与预览 / 导出读模型合成一份中立实现；SQLite 命名的那个文件只剩
     // legacy 提交路径用的同步助手。
     const lookup = source('src/modules/resource-catalog/infrastructure/packageResourceRows.ts')
-    expect(lookup).toContain('ProviderNeutralDatabase')
+    expect(lookup).toContain('PersistenceDb')
     expect(lookup).toContain('ResourcePackageOwnedResourceLookupPort')
     expect(lookup).toContain('createResourcePackageReadPort')
     expect(lookup).toContain('createResourceGrantReadPort')

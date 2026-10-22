@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeCapabilityTemplateOperations } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
 // RFC-304 T57 → RFC-309 — the capability template, merged.
 //
@@ -24,7 +25,6 @@ import { composeCapabilityTemplateOperations } from '../src/modules/code-capabil
 
 import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { capabilityTemplates } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 import {
@@ -35,7 +35,7 @@ import {
   requireResourceGovern,
 } from '../src/services/resourceAcl'
 import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {
@@ -183,13 +183,14 @@ describeEachProvider('RFC-309 — template writes retain both permission checks'
 })
 
 describeEachProvider('RFC-309 — reads redact rather than withhold', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(async () => {
     db = harness.db
     await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
   })
 
   test('a non-author sees the template, its params and agents, and NO script bodies', async () => {
+    const { capabilityTemplates } = tablesOf(db)
     const [row] = await db.select().from(capabilityTemplates)
     const wire = await templateOperations(db).get(NOT_AN_AUTHOR, row!.id)
     expect(wire.scriptsRedacted).toBe(true)
@@ -202,6 +203,7 @@ describeEachProvider('RFC-309 — reads redact rather than withhold', (harness) 
   })
 
   test('an author sees the script bodies', async () => {
+    const { capabilityTemplates } = tablesOf(db)
     const [row] = await db.select().from(capabilityTemplates)
     const wire = await templateOperations(db).get(AUTHOR, row!.id)
     expect(wire.scriptsRedacted).toBe(false)
@@ -210,7 +212,7 @@ describeEachProvider('RFC-309 — reads redact rather than withhold', (harness) 
 })
 
 describeEachProvider('RFC-309 — a redacted reader can still edit the rest', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -273,7 +275,7 @@ describeEachProvider('RFC-309 — a redacted reader can still edit the rest', (h
 describeEachProvider(
   'RFC-309 — creation, copying and deletion (formerly SQLite-only)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -312,6 +314,7 @@ describeEachProvider(
 
     test('a copy of a built-in is an ordinary resource', async () => {
       const source = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      const { capabilityTemplates } = tablesOf(db)
       await db.update(capabilityTemplates).set({ builtin: true })
       const builtin = await getTemplateRow(db, source.id)
       const copy = await copyTemplate(db, builtin!, AUTHOR, 'mine', NOW + 1)
@@ -322,6 +325,7 @@ describeEachProvider(
 
     test('a built-in cannot be edited in place', async () => {
       const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      const { capabilityTemplates } = tablesOf(db)
       await db.update(capabilityTemplates).set({ builtin: true })
       const builtin = await getTemplateRow(db, row.id)
       await expect(
@@ -333,7 +337,7 @@ describeEachProvider(
 
 describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => {
   describe('fixture lifetime', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -348,7 +352,7 @@ describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => 
 describeEachProvider(
   'RFC-309 — creation, copying and deletion (formerly SQLite-only)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -362,7 +366,7 @@ describeEachProvider(
 
 describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => {
   describe('fixture lifetime', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -511,7 +515,7 @@ describeEachProviderHttpApplication(
 )
 
 // RFC-375: writes use the live operation API; persistence reads inspect stored receipts.
-function templateOperations(db: ProviderNeutralDatabase, now?: number) {
+function templateOperations(db: PersistenceDb, now?: number) {
   return composeCapabilityTemplateOperations({
     db,
     ...(now === undefined ? {} : { now: () => now }),
@@ -524,22 +528,17 @@ function templateOperations(db: ProviderNeutralDatabase, now?: number) {
     },
   })
 }
-async function storedTemplate(db: ProviderNeutralDatabase, id: string) {
+async function storedTemplate(db: PersistenceDb, id: string) {
   const row = await createCapabilityTemplatePersistence(db).load(id)
   if (row === null) throw new Error(`missing template ${id}`)
   return row
 }
-async function createTemplate(
-  db: ProviderNeutralDatabase,
-  raw: unknown,
-  actor: Actor,
-  now?: number,
-) {
+async function createTemplate(db: PersistenceDb, raw: unknown, actor: Actor, now?: number) {
   const result = await templateOperations(db, now).create(actor, raw)
   return storedTemplate(db, result.id)
 }
 async function copyTemplate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   source: { readonly id: string },
   actor: Actor,
   name?: string,
@@ -553,10 +552,10 @@ async function copyTemplate(
   return storedTemplate(db, result.id)
 }
 
-const getTemplateRow = (db: ProviderNeutralDatabase, id: string) =>
+const getTemplateRow = (db: PersistenceDb, id: string) =>
   createCapabilityTemplatePersistence(db).load(id)
 async function updateTemplate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   existing: { readonly id: string },
   raw: unknown,
   actor: Actor,
@@ -565,5 +564,5 @@ async function updateTemplate(
   const result = await templateOperations(db, now).update(actor, existing.id, raw)
   return storedTemplate(db, result.id)
 }
-const deleteTemplate = (db: ProviderNeutralDatabase, row: { readonly id: string }) =>
+const deleteTemplate = (db: PersistenceDb, row: { readonly id: string }) =>
   templateOperations(db).delete(AUTHOR, row.id)

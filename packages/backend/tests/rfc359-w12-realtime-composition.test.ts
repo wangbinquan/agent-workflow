@@ -2,13 +2,14 @@
 // events. Both provider factories are called; the database and event queries
 // are real. Unused composition inputs throw if accessed beyond construction.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { composeRealtimeRuntimeFor } from '@/modules/runtime-management/composition'
 import type {
@@ -48,7 +49,7 @@ function runtimeFor(harness: ProviderHarness): RealtimeRuntime {
       })
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
   const definition = JSON.stringify({
@@ -58,13 +59,14 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     edges: [],
     outputs: [],
   })
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'realtime composition',
     definition,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'realtime composition',
     workflowId,
@@ -80,9 +82,10 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   return taskId
 }
 
-async function seedRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: `node-${id}`,
@@ -103,6 +106,7 @@ describeEachProvider('RFC-359 W12 — realtime runtime composition', (harness) =
     const runB = await seedRun(db, taskId)
     const otherRun = await seedRun(db, otherTaskId)
     const runtime = runtimeFor(harness)
+    const { nodeRunEvents } = tablesOf(db)
     // Timestamps are deliberately out of order: the replay cursor is event id.
     const rows = await db
       .insert(nodeRunEvents)
@@ -165,6 +169,7 @@ describeEachProvider('RFC-359 W12 — realtime runtime composition', (harness) =
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId)
     const runtime = runtimeFor(harness)
+    const { nodeRunEvents } = tablesOf(db)
     const [first] = await db
       .insert(nodeRunEvents)
       .values({

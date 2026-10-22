@@ -30,20 +30,14 @@
 // 行是直接种进 DB 的，不走各自的 create 端点：写门只 `load()` 一行，种子化让本文件
 // 不必背负每种类型创建时的特有约束（草稿 schema、能力引用闭包……），那些与被测边界无关。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import {
-  actionTemplates,
-  automationPolicies,
-  developmentAdapterDefinitions,
-  digitalEmployees,
-  resourceGrants,
-  verificationProfiles,
-} from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -59,7 +53,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Actor
   grantee: Actor
@@ -105,11 +99,11 @@ async function req(
 }
 
 type ConfigTable =
-  | typeof actionTemplates
-  | typeof automationPolicies
-  | typeof developmentAdapterDefinitions
-  | typeof digitalEmployees
-  | typeof verificationProfiles
+  | PersistenceTables['actionTemplates']
+  | PersistenceTables['automationPolicies']
+  | PersistenceTables['developmentAdapterDefinitions']
+  | PersistenceTables['digitalEmployees']
+  | PersistenceTables['verificationProfiles']
 
 interface ResourceCase {
   /** `AclResourceType` 的字面量；也是 `resource_grants.resource_type` 的取值。 */
@@ -120,7 +114,7 @@ interface ResourceCase {
     | 'digital_employee'
     | 'verification_profile'
   readonly base: string
-  readonly table: ConfigTable
+  readonly table: (db: object) => ConfigTable
   /** 该表在共享 identity 列之外的必填列。 */
   readonly extra: Record<string, string>
 }
@@ -129,31 +123,46 @@ const CASES: readonly ResourceCase[] = [
   {
     type: 'action_template',
     base: '/api/code/action-templates',
-    table: actionTemplates,
+    table: (db: object) => {
+      const { actionTemplates } = tablesOf(db)
+      return actionTemplates
+    },
     extra: { capabilityId: 'rfc317-capability' },
   },
   {
     type: 'verification_profile',
     base: '/api/code/verification-profiles',
-    table: verificationProfiles,
+    table: (db: object) => {
+      const { verificationProfiles } = tablesOf(db)
+      return verificationProfiles
+    },
     extra: {},
   },
   {
     type: 'digital_employee',
     base: '/api/code/digital-employees',
-    table: digitalEmployees,
+    table: (db: object) => {
+      const { digitalEmployees } = tablesOf(db)
+      return digitalEmployees
+    },
     extra: {},
   },
   {
     type: 'automation_policy',
     base: '/api/code/automation-policies',
-    table: automationPolicies,
+    table: (db: object) => {
+      const { automationPolicies } = tablesOf(db)
+      return automationPolicies
+    },
     extra: {},
   },
   {
     type: 'development_adapter',
     base: '/api/integrations/development-adapters',
-    table: developmentAdapterDefinitions,
+    table: (db: object) => {
+      const { developmentAdapterDefinitions } = tablesOf(db)
+      return developmentAdapterDefinitions
+    },
     extra: { purpose: 'requirement-source' },
   },
 ]
@@ -167,13 +176,13 @@ interface SeededRow {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   subject: ResourceCase,
   ownerUserId: string,
   visibility: 'private' | 'public',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(subject.table).values({
+  await insertOne(db, subject.table(db), {
     id,
     name: `rfc317-${subject.type}-${id.slice(-6)}`,
     draftJson: JSON.stringify({ seeded: true }),
@@ -189,12 +198,11 @@ async function seed(
   return id
 }
 
-async function readRow(
-  db: ProviderNeutralDatabase,
-  subject: ResourceCase,
-  id: string,
-): Promise<SeededRow> {
-  const rows = await db.select().from(subject.table).where(eq(subject.table.id, id))
+async function readRow(db: PersistenceDb, subject: ResourceCase, id: string): Promise<SeededRow> {
+  const rows = await db
+    .select()
+    .from(subject.table(db))
+    .where(eq(subject.table(db).id, id))
   const row = rows[0]
   expect(row, `种子行必须存在，否则本用例零预言力：${subject.type}/${id}`).toBeDefined()
   const found = row as unknown as SeededRow
@@ -265,7 +273,8 @@ describeEachProviderHttpApplication(
       test(`${subject.type}：read 档 grant 的非 owner 写仍 403——只授可见，不授写`, async () => {
         const harness = await buildHarness(scope)
         const id = await seed(harness.db, subject, harness.owner.id, 'private')
-        await harness.db.insert(resourceGrants).values({
+        const { resourceGrants } = tablesOf(harness.db)
+        await insertOne(harness.db, resourceGrants, {
           resourceType: subject.type,
           resourceId: id,
           userId: harness.grantee.id,
@@ -297,7 +306,8 @@ describeEachProviderHttpApplication(
       test(`${subject.type}：write 档 grant 能 revise/publish，archive 仍 403（治理面不放行）`, async () => {
         const harness = await buildHarness(scope)
         const id = await seed(harness.db, subject, harness.owner.id, 'private')
-        await harness.db.insert(resourceGrants).values({
+        const { resourceGrants } = tablesOf(harness.db)
+        await insertOne(harness.db, resourceGrants, {
           resourceType: subject.type,
           resourceId: id,
           userId: harness.grantee.id,
@@ -434,7 +444,8 @@ describeEachProviderHttpApplication(
       const harness = await buildHarness(scope)
       const subject = CASES.find((c) => c.type === 'digital_employee')!
       const id = await seed(harness.db, subject, harness.owner.id, 'private')
-      await harness.db.insert(resourceGrants).values({
+      const { resourceGrants } = tablesOf(harness.db)
+      await insertOne(harness.db, resourceGrants, {
         resourceType: 'digital_employee',
         resourceId: id,
         userId: harness.grantee.id,

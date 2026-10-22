@@ -27,6 +27,8 @@
 // If any of these go red the runaway pending-row accumulation bug is
 // resurfacing — investigate before relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -34,9 +36,8 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 function defaultDef(): WorkflowDefinition {
@@ -81,10 +82,11 @@ function defaultDef(): WorkflowDefinition {
   }
 }
 
-async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTaskAndWorkflow(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const def = defaultDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -93,7 +95,7 @@ async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<string>
     schemaVersion: 4,
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -165,7 +167,8 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
     // runner having created one via createClarifyRound on a
     // prior questioner emit).
     const preId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: preId,
       taskId,
       nodeId: 'cross1',
@@ -216,6 +219,7 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
     // (via createClarifyRound when questioner emits clarify).
     const db = harness.db
     const taskId = await seedTaskAndWorkflow(db)
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select()
       .from(nodeRuns)

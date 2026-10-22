@@ -12,12 +12,13 @@
 // PostgreSQL 侧 `/api/tasks` 用的是等价的 `IS DISTINCT FROM`。三态各来一行，
 // 任何一侧改写成裸 `ne(...)` 都会在这里红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, type SQL } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   defaultTaskListRowRef,
   taskListOwnershipScopeCondition,
@@ -26,7 +27,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskListPage/authorization'
 import { describeEachProvider } from '../tests/helpers/eachProvider'
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -40,6 +41,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
  * 于是「共享给我」这一档的差别只可能来自属主一栏。
  */
 async function seed(db: Db): Promise<void> {
+  const { users, workflows, tasks, taskCollaborators } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'bob'].map((id) => ({
       id,
@@ -51,7 +53,7 @@ async function seed(db: Db): Promise<void> {
       updatedAt: 1,
     })),
   )
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -64,7 +66,7 @@ async function seed(db: Db): Promise<void> {
   let startedAt = 1_788_278_400_000
   for (const row of rows) {
     startedAt += 1
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: row.id,
       workflowId: 'wf1',
@@ -83,7 +85,7 @@ async function seed(db: Db): Promise<void> {
       branchStartedAt: startedAt,
       rootTaskId: row.id,
     })
-    await db.insert(taskCollaborators).values({
+    await insertOne(db, taskCollaborators, {
       taskId: row.id,
       userId: 'alice',
       role: 'collaborator',
@@ -94,6 +96,7 @@ async function seed(db: Db): Promise<void> {
 }
 
 async function idsWhere(db: Db, condition: SQL<unknown> | undefined): Promise<string[]> {
+  const { tasks } = tablesOf(db)
   const rows = await db.select({ id: tasks.id }).from(tasks).where(condition)
   return rows.map((row) => row.id).sort()
 }
@@ -111,7 +114,7 @@ describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (h
       db,
       taskListVisibilityCondition(
         db,
-        defaultTaskListRowRef(),
+        defaultTaskListRowRef(db),
         taskListViewerOf(actor('root', 'admin')),
       ),
     )
@@ -120,14 +123,14 @@ describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (h
     // alice 是三行的协作者，所以可见性这一档把三行都收进来——包括无主那行。
     const alice = await idsWhere(
       db,
-      taskListVisibilityCondition(db, defaultTaskListRowRef(), taskListViewerOf(actor('alice'))),
+      taskListVisibilityCondition(db, defaultTaskListRowRef(db), taskListViewerOf(actor('alice'))),
     )
     expect(alice).toEqual(['owned-by-alice', 'owned-by-bob', 'ownerless'])
 
     // 与任何一行都无关的第三人什么都看不到。
     const carol = await idsWhere(
       db,
-      taskListVisibilityCondition(db, defaultTaskListRowRef(), taskListViewerOf(actor('carol'))),
+      taskListVisibilityCondition(db, defaultTaskListRowRef(db), taskListViewerOf(actor('carol'))),
     )
     expect(carol).toEqual([])
   })
@@ -138,7 +141,7 @@ describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (h
 
     const shared = await idsWhere(
       db,
-      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(), 'alice', 'shared'),
+      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(db), 'alice', 'shared'),
     )
     // 「共享给我」= 我是协作者且我不是属主。bob 的那行显然算；**无主那行也算**——
     // 少了 `isNull(...)` 这一支它会因为 `NULL <> 'alice'` 求值成 NULL 而消失。
@@ -152,13 +155,13 @@ describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (h
 
     const mine = await idsWhere(
       db,
-      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(), 'alice', 'mine'),
+      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(db), 'alice', 'mine'),
     )
     expect(mine).toEqual(['owned-by-alice', 'owned-by-bob', 'ownerless'])
 
     const all = await idsWhere(
       db,
-      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(), 'alice', 'all'),
+      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(db), 'alice', 'all'),
     )
     expect(all).toEqual(['owned-by-alice', 'owned-by-bob', 'ownerless'])
 
@@ -166,7 +169,7 @@ describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (h
     // 他的 mine 只有自己那行。
     const bobMine = await idsWhere(
       db,
-      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(), 'bob', 'mine'),
+      taskListOwnershipScopeCondition(db, defaultTaskListRowRef(db), 'bob', 'mine'),
     )
     expect(bobMine).toEqual(['owned-by-bob'])
   })
@@ -178,8 +181,8 @@ describeEachProvider('RFC-357 列表页授权的三态语义（双引擎）', (h
     const composed = await idsWhere(
       db,
       and(
-        taskListVisibilityCondition(db, defaultTaskListRowRef(), taskListViewerOf(alice)),
-        taskListOwnershipScopeCondition(db, defaultTaskListRowRef(), alice.user.id, 'shared'),
+        taskListVisibilityCondition(db, defaultTaskListRowRef(db), taskListViewerOf(alice)),
+        taskListOwnershipScopeCondition(db, defaultTaskListRowRef(db), alice.user.id, 'shared'),
       ),
     )
     expect(composed).toEqual(['owned-by-bob', 'ownerless'])

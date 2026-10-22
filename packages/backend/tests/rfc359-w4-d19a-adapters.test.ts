@@ -5,37 +5,32 @@
 // 同一段断言在两个引擎上各跑一遍：反问投影按 asker 聚合并带上 stop 指令、未决自问被 CAS 关闭且回出 park、
 // 无主围栏只对活着的（claimed）owner 拒绝；附源码锁。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  nodeRuns,
-  taskExecutionOwners,
-  taskNodeClarifyDirectives,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { assertTaskOwnerlessTx } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `rfc359-d19a-${workflowId.slice(-8).toLowerCase()}`,
     definition: '{}',
     builtin: true,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359 d19a room participants',
     workflowId,
@@ -54,7 +49,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedSelfClarify(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly taskId: string
     readonly id: string
@@ -63,7 +58,8 @@ async function seedSelfClarify(
     readonly status: 'awaiting_human' | 'answered'
   },
 ): Promise<void> {
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: input.id,
     taskId: input.taskId,
     kind: 'self',
@@ -80,10 +76,11 @@ async function seedSelfClarify(
 
 /** clarify_rounds 的 asking / intermediary 两列都外键到 node_runs，先把承载行落下。 */
 async function seedNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly taskId: string; readonly id: string; readonly shardKey: string | null },
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: input.id,
     taskId: input.taskId,
     nodeId: '__wg_member__',
@@ -94,11 +91,12 @@ async function seedNodeRun(
 }
 
 async function seedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   state: 'claimed' | 'released' | 'revoked' | 'recovery-required',
 ): Promise<void> {
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: `owner-${taskId}`,
     daemonGeneration: 'gen-1',
@@ -148,15 +146,16 @@ describeEachProvider('RFC-359 W4-D19a —— 任务房事务内参与者', (harn
       askingShardKey: null,
       status: 'answered',
     })
+    const { taskNodeClarifyDirectives } = tablesOf(harness.db)
     // 投影只收「按 asker」的 stop（shardKey 非空）；任务级的那条（空 shardKey）由别处判定，不进这张投影。
-    await harness.db.insert(taskNodeClarifyDirectives).values({
+    await insertOne(harness.db, taskNodeClarifyDirectives, {
       taskId,
       nodeId: '__wg_member__',
       shardKey: 'asg:a',
       directive: 'stop',
       updatedAt: T0 + 1,
     })
-    await harness.db.insert(taskNodeClarifyDirectives).values({
+    await insertOne(harness.db, taskNodeClarifyDirectives, {
       taskId,
       nodeId: '__wg_member__',
       shardKey: '',
@@ -199,6 +198,7 @@ describeEachProvider('RFC-359 W4-D19a —— 任务房事务内参与者', (harn
     )
     expect(dismissed.dismissedSessions).toBe(1)
     expect(dismissed.parks.map((park) => park.nodeRunId)).toEqual(['asking-run-a'])
+    const { clarifyRounds } = tablesOf(harness.db)
     const rows = await harness.db
       .select({ id: clarifyRounds.id, status: clarifyRounds.status })
       .from(clarifyRounds)

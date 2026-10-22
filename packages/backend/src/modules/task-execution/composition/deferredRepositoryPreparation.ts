@@ -1,5 +1,5 @@
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '@/auth/secretBox'
 import { composeDeferredRepositoryPreparationStep } from '@/services/task'
 import { type WorkspaceCleanupHookEvent } from '../application/ports/preparedWorkspace'
@@ -19,7 +19,7 @@ import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLa
  */
 export function composeDeferredRepositoryPreparation(input: {
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number

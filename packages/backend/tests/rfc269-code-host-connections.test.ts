@@ -9,6 +9,9 @@
 //   3. **探活四类可区分**：设计门 D7 —— 不可区分的失败让"测试连接"变成安慰剂，
 //      管理员看到红叉却不知道该改 token 还是改 base URL 还是找网络。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -20,7 +23,6 @@ import { createInMemoryDb } from '../src/db/client'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
-import { codeHostConnections } from '../src/db/schema'
 import {
   createCodeHostConnectionsService,
   probeCodeHostConnection,
@@ -62,7 +64,7 @@ async function harness(opts?: { role?: 'admin' | 'user' | 'manager'; fetchImpl?:
   const { token } = await createSession({ db, userId: user.id })
   const app = (
     await openTestApplication(
-      { provider: 'sqlite', db: db },
+      { provider: 'sqlite', db },
       {
         token: 'a'.repeat(64),
         opencodeVersion: null,
@@ -100,11 +102,10 @@ describe('RFC-269 凭据面 — token 三形态', () => {
     })
     expect(put.status).toBe(200)
 
-    const row = db
-      .select()
-      .from(codeHostConnections)
-      .where(eq(codeHostConnections.provider, 'gitlab'))
-      .all()[0]
+    const { codeHostConnections } = tablesOf(db)
+    const row = queryRows(
+      db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')),
+    )[0]
     expect(row).toBeDefined()
     expect(row!.tokenEnc).not.toContain(SECRET_TOKEN)
     expect(box.unseal(row!.tokenEnc)).toBe(SECRET_TOKEN)
@@ -257,11 +258,10 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
       baseUrl: 'https://gitlab.corp.example/gitlab/api/v4',
     })
     expect(res.status).toBe(200)
-    const row = db
-      .select()
-      .from(codeHostConnections)
-      .where(eq(codeHostConnections.provider, 'gitlab'))
-      .all()[0]
+    const { codeHostConnections } = tablesOf(db)
+    const row = queryRows(
+      db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')),
+    )[0]
     expect(box.unseal(row!.tokenEnc)).toBe(SECRET_TOKEN)
     expect(row!.baseUrl).toBe('https://gitlab.corp.example/gitlab/api/v4')
   })
@@ -319,12 +319,11 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
     expect(await updated.json()).toMatchObject({
       repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example'],
     })
+    const { codeHostConnections } = tablesOf(db)
     expect(
-      db
-        .select()
-        .from(codeHostConnections)
-        .where(eq(codeHostConnections.provider, 'gitlab'))
-        .all()[0]!.repositoryUrlPrefixesJson,
+      queryRows(
+        db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')),
+      )[0]!.repositoryUrlPrefixesJson,
     ).toBe('["https://mirror.example/platform","https://second.example"]')
     expect(await codeHostService(db).resolve('gitlab')).toMatchObject({
       repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example'],
@@ -378,14 +377,19 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
       token: '',
     })
     expect(emptied.status).toBe(422)
+    const { codeHostConnections } = tablesOf(db)
     expect(
-      db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')).all(),
+      queryRows(
+        db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')),
+      ),
     ).toHaveLength(1)
 
     const removed = await call('DELETE', '/api/code-hosts/gitlab')
     expect(removed.status).toBe(200)
     expect(
-      db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')).all(),
+      queryRows(
+        db.select().from(codeHostConnections).where(eq(codeHostConnections.provider, 'gitlab')),
+      ),
     ).toHaveLength(0)
   })
 
@@ -629,16 +633,15 @@ describe('RFC-269 探活 — 四类可区分', () => {
 describe('RFC-269 凭据面 — 解封失败按未配置处理', () => {
   test('secret.key 换过导致 unseal 失败 ⇒ resolve 返回 null 而不是空 token', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    db.insert(codeHostConnections)
-      .values({
-        provider: 'gitlab',
-        baseUrl: 'https://gitlab.corp.example/api/v4',
-        // 用另一把钥匙封的密文
-        tokenEnc: createSecretBoxFromKey(Buffer.alloc(32, 99)).seal(SECRET_TOKEN),
-        tokenHint: '9999',
-        updatedAt: Date.now(),
-      })
-      .run()
+    const { codeHostConnections } = tablesOf(db)
+    insertOne(db, codeHostConnections, {
+      provider: 'gitlab',
+      baseUrl: 'https://gitlab.corp.example/api/v4',
+      // 用另一把钥匙封的密文
+      tokenEnc: createSecretBoxFromKey(Buffer.alloc(32, 99)).seal(SECRET_TOKEN),
+      tokenHint: '9999',
+      updatedAt: Date.now(),
+    })
     const svc = codeHostService(db)
     expect(await svc.resolve('gitlab')).toBeNull()
     // 但列表仍然显示"已配置"，这样管理员能看到它并重录，而不是面对一个空白页。

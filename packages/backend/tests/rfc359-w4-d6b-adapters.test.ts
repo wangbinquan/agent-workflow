@@ -3,13 +3,13 @@
 // lookup、legacy 迁移落库——同一段断言在两个引擎上各跑一遍。末尾一条源码锁保证该族不再出现 provider
 // 专属文件，中立实现也不引用任一 provider 客户端。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { actionTemplates, automationPolicies, capabilityTemplates } from '@/db/schema'
 import { analyzeLegacyAssets } from '@/modules/development-automation/application/migrationAnalyzer'
 import { resolveAdmissionAssignment } from '@/modules/development-automation/infrastructure/assignmentStore'
 import {
@@ -500,6 +500,7 @@ describeEachProvider('RFC-359 W4-D6b —— development-automation 配置族', (
     const db = harness.db
     const now0 = 1_700_000_000_000
     const suffix = ulid().toLowerCase()
+    const { capabilityTemplates, actionTemplates, automationPolicies } = tablesOf(db)
     await db.insert(capabilityTemplates).values([
       {
         id: `t-fix-${suffix}`,
@@ -607,6 +608,6 @@ test('源码锁：配置族不再有 provider 专属文件，中立实现不引�
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update/i)
-    expect(source).toContain('ProviderNeutralDatabase')
+    expect(source).toContain('PersistenceDb')
   }
 })

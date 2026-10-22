@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTask } from './productionTaskLaunch'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
@@ -35,8 +36,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, mcps, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
@@ -87,13 +87,14 @@ import { createFileFusionWorkspaceEffects } from '@/modules/source-control/compo
 
 /** Real catalog rows and owner decoders supply the validation inventory on either DB. */
 export function createTestDynamicWorkflowOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): BoundRunTaskOptions['dynamicWorkflow'] {
   const plugins = createPluginRepository({ db }).repository
   return Object.freeze({
     persistence: composeDynamicWorkflowPersistence(db),
     validationContext: Object.freeze({
       async load() {
+        const { agents, mcps } = tablesOf(db)
         const [agentRows, skills, mcpRows, pluginRows] = await Promise.all([
           db.select().from(agents),
           listSkills(db),
@@ -223,6 +224,7 @@ export async function createEachProviderTaskExecution(
     task: StartTask,
     workspace: { readonly workspacePath: string; readonly baselineSha: string },
   ): Promise<{ readonly taskId: string; readonly submitted: readonly string[] }> {
+    const { workflows } = tablesOf(db)
     const [workflow] = await db
       .select()
       .from(workflows)
@@ -551,6 +553,7 @@ export async function createEachProviderTaskExecution(
       task: StartTask,
       workspace: { readonly workspacePath: string; readonly baselineSha: string },
     ) {
+      const { workflows } = tablesOf(db)
       const [workflow] = await db
         .select()
         .from(workflows)

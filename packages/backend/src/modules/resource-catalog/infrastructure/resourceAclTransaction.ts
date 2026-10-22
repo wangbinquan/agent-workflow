@@ -5,11 +5,12 @@
 // 再交给 `resolveAccessFrom` / `canViewAccess` 判定。合一前 PostgreSQL 侧在
 // `postgresqlTaskExecutionResourceSnapshots.ts` 里内联了一份逐字等价的副本；现在两边都用这一份。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq } from 'drizzle-orm'
 
-import { resourceGrants } from '@/db/schema'
 import type { Actor } from '@/auth/actor'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   canViewAccess,
   resolveAccessFrom,
@@ -20,34 +21,36 @@ import type { AclResourceType } from '@agent-workflow/shared'
 
 /** 该 actor 对这一行的访问级别；私有行才需要读授权表。 */
 export async function resolveResourceAccessForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
 ): Promise<ReturnType<typeof resolveAccessFrom>> {
   const audience = resourceAclAudienceAuthority(actor)
+  const { resourceGrants } = tablesOf(tx)
   const grant =
     audience.bypass || !audience.private
       ? null
       : ((
-          await tx
-            .select({ level: resourceGrants.level })
-            .from(resourceGrants)
-            .where(
-              and(
-                eq(resourceGrants.resourceType, type),
-                eq(resourceGrants.resourceId, row.id),
-                eq(resourceGrants.userId, actor.user.id),
-              ),
-            )
-            .limit(1)
-            .get()
+          await first(
+            tx
+              .select({ level: resourceGrants.level })
+              .from(resourceGrants)
+              .where(
+                and(
+                  eq(resourceGrants.resourceType, type),
+                  eq(resourceGrants.resourceId, row.id),
+                  eq(resourceGrants.userId, actor.user.id),
+                ),
+              )
+              .limit(1),
+          )
         )?.level ?? null)
   return resolveAccessFrom(audience, actor.user.id, row, grant)
 }
 
 export async function canViewResourceForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,

@@ -7,13 +7,13 @@
 // "RFC-102 overwrite permission" block below locks in the new gate with
 // non-admin owners.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { zipSync, type Zippable } from 'fflate'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills } from '../src/db/schema'
 import {
   commitSkillZipBuffer,
   parseSkillZipBuffer,
@@ -27,7 +27,7 @@ import { getSkill } from './helpers/resourceLookup'
 import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecision, SkillZipDecisionMap } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
@@ -40,13 +40,13 @@ const ADMIN = actor('admin-1', 'admin')
 const ALICE = actor('alice')
 const BOB = actor('bob')
 
-interface H<TDb extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface H<TDb extends PersistenceDb = PersistenceDb> {
   db: TDb
   fsOpts: SkillZipFsOptions
   cleanup: () => void
 }
 
-function buildWithDatabase<TDb extends ProviderNeutralDatabase>(createDatabase: () => TDb): H<TDb> {
+function buildWithDatabase<TDb extends PersistenceDb>(createDatabase: () => TDb): H<TDb> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-zip-commit-'))
   return {
     db: createDatabase(),
@@ -69,7 +69,7 @@ const skillMd = (name: string, desc = 'd') =>
 type OverwriteDecision = Extract<SkillZipDecision, { action: 'overwrite' }>
 
 async function previewOverwrite(
-  h: H<ProviderNeutralDatabase>,
+  h: H<PersistenceDb>,
   actor: Actor,
   buffer: Uint8Array,
   candidateName: string,
@@ -95,7 +95,7 @@ async function previewOverwrite(
 
 describeEachProvider('commitSkillZipBuffer', (harness) => {
   describe('filesystem lifetime', () => {
-    let h: H<ProviderNeutralDatabase>
+    let h: H<PersistenceDb>
     beforeEach(() => {
       h = buildWithDatabase(() => harness.db)
     })
@@ -380,6 +380,7 @@ describeEachProvider('commitSkillZipBuffer', (harness) => {
 
     test('visible non-owner overwrite is rejected with skill-overwrite-forbidden', async () => {
       const target = await seedAliceSkill('owned')
+      const { skills } = tablesOf(h.db)
       await h.db.update(skills).set({ visibility: 'public' }).where(eq(skills.id, target.id))
       const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
       // Replaying another actor's preview cannot turn it into write authority.
@@ -402,6 +403,7 @@ describeEachProvider('commitSkillZipBuffer', (harness) => {
       const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
       const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')
 
+      const { skills } = tablesOf(h.db)
       await h.db
         .update(skills)
         .set({ visibility: 'private', aclRevision: 1 })
@@ -635,6 +637,7 @@ describeEachProvider('commitSkillZipBuffer', (harness) => {
         {
           actor: ADMIN,
           __beforeOverwriteVersionForTest: async ({ skillId }) => {
+            const { skills } = tablesOf(h.db)
             await h.db
               .update(skills)
               .set({ ownerUserId: BOB.user.id, aclRevision: decision.expectedAclRevision + 1 })
@@ -665,6 +668,7 @@ describeEachProvider('commitSkillZipBuffer', (harness) => {
         {
           actor: ADMIN,
           __beforeOverwriteVersionForTest: async ({ skillId }) => {
+            const { skills } = tablesOf(h.db)
             await h.db
               .update(skills)
               .set({ visibility: 'private', aclRevision: decision.expectedAclRevision + 1 })

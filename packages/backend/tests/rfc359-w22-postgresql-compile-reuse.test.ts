@@ -2,43 +2,15 @@
 // fresh Drizzle bindings and every actual client dispatch. These are pure
 // compilation checks; the client probe stops at the driver without executing SQL.
 
+import { rawRows, rawFirst, rawExec, queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { SQLiteAsyncDialect } from 'drizzle-orm/sqlite-core'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { PgDialect } from 'drizzle-orm/pg-core'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
-import {
-  compilePostgresqlSql,
-  PostgresqlSqlCompatibilityError,
-} from '@/platform/persistence/postgresqlSql'
-
-const TRANSLATIONS = [
-  ['', ''],
-  ['select ?', 'select $1'],
-  ['select ?, ?, ?', 'select $1, $2, $3'],
-  ["select '?', ?, 'it''s ?'", "select '?', $1, 'it''s ?'"],
-  ['select "?", ?, "a""?"', 'select "?", $1, "a""?"'],
-  ['select $$?$$, $tag$?$tag$, ?', 'select $$?$$, $tag$?$tag$, $1'],
-  ['select ? -- ?\n, ? /* ? */', 'select $1 -- ?\n, $2 /* ? */'],
-  [
-    'select "one"."x" from "one"."t" where "x" = ?',
-    'select "one"."x" from "one"."t" where "x" = $1',
-  ],
-  [
-    'select "two"."x" from "two"."t" where "x" = ?',
-    'select "two"."x" from "two"."t" where "x" = $1',
-  ],
-  ['select ? as "名😀"', 'select $1 as "名😀"'],
-  [
-    'insert into "one"."t" ("id", "name") values (?, ?) on conflict ("one"."t"."id") do update set "name" = ?',
-    'insert into "one"."t" ("id", "name") values ($1, $2) on conflict ("id") do update set "name" = $3',
-  ],
-] as const
-
 function selectedValue(value: unknown) {
   return sql.join([sql.raw('select '), sql.param(value), sql.raw(' as value')], sql.raw(''))
 }
@@ -81,9 +53,7 @@ function createCompilationProbe() {
     env: { RFC359_COMPILE_REUSE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const provider = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(provider)
   return {
     db,
     runtime,
@@ -94,7 +64,7 @@ function createCompilationProbe() {
   }
 }
 
-async function expectStopped(operation: PromiseLike<unknown>, stop: Error): Promise<void> {
+async function expectStopped(operation: unknown, stop: Error): Promise<void> {
   let observed: unknown
   try {
     await operation
@@ -107,70 +77,25 @@ async function expectStopped(operation: PromiseLike<unknown>, stop: Error): Prom
 }
 
 describe('RFC-359 W22 PostgreSQL SQL text reuse', () => {
-  test('preserves exact token and conflict projections across repeated interleaved strings', () => {
-    for (const sequence of [TRANSLATIONS, [...TRANSLATIONS].reverse(), TRANSLATIONS]) {
-      for (const [input, expected] of sequence) expect(compilePostgresqlSql(input)).toBe(expected)
-    }
-    expect(compilePostgresqlSql('select ' + Array.from({ length: 12 }, () => '?').join(', '))).toBe(
-      'select ' + Array.from({ length: 12 }, (_, index) => '$' + (index + 1)).join(', '),
-    )
-  })
-
-  test('keeps fresh dialect arrays and exact values when the SQL text is shared', () => {
-    const dialect = new SQLiteAsyncDialect()
+  test('native rendering creates independent bindings for repeated and large SQL', () => {
+    const dialect = new PgDialect()
     const values = [0, 'opaque value', '?', null, false, new Date('2000-01-01T00:00:00.000Z')]
     const queries = values.map((value) => dialect.sqlToQuery(selectedValue(value)))
     for (const [index, query] of queries.entries()) {
-      expect(query.sql).toBe('select ? as value')
-      expect(compilePostgresqlSql(query.sql)).toBe('select $1 as value')
-      expect(query.params).toHaveLength(1)
-      expect(query.params[0]).toBe(values[index])
-      if (index > 0) expect(query.params).not.toBe(queries[index - 1]?.params)
+      expect(query.sql).toBe('select $1 as value')
+      expect(query.params).toEqual([values[index]])
+      if (index) expect(query.params).not.toBe(queries[index - 1]!.params)
     }
-  })
-
-  test('keeps output unchanged after entry pressure and oversized or multicode-unit strings', () => {
-    for (let index = 0; index < 257; index += 1) {
-      expect(compilePostgresqlSql('select ? /* entry-' + index + ' */')).toBe(
-        'select $1 /* entry-' + index + ' */',
+    for (const length of [262_144, 262_145]) {
+      const text = "select '" + 'x'.repeat(length - 9) + "'"
+      for (let repeat = 0; repeat < 2; repeat++)
+        expect(dialect.sqlToQuery(sql.raw(text)).sql).toBe(text)
+    }
+    for (let index = 0; index < 257; index++) {
+      const suffix = ' /* entry-' + index + ' 😀 */'
+      expect(dialect.sqlToQuery(sql`select ${index}${sql.raw(suffix)}`).sql).toBe(
+        'select $1' + suffix,
       )
-    }
-    expect(compilePostgresqlSql('select ? /* entry-0 */')).toBe('select $1 /* entry-0 */')
-    const exactLimit = "select '" + 'x'.repeat(262_144 - 9) + "'"
-    expect(exactLimit.length).toBe(262_144)
-    expect(compilePostgresqlSql(exactLimit)).toBe(exactLimit)
-    expect(compilePostgresqlSql(exactLimit)).toBe(exactLimit)
-    const oversized = "select '" + 'x'.repeat(262_145 - 9) + "'"
-    expect(compilePostgresqlSql(oversized)).toBe(oversized)
-    expect(compilePostgresqlSql(oversized)).toBe(oversized)
-    for (let index = 0; index < 3; index += 1) {
-      const suffix = ' /* units-' + index + ' ' + '😀'.repeat(45_000) + ' */'
-      expect(compilePostgresqlSql('select ?' + suffix)).toBe('select $1' + suffix)
-    }
-    expect(compilePostgresqlSql('')).toBe('')
-    expect(compilePostgresqlSql('')).toBe('')
-  })
-
-  test('creates the original parse error afresh for each repeated malformed token', () => {
-    for (const [input, message] of [
-      ["select 'broken ?", 'unterminated quoted SQL token'],
-      ['select /* broken ?', 'unterminated SQL block comment'],
-      ['select $tag$ broken ?', 'unterminated PostgreSQL dollar-quoted SQL token'],
-    ] as const) {
-      const errors: PostgresqlSqlCompatibilityError[] = []
-      for (let repeat = 0; repeat < 2; repeat += 1) {
-        try {
-          compilePostgresqlSql(input)
-        } catch (error) {
-          expect(error).toBeInstanceOf(PostgresqlSqlCompatibilityError)
-          if (!(error instanceof PostgresqlSqlCompatibilityError)) throw error
-          expect(error.code).toBe('unterminated-sql-token')
-          expect(error.message).toBe(message)
-          errors.push(error)
-        }
-      }
-      expect(errors).toHaveLength(2)
-      expect(errors[1]).not.toBe(errors[0])
     }
   })
 
@@ -179,10 +104,13 @@ describe('RFC-359 W22 PostgreSQL SQL text reuse', () => {
     try {
       const values = [17, 'opaque value', null, false]
       const dispatch = {
-        all: (query: ReturnType<typeof selectedValue>) => probe.db.all(query),
-        get: (query: ReturnType<typeof selectedValue>) => probe.db.get(query),
-        values: (query: ReturnType<typeof selectedValue>) => probe.db.values(query),
-        run: (query: ReturnType<typeof selectedValue>) => probe.db.run(query),
+        all: (query: ReturnType<typeof selectedValue>) => rawRows(probe.db, query),
+        get: (query: ReturnType<typeof selectedValue>) => rawFirst(probe.db, query),
+        values: (query: ReturnType<typeof selectedValue>) =>
+          Promise.resolve(rawRows(probe.db, query)).then((rows) =>
+            rows.map((row) => Object.values(row)),
+          ),
+        run: (query: ReturnType<typeof selectedValue>) => rawExec(probe.db, query),
       }
       for (const method of ['all', 'get', 'values', 'run'] as const) {
         for (const value of values) {
@@ -215,8 +143,8 @@ describe('RFC-359 W22 PostgreSQL SQL text reuse', () => {
         .select({ value: sql.join([sql.placeholder('value')], sql.raw('')).as('value') })
         .from(sql.raw('(select 1) as compiler_source'))
       const values = [0, 'opaque value', '?', null, false]
-      for (const value of values) await expectStopped(query.all({ value }), probe.stop)
-      expect(query.toSQL().sql).toBe('select ? as "value" from (select 1) as compiler_source')
+      for (const value of values) await expectStopped(queryRows(query, { value }), probe.stop)
+      expect(query.toSQL().sql).toBe('select $1 as "value" from (select 1) as compiler_source')
       expect(probe.statements.map((statement) => statement.sql)).toEqual(
         values.map(() => 'select $1 as "value" from (select 1) as compiler_source'),
       )
@@ -239,9 +167,9 @@ describe('RFC-359 W22 PostgreSQL SQL text reuse', () => {
     const probe = createCompilationProbe()
     try {
       const query = sql.join([sql.raw('select '), sql.param(1)], sql.raw(''))
-      await expectStopped(probe.db.all(query), probe.stop)
+      await expectStopped(rawRows(probe.db, query), probe.stop)
       query.append(sql.join([sql.raw(' + '), sql.param(2)], sql.raw('')))
-      await expectStopped(probe.db.all(query), probe.stop)
+      await expectStopped(rawRows(probe.db, query), probe.stop)
       expect(probe.statements).toEqual([
         { sql: 'select $1', parameters: [1] },
         { sql: 'select $1 + $2', parameters: [1, 2] },

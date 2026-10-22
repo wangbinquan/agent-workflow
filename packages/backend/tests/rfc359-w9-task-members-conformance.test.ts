@@ -20,13 +20,14 @@
 // 一条**反向对照**必须有：只断言「都被拒绝」的用例，被一个「永远拒绝」的实现也能满足。
 // 所以每条拒绝旁边都配一条同形的放行。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { buildActor, SYSTEM_USER_ID } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import {
   getTaskMembers,
@@ -57,8 +58,9 @@ function actorOf(userId: string, extra: { admin?: boolean } = {}): Actor {
   })
 }
 
-async function seedUsers(db: ProviderNeutralDatabase): Promise<void> {
+async function seedUsers(db: PersistenceDb): Promise<void> {
   const now = Date.now()
+  const { users } = tablesOf(db)
   await db.insert(users).values(
     [
       { id: OWNER, status: 'active' as const },
@@ -80,7 +82,7 @@ async function seedUsers(db: ProviderNeutralDatabase): Promise<void> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     ownerUserId: string | null
     members?: ReadonlyArray<{ userId: string; role: 'collaborator' | 'observer' }>
@@ -88,7 +90,8 @@ async function seedTask(
 ): Promise<{ id: string; ownerUserId: string | null }> {
   const taskId = `t_${ulid()}`
   const snapshot = JSON.stringify({ $schema_version: 6, inputs: [], nodes: [], edges: [] })
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: `rfc359-w9-members-${taskId}`,
     description: '',
@@ -96,7 +99,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 6,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359 w9 members',
     workflowId: `wf_${taskId}`,
@@ -130,9 +133,10 @@ async function seedTask(
 
 /** 成员行的可比较投影：只看 `(userId, role)`，行顺序不进判据。 */
 async function memberRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ userId: string; role: string }[]> {
+  const { taskCollaborators } = tablesOf(db)
   const rows = await db
     .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
     .from(taskCollaborators)
@@ -144,7 +148,8 @@ async function memberRows(
     )
 }
 
-async function ownerOf(db: ProviderNeutralDatabase, taskId: string): Promise<string | null> {
+async function ownerOf(db: PersistenceDb, taskId: string): Promise<string | null> {
+  const { tasks } = tablesOf(db)
   return (
     (await db.select({ ownerUserId: tasks.ownerUserId }).from(tasks).where(eq(tasks.id, taskId)))[0]
       ?.ownerUserId ?? null
@@ -405,6 +410,7 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const db = harness.db
     await seedUsers(db)
     const task = await seedTask(db, { ownerUserId: OWNER })
+    const { taskCollaborators, tasks } = tablesOf(db)
     await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id))
     await db.delete(tasks).where(eq(tasks.id, task.id))
     await expect(

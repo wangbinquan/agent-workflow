@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-041 — verify that completing a clarify session and submitting a
 // review decision both enqueue a `memory_distill_jobs` row (best-effort,
@@ -10,12 +13,11 @@ import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { clarifyRounds, memoryDistillJobs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-async function seedFixture(db: ProviderNeutralDatabase): Promise<{
+async function seedFixture(db: PersistenceDb): Promise<{
   taskId: string
   workflowId: string
   intermediaryNodeRunId: string
@@ -23,80 +25,73 @@ async function seedFixture(db: ProviderNeutralDatabase): Promise<{
   clarifySessionId: string
 }> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({
+      schemaVersion: 1,
       name: 'wf',
-      definition: JSON.stringify({
-        schemaVersion: 1,
-        name: 'wf',
-        nodes: [
-          { id: 'agent-1', kind: 'agent-single', agentName: 'codegen' },
-          { id: 'clarify-1', kind: 'clarify' },
-        ],
-        edges: [],
-      }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+      nodes: [
+        { id: 'agent-1', kind: 'agent-single', agentName: 'codegen' },
+        { id: 'clarify-1', kind: 'clarify' },
+      ],
+      edges: [],
+    }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
   // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
   // continuationSlotKey hashes this raw string.
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      executionLineageId: taskId,
-      lineageSlotPathJson,
-      name: 'fixture-task',
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        schemaVersion: 1,
-        nodes: [
-          { id: 'agent-1', kind: 'agent-single', agentName: 'codegen' },
-          { id: 'clarify-1', kind: 'clarify' },
-        ],
-      }),
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'awaiting_human',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
+    name: 'fixture-task',
+    workflowId: wfId,
+    workflowSnapshot: JSON.stringify({
+      schemaVersion: 1,
+      nodes: [
+        { id: 'agent-1', kind: 'agent-single', agentName: 'codegen' },
+        { id: 'clarify-1', kind: 'clarify' },
+      ],
+    }),
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'awaiting_human',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   const sourceRunId = ulid()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id: sourceRunId,
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_human',
-    })
-    .run()
+  await insertOne(db, nodeRuns, {
+    id: sourceRunId,
+    taskId,
+    nodeId: 'agent-1',
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'awaiting_human',
+  })
   const clarifyRunId = ulid()
   const sessionId = ulid()
   // RFC-217 T8：clarify_rounds 唯一数据源（原双写镜像退役为单播）。
@@ -126,7 +121,7 @@ async function seedFixture(db: ProviderNeutralDatabase): Promise<{
 describeEachProvider(
   'autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回归锁)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
       resetBroadcastersForTests()
@@ -150,7 +145,8 @@ describeEachProvider(
       }).catch(() => {
         /* a post-seal dispatch conflict must not hide the enqueue assertion below */
       })
-      const jobs = await db.select().from(memoryDistillJobs).all()
+      const { memoryDistillJobs } = tablesOf(db)
+      const jobs = await db.select().from(memoryDistillJobs)
       expect(jobs.length).toBe(1)
       expect(jobs[0]!.sourceKind).toBe('clarify')
       expect(jobs[0]!.sourceEventId).toBe(fx.clarifySessionId)
@@ -176,8 +172,9 @@ describeEachProvider(
       }).catch(() => {
         /* seal commits before any post-seal dispatch conflict — the row assertions stand */
       })
+      const { clarifyRounds } = tablesOf(db)
       const row = (
-        await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, fx.clarifySessionId)).all()
+        await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, fx.clarifySessionId))
       )[0]!
       expect(row.status).toBe('answered')
       expect(row.answeredAt).not.toBeNull()

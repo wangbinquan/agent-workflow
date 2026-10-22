@@ -5,24 +5,16 @@
 // this file asserts the FULL delta for each path so a refactor can't
 // silently drop a field.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents as agentsTable,
-  docVersions,
-  memoryDistillJobs,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   addReviewComment,
   submitReviewDecision,
@@ -38,7 +30,7 @@ import {
 
 describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
   interface Harness {
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     appHome: string
     repoPath: string
     taskId: string
@@ -67,6 +59,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
     const acquired = gate()
     const release = gate()
     const transaction = harness.session.transaction(async (tx) => {
+      const { tasks, docVersions } = tablesOf(tx)
       // Decisions write these rows; comment insertion also references the
       // document. Ordinary scope SELECTs can finish while these writes wait.
       await harness.session.engine.lockAggregateRoot(tx, tasks, tasks.id, h.taskId)
@@ -221,7 +214,9 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     const db = harness.db
     const committedEvents = await installCommittedEventDeliveryHarness(db)
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions, reviewComments } =
+      tablesOf(db)
+    await insertOne(db, agents, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -248,13 +243,13 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       ],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 't',
       id: taskId,
       executionLineageId: taskId,
@@ -274,7 +269,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     // Upstream agent done.
     const agentRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: agentRunId,
       taskId,
       nodeId: 'doc',
@@ -284,7 +279,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       startedAt: Date.now() - 1000,
       finishedAt: Date.now() - 900,
     })
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: agentRunId,
       portName: 'docpath',
       content: opts?.sourceFilePath !== undefined ? opts.sourceFilePath : '# body inline',
@@ -292,7 +287,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     // Review row awaiting decision.
     const reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -308,7 +303,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
     const bodyPath = 'doc_versions/v1.md'
     writeFileSync(join(appHome, bodyPath), '# body inline')
     const dvId = ulid()
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: dvId,
       taskId,
       reviewNodeId: 'rev_1',
@@ -323,7 +318,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
     })
 
     if (opts?.withInlineComments === true) {
-      await db.insert(reviewComments).values({
+      await insertOne(db, reviewComments, {
         id: ulid(),
         docVersionId: dvId,
         anchorSectionPath: 'Heading',
@@ -373,6 +368,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       })
       await h.committedEvents.drain()
 
+      const { nodeRuns, docVersions, nodeRunOutputs, memoryDistillJobs } = tablesOf(h.db)
       // node_run: status=done, finishedAt set ≥ before
       const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
       expect(nr.status).toBe('done')
@@ -424,6 +420,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       // Pre-write the source file (resolver expects it to exist for read path).
       mkdirSync(join(h.repoPath, 'docs'), { recursive: true })
       writeFileSync(join(h.repoPath, 'docs/design.md'), '# design body')
+      const { nodeRunOutputs } = tablesOf(h.db)
       // Re-write the upstream port to be a path string (not inline body).
       await h.db
         .update(nodeRunOutputs)
@@ -465,6 +462,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         author: 'tester',
       })
 
+      const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
       const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
       expect(nr.status).toBe('pending')
       expect(nr.reviewIteration).toBe(1)
@@ -511,6 +509,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         rejectReason: 'this is not what I asked for',
       })
 
+      const { docVersions, nodeRuns } = tablesOf(h.db)
       const dv = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(dv.decision).toBe('rejected')
       expect(dv.decisionReason).toBe('this is not what I asked for')
@@ -540,6 +539,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         expectedReviewIteration: 0,
         author: 'tester',
       })
+      const { docVersions } = tablesOf(h.db)
       const dv = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(dv.decision).toBe('iterated')
       // decisionReason may be empty / whitespace-trimmed depending on
@@ -557,6 +557,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         expectedReviewIteration: 0,
         author: 'tester',
       })
+      const { nodeRunOutputs, memoryDistillJobs } = tablesOf(h.db)
       const outsBefore = await h.db
         .select()
         .from(nodeRunOutputs)
@@ -597,6 +598,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       })
       await h.committedEvents.drain()
 
+      const { memoryDistillJobs } = tablesOf(h.db)
       const jobs = await h.db
         .select()
         .from(memoryDistillJobs)
@@ -621,6 +623,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         author: 'tester',
       })
       await h.committedEvents.drain()
+      const { memoryDistillJobs } = tablesOf(h.db)
       const jobs = await h.db
         .select()
         .from(memoryDistillJobs)
@@ -640,8 +643,11 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       }
     }
 
-    async function taskDistillJobs(): Promise<Array<typeof memoryDistillJobs.$inferSelect>> {
+    async function taskDistillJobs(): Promise<
+      Array<PersistenceTables['memoryDistillJobs']['$inferSelect']>
+    > {
       await h.committedEvents.drain()
+      const { memoryDistillJobs } = tablesOf(h.db)
       return h.db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.taskId, h.taskId))
     }
 
@@ -674,6 +680,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
 
+      const { nodeRuns, docVersions, reviewComments, nodeRunOutputs } = tablesOf(h.db)
       const reviewRun = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId))
       )[0]!
@@ -729,6 +736,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
 
+      const { nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
       const reviewRun = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId))
       )[0]!
@@ -782,6 +790,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+      const { docVersions, nodeRuns } = tablesOf(h.db)
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(doc.decision).toBe('iterated')
       expect(doc.decidedBy).toBe('iterator')
@@ -832,6 +841,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
           replayed: true,
         })
       }
+      const { docVersions, nodeRunOutputs } = tablesOf(h.db)
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(doc.decision).toBe('approved')
       expect(doc.decidedBy).toBe('first')
@@ -870,6 +880,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       expectRejectedWithCode(results[0]!, 'review-iteration-mismatch')
       expect(results[1]!.status).toBe('fulfilled')
+      const { docVersions } = tablesOf(h.db)
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(doc.decision).toBe('approved')
       expect(doc.decidedBy).toBe('valid-client')
@@ -910,6 +921,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+      const { reviewComments, docVersions } = tablesOf(h.db)
       expect(await h.db.select().from(reviewComments)).toHaveLength(0)
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(doc.decision).toBe('approved')
@@ -951,6 +963,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       expect(results[0]!.status).toBe('fulfilled')
       expect(results[1]!.status).toBe('fulfilled')
+      const { reviewComments, docVersions } = tablesOf(h.db)
       expect(await h.db.select().from(reviewComments)).toHaveLength(0)
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       const archived = JSON.parse(doc.commentsJson ?? '[]') as Array<{ commentText?: string }>
@@ -973,13 +986,14 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
           },
         ],
       }
+      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
       await h.db
         .update(tasks)
         .set({ workflowSnapshot: JSON.stringify(definition) })
         .where(eq(tasks.id, h.taskId))
 
       const siblingRunId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: siblingRunId,
         taskId: h.taskId,
         nodeId: 'rev_2',
@@ -992,7 +1006,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const siblingBodyPath = 'doc_versions/sibling.md'
       writeFileSync(join(h.appHome, siblingBodyPath), '# sibling body')
       const siblingDocId = ulid()
-      await h.db.insert(docVersions).values({
+      await insertOne(h.db, docVersions, {
         id: siblingDocId,
         taskId: h.taskId,
         reviewNodeId: 'rev_2',

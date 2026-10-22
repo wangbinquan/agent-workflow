@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSkillZipImportParticipant as createParticipant } from '../application/skills/skillZipImport'
 import type { SkillVersionContentStore } from '../application/skills/versionContentStore'
 import type { SkillCreationContentStore } from '../application/skills/creationContentStore'
@@ -8,7 +8,7 @@ import { commitSkillZipBuffer, parseSkillZipBuffer } from './legacy/skill-zip'
 
 /** RFC-359 W4-D23c：一份 ZIP 导入适配器，两个数据库共用（底下的机器已是中立事务）。 */
 export function createSkillZipImportParticipant(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly versionContent?: SkillVersionContentStore
   readonly creationContent?: SkillCreationContentStore

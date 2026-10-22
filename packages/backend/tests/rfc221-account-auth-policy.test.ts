@@ -3,13 +3,13 @@
 // Self-service unlink and both self/admin password mutation paths must be
 // denied server-side even when a mixed account still has a historical hash.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 
-import { userIdentities, users } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { createIdentity } from '../src/services/userIdentities'
@@ -83,6 +83,7 @@ describeEachProviderHttpApplication(
         expect(unlink.status).toBe(403)
         expect(((await unlink.json()) as { code: string }).code).toBe('identity-unlink-disabled')
       }
+      const { userIdentities, users } = tablesOf(db)
       expect(await db.select().from(userIdentities)).toHaveLength(1)
 
       const list = await as(DAEMON_TOKEN, '/api/users')

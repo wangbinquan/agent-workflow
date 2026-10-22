@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   compareNodeRunMintOrder,
@@ -25,13 +28,12 @@ import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import { lifecycleAlerts, lifecycleRepairAudit, nodeRuns, tasks } from '@/db/schema'
 import type {
   ClarifyRepairParticipant,
   CollaborationRuntimeMechanics,
   ReviewRepairParticipant,
 } from '@/modules/collaboration/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
 import { buildContainerMap } from '@/services/scheduler'
 import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
@@ -343,7 +345,7 @@ export interface TaskRouteRepairOperationsDependencies {
    * 再标 `PostgresqlDatabaseClient` 只会逼调用方写 `as unknown as`，凭空长出一条跨上下文债边。
    * 文件名与符号名里的 `postgresql` 仍是历史（naming debt §5hj），与句柄类型无关。
    */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly activity: ActiveTaskExecutionParticipant
   /**
@@ -454,17 +456,11 @@ function latestCandidate(
   return candidate
 }
 
-async function loadAlert(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  alertId: string,
-): Promise<ParsedAlert> {
-  const row = await db
-    .select()
-    .from(lifecycleAlerts)
-    .where(eq(lifecycleAlerts.id, alertId))
-    .limit(1)
-    .get()
+async function loadAlert(db: PersistenceDb, taskId: string, alertId: string): Promise<ParsedAlert> {
+  const { lifecycleAlerts } = tablesOf(db)
+  const row = await first(
+    db.select().from(lifecycleAlerts).where(eq(lifecycleAlerts.id, alertId)).limit(1),
+  )
   if (row === undefined) {
     throw new NotFoundError('alert-not-found', `lifecycle_alerts row ${alertId} not found`)
   }
@@ -498,51 +494,53 @@ async function loadAlert(
   }
 }
 
-async function loadTask(db: ProviderNeutralDatabase, taskId: string): Promise<RepairTask> {
-  const row = await db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      workflowSnapshot: tasks.workflowSnapshot,
-      worktreePath: tasks.worktreePath,
-      workgroupId: tasks.workgroupId,
-      workgroupConfigJson: tasks.workgroupConfigJson,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-    .get()
+async function loadTask(db: PersistenceDb, taskId: string): Promise<RepairTask> {
+  const { tasks } = tablesOf(db)
+  const row = await first(
+    db
+      .select({
+        id: tasks.id,
+        status: tasks.status,
+        workflowSnapshot: tasks.workflowSnapshot,
+        worktreePath: tasks.worktreePath,
+        workgroupId: tasks.workgroupId,
+        workgroupConfigJson: tasks.workgroupConfigJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1),
+  )
   if (row === undefined) throw new NotFoundError('task-not-found', `task ${taskId} not found`)
   return row
 }
 
 async function loadNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeRunId: string,
 ): Promise<RepairNodeRun | null> {
-  const row = await db
-    .select({
-      id: nodeRuns.id,
-      seq: nodeRuns.seq,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      iteration: nodeRuns.iteration,
-      reviewIteration: nodeRuns.reviewIteration,
-      shardKey: nodeRuns.shardKey,
-    })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.id, nodeRunId), eq(nodeRuns.taskId, taskId)))
-    .limit(1)
-    .get()
+  const { nodeRuns } = tablesOf(db)
+  const row = await first(
+    db
+      .select({
+        id: nodeRuns.id,
+        seq: nodeRuns.seq,
+        taskId: nodeRuns.taskId,
+        nodeId: nodeRuns.nodeId,
+        status: nodeRuns.status,
+        iteration: nodeRuns.iteration,
+        reviewIteration: nodeRuns.reviewIteration,
+        shardKey: nodeRuns.shardKey,
+      })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.id, nodeRunId), eq(nodeRuns.taskId, taskId)))
+      .limit(1),
+  )
   return row ?? null
 }
 
-async function loadNodeRuns(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<readonly RepairNodeRun[]> {
+async function loadNodeRuns(db: PersistenceDb, taskId: string): Promise<readonly RepairNodeRun[]> {
+  const { nodeRuns } = tablesOf(db)
   return await db
     .select({
       id: nodeRuns.id,
@@ -602,6 +600,7 @@ async function deriveScopeRoot(
   if (ctx.definition === null) return taskWorktreePath
   const wrapperId = buildContainerMap(ctx.definition).get(reviewNodeId)
   if (wrapperId === undefined) return taskWorktreePath
+  const { nodeRuns } = tablesOf(dependencies.db)
   const rows = await dependencies.db
     .select({ id: nodeRuns.id, seq: nodeRuns.seq, isoWorktreePath: nodeRuns.isoWorktreePath })
     .from(nodeRuns)
@@ -873,6 +872,7 @@ async function preflight(
       if (ids === null || ids.length < 2) {
         return unavailable('diagnose.repair.U1.unavailable.detailMissingIds')
       }
+      const { nodeRuns } = tablesOf(dependencies.db)
       const rows = await dependencies.db
         .select({ id: nodeRuns.id, seq: nodeRuns.seq, status: nodeRuns.status })
         .from(nodeRuns)
@@ -1382,34 +1382,33 @@ async function writeAudit(
     automaticKick && input.outcome === 'success'
       ? { task: { status: recordValue(value['task'], 'status') } }
       : value
-  await dependencies.db
-    .insert(lifecycleRepairAudit)
-    .values({
-      id: auditId,
-      taskId: input.alert.taskId,
-      alertId: input.alert.id,
-      alertRule: input.alert.rule,
-      alertDetailJson: JSON.stringify(input.alert.detail),
-      optionId: input.optionId,
-      actorUserId: input.actorUserId,
-      beforeSnapshotJson: JSON.stringify(
-        staleAutomaticTask ? { task: { status: 'pending' } } : snapshot(input.before),
-      ),
-      afterSnapshotJson: JSON.stringify(staleAutomaticTask ? {} : snapshot(input.after)),
-      outcome: input.outcome,
-      outcomeMessage: staleAutomaticTask
-        ? 'task is no longer pending'
-        : (input.outcomeMessage ?? null),
-      appliedAt: dependencies.now?.() ?? Date.now(),
-    })
-    .run()
+  const { lifecycleRepairAudit } = tablesOf(dependencies.db)
+  await insertOne(dependencies.db, lifecycleRepairAudit, {
+    id: auditId,
+    taskId: input.alert.taskId,
+    alertId: input.alert.id,
+    alertRule: input.alert.rule,
+    alertDetailJson: JSON.stringify(input.alert.detail),
+    optionId: input.optionId,
+    actorUserId: input.actorUserId,
+    beforeSnapshotJson: JSON.stringify(
+      staleAutomaticTask ? { task: { status: 'pending' } } : snapshot(input.before),
+    ),
+    afterSnapshotJson: JSON.stringify(staleAutomaticTask ? {} : snapshot(input.after)),
+    outcome: input.outcome,
+    outcomeMessage: staleAutomaticTask
+      ? 'task is no longer pending'
+      : (input.outcomeMessage ?? null),
+    appliedAt: dependencies.now?.() ?? Date.now(),
+  })
   return auditId
 }
 
 async function openAlerts(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<readonly Readonly<{ id: string; rule: string }>[]> {
+  const { lifecycleAlerts } = tablesOf(db)
   return await db
     .select({ id: lifecycleAlerts.id, rule: lifecycleAlerts.rule })
     .from(lifecycleAlerts)
@@ -1588,11 +1587,11 @@ export function createTaskRouteRepairOperations(
     }
 
     const before = await openAlerts(dependencies.db, ctx.task.id)
+    const { lifecycleAlerts } = tablesOf(dependencies.db)
     await dependencies.db
       .update(lifecycleAlerts)
       .set({ resolvedAt: now() })
       .where(and(eq(lifecycleAlerts.id, ctx.alert.id), isNull(lifecycleAlerts.resolvedAt)))
-      .run()
     input.onResolved?.(ctx.task.id)
     const onAlert = input.onAlert
     await runLifecycleInvariants({

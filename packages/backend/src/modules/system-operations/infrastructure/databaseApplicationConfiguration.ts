@@ -2,10 +2,10 @@
 // service slot has no persistent disk, so the document standalone keeps in
 // config.json is one singleton row here. Settings the deployment owns (the
 // database connection) are overlaid on every read and refused in patches.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { DEFAULT_CONFIG, type Config, type DatabaseConfig } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { applicationConfiguration } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   mergeValidatedConfigurationPatch,
   resolveConfigurationValue,
@@ -22,7 +22,7 @@ export interface DeploymentManagedSettings {
 }
 
 export function createDatabaseApplicationConfiguration(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly managed: DeploymentManagedSettings
   readonly now?: () => number
 }): ApplicationConfigurationPersistencePort {
@@ -33,7 +33,8 @@ export function createDatabaseApplicationConfiguration(input: {
     overlay(
       document === undefined ? DEFAULT_CONFIG : resolveConfigurationValue(JSON.parse(document)),
     )
-  const read = async (handle: ProviderNeutralDatabase): Promise<Config> => {
+  const read = async (handle: PersistenceDb): Promise<Config> => {
+    const { applicationConfiguration } = tablesOf(handle)
     const row = (
       await handle
         .select({ document: applicationConfiguration.document })
@@ -61,6 +62,7 @@ export function createDatabaseApplicationConfiguration(input: {
     },
     async applyPatch(patch: unknown) {
       return await session.transaction(async (tx) => {
+        const { applicationConfiguration } = tablesOf(tx)
         await tx
           .insert(applicationConfiguration)
           .values({

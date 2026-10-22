@@ -1,9 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { users, workgroups, workgroupMembers } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createAgent } from '@/services/agent'
 import { ConflictError } from '@/util/errors'
@@ -29,8 +31,9 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 'user') {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -55,7 +58,7 @@ function groupInput(agentId: string) {
   })
 }
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   owner?: { ownerUserId: string; actor: Actor },
 ) {
@@ -78,10 +81,11 @@ async function seed(
   )
   return await createWorkgroup(db, groupInput(agent.id)({ name }), owner)
 }
-async function rows(db: ProviderNeutralDatabase) {
+async function rows(db: PersistenceDb) {
+  const { workgroups, workgroupMembers } = tablesOf(db)
   return {
-    groups: await db.select().from(workgroups).orderBy(workgroups.id).all(),
-    members: await db.select().from(workgroupMembers).orderBy(workgroupMembers.id).all(),
+    groups: await db.select().from(workgroups).orderBy(workgroups.id),
+    members: await db.select().from(workgroupMembers).orderBy(workgroupMembers.id),
   }
 }
 
@@ -191,8 +195,9 @@ describeEachProvider('RFC359 W32 legacy Workgroup async persistence', (harness) 
       databaseSessionFor(db).transaction(async (tx) => {
         const result = await commitWorkgroupSaveInTx(tx, prepared)
         expect(result.committed).toBe(true)
+        const { workgroups, workgroupMembers } = tablesOf(tx)
         expect(
-          (await tx.select().from(workgroups).where(eq(workgroups.id, created.id)).get())
+          (await firstRow(tx.select().from(workgroups).where(eq(workgroups.id, created.id))))
             ?.description,
         ).toBe('rolled back')
         expect(
@@ -201,7 +206,6 @@ describeEachProvider('RFC359 W32 legacy Workgroup async persistence', (harness) 
               .select()
               .from(workgroupMembers)
               .where(eq(workgroupMembers.workgroupId, created.id))
-              .all()
           ).map((m) => m.displayName),
         ).toEqual(['renamed'])
         throw failure

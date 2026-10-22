@@ -11,28 +11,22 @@
 //
 // Locks the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let worktree: string
 
@@ -55,7 +49,8 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     definition: WorkflowDefinition
     docRunId: string
   }> {
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, agents, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -83,7 +78,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
       ],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -92,7 +87,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     })
 
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 'rfc-052',
       id: taskId,
       workflowId,
@@ -108,7 +103,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
 
     // Upstream agent done with a docpath output.
     const docRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: docRunId,
       taskId,
       nodeId: 'doc',
@@ -118,21 +113,24 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
       startedAt: Date.now() - 1000,
       finishedAt: Date.now() - 500,
     })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: docRunId, portName: 'docpath', content: '# body' })
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: docRunId,
+      portName: 'docpath',
+      content: '# body',
+    })
 
     return { taskId, definition, docRunId }
   }
 
   test('returns ok + does NOT touch a done review row + does NOT mint a phantom doc_version', async () => {
     const { taskId, definition } = await seedWorkflow()
+    const { tasks, nodeRuns, docVersions } = tablesOf(db)
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
 
     // Original review row: previously approved (status=done) at v1.
     const approvedRunId = ulid()
     const approvedFinishedAt = Date.now() - 200
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: approvedRunId,
       taskId,
       nodeId: 'rev_1',
@@ -143,7 +141,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
       startedAt: Date.now() - 800,
       finishedAt: approvedFinishedAt,
     })
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: ulid(),
       taskId,
       reviewNodeId: 'rev_1',
@@ -163,7 +161,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     // pre-RFC-052 latestPerNode / dispatchReviewNode interaction picked up
     // and used to reset the approved row.
     const placeholderRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: placeholderRunId,
       taskId,
       nodeId: 'rev_1',
@@ -213,12 +211,13 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
 
   test('still parks a pending review row at awaiting_review (no regression on normal path)', async () => {
     const { taskId, definition } = await seedWorkflow()
+    const { tasks, nodeRuns, docVersions } = tablesOf(db)
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
 
     // Single review row in `pending` (e.g., post-iterate). Dispatch should
     // pick it, set status=awaiting_review, and create v1.
     const reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',

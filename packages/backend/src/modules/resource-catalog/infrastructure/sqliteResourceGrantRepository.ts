@@ -4,7 +4,7 @@
 // **收回中立那一份的三个（现在是 re-export，不是实现）**：`listGrantedResourceIds` /
 // `loadGrantLevel` / `loadGrantLevelsForUser`。它们与 `resourceVisibility.ts` 的
 // `createResourceGrantReadPort` 里同名的三个**曾经逐字相同**（只差参数写成 `DbClient`——
-// 而 `DbClient` 本来就是 `ProviderNeutralDatabase` 的一个实例）。同一件事两份实现、且
+// 而 `DbClient` 本来就是 `PersistenceDb` 的一个实例）。同一件事两份实现、且
 // **两份在同一个 SQLite 进程里同时活着**：中立那份喂 `createResourceAuthorizationApplication`
 // （列表页可见性过滤与 access 徽章），这一份被 `legacy/agent.ts` / `legacy/resourceRefs.ts` /
 // `task-execution/infrastructure/legacyCallClosure.ts` 直接调用。一边改了另一边漏改，用户看到的
@@ -18,7 +18,7 @@
 //
 // **三个 async 留着，但不是同一个理由**（W10 逐个 import 核过，别当成「还没轮到」）：
 //   - `listWritableGrantedResourceIds` —— 没有孪生，是 `listGrantedResourceIds` 加一层 `level='write'`
-//     过滤；调用方只有 `legacy/skill-zip.ts`。它早就吃 `ProviderNeutralDatabase`，**名字里的
+//     过滤；调用方只有 `legacy/skill-zip.ts`。它早就吃 `PersistenceDb`，**名字里的
 //     `sqlite` 已经是假的**，属于命名债不是分叉债，随改名那一刀归位。
 //   - `listResourceGrantUserIds` / `listResourceGrants` —— `packages/backend/src` 下**零调用方**
 //     （`listResourceGrants` 连 `services/resourceAcl.ts` 的再导出都没人取用；
@@ -26,12 +26,13 @@
 //     `tests/architecture/rfc349-provider-cutover.test.ts` 的 facade 导出账本——那份此刻正被
 //     并发的刀改着，**为避免撞车留到下一刀**，理由记在这里而不是留一句「TODO」。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import type { GrantResourceType, ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DbTxSync } from '@/db/txSync'
-import { resourceGrants } from '@/db/schema'
 import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import { grantsOfResourceWhere, grantsOfUserWhere } from './resourceVisibility'
 
@@ -46,11 +47,13 @@ export function listGrantedResourceIdsInTx(
   actor: ResourceAclActorProjection,
   type: GrantResourceType,
 ): Set<string> {
-  const rows = tx
-    .select({ resourceId: resourceGrants.resourceId })
-    .from(resourceGrants)
-    .where(grantsOfUserWhere(type, actor.user.id))
-    .all()
+  const { resourceGrants } = tablesOf(tx)
+  const rows = queryRows(
+    tx
+      .select({ resourceId: resourceGrants.resourceId })
+      .from(resourceGrants)
+      .where(grantsOfUserWhere(tx, type, actor.user.id)),
+  )
   return new Set(rows.map((row) => row.resourceId))
 }
 
@@ -59,10 +62,11 @@ export async function listResourceGrantUserIds(
   type: GrantResourceType,
   resourceId: string,
 ): Promise<string[]> {
+  const { resourceGrants } = tablesOf(db)
   const rows = await db
     .select({ userId: resourceGrants.userId })
     .from(resourceGrants)
-    .where(grantsOfResourceWhere(type, resourceId))
+    .where(grantsOfResourceWhere(db, type, resourceId))
   return rows.map((row) => row.userId)
 }
 
@@ -71,10 +75,11 @@ export async function listResourceGrants(
   type: GrantResourceType,
   resourceId: string,
 ): Promise<Array<{ userId: string; level: ResourceGrantLevel }>> {
+  const { resourceGrants } = tablesOf(db)
   return db
     .select({ userId: resourceGrants.userId, level: resourceGrants.level })
     .from(resourceGrants)
-    .where(grantsOfResourceWhere(type, resourceId))
+    .where(grantsOfResourceWhere(db, type, resourceId))
 }
 
 export function listResourceGrantsInTx(
@@ -82,13 +87,14 @@ export function listResourceGrantsInTx(
   type: GrantResourceType,
   resourceId: string,
 ): Map<string, ResourceGrantLevel> {
+  const { resourceGrants } = tablesOf(tx)
   return new Map(
-    tx
-      .select({ userId: resourceGrants.userId, level: resourceGrants.level })
-      .from(resourceGrants)
-      .where(grantsOfResourceWhere(type, resourceId))
-      .all()
-      .map((row) => [row.userId, row.level] as const),
+    queryRows(
+      tx
+        .select({ userId: resourceGrants.userId, level: resourceGrants.level })
+        .from(resourceGrants)
+        .where(grantsOfResourceWhere(tx, type, resourceId)),
+    ).map((row) => [row.userId, row.level] as const),
   )
 }
 
@@ -97,23 +103,25 @@ export function listResourceGrantUserIdsInTx(
   type: GrantResourceType,
   resourceId: string,
 ): string[] {
-  return tx
-    .select({ userId: resourceGrants.userId })
-    .from(resourceGrants)
-    .where(grantsOfResourceWhere(type, resourceId))
-    .all()
-    .map((row) => row.userId)
+  const { resourceGrants } = tablesOf(tx)
+  return queryRows(
+    tx
+      .select({ userId: resourceGrants.userId })
+      .from(resourceGrants)
+      .where(grantsOfResourceWhere(tx, type, resourceId)),
+  ).map((row) => row.userId)
 }
 
 export async function listWritableGrantedResourceIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ResourceAclActorProjection,
   type: GrantResourceType,
 ): Promise<Set<string>> {
+  const { resourceGrants } = tablesOf(db)
   const rows = await db
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
-    .where(and(grantsOfUserWhere(type, actor.user.id), eq(resourceGrants.level, 'write')))
+    .where(and(grantsOfUserWhere(db, type, actor.user.id), eq(resourceGrants.level, 'write')))
   return new Set(rows.map((row) => row.resourceId))
 }
 
@@ -123,12 +131,14 @@ export function loadGrantLevelInTx(
   resourceId: string,
   userId: string,
 ): ResourceGrantLevel | null {
+  const { resourceGrants } = tablesOf(tx)
   return (
-    tx
-      .select({ level: resourceGrants.level })
-      .from(resourceGrants)
-      .where(and(grantsOfResourceWhere(type, resourceId), eq(resourceGrants.userId, userId)))
-      .get()?.level ?? null
+    first(
+      tx
+        .select({ level: resourceGrants.level })
+        .from(resourceGrants)
+        .where(and(grantsOfResourceWhere(tx, type, resourceId), eq(resourceGrants.userId, userId))),
+    )?.level ?? null
   )
 }
 

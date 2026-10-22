@@ -1,14 +1,15 @@
 // RFC-036 — patStore CRUD + lookup invariants.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createPat, listPatsForUser, lookupActivePat, revokePat } from './helpers/auth/patStore'
-import { users } from '../src/db/schema'
-
-async function seedActiveUser(db: ProviderNeutralDatabase, id = '01HQPATUSR'): Promise<string> {
-  await db.insert(users).values({
+async function seedActiveUser(db: PersistenceDb, id = '01HQPATUSR'): Promise<string> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id.toLowerCase(),
     email: `${id.toLowerCase()}@example.com`,
@@ -27,7 +28,7 @@ async function seedActiveUser(db: ProviderNeutralDatabase, id = '01HQPATUSR'): P
 }
 
 describeEachProvider('patStore', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -78,6 +79,7 @@ describeEachProvider('patStore', (harness) => {
   test('lookupActivePat returns null when user is disabled', async () => {
     const id = await seedActiveUser(db)
     const { token } = await createPat({ db, userId: id, name: 'ci', purpose: 'general' })
+    const { users } = tablesOf(db)
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, id))
     expect(await lookupActivePat(db, token)).toBe(null)
   })
@@ -108,7 +110,7 @@ describeEachProvider('patStore', (harness) => {
   test('scopes JSON malformed → empty scopes (no crash)', async () => {
     const id = await seedActiveUser(db)
     const { token } = await createPat({ db, userId: id, name: 'ci', purpose: 'general' })
-    const { userPats } = await import('../src/db/schema')
+    const { userPats } = tablesOf(db)
     // Manually corrupt the row.
     await db.update(userPats).set({ scopesJson: '{not-json' }).where(eq(userPats.userId, id))
     const resolved = await lookupActivePat(db, token)

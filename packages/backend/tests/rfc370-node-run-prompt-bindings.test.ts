@@ -1,4 +1,7 @@
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
@@ -11,8 +14,7 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory, ulid } from 'ulid'
 import ts from 'typescript'
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, memoryDistillJobs, nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -42,9 +44,10 @@ function held<T>() {
 // Session siblings use ID order, so same-millisecond fixture attempts must be monotonic.
 const sourceRunId = monotonicFactory()
 
-async function sourceRun(db: ProviderNeutralDatabase, taskId: string, retryIndex = 0) {
+async function sourceRun(db: PersistenceDb, taskId: string, retryIndex = 0) {
   const id = sourceRunId()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: DESIGNER,
@@ -58,7 +61,7 @@ async function sourceRun(db: ProviderNeutralDatabase, taskId: string, retryIndex
     promptPath: 'object:' + id,
     opencodeSessionId: 'session-' + taskId,
   })
-  await db.insert(nodeRunEvents).values({
+  await insertOne(db, nodeRunEvents, {
     nodeRunId: id,
     ts: retryIndex + 2,
     kind: 'text',
@@ -74,10 +77,11 @@ async function sourceRun(db: ProviderNeutralDatabase, taskId: string, retryIndex
   return id
 }
 
-async function clarifySource(db: ProviderNeutralDatabase, taskId: string, askingNodeRunId: string) {
+async function clarifySource(db: PersistenceDb, taskId: string, askingNodeRunId: string) {
   const intermediaryNodeRunId = ulid(),
     id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, clarifyRounds } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: intermediaryNodeRunId,
     taskId,
     nodeId: CL,
@@ -86,7 +90,7 @@ async function clarifySource(db: ProviderNeutralDatabase, taskId: string, asking
     reviewIteration: 0,
     status: 'awaiting_human',
   })
-  await db.insert(clarifyRounds).values({
+  await insertOne(db, clarifyRounds, {
     id,
     kind: 'self',
     taskId,
@@ -281,7 +285,8 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       failure = held<string>()
     await seedTask(db, taskId)
     const run = await sourceRun(db, taskId)
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id: jobId,
       sourceKind: 'agent-run',
       sourceEventId: run,
@@ -349,7 +354,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       expect(await failure.promise).toBe(reason)
       expect(calls).toEqual(['object:' + run, 'object:' + run])
       expect(
-        await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get(),
+        await firstRow(db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId))),
       ).toMatchObject({ status: 'pending', attempts: 1, lastError: reason })
     } finally {
       ack.resolve(undefined)
@@ -373,9 +378,10 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     await seedTask(db, taskId)
     const worktreePath = join(root, 'wt')
     mkdirSync(worktreePath, { recursive: true })
+    const { tasks, nodeRuns } = tablesOf(db)
     await db.update(tasks).set({ status: 'running', worktreePath }).where(eq(tasks.id, taskId))
     const nodeRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, tablesOf(db).nodeRuns, {
       id: nodeRunId,
       taskId,
       nodeId: DESIGNER,
@@ -483,7 +489,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       ])
       expect(trace).toEqual(['store'])
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.status,
+        (await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))))?.status,
       ).toBe('pending')
       writeAck.resolve(undefined)
       await Promise.race([
@@ -494,13 +500,13 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       ])
       expect(trace).toEqual(['store', 'store-ack', 'patch'])
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.status,
+        (await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))))?.status,
       ).toBe('pending')
       patchAck.resolve(undefined)
       expect(await pending).toBe(stop)
       expect(trace).toEqual(['store', 'store-ack', 'patch', 'patch-ack', 'mark-running'])
       expect(
-        await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get(),
+        await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))),
       ).toMatchObject({ status: 'pending', promptText: null, promptPath: 'object:runner' })
     } finally {
       writeAck.resolve(undefined)

@@ -9,12 +9,12 @@
 // 种子与候选树经 `SkillTreeContentStore`：严格读某一版本的不可变快照（缺失即 null，没有 live 兜底），
 // 候选树与技能同生同灭。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills, skillVersions } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 
 import { createSkillVersionCommitParticipantInTx } from '../application/skillVersionCommit'
@@ -49,7 +49,7 @@ import { readSkillVersionCompositeLive } from './skillVersionCommitParticipant'
 const MAIN = 'SKILL.md'
 
 export interface SkillTreeVersionParticipant extends SkillTreeVersionOperations {
-  inTransaction(transaction: DatabaseTransaction): SkillVersionCommitParticipantInTx
+  inTransaction(transaction: PersistenceTx): SkillVersionCommitParticipantInTx
 }
 
 interface StagedEntry {
@@ -79,7 +79,7 @@ function mainContentOf(files: readonly SkillTreeVersionFile[]): string {
 }
 
 export function createSkillTreeVersionParticipant(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fs: SkillVersionFsOptions
   readonly trees: SkillTreeContentStore
 }): SkillTreeVersionParticipant {
@@ -164,7 +164,7 @@ export function createSkillTreeVersionParticipant(input: {
       })
       return handle
     },
-    inTransaction(transaction: DatabaseTransaction) {
+    inTransaction(transaction: PersistenceTx) {
       return createSkillVersionCommitParticipantInTx({
         async commit(
           handle: StagedSkillTreeVersion,
@@ -197,8 +197,9 @@ export function createSkillTreeVersionParticipant(input: {
             now: request.now,
             setDescription: description,
           })
+          const { skills, skillVersions } = tablesOf(transaction)
           await transaction.update(skills).set(plan.skillPatch).where(eq(skills.id, staged.skillId))
-          await transaction.insert(skillVersions).values(plan.versionRow)
+          await insertOne(transaction, skillVersions, plan.versionRow)
           await hooks?.after?.(staged.newVersion)
           if (staged.opId !== null) await advancePhase(transaction, staged.opId, 'db-committed')
           return staged.newVersion

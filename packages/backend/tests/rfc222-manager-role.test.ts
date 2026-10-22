@@ -11,13 +11,14 @@
 //     tasks:delete out of a PAT unless explicitly scoped; last-admin protection
 //     does not count manager as an admin.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -29,7 +30,7 @@ import { ValidationError } from '../src/util/errors'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   adminToken: string
   managerToken: string
@@ -38,7 +39,7 @@ interface Harness {
   managerId: string
 }
 
-async function tokenFor(db: ProviderNeutralDatabase, userId: string): Promise<string> {
+async function tokenFor(db: PersistenceDb, userId: string): Promise<string> {
   const { token } = await createSession({ db, userId })
   return token
 }
@@ -73,7 +74,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   })
   // A private agent owned by alice — the row a manager must be able to reach.
   const agId = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: agId,
     name: `alice-secret-${agId}`,
     ownerUserId: alice.id,
@@ -280,7 +282,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-manager-role-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })

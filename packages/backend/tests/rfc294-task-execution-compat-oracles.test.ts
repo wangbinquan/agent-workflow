@@ -13,6 +13,8 @@
 //   4. a route/call/workgroup pre-materialized handoff takes precedence over
 //      JSON deferred repository preparation, including its failure arm.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -28,14 +30,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  nodeRuns,
-  taskExecutionEffects,
-  taskExecutionOwners,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
@@ -108,7 +102,8 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
   const agentId = ulid()
-  await db.insert(agents).values({
+  const { agents, workflows } = tablesOf(db)
+  await insertOne(db, agents, {
     id: agentId,
     name: 'rfc294-worker',
     description: 'RFC-294 execution compatibility oracle',
@@ -132,7 +127,7 @@ async function buildHarness(): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc294-execution-oracle',
     definition: JSON.stringify(definition),
@@ -161,7 +156,8 @@ async function seedTask(
   mkdirSync(resolve(worktreePath, '..'), { recursive: true })
   await runGit(harness.sourceRepo, ['worktree', 'add', '-q', '-b', branch, worktreePath, 'main'])
   const head = (await runGit(worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
-  await harness.db.insert(tasks).values({
+  const { tasks, nodeRuns } = tablesOf(harness.db)
+  await insertOne(harness.db, tasks, {
     id: taskId,
     name: `rfc294-${status}`,
     workflowId: harness.workflowId,
@@ -183,7 +179,7 @@ async function seedTask(
   if (status === 'pending') return { taskId }
 
   const failedRunId = ulid()
-  await harness.db.insert(nodeRuns).values({
+  await insertOne(harness.db, nodeRuns, {
     id: failedRunId,
     taskId,
     nodeId: 'work',
@@ -223,6 +219,7 @@ async function waitFor(check: () => boolean | Promise<boolean>, what: string): P
 }
 
 async function taskRow(db: DbClient, taskId: string) {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
 }
 
@@ -269,6 +266,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
 
     const final = await taskRow(h.db, taskId)
     expect(final?.status).toBe('done')
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const workRows = rows.filter((row) => row.nodeId === 'work')
     expect(workRows).toHaveLength(1)
@@ -306,6 +304,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
 
     await waitFor(() => existsSync(join(h!.ctrlDir, 'slow-started')), 'single slow process')
     expect(spawnLog(h)).toBe('S')
+    const { nodeRuns } = tablesOf(h.db)
     const beforeCancel = await h.db
       .select()
       .from(nodeRuns)
@@ -344,6 +343,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
     const interrupted = await waitForStatus(h.db, started.id, 'interrupted')
     await waitFor(() => !isTaskActive(started.id), 'shutdown owner release')
     expect(interrupted.errorSummary).toBe(DAEMON_RESTART_ERROR_SUMMARY)
+    const { nodeRuns, taskExecutionOwners, taskExecutionEffects } = tablesOf(h.db)
     const firstGeneration = await h.db
       .select()
       .from(nodeRuns)
@@ -444,6 +444,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
     expect(result.errorMessage).toBe(sentinel)
     expect(result.errorSummary).toContain(sentinel)
     expect(materializedSpace.cleanup.state).toBe('committed')
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(rows).toHaveLength(0)
     expect(rows.some((row) => row.nodeId === '__repo_prep__')).toBe(false)

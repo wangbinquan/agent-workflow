@@ -209,7 +209,7 @@ function chainCalls(root: ts.Node): ChainCall[] {
 
 /** `from(表)` / `insert(表)` 的表名——只认光秃秃一个标识符。 */
 function tableArgument(call: ts.CallExpression | undefined): string | null {
-  const argument = call?.arguments[0]
+  const argument = call?.arguments[call && calleeName(call) === 'insertOne' ? 1 : 0]
   if (argument !== undefined && ts.isIdentifier(argument)) return argument.text
   return null
 }
@@ -318,7 +318,7 @@ export function unnormalizedUniqueInsertSites(
         }
       }
       // ③ 插入：表带唯一约束、链上没有 onConflictDo*
-      if (name === 'insert') {
+      if (name === 'insert' || name === 'insertOne') {
         const table = tableArgument(node)
         const scope = table === null ? null : enclosingScope(node)
         if (scope !== null && table !== null && uniqueTables.has(table)) {
@@ -509,6 +509,8 @@ const UNIQUE_TABLES = uniqueConstrainedTables(persistenceSchema.tables)
 export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/collaboration/infrastructure/humanGateOpenParticipant.ts: 1',
   'modules/collaboration/infrastructure/taskCollab.ts: 1',
+  // RFC-395 I-b: tablesOf expands the previous revisions alias; the existing commit program is unchanged.
+  'modules/development-automation/infrastructure/graph-development/designStore.ts: 1',
   'modules/digital-employee/infrastructure/runtimeStore.ts: 5',
   // RFC-365：EC durable origin/work-intent store 在目标 effect **之前**落一行 intent
   // （唯一键 `event_automation_work_intents_delivery_unique` /
@@ -557,7 +559,7 @@ function scan(): ScannedFile[] {
   for (const rel of CORPUS_FILES) {
     const text = readFileSync(join(SRC, rel), 'utf8')
     // 便宜的前置过滤：没有 `.insert(` 的文件不必解析（全树 AST 解析是这条守卫的主要成本）。
-    if (!text.includes('.insert(')) continue
+    if (!text.includes('.insert(') && !text.includes('insertOne(')) continue
     const sites = uniqueInsertDebtSites(rel, text, UNIQUE_TABLES)
     if (sites.length > 0) out.push({ path: rel, sites })
   }
@@ -772,6 +774,19 @@ export function* append(tx: Tx, name: string, a: string, b: string) {
 const FIXTURE_TABLES = uniqueConstrainedTables(FIXTURE_SCHEMA)
 
 describe('RFC-359 W8-T29 —— 判据自证（负 fixture）', () => {
+  test('native single-row insert keeps the same unique-table inventory', () => {
+    const native = DEBT_FIXTURE.replace(
+      'tx.insert(widgets).values({ id: mintId(), name })',
+      'insertOne(tx, widgets, { id: mintId(), name })',
+    )
+    expect(
+      unnormalizedUniqueInsertSites(
+        'native.ts',
+        native,
+        uniqueConstrainedTables(FIXTURE_SCHEMA),
+      ).map((site) => site.table),
+    ).toEqual(['widgets'])
+  })
   test('唯一约束表的识别：uniqueIndex 与复合 primaryKey 都算，普通 index 不算', () => {
     expect([...FIXTURE_TABLES].sort()).toEqual(['gadgets', 'widgets'])
     const plain = FIXTURE_SCHEMA[2]!

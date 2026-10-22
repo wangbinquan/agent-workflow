@@ -22,27 +22,31 @@
 // 每次重启都作废所有在途 fence——那等于把一个安全机制变成噪音源，用户学会的第一件事
 // 就是忽略 409。所以只在**真的发生归一**时推进，稳态重启必须逐字不变。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, users, workflows } from '../src/db/schema'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const agentRow = async (
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
-): Promise<Record<string, unknown> | undefined> =>
-  (await db.select().from(agents).where(eq(agents.name, name)))[0] as
+): Promise<Record<string, unknown> | undefined> => {
+  const { agents } = tablesOf(db)
+  return (await db.select().from(agents).where(eq(agents.name, name)))[0] as
     | Record<string, unknown>
     | undefined
+}
 
-async function freshDb(db: ProviderNeutralDatabase): Promise<ProviderNeutralDatabase> {
-  await db.insert(users).values({
+async function freshDb(db: PersistenceDb): Promise<PersistenceDb> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'U1',
@@ -55,7 +59,7 @@ async function freshDb(db: ProviderNeutralDatabase): Promise<ProviderNeutralData
   return db
 }
 
-function seed(db: ProviderNeutralDatabase): Promise<void> {
+function seed(db: PersistenceDb): Promise<void> {
   return seedFusionResources(
     composeSqliteFusionPersistence({ db, appHome: '/tmp', ...TEST_SQLITE_FUSION_PARTICIPANTS }),
   )
@@ -69,6 +73,7 @@ describeEachProvider('AC-12 · built-in 归一改变导出语义 ⇒ 必须推�
     const seeded = await agentRow(db, 'aw-skill-merger')
     expect(seeded?.builtin).toBe(true)
 
+    const { agents } = tablesOf(db)
     // 人为把它退回「普通用户资源」的形态，模拟一个待归一的存量库。
     await db
       .update(agents)
@@ -124,12 +129,12 @@ describeEachProvider(
     //
     // 教训很具体：给两条路径写同一个修复时，**两条都要有自己的用例**。只测一条时，另一条
     // 是否生效完全靠「它们看起来一样」这个假设，而这里恰恰不一样（两类的 fence 形态不同）。
-    const workflowRow = async (
-      db: ProviderNeutralDatabase,
-    ): Promise<Record<string, unknown> | undefined> =>
-      (await db.select().from(workflows).where(eq(workflows.name, 'aw-skill-fusion')))[0] as
+    const workflowRow = async (db: PersistenceDb): Promise<Record<string, unknown> | undefined> => {
+      const { workflows } = tablesOf(db)
+      return (await db.select().from(workflows).where(eq(workflows.name, 'aw-skill-fusion')))[0] as
         | Record<string, unknown>
         | undefined
+    }
 
     test('把 workflow 归一成 built-in ⇒ `version` 必须推进（fence 只看它）', async () => {
       const db = await freshDb(harness.db)
@@ -137,6 +142,7 @@ describeEachProvider(
       const seeded = await workflowRow(db)
       expect(seeded?.builtin).toBe(true)
 
+      const { workflows } = tablesOf(db)
       // 退回「普通用户资源」形态，模拟待归一的存量库。
       await db
         .update(workflows)

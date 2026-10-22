@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ResourceCatalogOverviewQuery } from '../public/queries'
 import { createResourceCatalogOverviewQuery } from '../application/resourceCatalogOverview'
 import { createResourceCatalogOverviewCountPort } from '../infrastructure/resourceCatalogOverview'
@@ -19,7 +19,7 @@ import { createResourceCatalogOverviewCountPort } from '../infrastructure/resour
  * 同时去掉了原来的 `authority` 解析器入参：端口现在直接收 actor，见 `public/queries.ts`。
  */
 export function composeResourceCatalogOverviewQuery(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ResourceCatalogOverviewQuery {
   return createResourceCatalogOverviewQuery({
     counts: createResourceCatalogOverviewCountPort(db),

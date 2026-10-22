@@ -17,8 +17,7 @@
 // 注意：`db.run(...)` 那条路**不能**用来插队——SQLite 会话开事务发的 `BEGIN IMMEDIATE` 是
 // `db.run(sql.raw(...))` 且**没有 await**，把它包成 promise 会让 BEGIN 落到事务体之后。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /** 链式转发代理：drizzle 的 builder 每一步可能返回新对象，所以逐层包。 */
 function fireBeforeAwait<T extends object>(node: T, hook: () => Promise<void>): T {
@@ -58,9 +57,9 @@ function fireBeforeAwait<T extends object>(node: T, hook: () => Promise<void>): 
  * 交出的事务句柄），所以竞争写与被插队的语句在**同一笔事务**里。
  */
 export function dbWithCompetingWriter(
-  real: ProviderNeutralDatabase,
-  sabotage: (tx: DatabaseTransaction) => Promise<void>,
-): ProviderNeutralDatabase {
+  real: PersistenceDb,
+  sabotage: (tx: PersistenceTx) => Promise<void>,
+): PersistenceDb {
   let fired = false
   const wrap = <T extends object>(node: T): T =>
     new Proxy(node, {
@@ -72,7 +71,7 @@ export function dbWithCompetingWriter(
             if (fired || typeof builder !== 'object' || builder === null) return builder
             fired = true
             return fireBeforeAwait(builder as object, () =>
-              sabotage(target as unknown as DatabaseTransaction),
+              sabotage(target as unknown as PersistenceTx),
             )
           }
         }
@@ -89,5 +88,5 @@ export function dbWithCompetingWriter(
           : value
       },
     }) as T
-  return wrap(real as object) as ProviderNeutralDatabase
+  return wrap(real as object) as PersistenceDb
 }

@@ -8,6 +8,9 @@
 // C7(proposal §5):无参 GET 保持旧 `{items}` 全量形状;带任一参数才切分页
 // 封套——两种形状都在 HTTP 层锁死。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -17,8 +20,7 @@ import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { CachedRepo } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { cachedRepos, scheduledTasks, taskRepos, tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   invalidateRepoFacetsCache,
   listCachedRepos,
@@ -51,7 +53,7 @@ interface RepoSeed {
   lastSubmoduleSyncOk: boolean | null
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
+async function seed(db: PersistenceDb): Promise<RepoSeed[]> {
   // 12 仓覆盖:submodule true/false/null × sync ok/fail × autoRefresh 有/无 ×
   // q 命中面(urlRedacted/localPath/defaultBranch)× lastFetchedAt tie。
   const repos: RepoSeed[] = [
@@ -97,7 +99,8 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
     r('r12', 'git@github.com:acme/never-fetched.git', '/repos/a12', 'main', 0, null, null, null),
   ]
   for (const row of repos) {
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: row.id,
       urlHash: row.id.padEnd(8, '0'),
       urlRedacted: row.urlRedacted,
@@ -112,13 +115,14 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
     })
   }
 
+  const { users, workflows, tasks, taskRepos, scheduledTasks } = tablesOf(db)
   // 引用面三源:
   //   r01 ← task_repos 两个不同 task(计 2)+ 下面 tD 的 task_repos 行(计 1)= 3
   //   r05 ← 仅 tasks.cachedRepoId(无 task_repos 行)(计 1)
   //   r08 ← 仅 scheduled payload 提及(计 1)
   //   r02 ← tasks.cachedRepoId 但该 task 有 task_repos 行(指向 r01)→ tasks 腿
   //         不计(锁 NOT EXISTS 细节),r02 保持 unused。
-  await db.insert(users).values({
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -126,11 +130,13 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
     createdAt: T0,
     updatedAt: T0,
   })
-  await db
-    .insert(workflows)
-    .values({ id: 'wf1', name: 'wf', definition: '{"nodes":[],"edges":[],"inputs":[]}' })
+  await insertOne(db, workflows, {
+    id: 'wf1',
+    name: 'wf',
+    definition: '{"nodes":[],"edges":[],"inputs":[]}',
+  })
   const mkTask = async (id: string, cachedRepoId: string | null): Promise<void> => {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id,
       name: id,
       workflowId: 'wf1',
@@ -159,7 +165,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
   await mkTask('tC', 'r05')
   await mkTask('tD', 'r02')
   const mkTaskRepo = async (taskId: string, cachedRepoId: string): Promise<void> => {
-    await db.insert(taskRepos).values({
+    await insertOne(db, taskRepos, {
       taskId,
       repoIndex: 0,
       repoPath: `/tmp/${taskId}`,
@@ -171,7 +177,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
   await mkTaskRepo('tA', 'r01')
   await mkTaskRepo('tB', 'r01')
   await mkTaskRepo('tD', 'r01')
-  await db.insert(scheduledTasks).values({
+  await insertOne(db, scheduledTasks, {
     id: ulid(),
     name: 'sched-1',
     ownerUserId: 'u1',
@@ -347,14 +353,14 @@ describe('RFC-311 T28 — listCachedReposPage oracle (SQLite query plans)', () =
   // 实现门 P2-4:断点必须是行值比较——展开式在**绑定参数**下会退化成
   // MULTI-INDEX OR + TEMP B-TREE 全排序(字面量 EXPLAIN 看不出来,必须用 ?)。
   test('the cursor boundary keeps an ordered index seek under bound parameters', () => {
-    const detail = db
-      .all<{ detail: string }>(
-        sql.raw(
-          `EXPLAIN QUERY PLAN SELECT * FROM cached_repos
+    const detail = rawRows<{ detail: string }>(
+      db,
+      sql.raw(
+        `EXPLAIN QUERY PLAN SELECT * FROM cached_repos
              WHERE (last_fetched_at, id) < (?, ?)
              ORDER BY last_fetched_at DESC, id DESC LIMIT 4`,
-        ),
-      )
+      ),
+    )
       .map((row) => row.detail)
       .join('\n')
     expect(detail).toContain('idx_cached_repos_fetched_id')
@@ -378,12 +384,12 @@ describe('RFC-311 T28 — listCachedReposPage oracle (SQLite query plans)', () =
   })
 
   test('page query drives the keyset index, not a full sort', () => {
-    const detail = db
-      .all<{ detail: string }>(
-        sql.raw(
-          'EXPLAIN QUERY PLAN SELECT * FROM cached_repos ORDER BY last_fetched_at DESC, id DESC LIMIT 4',
-        ),
-      )
+    const detail = rawRows<{ detail: string }>(
+      db,
+      sql.raw(
+        'EXPLAIN QUERY PLAN SELECT * FROM cached_repos ORDER BY last_fetched_at DESC, id DESC LIMIT 4',
+      ),
+    )
       .map((row) => row.detail)
       .join('\n')
     expect(detail).toContain('idx_cached_repos_fetched_id')
@@ -394,7 +400,7 @@ describe('RFC-311 T28 — listCachedReposPage oracle (SQLite query plans)', () =
 describeEachProvider('RFC-311 T28 — /api/cached-repos C7 双形状', (harness) => {
   // Dispose this complete application before the outer harness resets its database.
   describe('complete application lifetime', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let application: ProviderHttpApplication | undefined
     let tmp: string | undefined
@@ -529,7 +535,8 @@ describeEachProvider('RFC-311 T28 — /api/cached-repos C7 双形状', (harness)
       expect(first.facets.all).toBe(12)
 
       // 绕过写路径(不触发失效)直接插一行:TTL 内应仍看到旧计数。
-      await db.run(
+      await rawExec(
+        db,
         sql.raw(`INSERT INTO cached_repos (id, url_hash, url_redacted, local_path, last_fetched_at, created_at)
                VALUES ('r99', 'hash-r99', 'git@github.com:acme/late.git', '/repos/late', ${T0}, ${T0})`),
       )

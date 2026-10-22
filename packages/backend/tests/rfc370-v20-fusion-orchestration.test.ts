@@ -13,6 +13,8 @@
 // proposal is collected through Task Execution and kept as a candidate tree,
 // approval versions the candidate through Resource Catalog, a re-run seeds
 // base + overlay, and every settled engine workspace is released.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -21,8 +23,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { resolveEffectiveAccountPermissions, type TaskStatus } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { fusions, memories, skillContentEntries, skills } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   approveFusion,
   cancelFusion,
@@ -103,7 +104,7 @@ function fakeEngineTasks() {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   deps: FusionDeps
   engine: ReturnType<typeof fakeEngineTasks>
   skillId: string
@@ -129,7 +130,8 @@ describeEachProvider(
       // Nothing of the skill may live on the local disk.
       rmSync(appHome, { recursive: true, force: true })
       const memoryId = ulid()
-      await db.insert(memories).values({
+      const { memories, skillContentEntries } = tablesOf(db)
+      await insertOne(db, memories, {
         id: memoryId,
         scopeType: 'global',
         scopeId: null,
@@ -154,8 +156,8 @@ describeEachProvider(
         }),
         tasks: engine.tasks,
       })
-      const trees = async (prefix: string) =>
-        [
+      const trees = async (prefix: string) => {
+        return [
           ...new Set(
             (
               await db
@@ -165,6 +167,7 @@ describeEachProvider(
             ).map((row) => row.tree),
           ),
         ].filter((tree) => tree.startsWith(prefix))
+      }
       h = {
         db,
         deps: { operations },
@@ -213,6 +216,7 @@ describeEachProvider(
     }
 
     async function row(id: string) {
+      const { fusions } = tablesOf(h.db)
       return (await h.db.select().from(fusions).where(eq(fusions.id, id)))[0]!
     }
 
@@ -233,6 +237,7 @@ describeEachProvider(
     })
 
     test('a hosted skill without its version snapshot still fails closed (no live fallback)', async () => {
+      const { skillContentEntries } = tablesOf(h.db)
       await h.db
         .delete(skillContentEntries)
         .where(
@@ -265,6 +270,7 @@ describeEachProvider(
         'SKILL.md': expect.stringContaining('fused body (2 spaces)'),
         'assets/rule.bin': dec(new Uint8Array([0, 1, 255])),
       })
+      const { skills, memories } = tablesOf(h.db)
       expect(
         (await h.db.select().from(skills).where(eq(skills.id, h.skillId)))[0]!.contentVersion,
       ).toBe(2)
@@ -329,6 +335,7 @@ describeEachProvider(
       const fusion = await launch()
       const taskId = fusion.currentTaskId!
       settleWithProposal(taskId, 'legacy proposal')
+      const { fusions } = tablesOf(h.db)
       await h.db
         .update(fusions)
         .set({

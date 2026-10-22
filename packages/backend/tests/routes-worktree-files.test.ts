@@ -4,6 +4,8 @@
 // stat the filesystem; sanity-checks the JSON wire shape against the shared
 // zod schemas to catch field drift between server / shared / client.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,8 +14,7 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import { worktreeFileResponseSchema, worktreeTreeResponseSchema } from '@agent-workflow/shared'
-import { tasks, workflows } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -23,13 +24,14 @@ async function req(app: Hono, path: string): Promise<Response> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { worktreePath: string; taskId?: string },
   providerTaskLineage = false,
 ): Promise<string> {
   const taskId = opts.taskId ?? `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -37,7 +39,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc065-fixture',
     workflowId,
@@ -203,7 +205,7 @@ describe('GET /api/tasks/:id/worktree-file', () => {
 function registerProviderApplication(
   name: string,
   register: (
-    buildApp: () => { db: ProviderNeutralDatabase; app: Hono },
+    buildApp: () => { db: PersistenceDb; app: Hono },
     seedTaskForCase: typeof seedTask,
   ) => void,
 ): void {

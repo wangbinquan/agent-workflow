@@ -13,10 +13,10 @@
 //   somebody is debugging the platform itself, and the correlation id already
 //   ties the round and stage tables to it for that case.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { codeTriggerDeliveries } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   DeliveryChainReadPort,
   DeliveryRow,
@@ -24,7 +24,8 @@ import type {
 import type { DeliveryOutcome, DeliveryStep } from '@/modules/code-capability/domain/deliveryChain'
 
 /** 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。 */
-function fields() {
+function fields(db: object) {
+  const { codeTriggerDeliveries } = tablesOf(db)
   return {
     id: codeTriggerDeliveries.id,
     correlationId: codeTriggerDeliveries.correlationId,
@@ -66,12 +67,13 @@ function toRow(row: DeliveryProjection): DeliveryRow {
   }
 }
 
-export function createDeliveryChainRead(db: ProviderNeutralDatabase): DeliveryChainReadPort {
+export function createDeliveryChainRead(db: PersistenceDb): DeliveryChainReadPort {
   return {
     /** Recent deliveries for one project, newest first. */
     async recent(input) {
+      const { codeTriggerDeliveries } = tablesOf(db)
       const rows = await db
-        .select(fields())
+        .select(fields(db))
         .from(codeTriggerDeliveries)
         .where(eq(codeTriggerDeliveries.stableProjectId, input.stableProjectId))
         .orderBy(desc(codeTriggerDeliveries.createdAt))
@@ -80,8 +82,9 @@ export function createDeliveryChainRead(db: ProviderNeutralDatabase): DeliveryCh
     },
     /** One delivery's whole story, by the id that ties the tables together. */
     async byCorrelation(correlationId) {
+      const { codeTriggerDeliveries } = tablesOf(db)
       const rows = await db
-        .select(fields())
+        .select(fields(db))
         .from(codeTriggerDeliveries)
         .where(eq(codeTriggerDeliveries.correlationId, correlationId))
         .orderBy(desc(codeTriggerDeliveries.createdAt))
@@ -89,12 +92,13 @@ export function createDeliveryChainRead(db: ProviderNeutralDatabase): DeliveryCh
     },
     /** Deliveries that need somebody — failures only, never drops. */
     async failures(input) {
+      const { codeTriggerDeliveries } = tablesOf(db)
       const filters = [eq(codeTriggerDeliveries.outcome, 'failed')]
       if (input.stableProjectId !== undefined) {
         filters.push(eq(codeTriggerDeliveries.stableProjectId, input.stableProjectId))
       }
       const rows = await db
-        .select(fields())
+        .select(fields(db))
         .from(codeTriggerDeliveries)
         .where(and(...filters))
         .orderBy(desc(codeTriggerDeliveries.createdAt))

@@ -10,11 +10,9 @@
 // cycle on a real PostgreSQL is rfc370-m0-hosted-postgresql.integration.test.ts.
 import { expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type DatabaseConfig } from '@agent-workflow/shared'
-import { getTableName, isTable } from 'drizzle-orm'
-import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core'
-import { concreteDatabaseTable } from '@/db/providerSchema'
-import * as schema from '@/db/schema'
-import { applicationConfiguration, authLoginPolicy } from '@/db/schema'
+import type { Table } from 'drizzle-orm'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import {
   createHostedDatabaseInstallation,
   HostedDatabaseInstallationError,
@@ -137,29 +135,23 @@ const POSTGRESQL_TABLES = new Set(
 )
 
 function allTables(
+  db: object,
   provider: 'sqlite' | 'postgresql',
-): { name: string; table: SQLiteTable; references: string[] }[] {
-  return Object.values(schema)
-    .filter((candidate) => isTable(candidate))
-    .map((candidate) => {
-      const table = candidate as SQLiteTable
-      return {
-        name: getTableName(table),
-        table,
-        // The schema exports resolve to the selected provider; foreign keys are
-        // declared once on the SQLite projection.
-        references: getTableConfig(concreteDatabaseTable(table, 'sqlite')).foreignKeys.map((fk) =>
-          getTableName(fk.reference().foreignTable),
-        ),
-      }
-    })
+): { name: string; table: Table; references: string[] }[] {
+  const tables = tablesOf(db)
+  return persistenceSchema.tables
+    .map((definition) => ({
+      name: definition.id,
+      table: tables[definition.schemaSymbol],
+      references: definition.foreignKeys.map((key) => key.foreignTable),
+    }))
     .filter((entry) => provider === 'sqlite' || POSTGRESQL_TABLES.has(entry.name))
 }
 
 describeEachProvider('RFC-370 M0 hosted installation rows and Settings document', (harness) => {
   async function countRows(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {}
-    for (const entry of allTables(harness.applicationBinding.provider)) {
+    for (const entry of allTables(harness.db, harness.applicationBinding.provider)) {
       const rows = await harness.db.select().from(entry.table)
       if (rows.length > 0) counts[entry.name] = rows.length
     }
@@ -169,7 +161,9 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
   test('a fresh database receives the migrated SQLite seed rows once', async () => {
     const reference = await countRows()
     expect(reference.auth_login_policy).toBe(1)
-    for (const entry of orderSeedTables(allTables(harness.applicationBinding.provider)).reverse()) {
+    for (const entry of orderSeedTables(
+      allTables(harness.db, harness.applicationBinding.provider),
+    ).reverse()) {
       await harness.db.delete(entry.table)
     }
     expect(await countRows()).toEqual({})
@@ -181,6 +175,7 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
     })
     expect(receipt.seeded).toBe(true)
     expect(await countRows()).toEqual(reference)
+    const { authLoginPolicy } = tablesOf(harness.db)
     const policy = (await harness.db.select().from(authLoginPolicy))[0]!
     expect(policy.bootstrapCompletedAt).toBe(42)
     expect(
@@ -202,6 +197,7 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
     })
     const initial = await settings.load()
     expect(initial).toEqual({ ...DEFAULT_CONFIG, database: managed })
+    const { applicationConfiguration } = tablesOf(harness.db)
     expect(await harness.db.select().from(applicationConfiguration)).toEqual([])
 
     const next = await settings.applyPatch({ language: 'en-US' })

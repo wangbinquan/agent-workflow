@@ -1,12 +1,13 @@
 // RFC-370 H6: initial bytes and cleanup use the selected storage, while AW
 // retains reservation visibility, first-version publication and compensation.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { zipSync } from 'fflate'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills, skillOperations, skillOperationLocks, skillVersions, users } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type {
   SkillCreationContentStore,
@@ -95,12 +96,15 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
   async function row() {
+    const { skills } = tablesOf(harness.db)
     return (await harness.db.select().from(skills))[0]!
   }
   async function reserve() {
+    const { skillOperations } = tablesOf(harness.db)
     return (await harness.db.select().from(skillOperations))[0]!
   }
   async function locks() {
+    const { skillOperationLocks } = tablesOf(harness.db)
     return await harness.db.select().from(skillOperationLocks)
   }
 
@@ -158,6 +162,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
     })
     expect(await reserve()).toMatchObject({ phase: 'done', active: 0 })
     expect(await locks()).toEqual([])
+    const { skillVersions } = tablesOf(harness.db)
     expect(await harness.db.select().from(skillVersions)).toHaveLength(1)
     expect(contents.get(result.id)).toMatchObject({
       kind: 'main',
@@ -206,6 +211,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
       cleanupReady.release()
     }
     expect(await outcome).toBe(failure)
+    const { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toEqual([])
     expect(await reserve()).toMatchObject({ active: 0 })
     expect(await locks()).toEqual([])
@@ -252,6 +258,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
       ),
     ).rejects.toThrow('legacy skill producer requires the local file creation store')
     expect(producerCalled).toBe(false)
+    const { skills, skillOperations } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toEqual([])
     expect(await harness.db.select().from(skillOperations)).toEqual([])
     expect(await locks()).toEqual([])
@@ -319,6 +326,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
     }
     await pending
     expect(contents.size).toBe(0)
+    const { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toEqual([])
     expect(await reserve()).toMatchObject({ active: 0 })
     expect(await locks()).toEqual([])
@@ -326,7 +334,8 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
   })
 
   test('production catalog threads async file creation through editor and ZIP including binary files', async () => {
-    await harness.db.insert(users).values({
+    const { users, skillVersions } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'creation-owner',
       username: 'creation-owner',
       displayName: 'Creation owner',

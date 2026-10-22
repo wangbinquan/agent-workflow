@@ -1,19 +1,13 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-381: both provider roots reject invalid saved triggers with the full 422 contract; dispatch classifies the same failure as launch-failed.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { CodeHostEvent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  workflows,
-  webhookEndpoints,
-  webhookTriggers,
-  webhookDeliveries,
-  webhookTriggerFires,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -23,13 +17,14 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' }
 const emptyDefinition = { $schema_version: 5, inputs: [], nodes: [], edges: [] }
 async function workflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   definition: object,
   name = `wf-${ulid()}`,
 ) {
   const id = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name,
     definition: JSON.stringify(definition),
@@ -164,7 +159,8 @@ describeEachProviderHttpApplication(
     test('references to built-in agents remain launchable when saving either trigger kind', async () => {
       const h = await setup()
       const agentId = ulid()
-      await h.db.insert(agents).values({
+      const { agents } = tablesOf(h.db)
+      await insertOne(h.db, agents, {
         id: agentId,
         name: 'rfc381-builtin-agent',
         builtin: true,
@@ -207,7 +203,9 @@ describeEachProviderHttpApplication(
       })
       const triggerId = ulid(),
         deliveryId = ulid()
-      await h.db.insert(webhookTriggers).values({
+      const { webhookTriggers, webhookDeliveries, webhookEndpoints, webhookTriggerFires } =
+        tablesOf(h.db)
+      await insertOne(h.db, webhookTriggers, {
         id: triggerId,
         name: 'broken response',
         endpointId: h.endpointId,
@@ -231,7 +229,7 @@ describeEachProviderHttpApplication(
         author: { username: h.user.username },
         raw: {},
       }
-      await h.db.insert(webhookDeliveries).values({
+      await insertOne(h.db, webhookDeliveries, {
         id: deliveryId,
         endpointId: h.endpointId,
         eventUuid: event.eventUuid,

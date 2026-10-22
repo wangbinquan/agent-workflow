@@ -23,20 +23,17 @@
 // 「SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001/40P01 退避重试」——
 // `platform/persistence/databaseTransaction.ts` 的 `serializable` 显式记着它以本文件为蓝本。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
 // RFC-359 W7：这个别名以前借道 `platform/events/committed/postgresqlPersistence.ts`——那个文件
 // 是已提交事件出站存储的 PG 适配器，与本别名毫无关系，只是当年顺手把 PG 客户端的事务句柄类型
 // 定义在了那里。出站存储合一后该文件整个删除。
 //
 // RFC-359 W5-T18：它不再从 PG 客户端的 `transaction` 签名里挖，而**就是**中立事务句柄
-// `DatabaseTransaction`——事务由中立会话开出，交给 body 的本来就是那一个。别名留着是因为
+// `PersistenceTx`——事务由中立会话开出，交给 body 的本来就是那一个。别名留着是因为
 // 这几个 atom 的调用点还叫这个名字；语义上它已经没有 provider 私有面了。
-export type TaskExecutionTransaction = DatabaseTransaction
+export type TaskExecutionTransaction = PersistenceTx
 
 /**
  * RFC-359 AC-1（plan §5gw）：名字去掉 `Postgresql` 前缀——**它没有孪生，前缀纯属历史**。
@@ -55,7 +52,7 @@ export type TaskExecutionTransaction = DatabaseTransaction
  * `@/db/query` 的跨 context import 于是是被需求逼出来的，不再是预支。
  */
 export async function withSerializableTaskExecution<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return await databaseSessionFor(db).serializable(body)

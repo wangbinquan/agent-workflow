@@ -11,12 +11,13 @@
 // 回归意图：任何 refactor 让「移出待下发的已答题」再次不可重答（409）、或让重答冲掉
 // answered 轮的 answeredAt / directive / 长出 stop 轮 designer 条目，这里立刻变红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import {
   listTaskQuestions,
@@ -85,13 +86,11 @@ function crossDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  def: WorkflowDefinition,
-): Promise<{ taskId: string }> {
+async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -99,7 +98,7 @@ async function seedTask(
     version: 1,
     schemaVersion: def.$schema_version,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,
@@ -120,12 +119,13 @@ async function seedTask(
 }
 
 async function seedSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
   const sourceRunId = `nr_src_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -149,11 +149,12 @@ async function seedSelfRound(
 }
 
 async function seedCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
   const questionerRunId = `nr_q_${Math.random().toString(36).slice(2, 8)}`
+  const { nodeRuns } = tablesOf(db)
   await db.insert(nodeRuns).values([
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     {
@@ -179,12 +180,14 @@ async function seedCrossRound(
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
-async function roundRow(db: ProviderNeutralDatabase, taskId: string) {
+async function roundRow(db: PersistenceDb, taskId: string) {
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
   return rows[0]
 }
 
-async function entriesOf(db: ProviderNeutralDatabase, originNodeRunId: string) {
+async function entriesOf(db: PersistenceDb, originNodeRunId: string) {
+  const { taskQuestions } = tablesOf(db)
   return db.select().from(taskQuestions).where(eq(taskQuestions.originNodeRunId, originNodeRunId))
 }
 
@@ -194,7 +197,7 @@ function answersOf(json: string | null): ClarifyAnswer[] {
 
 /** seal(autoStage) → 移出待下发：把一个已答题制备成「待指派 + sealed」的重答起点。 */
 async function sealThenUnstage(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   originNodeRunId: string,
   qid: string,
@@ -374,7 +377,8 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       // 简化的下发面：手动把 self 条目置 dispatched 并 mint 一个承接 rerun（真实 dispatch 路径
       // 由 RFC-133 测试锁定；本断言只锁「注入读 answers_json → 重答后注入新答案」）。
       const rerunId = `nr_rerun_${Math.random().toString(36).slice(2, 8)}`
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, taskQuestions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: rerunId,
         taskId,
         nodeId: 'designer',
@@ -431,6 +435,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1')])
       await sealThenUnstage(db, taskId, originNodeRunId, 'q1', makeAns('q1', 0), 1_000)
+      const { taskQuestions } = tablesOf(db)
       await db
         .update(taskQuestions)
         .set({ dispatchedAt: 1_500, dispatchedBy: 'u1' })
@@ -463,6 +468,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const dtos = await listTaskQuestions(db, taskId)
       const stagedEntries = dtos.filter((e) => e.staged)
       expect(stagedEntries.length).toBeGreaterThan(1)
+      const { taskQuestions } = tablesOf(db)
       // 直接 UPDATE 单行清 staged_at 构造「半 staged」（stageTaskQuestion 的 unstage 已按题
       // 级联，正常路径不再产生这种形态——这里模拟并发窗口/历史残留），重 seal 整题拒绝。
       await db

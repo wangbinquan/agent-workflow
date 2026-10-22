@@ -15,6 +15,9 @@
 // 迁移方式：把 migrations 目录复制到临时目录并截断 journal 至 0094 → 建库插行
 // → 换回完整目录再 migrate（drizzle 按 journal 差量补跑 0095）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,9 +27,8 @@ import { ulid } from 'ulid'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
@@ -115,10 +117,13 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
       // drizzle emits EVERY HEAD column, so `workflows.example` (0103) made the
       // ORM form fail with "table workflows has no column named example" on this
       // 0094-frozen DB. Spell the 0094-era columns out.
-      await db.run(sql`
+      await rawExec(
+        db,
+        sql`
         INSERT INTO workflows (id, name, description, definition)
         VALUES (${wfId}, ${`wf-${taskId}`}, '', '{}')
-      `)
+      `,
+      )
       // NOTE (RFC-204 T2): this row is inserted into a table frozen at 0094,
       // but drizzle emits EVERY column of the HEAD schema in its INSERT — so
       // any later migration that merely ADDs a `tasks` column made this line
@@ -126,7 +131,9 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
       // keeps the fixture pinned to the 0094-era shape the test actually needs,
       // so future additive migrations don't re-red it (same intent as the
       // tag-based journal truncation above).
-      await db.run(sql`
+      await rawExec(
+        db,
+        sql`
         INSERT INTO tasks (
           id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
           base_branch, branch, status, inputs, started_at,
@@ -136,7 +143,8 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
           'main', ${`agent-workflow/${taskId}`}, 'done', '{}', ${Date.now()},
           'wg1', ${JSON.stringify({ mode })}
         )
-      `)
+      `,
+      )
       return taskId
     }
 
@@ -155,7 +163,8 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
     // 0094 时代的行必须用裸 SQL 写入：drizzle 的 .values() 按当前 schema 全列
     // 生成 INSERT（含尚不存在的 wg_round），对旧库直接 prepare 失败。
     const insertOldRow = async (id: string, taskId: string, r: SynthRow): Promise<void> => {
-      await db.run(
+      await rawExec(
+        db,
         sql`INSERT INTO node_runs (id, task_id, node_id, status, rerun_cause, shard_key, started_at)
             VALUES (${id}, ${taskId}, ${r.nodeId}, ${r.status}, ${r.cause}, ${r.shardKey ?? null}, ${Date.now()})`,
       )
@@ -172,7 +181,9 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
     // RFC-215 T2：与上面 tasks 同理——0094 冻结库上 drizzle 会按 HEAD schema 全列
     // 生成 INSERT（含 0105 的 attempt_count），必须裸 SQL 显式列钉住 0094 形状。
     const waId = ulid()
-    await db.run(sql`
+    await rawExec(
+      db,
+      sql`
       INSERT INTO workgroup_assignments (
         id, task_id, round, source, assignee_member_id, title, brief_md,
         status, created_at, updated_at
@@ -180,7 +191,8 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
         ${waId}, ${lwTask}, 3, 'leader', 'm1', 't', 'b',
         'done', ${Date.now()}, ${Date.now()}
       )
-    `)
+    `,
+    )
     const lwMemberAssignId = 'M01'
     await insertOldRow(lwMemberAssignId, lwTask, {
       nodeId: '__wg_member__',
@@ -218,6 +230,7 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
     migrate(db, { migrationsFolder: partialMigrationsThrough0095() })
 
     const expected = oracleRounds(lwLeaderRows)
+    const { nodeRuns } = tablesOf(db)
     const leaderRows = await db
       .select()
       .from(nodeRuns)
@@ -277,10 +290,7 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
   }
 }
 
-async function seedEngineTask(
-  db: ProviderNeutralDatabase,
-  config: WorkgroupRuntimeConfig,
-): Promise<string> {
+async function seedEngineTask(db: PersistenceDb, config: WorkgroupRuntimeConfig): Promise<string> {
   const taskId = ulid()
   const agentIds = new Map<string, string>()
   for (const name of ['wg-planner', 'wg-coder']) {
@@ -307,9 +317,10 @@ async function seedEngineTask(
         : member,
     ),
   }
-  await db.insert(workflows).values({ id: ulid(), name: `host-${taskId}`, definition: '{}' })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: ulid(), name: `host-${taskId}`, definition: '{}' })
   const wf = (await db.select().from(workflows).limit(1))[0]
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'wg-rfc189',
     executionLineageId: taskId,
@@ -371,7 +382,8 @@ const skipEnvelope = (): WorkgroupHostRunResult => ({
   failureCode: 'envelope-missing',
 })
 
-async function hostRows(db: ProviderNeutralDatabase, taskId: string) {
+async function hostRows(db: PersistenceDb, taskId: string) {
+  const { nodeRuns } = tablesOf(db)
   return (
     await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).orderBy(asc(nodeRuns.id))
   ).filter((r) => r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__')
@@ -421,7 +433,8 @@ describeEachProvider('RFC-189 workgroup round providers', (harness) => {
       const taskId = await seedEngineTask(db, cfg())
       // 模拟崩溃残留：引擎外 mint 的 pending leader 行（无 wgRound）。
       const orphanId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, workgroupAssignments } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: orphanId,
         taskId,
         nodeId: '__wg_leader__',

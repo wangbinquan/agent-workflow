@@ -6,10 +6,10 @@
 // the command from its platform result), a caller abort / deadline cancels and
 // waits for the result, and commands whose caller is gone are abandoned
 // instead of blocking the volume forever.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import { hostedWorkspaceCommands } from '@/db/schema'
 import type {
   BusinessEvent,
   BusinessSubtask,
@@ -177,7 +177,10 @@ describeEachProvider('RFC-370 hosted workspace commands', (harness) => {
       ])
       if (outcome !== null) files.set(resultFile('task-1', operationId), JSON.stringify(outcome))
     }
-    const rows = () => harness.db.select().from(hostedWorkspaceCommands)
+    const rows = () => {
+      const { hostedWorkspaceCommands } = tablesOf(harness.db)
+      return harness.db.select().from(hostedWorkspaceCommands)
+    }
     return {
       state,
       commands,

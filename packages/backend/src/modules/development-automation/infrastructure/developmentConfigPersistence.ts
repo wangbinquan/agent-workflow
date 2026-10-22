@@ -7,17 +7,11 @@
 // 「draft 未变」CAS、插 revision 行、推进 published_revision——不存在半个 revision。name 撞 (owner, name)
 // 唯一索引经能力矩阵归类成 typed 409。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  actionTemplateRevisions,
-  automationPolicies,
-  automationPolicyRevisions,
-  developmentAdapterDefinitionRevisions,
-  digitalEmployeeRevisions,
-  digitalEmployees,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
@@ -27,12 +21,15 @@ import type {
 } from '../application/ports/developmentConfigPersistence'
 import { deleteAssignment, listAssignments, upsertAssignment } from './assignmentStore'
 
-const IDENTITY = {
-  employee: { table: digitalEmployees, code: 'digital-employee', label: 'digital employee' },
-  policy: { table: automationPolicies, code: 'automation-policy', label: 'automation policy' },
-} as const
+const IDENTITY = (db: object) => {
+  const { digitalEmployees, automationPolicies } = tablesOf(db)
+  return {
+    employee: { table: digitalEmployees, code: 'digital-employee', label: 'digital employee' },
+    policy: { table: automationPolicies, code: 'automation-policy', label: 'automation policy' },
+  } as const
+}
 
-type IdentityKind = keyof typeof IDENTITY
+type IdentityKind = keyof ReturnType<typeof IDENTITY>
 
 function identityOf(row: {
   readonly id: string
@@ -52,11 +49,11 @@ function identityOf(row: {
 }
 
 function identityPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   kind: IdentityKind,
 ): DevelopmentResourceIdentityPersistence {
   const session = databaseSessionFor(db)
-  const { table, code, label } = IDENTITY[kind]
+  const { table, code, label } = IDENTITY(db)[kind]
   const notFound = (message: string): NotFoundError =>
     new NotFoundError(`${code}-not-found`, message)
   const nameTaken = (error: unknown): never => {
@@ -80,7 +77,7 @@ function identityPersistence(
         archivedAt: null,
       }
       try {
-        await db.insert(table).values(row)
+        await insertOne(db, table, row)
       } catch (error) {
         nameTaken(error)
       }
@@ -134,7 +131,8 @@ function identityPersistence(
         }
         const revision = (identity.publishedRevision ?? 0) + 1
         if (kind === 'employee') {
-          await tx.insert(digitalEmployeeRevisions).values({
+          const { digitalEmployeeRevisions } = tablesOf(tx)
+          await insertOne(tx, digitalEmployeeRevisions, {
             employeeId: input.id,
             revision,
             contentJson: input.contentJson,
@@ -143,7 +141,8 @@ function identityPersistence(
             publishedBy: input.publishedBy,
           })
         } else {
-          await tx.insert(automationPolicyRevisions).values({
+          const { automationPolicyRevisions } = tablesOf(tx)
+          await insertOne(tx, automationPolicyRevisions, {
             policyId: input.id,
             revision,
             contentJson: input.contentJson,
@@ -163,7 +162,7 @@ function identityPersistence(
 }
 
 export function createDevelopmentConfigPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DevelopmentConfigPersistence {
   return {
     employees: identityPersistence(db, 'employee'),
@@ -175,6 +174,7 @@ export function createDevelopmentConfigPersistence(
     },
     publishLookup: {
       async getTemplate(id, revision) {
+        const { actionTemplateRevisions } = tablesOf(db)
         const row = (
           await db
             .select({ contentJson: actionTemplateRevisions.contentJson })
@@ -194,6 +194,7 @@ export function createDevelopmentConfigPersistence(
           : null
       },
       async getPolicy(id, revision) {
+        const { automationPolicyRevisions } = tablesOf(db)
         const row = (
           await db
             .select({ revision: automationPolicyRevisions.revision })
@@ -209,6 +210,7 @@ export function createDevelopmentConfigPersistence(
         return row === undefined ? null : { exists: true }
       },
       async getAdapter(id, revision) {
+        const { developmentAdapterDefinitionRevisions } = tablesOf(db)
         const row = (
           await db
             .select({ contentJson: developmentAdapterDefinitionRevisions.contentJson })
@@ -226,6 +228,7 @@ export function createDevelopmentConfigPersistence(
         return typeof content.purpose === 'string' ? { purpose: content.purpose } : null
       },
       async getEmployee(id, revision) {
+        const { digitalEmployeeRevisions } = tablesOf(db)
         const row = (
           await db
             .select({ revision: digitalEmployeeRevisions.revision })

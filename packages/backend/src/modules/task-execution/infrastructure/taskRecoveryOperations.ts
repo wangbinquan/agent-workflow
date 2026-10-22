@@ -5,26 +5,14 @@
 // （`composition/taskExecutionPersistence.ts`），其余读 / 写共用；`recordAutoRecoveryAttempt` 取 PG 的
 // 事务形态（读 + 写同一事务，SQLite 侧此前是两条自动提交语句）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import {
-  clarifyRounds,
-  docVersions,
-  lifecycleAlerts,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  recoveryEvents,
-  runtimeSessionLeases,
-  taskCollaborators,
-  taskExecutionIntents,
-  taskQuestions,
-  tasks,
-  users,
-} from '@/db/schema'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   CANCELABLE_TASK_STATUSES,
@@ -88,24 +76,21 @@ function runProjection(row: {
   return Object.freeze({ ...row })
 }
 
-async function latestEventTsForRun(
-  db: ProviderNeutralDatabase,
-  nodeRunId: string,
-): Promise<number | null> {
-  const row = await db
-    .select({ ts: nodeRunEvents.ts })
-    .from(nodeRunEvents)
-    .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    .orderBy(desc(nodeRunEvents.id))
-    .limit(1)
-    .get()
+async function latestEventTsForRun(db: PersistenceDb, nodeRunId: string): Promise<number | null> {
+  const { nodeRunEvents } = tablesOf(db)
+  const row = await first(
+    db
+      .select({ ts: nodeRunEvents.ts })
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .orderBy(desc(nodeRunEvents.id))
+      .limit(1),
+  )
   return row?.ts ?? null
 }
 
-async function latestEventTsForTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-): Promise<number | null> {
+async function latestEventTsForTask(db: PersistenceDb, taskId: string): Promise<number | null> {
+  const { nodeRuns } = tablesOf(db)
   const runs = await db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)
@@ -119,9 +104,10 @@ async function latestEventTsForTask(
 }
 
 async function hasUndispatchedDesignerQuestions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<boolean> {
+  const { taskQuestions, clarifyRounds, nodeRuns, nodeRunOutputs } = tablesOf(db)
   const projection = {
     dispatchedAt: taskQuestions.dispatchedAt,
     triggerRunId: taskQuestions.triggerRunId,
@@ -201,9 +187,11 @@ async function hasUndispatchedDesignerQuestions(
 }
 
 async function loadLifecycleInvariantSnapshots(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scope: TaskLifecycleInvariantScope,
 ): Promise<readonly TaskLifecycleInvariantSnapshot[]> {
+  const { tasks, docVersions, clarifyRounds, nodeRuns, taskQuestions, nodeRunOutputs } =
+    tablesOf(db)
   const taskRows =
     'taskId' in scope
       ? await db
@@ -392,10 +380,11 @@ async function loadLifecycleInvariantSnapshots(
 }
 
 async function hasNoActiveHumanMember(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   ownerUserId: string | null,
 ): Promise<boolean> {
+  const { taskCollaborators, users } = tablesOf(db)
   const collaborators = await db
     .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
     .from(taskCollaborators)
@@ -409,19 +398,21 @@ async function hasNoActiveHumanMember(
     ]),
   ]
   if (memberIds.length === 0) return false
-  const active = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(inArray(users.id, memberIds), eq(users.status, 'active')))
-    .limit(1)
-    .get()
+  const active = await first(
+    db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(inArray(users.id, memberIds), eq(users.status, 'active')))
+      .limit(1),
+  )
   return active === undefined
 }
 
 async function loadStuckTaskSnapshots(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskIdFilter?: readonly string[],
 ): Promise<readonly TaskRecoveryStuckTaskSnapshot[]> {
+  const { tasks, nodeRuns, docVersions, clarifyRounds } = tablesOf(db)
   const base = and(isNull(tasks.deletedAt), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]))
   const rows = await db
     .select({
@@ -484,12 +475,13 @@ async function loadStuckTaskSnapshots(
       }
       let child: TaskRecoveryStuckTaskSnapshot['runs'][number]['child'] = null
       if (run.childTaskId !== null) {
-        const childRow = await db
-          .select({ status: tasks.status, startedAt: tasks.startedAt })
-          .from(tasks)
-          .where(eq(tasks.id, run.childTaskId))
-          .limit(1)
-          .get()
+        const childRow = await first(
+          db
+            .select({ status: tasks.status, startedAt: tasks.startedAt })
+            .from(tasks)
+            .where(eq(tasks.id, run.childTaskId))
+            .limit(1),
+        )
         if (childRow !== undefined) {
           child = {
             status: childRow.status,
@@ -501,20 +493,22 @@ async function loadStuckTaskSnapshots(
       stuckRuns.push({ ...run, lastEventTs, child })
     }
     const [pendingDoc, openClarify, undispatchedDesigner, noActiveMember] = await Promise.all([
-      db
-        .select({ id: docVersions.id })
-        .from(docVersions)
-        .where(and(eq(docVersions.taskId, row.taskId), eq(docVersions.decision, 'pending')))
-        .limit(1)
-        .get(),
-      db
-        .select({ id: clarifyRounds.id })
-        .from(clarifyRounds)
-        .where(
-          and(eq(clarifyRounds.taskId, row.taskId), eq(clarifyRounds.status, 'awaiting_human')),
-        )
-        .limit(1)
-        .get(),
+      first(
+        db
+          .select({ id: docVersions.id })
+          .from(docVersions)
+          .where(and(eq(docVersions.taskId, row.taskId), eq(docVersions.decision, 'pending')))
+          .limit(1),
+      ),
+      first(
+        db
+          .select({ id: clarifyRounds.id })
+          .from(clarifyRounds)
+          .where(
+            and(eq(clarifyRounds.taskId, row.taskId), eq(clarifyRounds.status, 'awaiting_human')),
+          )
+          .limit(1),
+      ),
       hasUndispatchedDesignerQuestions(db, row.taskId),
       hasNoActiveHumanMember(db, row.taskId, row.ownerUserId),
     ])
@@ -549,53 +543,60 @@ export type TaskRecoveryMutationOperations = Pick<
 // lease 原语（`runtimeSessionLeaseOperations.repairAfterOrphanReap`），手抄件随之删除。
 
 export function createTaskRecoveryOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   mutations: TaskRecoveryMutationOperations,
 ): TaskRecoveryOperations {
   const operations: TaskRecoveryOperations = {
     async recordEvent(input: RecordTaskRecoveryEventInput): Promise<void> {
-      await db.insert(recoveryEvents).values(input).run()
+      const { recoveryEvents } = tablesOf(db)
+      await insertOne(db, recoveryEvents, input)
     },
 
     async listEventsForTask(
       taskId: string,
       limit: number,
     ): Promise<readonly TaskRecoveryEventRecord[]> {
-      return db
-        .select()
-        .from(recoveryEvents)
-        .where(eq(recoveryEvents.taskId, taskId))
-        .orderBy(desc(recoveryEvents.createdAt))
-        .limit(limit)
-        .all()
+      const { recoveryEvents } = tablesOf(db)
+      return queryRows(
+        db
+          .select()
+          .from(recoveryEvents)
+          .where(eq(recoveryEvents.taskId, taskId))
+          .orderBy(desc(recoveryEvents.createdAt))
+          .limit(limit),
+      )
     },
 
     async isAutoRecoverySuspended(taskId: string): Promise<boolean> {
-      const row = await db
-        .select({ suspended: tasks.autoRecoverySuspended })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-        .get()
+      const { tasks } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ suspended: tasks.autoRecoverySuspended })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1),
+      )
       return row?.suspended ?? false
     },
 
     async recordAutoRecoveryAttempt(input) {
       return databaseSessionFor(db).transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         // 读—改—写：滑动窗口的计数由这次读自增，而 UPDATE 的 where 只有 id。auto-repair 与
         // heartbeat-kill 是两条各自定时的 loop，可以同时盯上同一个任务；不先锁住任务行，PG 的
         // READ COMMITTED 下两次尝试只会记成一次——用户配的 `maxAutoRecoveriesPerWindow` 闸门
         // 因此永不跳闸，任务被无限自动重跑（tests/rfc359-w8-t28-lost-update.test.ts L5）。
         await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, input.taskId)
-        const row = await tx
-          .select({
-            attempts: tasks.autoRecoveryAttempts,
-            windowStart: tasks.autoRecoveryWindowStartedAt,
-            suspended: tasks.autoRecoverySuspended,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, input.taskId))
-          .get()
+        const row = await first(
+          tx
+            .select({
+              attempts: tasks.autoRecoveryAttempts,
+              windowStart: tasks.autoRecoveryWindowStartedAt,
+              suspended: tasks.autoRecoverySuspended,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, input.taskId)),
+        )
         if (row === undefined) return { suspended: false, attempts: 0 }
         if (row.suspended) return { suspended: true, attempts: row.attempts }
 
@@ -612,12 +613,12 @@ export function createTaskRecoveryOperations(
             autoRecoverySuspended: suspended,
           })
           .where(eq(tasks.id, input.taskId))
-          .run()
         return { suspended, attempts }
       })
     },
 
     async clearAutoRecoverySuspension(taskId: string): Promise<void> {
+      const { tasks } = tablesOf(db)
       await db
         .update(tasks)
         .set({
@@ -626,42 +627,44 @@ export function createTaskRecoveryOperations(
           autoRecoveryWindowStartedAt: null,
         })
         .where(eq(tasks.id, taskId))
-        .run()
     },
 
     async listOpenLifecycleAlerts(taskId?: string): Promise<readonly TaskLifecycleAlertRecord[]> {
+      const { lifecycleAlerts } = tablesOf(db)
       const predicate =
         taskId === undefined
           ? isNull(lifecycleAlerts.resolvedAt)
           : and(eq(lifecycleAlerts.taskId, taskId), isNull(lifecycleAlerts.resolvedAt))
-      return db
-        .select({
-          id: lifecycleAlerts.id,
-          taskId: lifecycleAlerts.taskId,
-          rule: lifecycleAlerts.rule,
-          severity: lifecycleAlerts.severity,
-          detail: lifecycleAlerts.detail,
-          detectedAt: lifecycleAlerts.detectedAt,
-        })
-        .from(lifecycleAlerts)
-        .where(predicate)
-        .orderBy(asc(lifecycleAlerts.detectedAt))
-        .all()
+      return queryRows(
+        db
+          .select({
+            id: lifecycleAlerts.id,
+            taskId: lifecycleAlerts.taskId,
+            rule: lifecycleAlerts.rule,
+            severity: lifecycleAlerts.severity,
+            detail: lifecycleAlerts.detail,
+            detectedAt: lifecycleAlerts.detectedAt,
+          })
+          .from(lifecycleAlerts)
+          .where(predicate)
+          .orderBy(asc(lifecycleAlerts.detectedAt)),
+      )
     },
 
     async taskIdsWithRepoPrepRow(taskIds: readonly string[]): Promise<ReadonlySet<string>> {
       if (taskIds.length === 0) return new Set()
+      const { nodeRuns } = tablesOf(db)
       const rows = await db
         .select({ taskId: nodeRuns.taskId })
         .from(nodeRuns)
         .where(and(inArray(nodeRuns.taskId, [...taskIds]), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
         .groupBy(nodeRuns.taskId)
         .limit(taskIds.length)
-        .all()
       return new Set(rows.map((row) => row.taskId))
     },
 
     async listStalledRunningChildren(input) {
+      const { nodeRuns, nodeRunEvents } = tablesOf(db)
       const runs = await db
         .select({
           id: nodeRuns.id,
@@ -700,6 +703,7 @@ export function createTaskRecoveryOperations(
     },
 
     async listAutoResumeCandidates(): Promise<readonly TaskRecoveryAutoResumeCandidate[]> {
+      const { tasks, nodeRuns } = tablesOf(db)
       const projection = {
         id: tasks.id,
         workgroupId: tasks.workgroupId,
@@ -737,6 +741,7 @@ export function createTaskRecoveryOperations(
     },
 
     async loadBootOrphanSnapshot(): Promise<TaskRecoveryBootSnapshot> {
+      const { tasks, nodeRuns, taskExecutionIntents, runtimeSessionLeases } = tablesOf(db)
       const taskCandidates = await db
         .select({ id: tasks.id, status: tasks.status })
         .from(tasks)
@@ -822,6 +827,7 @@ export function createTaskRecoveryOperations(
     },
 
     async listPeriodicReconcileCandidates(startedBefore: number) {
+      const { nodeRuns } = tablesOf(db)
       const rows = await db
         .select({
           id: nodeRuns.id,
@@ -845,12 +851,14 @@ export function createTaskRecoveryOperations(
     async loadPeriodicReconcileSnapshot(
       taskId: string,
     ): Promise<TaskRecoveryPeriodicSnapshot | null> {
-      const task = await db
-        .select({ workflowSnapshot: tasks.workflowSnapshot })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-        .get()
+      const { tasks, nodeRuns } = tablesOf(db)
+      const task = await first(
+        db
+          .select({ workflowSnapshot: tasks.workflowSnapshot })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1),
+      )
       if (task === undefined) return null
       const rows = await db
         .select({
@@ -889,12 +897,14 @@ export function createTaskRecoveryOperations(
     },
 
     async findHeldRuntimeSessionId(nodeRunId: string): Promise<string | null> {
-      const lease = await db
-        .select({ sessionId: runtimeSessionLeases.sessionId })
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
-        .limit(1)
-        .get()
+      const { runtimeSessionLeases } = tablesOf(db)
+      const lease = await first(
+        db
+          .select({ sessionId: runtimeSessionLeases.sessionId })
+          .from(runtimeSessionLeases)
+          .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
+          .limit(1),
+      )
       return lease?.sessionId ?? null
     },
 
@@ -903,14 +913,19 @@ export function createTaskRecoveryOperations(
     },
 
     async interruptPeriodicTaskIfIdle(input): Promise<boolean> {
-      const active = await db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(
-          and(eq(nodeRuns.taskId, input.taskId), inArray(nodeRuns.status, ['running', 'pending'])),
-        )
-        .limit(1)
-        .get()
+      const { nodeRuns } = tablesOf(db)
+      const active = await first(
+        db
+          .select({ id: nodeRuns.id })
+          .from(nodeRuns)
+          .where(
+            and(
+              eq(nodeRuns.taskId, input.taskId),
+              inArray(nodeRuns.status, ['running', 'pending']),
+            ),
+          )
+          .limit(1),
+      )
       if (active !== undefined) return false
       return mutations.interruptPeriodicTaskIfIdle(input)
     },
@@ -923,6 +938,7 @@ export function createTaskRecoveryOperations(
       if (input.taskIds.length > 0 && input.ownedRules.length > 0) {
         for (let offset = 0; offset < input.taskIds.length; offset += 500) {
           const taskIds = input.taskIds.slice(offset, offset + 500)
+          const { lifecycleAlerts } = tablesOf(db)
           openRows.push(
             ...(await db
               .select()
@@ -949,11 +965,11 @@ export function createTaskRecoveryOperations(
       const resolvedTaskIds = new Set<string>()
       for (const row of openRows) {
         if (findingByKey.has(`${row.taskId}\u0000${row.rule}`)) continue
+        const { lifecycleAlerts } = tablesOf(db)
         await db
           .update(lifecycleAlerts)
           .set({ resolvedAt: input.now })
           .where(eq(lifecycleAlerts.id, row.id))
-          .run()
         resolvedAlerts += 1
         resolvedTaskIds.add(row.taskId)
       }
@@ -969,18 +985,16 @@ export function createTaskRecoveryOperations(
             detectedAt: input.now,
             resolvedAt: null,
           })
-          await db
-            .insert(lifecycleAlerts)
-            .values({
-              id: row.id,
-              taskId: row.taskId,
-              rule: row.rule,
-              severity: row.severity,
-              detail: JSON.stringify(row.detail),
-              detectedAt: row.detectedAt,
-              resolvedAt: null,
-            })
-            .run()
+          const { lifecycleAlerts } = tablesOf(db)
+          await insertOne(db, lifecycleAlerts, {
+            id: row.id,
+            taskId: row.taskId,
+            rule: row.rule,
+            severity: row.severity,
+            detail: JSON.stringify(row.detail),
+            detectedAt: row.detectedAt,
+            resolvedAt: null,
+          })
           newAlerts += 1
           openAlerts.push(row)
           transitions.push(Object.freeze({ row, kind: 'new' as const }))
@@ -991,11 +1005,11 @@ export function createTaskRecoveryOperations(
           input.now - existing.detectedAt >= input.promotionAfterMs
             ? ('error' as const)
             : (existing.severity as 'warning' | 'error')
+        const { lifecycleAlerts } = tablesOf(db)
         await db
           .update(lifecycleAlerts)
           .set({ severity, detail: JSON.stringify(finding.detail) })
           .where(eq(lifecycleAlerts.id, existing.id))
-          .run()
         const row = Object.freeze({
           id: existing.id,
           taskId: finding.taskId,

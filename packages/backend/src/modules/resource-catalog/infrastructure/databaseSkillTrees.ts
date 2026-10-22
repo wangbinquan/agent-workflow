@@ -6,10 +6,10 @@
 // funnel recovers from (half-renamed directories, partial copies) do not exist.
 // The tree hash is the canonical skill-tree digest (`digestSortedTree`, the
 // one `hashDir` uses), so a tree hashes the same in either store.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { FileNode } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skillContentEntries } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 import { digestSortedTree } from './legacy/skillHash'
 
@@ -26,11 +26,8 @@ export interface SkillTreeFile {
   readonly bytes: Uint8Array
 }
 
-type Handle = Pick<
-  ProviderNeutralDatabase,
-  'select' | 'selectDistinct' | 'insert' | 'delete' | 'update'
->
-type EntryRow = typeof skillContentEntries.$inferSelect
+type Handle = Pick<PersistenceDb, 'select' | 'selectDistinct' | 'insert' | 'delete' | 'update'>
+type EntryRow = PersistenceTables['skillContentEntries']['$inferSelect']
 
 const INSERT_CHUNK = 200
 
@@ -94,6 +91,7 @@ export async function readTreeRows(
   skillId: string,
   tree: string,
 ): Promise<readonly EntryRow[]> {
+  const { skillContentEntries } = tablesOf(db)
   return await db
     .select()
     .from(skillContentEntries)
@@ -112,6 +110,7 @@ export async function readTree(
 }
 
 export async function treeExists(db: Handle, skillId: string, tree: string): Promise<boolean> {
+  const { skillContentEntries } = tablesOf(db)
   return (
     (
       await db
@@ -129,6 +128,7 @@ export async function fileExists(
   tree: string,
   path: string,
 ): Promise<boolean> {
+  const { skillContentEntries } = tablesOf(db)
   return (
     (
       await db
@@ -147,6 +147,7 @@ export async function fileExists(
 }
 
 export async function deleteTree(db: Handle, skillId: string, tree: string): Promise<void> {
+  const { skillContentEntries } = tablesOf(db)
   await db
     .delete(skillContentEntries)
     .where(and(eq(skillContentEntries.skillId, skillId), eq(skillContentEntries.tree, tree)))
@@ -169,6 +170,7 @@ export async function writeTree(
     updatedAt: now,
   }))
   for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK) {
+    const { skillContentEntries } = tablesOf(db)
     await db.insert(skillContentEntries).values(rows.slice(offset, offset + INSERT_CHUNK))
   }
 }
@@ -185,6 +187,7 @@ export async function copyTree(
 
 /** Every tree of a skill except deletion trash. */
 export async function liveTreeNames(db: Handle, skillId: string): Promise<readonly string[]> {
+  const { skillContentEntries } = tablesOf(db)
   const rows = await db
     .selectDistinct({ tree: skillContentEntries.tree })
     .from(skillContentEntries)
@@ -200,6 +203,7 @@ export async function trashTreeNames(
   // A skill holds only a handful of trees: filter by the exact machine prefix
   // here rather than with a LIKE pattern.
   const prefix = trashTreePrefix(operationId)
+  const { skillContentEntries } = tablesOf(db)
   const rows = await db
     .selectDistinct({ tree: skillContentEntries.tree })
     .from(skillContentEntries)
@@ -213,6 +217,7 @@ export async function renameTree(
   from: string,
   to: string,
 ): Promise<void> {
+  const { skillContentEntries } = tablesOf(db)
   await db
     .update(skillContentEntries)
     .set({ tree: to })

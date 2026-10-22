@@ -5,19 +5,13 @@
 // Locks: list shape, write happy paths, cross-task entry → 404, missing task →
 // 404, missing targetNodeId → 422.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
-import {
-  clarifyRounds,
-  nodeRunOutputs,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { listTaskQuestions } from '../src/services/taskQuestions'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ProviderHarness } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -37,12 +31,9 @@ const SNAPSHOT = JSON.stringify({
   outputs: [],
 })
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  lineage?: typeof providerTaskLineage,
-) {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId: string, lineage?: typeof providerTaskLineage) {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf-${taskId}`,
     name: 'wf',
     definition: '{}',
@@ -50,7 +41,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     ownerUserId: '__system__',
@@ -69,24 +60,31 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   id: string,
   nodeId: string,
   cause?: string,
 ) {
-  await db
-    .insert(nodeRuns)
-    .values({ id, taskId, nodeId, status: 'done', rerunCause: cause ?? null, iteration: 0 })
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
+    id,
+    taskId,
+    nodeId,
+    status: 'done',
+    rerunCause: cause ?? null,
+    iteration: 0,
+  })
   if (cause)
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'x' })
 }
 
-async function seedSelfAnswered(db: ProviderNeutralDatabase, taskId: string) {
+async function seedSelfAnswered(db: PersistenceDb, taskId: string) {
   await seedRun(db, taskId, `${taskId}-ask`, 'designer')
   await seedRun(db, taskId, `${taskId}-int`, 'clar')
   await seedRun(db, taskId, `${taskId}-h`, 'designer', 'clarify-answer')
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds, taskQuestions } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: `${taskId}-r`,
     taskId,
     kind: 'self',
@@ -153,7 +151,8 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
       await seedTask(db, 'task-b')
       await seedRun(db, 'task-b', 'task-b-ask', 'auditor')
       await seedRun(db, 'task-b', 'task-b-int', 'clar')
-      await db.insert(clarifyRounds).values({
+      const { clarifyRounds } = tablesOf(db)
+      await insertOne(db, clarifyRounds, {
         id: 'task-b-r',
         taskId: 'task-b',
         kind: 'cross',
@@ -238,6 +237,7 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
         body: JSON.stringify({ staged: true }),
       })
       expect(stagedDispatched.status).toBe(409)
+      const { taskQuestions } = tablesOf(db)
       // 未下发行照常可 stage（正路径接线保留）：解除 fixture 的 dispatch 戳后再 stage。
       await db
         .update(taskQuestions)
@@ -270,7 +270,7 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
 function registerProviderApplication(
   register: (
     harness: ProviderHarness,
-    makeApp: (db: ProviderNeutralDatabase) => Promise<Hono>,
+    makeApp: (db: PersistenceDb) => Promise<Hono>,
     seedTaskFixture: typeof seedTask,
   ) => void,
 ): void {

@@ -5,6 +5,8 @@
 // existed only as that one response. The request is now accepted once its checks pass
 // (202), the model runs in the background, and the round detail reports the running
 // generation or its last failure (kept ten minutes, cleared by the next start).
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { Hono, type Context } from 'hono'
@@ -15,7 +17,6 @@ import {
   type ClarifyFollowup,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { createClarifyRound } from '@/services/clarify/service'
 import { errorHandler } from '@/util/errors'
@@ -74,13 +75,14 @@ async function seed(h: ProviderHarness) {
     edges: [],
     outputs: [],
   }
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'async-followup',
     definition: JSON.stringify(definition),
     schemaVersion: 7,
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'async-followup',
     executionLineageId: taskId,
@@ -97,9 +99,13 @@ async function seed(h: ProviderHarness) {
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await h.db
-    .insert(nodeRuns)
-    .values({ id: askingNodeRunId, taskId, nodeId: 'asking', status: 'done', iteration: 0 })
+  await insertOne(h.db, nodeRuns, {
+    id: askingNodeRunId,
+    taskId,
+    nodeId: 'asking',
+    status: 'done',
+    iteration: 0,
+  })
   const round = await createClarifyRound({
     db: h.db,
     taskId,

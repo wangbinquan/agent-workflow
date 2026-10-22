@@ -27,6 +27,7 @@
 // runner 的快慢对两次测量同等作用，会被比值约掉;两个规模**交替**测，
 // 使某一段时间的整体变慢同样落在两边;每个规模取**多轮最小值**，
 // 使单次 GC 停顿（只会把某一轮抬高、不可能压低）被排除在判据之外。
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
 import {
@@ -143,7 +144,7 @@ function receiptsFor(chunkCount: number): readonly Record<string, unknown>[] {
 
 function runtimeFor(statements: string[], chunkCount: number): PostgresqlDatabaseRuntime {
   const receipts = receiptsFor(chunkCount)
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql) {
       statements.push(sql)
       if (sql.includes('pg_try_advisory_lock')) return rows([{ acquired: true }])
@@ -165,7 +166,7 @@ function runtimeFor(statements: string[], chunkCount: number): PostgresqlDatabas
       return rows([])
     },
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection

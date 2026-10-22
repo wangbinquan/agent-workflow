@@ -1,11 +1,12 @@
 // RFC-370: selected workspace maintenance reads may be remote and asynchronous.
 // Use real provider stores/claims with explicit effect fakes; local fallback must
 // not run and durable cleanup completion must follow acknowledged effects.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows, taskExecutionMaintenanceClaims } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
@@ -40,7 +41,7 @@ function selectedEffects(
     ...overrides,
   }
 }
-function command(db: ProviderNeutralDatabase, filesystem: WorkspaceMaintenanceFilesystem) {
+function command(db: PersistenceDb, filesystem: WorkspaceMaintenanceFilesystem) {
   return composeWorkspaceMaintenanceCommand({
     db,
     appHome: '/selected-adapter-only',
@@ -54,18 +55,19 @@ function command(db: ProviderNeutralDatabase, filesystem: WorkspaceMaintenanceFi
     filesystem,
   })
 }
-async function terminalTask(db: ProviderNeutralDatabase) {
+async function terminalTask(db: PersistenceDb) {
   const workflowId = ulid(),
     taskId = ulid(),
     workspace = `workspace://${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'RFC370 workspace',
     definition: '{}',
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'selected workspace',
     workflowId,
@@ -126,6 +128,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
     )
     try {
       await entered.pending
+      const { tasks } = tablesOf(harness.db)
       const pendingRow = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
       expect(pendingRow.workspacePruningAt).toBeNull()
       expect(pendingRow.workspacePrunedAt).toBeNull()
@@ -178,6 +181,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
       removed: 0,
       skipped: 1,
     })
+    const { tasks, taskExecutionMaintenanceClaims } = tablesOf(harness.db)
     const row = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(row.workspacePruningAt).toBe(10000)
     expect(row.workspacePrunedAt).toBeNull()
@@ -223,6 +227,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
     const recovery = maintenance.recover({ activeTaskIds: [], now: 10000 })
     try {
       await entered.pending
+      const { tasks } = tablesOf(harness.db)
       expect(
         (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
       ).toBeNull()
@@ -263,6 +268,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
     )
     try {
       await entered.pending
+      const { tasks } = tablesOf(harness.db)
       expect(
         (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
       ).toBeNull()
@@ -306,6 +312,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
       const recovery = maintenance.recover({ activeTaskIds: [], now: 10000 })
       try {
         await entered.pending
+        const { tasks } = tablesOf(harness.db)
         await harness.db
           .update(tasks)
           .set(
@@ -374,6 +381,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
         await cleanupEntered.pending
         existenceReleased.release()
         expect(await recovery).toEqual({ completed: 0, failed: 0, skipped: 0, healed: 0 })
+        const { tasks, taskExecutionMaintenanceClaims } = tablesOf(harness.db)
         const pending = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
         expect(pending.workspacePruningAt).toBe(10001)
         expect(pending.workspacePrunedAt).toBeNull()

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-181 —— 工作组「全自动」硬化回归锁
 // (design/RFC-181-workgroup-autonomous-hardening/{proposal,design}.md)
@@ -35,16 +37,8 @@ import {
   WG_CLARIFY_BUDGET_DEFAULT,
   WorkgroupDraftSnapshotSchema,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  clarifyRounds,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-} from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import {
   createWorkgroup,
@@ -70,7 +64,7 @@ function canTransitionAssignment(
 import { createCollaborationRuntimeMechanics } from '../src/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 
 const isTaskClarifySuppressed = (
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId?: string,
   shardKey?: string | null,
@@ -82,7 +76,7 @@ const isTaskClarifySuppressed = (
   })
 
 const dismissOpenClarifyParksForAutonomous = (
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   mode: string,
 ): ReturnType<
@@ -97,7 +91,7 @@ import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 const PLANNER_AGENT_ID = '01HPLANNERAGENT000000000000'
 
-async function getWorkgroupForTest(db: ProviderNeutralDatabase, name: string) {
+async function getWorkgroupForTest(db: PersistenceDb, name: string) {
   const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
   return row === undefined ? null : getWorkgroupById(db, row.id)
 }
@@ -129,10 +123,11 @@ function groupInput(
 describeEachProvider(
   'RFC-181 D + RFC-225 — create defaults and complete save snapshots',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(async () => {
       db = harness.db
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         id: PLANNER_AGENT_ID,
         name: 'planner-agent',
         description: '',
@@ -221,16 +216,20 @@ describe('RFC-181 A2 — 转移表 requeue 新边', () => {
 describeEachProvider(
   'RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForAutonomous',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let taskId: string
 
     async function seedTask(configJson: string | null): Promise<string> {
       const id = ulid()
-      await db
-        .insert(workflows)
-        .values({ id: ulid(), name: `wf-${id}`, definition: '{}', builtin: true })
+      const { workflows, tasks } = tablesOf(db)
+      await insertOne(db, workflows, {
+        id: ulid(),
+        name: `wf-${id}`,
+        definition: '{}',
+        builtin: true,
+      })
       const wf = (await db.select().from(workflows).limit(1))[0]
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id,
         name: 'rfc181-task',
         workflowId: wf?.id ?? ulid(),
@@ -261,7 +260,8 @@ describeEachProvider(
       let assignmentId: string | null = null
       if (opts.withAssignment === true && opts.shard !== null) {
         assignmentId = opts.shard
-        await db.insert(workgroupAssignments).values({
+        const { workgroupAssignments } = tablesOf(db)
+        await insertOne(db, workgroupAssignments, {
           id: opts.shard,
           taskId,
           round: 1,
@@ -398,7 +398,8 @@ describeEachProvider(
       const cardA = `A${ulid()}`
       const cardB = `B${ulid()}`
       for (const id of [cardA, cardB]) {
-        await db.insert(workgroupAssignments).values({
+        const { workgroupAssignments } = tablesOf(db)
+        await insertOne(db, workgroupAssignments, {
           id,
           taskId,
           round: 1,
@@ -418,6 +419,7 @@ describeEachProvider(
         new Set([`${cardA}:open`, `${cardB}:open`]),
       )
       for (const id of [cardA, cardB]) {
+        const { workgroupAssignments } = tablesOf(db)
         const card = (
           await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, id))
         )[0]
@@ -437,6 +439,7 @@ describeEachProvider(
       expect(res.canceledParkRuns.map((r) => r.nodeRunId)).toEqual([park.clarifyRunId])
       expect(res.requeuedAssignments).toEqual([{ id: park.assignmentId ?? '', to: 'dispatched' }])
 
+      const { clarifyRounds, nodeRuns, workgroupAssignments } = tablesOf(db)
       const session = (
         await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, park.sessionId))
       )[0]
@@ -471,6 +474,7 @@ describeEachProvider(
       const park = await seedClarifyPark({ shard: ulid(), withAssignment: true })
       const res = await dismissOpenClarifyParksForAutonomous(db, taskId, 'free_collab')
       expect(res.requeuedAssignments).toEqual([{ id: park.assignmentId ?? '', to: 'open' }])
+      const { workgroupAssignments } = tablesOf(db)
       const card = (
         await db
           .select()
@@ -491,6 +495,7 @@ describeEachProvider(
 
     test('已 answered / canceled 的 session no-op；重复调用幂等（陈旧答案回流的根被掐死）', async () => {
       const park = await seedClarifyPark({ shard: ulid(), withAssignment: true })
+      const { clarifyRounds } = tablesOf(db)
       await db
         .update(clarifyRounds)
         .set({ status: 'answered' })

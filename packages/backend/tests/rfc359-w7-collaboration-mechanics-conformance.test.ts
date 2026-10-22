@@ -11,6 +11,8 @@
 // `collaborationWorkgroupClarify.ts`（RFC-172/181 反问许可与自治遣散）、
 // `clarify/queue.ts`（澄清队列上下文）与 `review.ts`（评审提示上下文）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,18 +20,7 @@ import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  taskNodeClarifyDirectives,
-  taskQuestions,
-  tasks,
-  workgroupAssignments,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -104,12 +95,13 @@ function definition(): WorkflowDefinition {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   overrides: { status?: string; workgroupConfigJson?: string } = {},
 ): Promise<string> {
   const taskId = `t_${ulid()}`
   const snapshot = JSON.stringify(definition())
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-w7-mechanics',
     description: '',
@@ -117,7 +109,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 6,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc359 w7 mechanics',
     workflowId: `wf_${taskId}`,
@@ -141,13 +133,14 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   overrides: { status?: string; shardKey?: string | null } = {},
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -192,6 +185,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         definition: orphanDefinition,
       }),
     ).toEqual({ kind: 'no-questioner' })
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ status: nodeRuns.status })
       .from(nodeRuns)
@@ -212,6 +206,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         definition: definition(),
       }),
     ).toEqual({ kind: 'awaiting' })
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ status: nodeRuns.status })
       .from(nodeRuns)
@@ -223,7 +218,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId, CROSS, { status: 'pending' })
-    await db.insert(taskNodeClarifyDirectives).values({
+    const { taskNodeClarifyDirectives, nodeRuns } = tablesOf(db)
+    await insertOne(db, taskNodeClarifyDirectives, {
       taskId,
       nodeId: ASKER,
       shardKey: '',
@@ -251,7 +247,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId, CROSS, { status: 'pending' })
-    await db.insert(taskNodeClarifyDirectives).values({
+    const { taskNodeClarifyDirectives } = tablesOf(db)
+    await insertOne(db, taskNodeClarifyDirectives, {
       taskId,
       nodeId: ASKER,
       shardKey: '',
@@ -277,6 +274,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const taskId = await seedTask(db)
     const mechanics = createCollaborationRuntimeMechanics(db)
     expect(await mechanics.getNodeClarifyDirective({ taskId, nodeId: ASKER })).toBeUndefined()
+    const { taskNodeClarifyDirectives } = tablesOf(db)
     await db.insert(taskNodeClarifyDirectives).values([
       { taskId, nodeId: ASKER, shardKey: '', directive: 'stop', updatedAt: 1 },
       { taskId, nodeId: ASKER, shardKey: 'a1', directive: 'continue', updatedAt: 2 },
@@ -310,6 +308,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const mechanics = createCollaborationRuntimeMechanics(db)
     expect(await mechanics.isTaskClarifySuppressed({ taskId: agentsOnly })).toBe(true)
 
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({
@@ -341,7 +340,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const mechanics = createCollaborationRuntimeMechanics(db)
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds, tasks } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: `cr_${ulid()}`,
       taskId,
       kind: 'self',
@@ -387,8 +387,9 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     expect(
       await mechanics.isTaskClarifySuppressed({ taskId, nodeId: WG_LEADER, shardKey: null }),
     ).toBe(false)
+    const { taskNodeClarifyDirectives } = tablesOf(db)
     // `wgClarifyAskerKey(leaderNodeId, …)` 恒为字面量 'leader'（工作组反问的单例 asker）。
-    await db.insert(taskNodeClarifyDirectives).values({
+    await insertOne(db, taskNodeClarifyDirectives, {
       taskId,
       nodeId: WG_LEADER,
       shardKey: 'leader',
@@ -412,7 +413,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     const assignmentId = `wga_${ulid()}`
-    await db.insert(workgroupAssignments).values({
+    const { workgroupAssignments, clarifyRounds, nodeRuns } = tablesOf(db)
+    await insertOne(db, workgroupAssignments, {
       id: assignmentId,
       taskId,
       round: 0,
@@ -424,7 +426,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       updatedAt: Date.now(),
     })
     const openRoundId = `cr_${ulid()}`
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: openRoundId,
       taskId,
       kind: 'self',
@@ -441,7 +443,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     // 已答轮不受影响
     const answeredRun = await seedRun(db, taskId, WG_CLARIFY)
     const answeredRoundId = `cr_${ulid()}`
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: answeredRoundId,
       taskId,
       kind: 'self',
@@ -494,7 +496,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     const assignmentId = `wga_${ulid()}`
-    await db.insert(workgroupAssignments).values({
+    const { workgroupAssignments, clarifyRounds } = tablesOf(db)
+    await insertOne(db, workgroupAssignments, {
       id: assignmentId,
       taskId,
       round: 0,
@@ -506,7 +509,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: `cr_${ulid()}`,
       taskId,
       kind: 'self',
@@ -542,7 +545,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     const roundId = `cr_${ulid()}`
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -590,6 +594,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       questions: [question('q1'), question('q2')],
     })
     expect(receipt.intermediaryNodeRunId.length).toBeGreaterThan(0)
+    const { clarifyRounds, nodeRuns, tasks } = tablesOf(db)
     const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(rounds).toHaveLength(1)
     expect(rounds[0]).toMatchObject({
@@ -627,6 +632,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: CROSS,
       questions: [question('q1')],
     })
+    const { clarifyRounds } = tablesOf(db)
     const rounds = await db
       .select()
       .from(clarifyRounds)
@@ -664,7 +670,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, ASKER)
     const parkRun = await seedRun(db, taskId, CLARIFY, { status: 'awaiting_human' })
     const roundId = `cr_${ulid()}`
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds, taskQuestions } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -687,7 +694,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       answeredAt: Date.now(),
     })
     const now = Date.now()
-    await db.insert(taskQuestions).values({
+    await insertOne(db, taskQuestions, {
       id: `tq_${ulid()}`,
       taskId,
       originNodeRunId: parkRun,
@@ -749,7 +756,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const taskId = await seedTask(db)
     const askingRun = await seedRun(db, taskId, ASKER)
     const parkRun = await seedRun(db, taskId, CLARIFY, { status: 'done' })
-    await db.insert(clarifyRounds).values({
+    const { clarifyRounds, taskQuestions } = tablesOf(db)
+    await insertOne(db, clarifyRounds, {
       id: `cr_${ulid()}`,
       taskId,
       kind: 'self',
@@ -773,7 +781,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     })
     const now = Date.now()
     const dispatchedRunId = await seedRun(db, taskId, ASKER, { status: 'running' })
-    await db.insert(taskQuestions).values({
+    await insertOne(db, taskQuestions, {
       id: `tq_${ulid()}`,
       taskId,
       originNodeRunId: parkRun,
@@ -854,9 +862,12 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     expect(missingUpstream.kind).toBe('failed')
 
     const writerRun = await seedRun(db, taskId, WRITER, { status: 'done' })
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: writerRun, portName: 'out', content: '# Draft\n\nreview me\n' })
+    const { nodeRunOutputs, docVersions, nodeRuns, tasks } = tablesOf(db)
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: writerRun,
+      portName: 'out',
+      content: '# Draft\n\nreview me\n',
+    })
 
     const dispatched = await mechanics.dispatchReviewNode(request)
     expect(dispatched).toMatchObject({ kind: 'awaiting_review', message: 'awaiting_review' })
@@ -912,7 +923,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const absolute = join(APP_HOME, bodyPath)
     mkdirSync(dirname(absolute), { recursive: true })
     writeFileSync(absolute, '# Draft\n\nfirst pass\n', 'utf8')
-    await db.insert(docVersions).values({
+    const { docVersions } = tablesOf(db)
+    await insertOne(db, docVersions, {
       id: `dv_${ulid()}`,
       taskId,
       reviewNodeId: REVIEW,

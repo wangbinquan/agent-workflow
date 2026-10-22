@@ -15,6 +15,11 @@
 //      __drizzle_migrations hashes for 0000+0001 and applies only 0002.
 //   4. Verify seed rows preserved + new schema reachable.
 
+import { nativeTableSets } from '@/bootstrap/persistenceSchema'
+import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
+import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,9 +30,6 @@ import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { ulid } from 'ulid'
-import * as schema from '../src/db/schema'
-import { nodeRuns, tasks } from '../src/db/schema'
-
 const ROOT_MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
 const JOURNAL_RAW = JSON.parse(readFileSync(join(ROOT_MIGRATIONS, 'meta', '_journal.json'), 'utf8'))
 
@@ -60,7 +62,11 @@ function makeMigrationsFolder(entries: number[]): string {
 function openWithMigrations(filePath: string, migrationsFolder: string) {
   const sqlite = new Database(filePath, { create: true })
   sqlite.exec('PRAGMA foreign_keys = ON;')
-  const db = drizzle(sqlite, { schema })
+  const db = bindDatabaseHandle(
+    drizzle(sqlite, { schema: nativeTableSets.sqlite }),
+    nativeTableSets.sqlite,
+    createSqliteCapabilities(),
+  )
   migrate(db, { migrationsFolder: resolve(migrationsFolder) })
   return { db, sqlite }
 }
@@ -201,13 +207,14 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
     expect(idxNames).toContain('idx_doc_versions_task')
     expect(idxNames).toContain('idx_review_comments_version')
 
+    const { tasks, nodeRuns } = tablesOf(db)
     // 4. v1 seed rows preserved.
-    const t = db.select().from(tasks).where(eq(tasks.id, seededIds.taskId)).all()
+    const t = queryRows(db.select().from(tasks).where(eq(tasks.id, seededIds.taskId)))
     expect(t.length).toBe(1)
     expect(t[0]?.status).toBe('done')
     expect(t[0]?.workflowId).toBe(seededIds.workflowId)
 
-    const nr = db.select().from(nodeRuns).where(eq(nodeRuns.id, seededIds.nodeRunId)).all()
+    const nr = queryRows(db.select().from(nodeRuns).where(eq(nodeRuns.id, seededIds.nodeRunId)))
     expect(nr.length).toBe(1)
     // Existing v1 row picks up the new column at default 0.
     expect(nr[0]?.reviewIteration).toBe(0)
@@ -281,8 +288,9 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
     openWithMigrations(dbPath, v2MigrationsDir).sqlite.close()
     // openWithMigrations should run cleanly without throwing on a fully-migrated file.
     const { db, sqlite } = openWithMigrations(dbPath, v2MigrationsDir)
+    const { tasks } = tablesOf(db)
     // The seed rows survive across re-opens.
-    const t = db.select().from(tasks).where(eq(tasks.id, seededIds.taskId)).all()
+    const t = queryRows(db.select().from(tasks).where(eq(tasks.id, seededIds.taskId)))
     expect(t.length).toBe(1)
     sqlite.close()
   })

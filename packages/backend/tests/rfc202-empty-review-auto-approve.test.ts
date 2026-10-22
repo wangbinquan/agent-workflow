@@ -10,28 +10,21 @@
 // emits, close the run, and return kind:'ok' so the scheduler continues.
 // If any of these go red, the P0 wedge is back.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import {
-  agents as agentsTable,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  docVersions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let worktree: string
 
@@ -50,12 +43,13 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
 
   async function seed(portKind: 'list<path<md>>' | 'list<markdown>'): Promise<{
     taskId: string
-    task: typeof tasks.$inferSelect
+    task: PersistenceTables['tasks']['$inferSelect']
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
     const caseGenId = ulid()
-    await db.insert(agentsTable).values({
+    const { agents, workflows, tasks } = tablesOf(db)
+    await insertOne(db, agents, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -85,7 +79,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       edges: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -93,7 +87,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       version: 1,
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'empty-review',
       workflowId,
@@ -113,7 +107,8 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
 
   /** Upstream done run whose `cases` port is an EMPTY list. */
   async function seedEmptySrc(taskId: string, srcId: string): Promise<void> {
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: srcId,
       taskId,
       nodeId: 'src',
@@ -124,10 +119,11 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db.insert(nodeRunOutputs).values({ nodeRunId: srcId, portName: 'cases', content: '' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: srcId, portName: 'cases', content: '' })
   }
 
-  async function reviewRun(taskId: string): Promise<typeof nodeRuns.$inferSelect> {
+  async function reviewRun(taskId: string): Promise<PersistenceTables['nodeRuns']['$inferSelect']> {
+    const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const rev = rows.find((r) => r.nodeId === 'rev_1')
     expect(rev).toBeDefined()
@@ -137,6 +133,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
   async function outputsOf(
     runId: string,
   ): Promise<Map<string, { content: string; kind: string | null }>> {
+    const { nodeRunOutputs } = tablesOf(db)
     const rows = await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, runId))
     return new Map(rows.map((r) => [r.portName, { content: r.content, kind: r.kind ?? null }]))
   }
@@ -172,6 +169,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
     expect(Object.keys(meta)).not.toContain('decidedBy')
     expect(Object.keys(meta)).not.toContain('decidedByRole')
 
+    const { nodeRunEvents, docVersions } = tablesOf(db)
     // durable audit trace for the node drawer events tab
     const events = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, rev.id))
     expect(events.some((e) => e.payload.startsWith('[rfc202/review-auto-approved]'))).toBe(true)
@@ -201,7 +199,8 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
 
   test('a stale visible review refreshed to an empty list retires the old round and releases the task atomically', async () => {
     const { taskId, task, definition, reviewNode } = await seed('list<path<md>>')
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, nodeRunOutputs, tasks, docVersions } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: '01A_OLD',
       taskId,
       nodeId: 'src',
@@ -211,7 +210,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: '01A_OLD',
       portName: 'cases',
       content: 'old.md',
@@ -219,7 +218,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
     await seedEmptySrc(taskId, '01B_NEW')
     await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
     const reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -231,7 +230,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       startedAt: Date.now(),
     })
     const oldVersionId = ulid()
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: oldVersionId,
       taskId,
       reviewNodeId: 'rev_1',
@@ -278,7 +277,8 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
     await seedEmptySrc(taskId, '01SRC')
     // Simulate a pre-RFC-202 wedged row: parked awaiting_review, no doc_versions.
     const wedgedId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: wedgedId,
       taskId,
       nodeId: 'rev_1',

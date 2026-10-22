@@ -15,14 +15,15 @@
 // 任何 refactor 一旦让下面任一条变红，说明「没有进程 ⇒ 已经死了」这个只对
 // agent 成立的前提又被悄悄推广到了容器行上。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { NODE_KIND, type NodeKind, type WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { probeRunProcessAlive, reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { listRecoveryEventsForTask } from '../src/services/recovery'
 import {
@@ -341,14 +342,12 @@ describe('RFC-230 — resolveRunLiveness', () => {
 
 // --- ④ 回收器端到端 ---------------------------------------------------------
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  definition: WorkflowDefinition,
-): Promise<string> {
+async function seedTask(db: PersistenceDb, definition: WorkflowDefinition): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(definition) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(definition) })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -365,12 +364,13 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   over: { nodeId: string; status: string; pid?: number | null; containerRunId?: string | null },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: over.nodeId,
@@ -402,6 +402,7 @@ describeEachProvider('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处
       taskHasDriver: () => false,
     })
     expect(res.reapedRuns).toHaveLength(0)
+    const { nodeRuns, tasks } = tablesOf(db)
     const w = await db.select().from(nodeRuns).where(eq(nodeRuns.id, wrapperId))
     expect(w[0]!.status).toBe('running')
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
@@ -422,6 +423,7 @@ describeEachProvider('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处
     })
     expect(res.reapedRuns).toEqual([wrapperId])
     expect(res.reasons[wrapperId]).toBe('inner-all-terminal')
+    const { nodeRuns } = tablesOf(db)
     const w = await db.select().from(nodeRuns).where(eq(nodeRuns.id, wrapperId))
     expect(w[0]!.status).toBe('interrupted')
   })
@@ -440,6 +442,7 @@ describeEachProvider('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处
     })
     expect(res.reapedRuns).toHaveLength(0)
     expect(res.reapedTasks).toHaveLength(0)
+    const { nodeRuns, tasks } = tablesOf(db)
     const w = await db.select().from(nodeRuns).where(eq(nodeRuns.id, wrapperId))
     expect(w[0]!.status).toBe('running')
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
@@ -502,6 +505,7 @@ describeEachProvider('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处
   test('快照不可解析的任务被跳过（保守），不因残缺定义误杀', async () => {
     const db = harness.db
     const taskId = await seedTask(db, gitWrapperDef())
+    const { tasks } = tablesOf(db)
     await db.update(tasks).set({ workflowSnapshot: '{ not json' }).where(eq(tasks.id, taskId))
     await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     const res = await reconcileDeadRunningRuns({

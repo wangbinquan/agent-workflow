@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-314 D3 —— 事件落库按 chunk 合并。
 //
@@ -24,9 +26,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { pump } from '../src/services/execution/managedProcess'
 import { runNode } from './helpers/runner'
 import { recordStatements } from './helpers/statementRecorder'
@@ -97,7 +98,7 @@ describe('RFC-314 D3 —— pump 的 chunk 边界回调', () => {
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -124,18 +125,19 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc314-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc314-fixture',
     workflowId,
@@ -157,9 +159,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'node1', status: 'pending' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'node1', status: 'pending' })
   return id
 }
 
@@ -222,6 +225,7 @@ describeEachProvider('RFC-314 D3 —— 端到端', (harness) => {
       rec.stop()
     }
 
+    const { nodeRunEvents } = tablesOf(h.db)
     // 事件全部落库，且顺序（按 id）与 agent 的输出顺序一致 —— 合并不改内容也不改顺序。
     const rows = await h.db
       .select({ id: nodeRunEvents.id, payload: nodeRunEvents.payload })
@@ -287,6 +291,7 @@ describeEachProvider('RFC-314 D3 —— 端到端', (harness) => {
         }),
     )
 
+    const { nodeRunEvents } = tablesOf(h.db)
     const rows = await h.db
       .select({ payload: nodeRunEvents.payload })
       .from(nodeRunEvents)

@@ -1,11 +1,11 @@
 // RFC-349 — resource-limit policy consumes a provider-neutral persistence and
 // Task Execution cancellation command; SQLite/PG SQL lives in infrastructure.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import type { ResourceLimitOperations } from '@/modules/system-operations/public/operations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -58,12 +58,12 @@ function postgresqlFixture() {
     if (compact.startsWith('select') && compact.includes('sum(')) return rows([['7']])
     return rows()
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -94,10 +94,6 @@ function postgresqlFixture() {
     },
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 resource-limit provider seam', () => {
   test('policy uses only the required async operations and preserves human-wait usage', async () => {

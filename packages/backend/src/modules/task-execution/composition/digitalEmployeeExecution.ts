@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, desc, eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
@@ -12,8 +14,7 @@ import {
   type WorkflowDefinition,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   executionContractAgentImplementationSchema,
   executionContractImplementationSchema,
@@ -259,14 +260,13 @@ export function buildDigitalEmployeePlanPrompt(
  * 合并的后果：带闸门的动作正常完成、随后任务行被删，闸门会从「已批准」变成「跳过」。
  */
 export async function inspectDigitalEmployeeHumanReviewSnapshot(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   executionRef: string,
 ): Promise<DigitalEmployeeHumanReviewCoreSnapshot> {
-  const task = await db
-    .select({ inputs: tasks.inputs })
-    .from(tasks)
-    .where(eq(tasks.id, executionRef))
-    .get()
+  const { tasks, nodeRuns } = tablesOf(db)
+  const task = await first(
+    db.select({ inputs: tasks.inputs }).from(tasks).where(eq(tasks.id, executionRef)),
+  )
   if (task === undefined) return 'unknown'
   let parsedInputs: z.SafeParseReturnType<unknown, Record<string, unknown>>
   try {
@@ -278,17 +278,18 @@ export async function inspectDigitalEmployeeHumanReviewSnapshot(
   if (typeof parsedInputs.data[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY] !== 'string') {
     return 'not-applicable'
   }
-  const reviewRun = await db
-    .select({ status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, executionRef),
-        eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID),
-      ),
-    )
-    .orderBy(engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
-    .get()
+  const reviewRun = await first(
+    db
+      .select({ status: nodeRuns.status })
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, executionRef),
+          eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID),
+        ),
+      )
+      .orderBy(engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id)),
+  )
   if (reviewRun?.status === 'awaiting_review') return 'waiting'
   if (reviewRun?.status === 'done') return 'approved'
   if (
@@ -836,14 +837,14 @@ type ReactionExecutionPortDependencies = Parameters<typeof composeReactionExecut
  */
 export function composeReactionExecutionProvider(
   deps: DigitalEmployeeExecutionDependencies & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly now?: () => number
   },
 ) {
   const now = deps.now ?? Date.now
   const core = buildDigitalEmployeeExecution(deps)
   return Object.freeze({
-    admission: (tx: ProviderNeutralDatabase) =>
+    admission: (tx: PersistenceDb) =>
       composeReactionExecutionAdmissionParticipantInTx(createReactionAdmissionStore(tx), { now }),
     port: (artifacts: {
       readonly retryFeedback: ReactionExecutionPortDependencies['retryFeedback']
@@ -869,7 +870,7 @@ export function composeReactionExecutionProvider(
  * 装配方只在确有更好来源时（例如 PG daemon 的 `resourceLimitOperations`）覆盖它。
  */
 export function composeDatabaseDigitalEmployeeExecutionPorts(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Pick<
   DigitalEmployeeExecutionDependencies,
   'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview' | 'hostWorkflow'
@@ -891,14 +892,16 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
     },
     executionMetadata: {
       async load(taskId: string) {
-        const row = await db
-          .select({
-            roundRef: tasks.digitalEmployeeRoundId,
-            autoRecoverySuspended: tasks.autoRecoverySuspended,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .get()
+        const { tasks } = tablesOf(db)
+        const row = await first(
+          db
+            .select({
+              roundRef: tasks.digitalEmployeeRoundId,
+              autoRecoverySuspended: tasks.autoRecoverySuspended,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, taskId)),
+        )
         return row ?? null
       },
     },

@@ -27,10 +27,10 @@
 // 还没开工 / 还没收工的行选成 active / last。端口自己造不出这种行，但逻辑复制 / 恢复出来的库
 // 里有，所以从能力矩阵取 `descNullsLast`，判据锁在上面那份对拍文件里。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, lte, ne, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { maintenanceRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ClaimedMaintenanceRun,
   MaintenanceRunRecord,
@@ -44,16 +44,17 @@ function json(value: unknown): string {
   return JSON.stringify(value ?? {})
 }
 
-function record(value: typeof maintenanceRuns.$inferSelect): MaintenanceRunRecord {
+function record(value: PersistenceTables['maintenanceRuns']['$inferSelect']): MaintenanceRunRecord {
   return value
 }
 
-export function createMaintenanceRunStore(db: ProviderNeutralDatabase): MaintenanceRunStore {
+export function createMaintenanceRunStore(db: PersistenceDb): MaintenanceRunStore {
   const session = databaseSessionFor(db)
 
   const store: MaintenanceRunStore = {
     async enqueue(input) {
       return await session.transaction(async (tx) => {
+        const { maintenanceRuns } = tablesOf(tx)
         const current = (
           await tx
             .select()
@@ -123,6 +124,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
 
     async recoverRunning(now) {
       return await session.transaction(async (tx) => {
+        const { maintenanceRuns } = tablesOf(tx)
         const rows = await tx
           .select({ id: maintenanceRuns.id, jobKey: maintenanceRuns.jobKey })
           .from(maintenanceRuns)
@@ -164,6 +166,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
 
     async claimNext(input): Promise<ClaimedMaintenanceRun | null> {
       return await session.transaction(async (tx) => {
+        const { maintenanceRuns } = tablesOf(tx)
         const candidate = (
           await tx
             .select()
@@ -212,6 +215,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
     },
 
     async heartbeat(input) {
+      const { maintenanceRuns } = tablesOf(db)
       // Single fenced statement: atomic on its own, no transaction needed.
       const updated = await db
         .update(maintenanceRuns)
@@ -235,6 +239,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
     async settle(input) {
       if (input.outcome === 'deferred') {
         return await session.transaction(async (tx) => {
+          const { maintenanceRuns } = tablesOf(tx)
           const owned = (
             await tx
               .select({ jobKey: maintenanceRuns.jobKey })
@@ -290,6 +295,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
           return updated.length === 1
         })
       }
+      const { maintenanceRuns } = tablesOf(db)
       const updated = await db
         .update(maintenanceRuns)
         .set({
@@ -319,6 +325,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
     },
 
     async read(runId) {
+      const { maintenanceRuns } = tablesOf(db)
       const rows = await db
         .select()
         .from(maintenanceRuns)
@@ -330,6 +337,7 @@ export function createMaintenanceRunStore(db: ProviderNeutralDatabase): Maintena
     async readProjection() {
       // NULL 落位按 SQLite 语义显式渲染（见文件头注释）。
       const { descNullsLast } = session.engine
+      const { maintenanceRuns } = tablesOf(db)
       const [activeRows, lastRows, backlog] = await Promise.all([
         db
           .select()

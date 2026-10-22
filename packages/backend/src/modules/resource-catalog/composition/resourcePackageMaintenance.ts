@@ -1,5 +1,5 @@
 import { ZodError } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger, type Logger } from '@/util/log'
 import {
   createResourcePackageApplyActivityQuery,
@@ -73,7 +73,7 @@ function maintenanceLog(log: Logger): ResourcePackageApplyMaintenanceLog {
 }
 
 export function composeSqliteResourcePackageApplyMaintenance(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
   readonly activitySource: ResourcePackageApplyActivitySource
@@ -124,7 +124,7 @@ export function composeSqliteResourcePackageApplyMaintenance(input: {
 }
 
 export function composePostgresqlResourcePackageApplyMaintenance(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
   readonly artifacts?: ResourcePackageApplyArtifactRecoveryPort

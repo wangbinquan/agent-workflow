@@ -4,6 +4,9 @@
 // 的跨页无重/漏、四过滤 AND 与 total 一致、参数钳制姿态（catch/coerce 不 422）、
 // /repos distinct 选项源（读权限 + PAT 可读）、迁移 0139 索引组与 body 末列、
 // 保留天数可配（gcDeliveries 参数化 + PUT /api/config 保存门 body ≤ row）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -11,7 +14,7 @@ import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   describeEachProviderHttpApplication,
@@ -22,7 +25,6 @@ import { runWebhookDeliveryMaintenanceJob } from '@/platform/background/maintena
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
-import { webhookDeliveries } from '../src/db/schema'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { gcDeliveries } from '../src/services/webhook/deliveryStore'
@@ -68,7 +70,7 @@ function get(app: H['app'], path: string, token: string): Promise<Response> {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   row: {
     receivedAt: number
     status?: WebhookDeliveryStatus
@@ -78,7 +80,8 @@ async function seed(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(webhookDeliveries).values({
+  const { webhookDeliveries } = tablesOf(db)
+  await insertOne(db, webhookDeliveries, {
     id,
     endpointId: 'ep-1', // soft link，无 FK（schema 注释），列表面不需要端点行
     eventUuid: null,
@@ -204,7 +207,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc261-',
   },
   (scope) => {
-    async function seedMatrix(db: ProviderNeutralDatabase): Promise<void> {
+    async function seedMatrix(db: PersistenceDb): Promise<void> {
       await seed(db, { receivedAt: 1, eventType: 'push', repoPath: 'a/x', status: 'matched' })
       await seed(db, { receivedAt: 2, eventType: 'push', repoPath: 'a/x', status: 'ignored' })
       await seed(db, { receivedAt: 3, eventType: 'note', repoPath: 'a/x', status: 'matched' })
@@ -274,7 +277,8 @@ describeEachProviderHttpApplication(
 describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
   test('索引组齐备：过滤维度组合索引 + body-retention 部分索引；单列 status 索引已退役', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const rows = db.all<{ name: string }>(
+    const rows = rawRows<{ name: string }>(
+      db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='webhook_deliveries' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
     )
     expect(rows.map((r) => r.name)).toEqual([
@@ -291,7 +295,7 @@ describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
 
   test('body_json 是末列（列表投影不得穿越大 body 的 overflow 链）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = db.all<{ name: string }>(sql`PRAGMA table_info(webhook_deliveries)`)
+    const cols = rawRows<{ name: string }>(db, sql`PRAGMA table_info(webhook_deliveries)`)
     expect(cols[cols.length - 1]!.name).toBe('body_json')
   })
 })
@@ -424,6 +428,7 @@ describeEachProvider('RFC-261 delivery retention', (harness) => {
     })
     // dead 行先被 body 段清空再被 row 段删除 → bodiesCleared 计 2（既有段序语义）
     expect(res).toEqual({ bodiesCleared: 2, rowsDeleted: 1 })
+    const { webhookDeliveries } = tablesOf(db)
     const rows = await db.select().from(webhookDeliveries)
     const byId = new Map(rows.map((r) => [r.id, r]))
     expect(byId.has(dead)).toBe(false) // 25 天 > row 20 天 → 删行
@@ -445,6 +450,7 @@ describeEachProvider('RFC-261 delivery retention', (harness) => {
       10, // 25 行 → 3 批（10/10/5），锁跨批推进与终止条件
     )
     expect(res).toEqual({ bodiesCleared: 25, rowsDeleted: 25 })
+    const { webhookDeliveries } = tablesOf(db)
     const left = await db.select().from(webhookDeliveries)
     expect(left.length).toBe(1)
     expect(left[0]!.bodyJson).toBe('{"keep":1}')

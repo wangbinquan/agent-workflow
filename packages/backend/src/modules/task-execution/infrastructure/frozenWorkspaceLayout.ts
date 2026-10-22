@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PlannedDirectoryNode, PlannedRepo } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
-import { taskRepos, taskSpaceNodes } from '@/db/schema'
 import type { PlannedSpaceLayout } from '../application/ports/preparedWorkspace'
 import { ValidationError } from '@/util/errors'
 
@@ -21,9 +21,10 @@ function minimalNodePaths(mountPaths: readonly string[]): string[] {
 }
 
 export async function loadFrozenSpaceLayout(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   sourceTaskId: string,
 ): Promise<PlannedSpaceLayout> {
+  const { taskRepos, taskSpaceNodes } = tablesOf(db)
   const rows = await db
     .select()
     .from(taskRepos)

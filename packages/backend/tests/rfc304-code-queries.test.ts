@@ -10,19 +10,11 @@
 //   - enabling a capability whose prerequisites are missing SAVES and reports
 //     the resulting readiness, rather than pretending it is now running.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  capabilityTemplates,
-  codeAiAttempts,
-  codeRoundStages,
-  codeWorkItems,
-  codeWorkRounds,
-  webhookEndpoints,
-  webhookTriggers,
-} from '../src/db/schema'
 import {
   ROUNDS_PER_ITEM,
   ROUND_WINDOW,
@@ -41,27 +33,28 @@ const NOW = 1_700_000_000_000
 const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
 
-const createCodeMatrixQuery = (db: ProviderNeutralDatabase) =>
+const createCodeMatrixQuery = (db: PersistenceDb) =>
   createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db))
-const createCodeWorkItemProjectionQuery = (db: ProviderNeutralDatabase) =>
+const createCodeWorkItemProjectionQuery = (db: PersistenceDb) =>
   createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(db))
-const createCodeRoundAttemptsQuery = (db: ProviderNeutralDatabase) =>
+const createCodeRoundAttemptsQuery = (db: PersistenceDb) =>
   createCodeRoundAttemptsQueryFromPort(createRoundAttemptsRead(db))
 
 describeEachProvider('RFC-304 — the capability matrix a page renders', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
 
   test('a ready cell carries no issues and needs no repairs', async () => {
+    const { webhookEndpoints, agents, capabilityTemplates, webhookTriggers } = tablesOf(db)
     // Seeded as ROWS rather than as stored facts. It used to hand
     // `upsertCapabilityCell` a `READY_FACTS` object and read the answer back,
     // which asserted only that the query returns what it was given — the cell
     // could claim `ready` with no binding, no framework and no agent anywhere
     // in the database. Now that readiness is derived on read, `ready` means the
     // pieces are actually there, and the fixture has to make them so.
-    await db.insert(webhookEndpoints).values({
+    await insertOne(db, webhookEndpoints, {
       id: ENDPOINT,
       name: 'gl',
       provider: 'gitlab',
@@ -69,21 +62,21 @@ describeEachProvider('RFC-304 — the capability matrix a page renders', (harnes
       secretEnc: 'sealed',
       enabled: true,
     })
-    await db.insert(agents).values({
+    await insertOne(db, agents, {
       id: 'agent-1',
       name: 'reviewer-agent',
       bodyMd: 'x',
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityTemplates).values({
+    await insertOne(db, capabilityTemplates, {
       id: 'fw-1',
       name: 'f',
       capability: 'mr-review',
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(capabilityTemplates).values({
+    await insertOne(db, capabilityTemplates, {
       id: 'binding-1',
       name: 'b',
       agentBySlotJson: JSON.stringify({ reviewer: 'agent-1' }),
@@ -94,7 +87,7 @@ describeEachProvider('RFC-304 — the capability matrix a page renders', (harnes
     // T104/T105 后 writer 已删：读面测试自持种子——平台 trigger 行
     // （launchKind='code-round'，historical）+ cell 行；readiness 由查询读时
     // 现算，逐项核对这些真实行。
-    await db.insert(webhookTriggers).values({
+    await insertOne(db, webhookTriggers, {
       id: 'tr-cell',
       name: 'mr-review · group/project',
       endpointId: ENDPOINT,
@@ -174,7 +167,7 @@ test('every readiness code has a repair route', async () => {
 })
 
 describeEachProvider('RFC-304 — the work-item projection', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -184,7 +177,8 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
   // per capability — so seeding two for the same MR is a fixture that could not
   // exist in production.
   const seedItem = async (id: string, createdAt: number, capability = 'mr-review') => {
-    await db.insert(codeWorkItems).values({
+    const { codeWorkItems } = tablesOf(db)
+    await insertOne(db, codeWorkItems, {
       id,
       codeHostEndpointId: ENDPOINT,
       stableProjectId: '41823',
@@ -256,6 +250,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // Naming the number rather than saying "recent rounds": a count cannot be
     // misread as completeness, and a phrase can.
     await seedItem('busy', NOW)
+    const { codeWorkRounds } = tablesOf(db)
     await db.insert(codeWorkRounds).values(
       Array.from({ length: 12 }, (_, i) => ({
         id: `h${String(i)}`,
@@ -277,7 +272,8 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // unconditionally cannot accidentally suppress the truncation notice by
     // treating "no key" as "nothing hidden".
     await seedItem('quiet', NOW)
-    await db.insert(codeWorkRounds).values({
+    const { codeWorkRounds } = tablesOf(db)
+    await insertOne(db, codeWorkRounds, {
       id: 'only',
       workItemId: 'quiet',
       roundSeq: 1,
@@ -296,6 +292,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // is the response size T66 exists to bound. Asking about ONE item is the
     // different question, and the design answers it with "current + last 20".
     await seedItem('busy', NOW)
+    const { codeWorkRounds } = tablesOf(db)
     await db.insert(codeWorkRounds).values(
       Array.from({ length: 30 }, (_, i) => ({
         id: `w${String(i)}`,
@@ -319,6 +316,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // carries a merge request's entire history, which is the shape §11.4's
     // arithmetic says will exist by the third month.
     await seedItem('busy', NOW)
+    const { codeWorkRounds } = tablesOf(db)
     await db.insert(codeWorkRounds).values(
       Array.from({ length: 30 }, (_, i) => ({
         id: `c${String(i)}`,
@@ -347,6 +345,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // raising it — or losing the limit in a refactor — would have been silent
     // until somebody opened `/code` on a long-lived merge request.
     await seedItem('busy', NOW)
+    const { codeWorkRounds } = tablesOf(db)
     await db.insert(codeWorkRounds).values(
       Array.from({ length: 12 }, (_, i) => ({
         id: `r${String(i)}`,
@@ -370,7 +369,8 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
 
   test('rounds and their stages are projected in reading order', async () => {
     await seedItem('item-1', NOW)
-    await db.insert(codeWorkRounds).values({
+    const { codeWorkRounds, codeRoundStages } = tablesOf(db)
+    await insertOne(db, codeWorkRounds, {
       id: 'round-1',
       workItemId: 'item-1',
       roundSeq: 1,
@@ -426,14 +426,17 @@ describe('RFC-304 — a round’s status is derived, not stored', () => {
   })
 })
 describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
   })
 
-  const attempt = async (over: Partial<typeof codeAiAttempts.$inferInsert> = {}) => {
-    await db.insert(codeAiAttempts).values({
+  const attempt = async (
+    over: Partial<PersistenceTables['codeAiAttempts']['$inferInsert']> = {},
+  ) => {
+    const { codeAiAttempts } = tablesOf(db)
+    await insertOne(db, codeAiAttempts, {
       id: over.id ?? `att-${String(Math.random()).slice(2, 8)}`,
       roundId: 'round-1',
       stageName: 'review-shard',

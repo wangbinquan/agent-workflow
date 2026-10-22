@@ -15,12 +15,11 @@
 // serving instance verifies the schema and its generation, then writes through
 // the fence; another service's Job or instance on the same database is refused;
 // an instance never starts on a database the Job has not installed.
-import { afterEach, expect, test } from 'bun:test'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { expect, test } from 'bun:test'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { migrateForDeployment } from '@/bootstrap/deployment'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { authLoginPolicy } from '@/db/schema'
 import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createDatabaseApplicationConfiguration } from '@/modules/system-operations/infrastructure/databaseApplicationConfiguration'
 import { readHostedDatabaseBackupProvenance } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupProvenance'
@@ -34,10 +33,6 @@ const providers = resolveTestProviders(process.env)
 // The hosted Job and instance select the PostgreSQL schema provider process-wide;
 // restore it so a later file's SQLite cases do not inherit it (a following
 // SQLite core read once failed only in that order).
-const previousSchemaProvider = currentDatabaseSchemaProvider()
-afterEach(() => {
-  selectDatabaseSchemaProvider(previousSchemaProvider)
-})
 
 if (providers.includes('postgresql')) {
   const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
@@ -134,6 +129,7 @@ if (providers.includes('postgresql')) {
     try {
       expect(serving.describeSchemaOutcome()).toContain('PostgreSQL schema verified')
       const db = serving.openBootstrapClient()
+      const { authLoginPolicy } = tablesOf(db)
       const policy = (
         await db.select().from(authLoginPolicy).where(eq(authLoginPolicy.id, 'global'))
       )[0]

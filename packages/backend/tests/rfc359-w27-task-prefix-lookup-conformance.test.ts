@@ -1,13 +1,14 @@
 // RFC359 W27: actual W25 PG root_prefix still scanned 100,000 tasks after a 204-row
 // physical prefix. Compare exact original SQL and real rows; no latency assertion.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, getTableColumns, SQL, StringChunk } from 'drizzle-orm'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskListViewer,
   TaskOperationsRawQuery,
@@ -154,8 +155,9 @@ function roots(count = 16): FixtureRow[] {
     startedAt: 1000 - i * 10,
   }))
 }
-async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
     displayName: 'W27 fixture',
@@ -164,7 +166,7 @@ async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): P
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'w27-workflow',
     name: 'W27 workflow',
     definition: '{ "fixture": true }',
@@ -173,7 +175,7 @@ async function seed(db: ProviderNeutralDatabase, rows: readonly FixtureRow[]): P
   })
   for (const row of rows) {
     const family = row.root === undefined ? row.id : row.root
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: row.name ?? 'match',
       workflowId: 'w27-workflow',
@@ -231,14 +233,15 @@ function withCursor(
     }),
   }
 }
-async function storedRows(db: ProviderNeutralDatabase) {
+async function storedRows(db: PersistenceDb) {
+  const { tasks, lifecycleAlerts } = tablesOf(db)
   const rows = {
     tasks: await db.select().from(tasks).orderBy(tasks.id),
     alerts: await db.select().from(lifecycleAlerts).orderBy(lifecycleAlerts.id),
   }
   return rows
 }
-function queryFor(db: ProviderNeutralDatabase, raw: TaskOperationsRawQuery): SQL {
+function queryFor(db: PersistenceDb, raw: TaskOperationsRawQuery): SQL {
   return fastFilteredRootQuery(
     db,
     VIEWER,
@@ -246,17 +249,13 @@ function queryFor(db: ProviderNeutralDatabase, raw: TaskOperationsRawQuery): SQL
     OPTIONS.catalogVisibility,
   )
 }
-async function compare(
-  harness: ProviderHarness,
-  db: ProviderNeutralDatabase,
-  raw: TaskOperationsRawQuery,
-) {
+async function compare(harness: ProviderHarness, db: PersistenceDb, raw: TaskOperationsRawQuery) {
   const before = await storedRows(db)
   const query = queryFor(db, raw)
   const recording = harness.recordStatements()
   try {
-    const expected = await db.all<Record<string, unknown>>(originalQuery(query))
-    const actual = await db.all<Record<string, unknown>>(query)
+    const expected = await rawRows<Record<string, unknown>>(db, originalQuery(query))
+    const actual = await rawRows<Record<string, unknown>>(db, query)
     expect(actual).toEqual(expected)
     expect(JSON.stringify(actual)).toBe(JSON.stringify(expected))
     expect(recording.statements).toHaveLength(2)
@@ -281,12 +280,13 @@ const RAW = { subject: 'workflow', limit: '1' } satisfies TaskOperationsRawQuery
 describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
   test('the original matches remain unique with multiple open alerts for one task', async () => {
     await seed(harness.db, roots())
+    const { lifecycleAlerts, tasks } = tablesOf(harness.db)
     for (const [id, resolvedAt] of [
       ['open-a', null],
       ['open-b', null],
       ['resolved-c', 2],
     ] as const)
-      await harness.db.insert(lifecycleAlerts).values({
+      await insertOne(harness.db, lifecycleAlerts, {
         id,
         taskId: 'root-00',
         rule: `fixture-${id}`,
@@ -299,7 +299,8 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
     for (const raw of [RAW, { ...RAW, view: 'attention' }]) {
       const query = queryFor(harness.db, raw)
       expect(
-        await harness.db.all(
+        await rawRows(
+          harness.db,
           inspectCte(
             query,
             '    root_prefix_budget AS MATERIALIZED (',
@@ -309,16 +310,18 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
       ).toEqual([])
       await compare(harness, harness.db, raw)
     }
-    const matching = await harness.db.all<{
+    const matching = await rawRows<{
       id: string
       rid: string | null
-      started_at: number | string
-    }>(prefixRows(queryFor(harness.db, { ...RAW, view: 'attention' })))
+      started_at: number
+    }>(harness.db, prefixRows(queryFor(harness.db, { ...RAW, view: 'attention' })), {
+      started_at: 'int',
+    })
     expect(matching).toEqual([
       {
         id: 'root-00',
         rid: 'root-00',
-        started_at: harness.capabilities.provider === 'postgresql' ? '1000' : 1000,
+        started_at: 1000,
       },
     ])
   })
@@ -351,10 +354,11 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
       await seed(harness.db, fixture.rows)
       await compare(harness, harness.db, fixture.raw)
       const query = queryFor(harness.db, fixture.raw)
-      const oldPrefix = await harness.db.all<Record<string, unknown>>(
+      const oldPrefix = await rawRows<Record<string, unknown>>(
+        harness.db,
         prefixRows(originalQuery(query)),
       )
-      const newPrefix = await harness.db.all<Record<string, unknown>>(prefixRows(query))
+      const newPrefix = await rawRows<Record<string, unknown>>(harness.db, prefixRows(query))
       expect(newPrefix).toEqual(oldPrefix)
       expect(JSON.stringify(newPrefix)).toBe(JSON.stringify(oldPrefix))
       expect(newPrefix.length).toBeLessThanOrEqual(4 * (Number(fixture.raw.limit) + 1))
@@ -368,21 +372,23 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
     ])
     const raw = { ...RAW, q: 'match' }
     const query = queryFor(harness.db, raw)
-    const prefix = await harness.db.all<{
+    const prefix = await rawRows<{
       id: string
       rid: string | null
-      started_at: number | string
-    }>(prefixRows(query))
+      started_at: number
+    }>(harness.db, prefixRows(query), { started_at: 'int' })
     expect(prefix.find((row) => row.id === 'null-family')).toEqual({
       id: 'null-family',
       rid: null,
-      started_at: harness.capabilities.provider === 'postgresql' ? '1200' : 1200,
+      started_at: 1200,
     })
     expect(prefix.find((row) => row.id === 'missing-family')?.rid).toBe('missing-root')
     expect(prefix.some((row) => row.id === 'outside-newest')).toBe(false)
     expect(prefix).toEqual(
-      await harness.db.all<{ id: string; rid: string | null; started_at: number | string }>(
+      await rawRows<{ id: string; rid: string | null; started_at: number }>(
+        harness.db,
         prefixRows(originalQuery(query)),
+        { started_at: 'int' },
       ),
     )
     await compare(harness, harness.db, raw)
@@ -394,6 +400,7 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
     const stop = new Error('rollback W27 prefix fixture')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ startedAt: 1500, inputs: '{ "changed" : [null,2] }', rootTaskId: null })
@@ -407,12 +414,13 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
     expect(await compare(harness, harness.db, RAW)).toEqual(initial)
   })
 })
+// RFC-395 I-b: the inverse includes the shared instr capability; SQL and bindings are still compared on both providers.
 test('the inverse retains the complete W26 source and all original interpolation sites', () => {
   expect(
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('37cc4ba229d6197d3fcb1d1256eb06a0edb7a09b3d7f910cb4630ea31db19324')
+  ).toBe('57b2b2d64552208e15e7dce41b1eb8628cf51c6dabb637184748a3414b296712')
 })
 test('the actual PG compiler preserves original SQL and bindings without executing PG', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []
@@ -440,10 +448,7 @@ test('the actual PG compiler preserves original SQL and bindings without executi
     env: { RFC359_W27_PG_URL: 'postgresql://fixture:fixture@localhost/fixture' },
     poolFactory: () => pool,
   })
-  const provider = currentDatabaseSchemaProvider()
   const db = createPostgresqlDatabaseClient(runtime)
-  selectDatabaseSchemaProvider(provider)
-  const restore = selectDatabaseSchemaProvider('postgresql')
   try {
     for (const raw of [RAW, { ...RAW, q: 'percent%_' }, withCursor(RAW, 890, 'root-11')]) {
       const query = fastFilteredRootQuery(
@@ -454,7 +459,12 @@ test('the actual PG compiler preserves original SQL and bindings without executi
       )
       const start = statements.length
       for (const item of [originalQuery(query), query])
-        await expect(db.all(item)).rejects.toBe(stop)
+        await expect(
+          Promise.resolve(rawRows(db, item)).catch((error: unknown) => {
+            while (error instanceof Error && error.cause !== undefined) error = error.cause
+            throw error
+          }),
+        ).rejects.toBe(stop)
       expect(statements).toHaveLength(start + 2)
       const before = statements[start],
         after = statements[start + 1]
@@ -464,7 +474,6 @@ test('the actual PG compiler preserves original SQL and bindings without executi
       expect(originalBindings(after.sql, after.values, raw)).toEqual(before.values)
     }
   } finally {
-    restore()
     await runtime.close()
   }
 })

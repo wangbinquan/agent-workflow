@@ -1,10 +1,10 @@
 // RFC-359 W4-D14 —— Agent portable-import 的引用快照：一份实现，两个 provider 共用（读在统一 serializable 事务里成一致快照）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { ImportRefType } from '@agent-workflow/shared'
 import { and, eq, inArray, or } from 'drizzle-orm'
-import { resourceGrants, users } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AgentImportReferenceReadPort,
   TransactionBoundImportReferenceReadPort,
@@ -35,7 +35,7 @@ async function readSnapshot(
     ]),
   ]
   for (const type of types) {
-    const table = ACL_TABLES[type]
+    const table = ACL_TABLES(transaction)[type]
     const names = [
       ...new Set(selectors.filter((entry) => entry.type === type).map((entry) => entry.name)),
     ]
@@ -62,6 +62,7 @@ async function readSnapshot(
         )
       rows.push(...providerRows.map((row) => ({ type, ...row })))
     }
+    const { resourceGrants } = tablesOf(transaction)
     const granted =
       hasResourceAclBypass(authority) || !hasPrivateResourceAccess(authority)
         ? []
@@ -80,6 +81,7 @@ async function readSnapshot(
   const ownerIds = [
     ...new Set(rows.flatMap((row) => (row.ownerUserId === null ? [] : [row.ownerUserId]))),
   ]
+  const { users } = tablesOf(transaction)
   const userRows =
     ownerIds.length === 0
       ? []
@@ -107,7 +109,7 @@ export function createImportReferenceReadPortInTransaction(
 }
 
 export function createAgentImportReferenceReadPort(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): AgentImportReferenceReadPort {
   return Object.freeze<AgentImportReferenceReadPort>({
     snapshot: (authority, selectors, selections) =>

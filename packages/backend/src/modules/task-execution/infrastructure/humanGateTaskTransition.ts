@@ -10,6 +10,8 @@
 // 体内传 `tx`。PostgreSQL READ COMMITTED 下 CAS（status + lifecycle_event_revision 双条件 UPDATE）
 // 自身即是并发判据；需要与同任务的其它写手串行时由调用方先 `engineOf(tx).lockAggregateRoot`。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   allowedFromForTaskEvent,
   targetForTaskEvent,
@@ -18,9 +20,8 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 
-import { tasks } from '@/db/schema'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ConcurrentTaskTransition } from '@/platform/persistence/sqlite/taskLifecycle'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
@@ -57,18 +58,20 @@ export type TransitionedHumanGateTask = Readonly<{
 }>
 
 export async function transitionHumanGateTask(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: TransitionHumanGateTaskInput,
 ): Promise<TransitionedHumanGateTask> {
-  const row = await tx
-    .select({
-      status: tasks.status,
-      lifecycleEventRevision: tasks.lifecycleEventRevision,
-      errorSummary: tasks.errorSummary,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, input.taskId))
-    .get()
+  const { tasks } = tablesOf(tx)
+  const row = await first(
+    tx
+      .select({
+        status: tasks.status,
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
+        errorSummary: tasks.errorSummary,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, input.taskId)),
+  )
   if (row === undefined) {
     throw new NotFoundError('task-not-found', `task ${input.taskId} not found`)
   }

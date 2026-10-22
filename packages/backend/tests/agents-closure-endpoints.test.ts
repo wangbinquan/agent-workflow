@@ -10,11 +10,12 @@
 //   3. closure / closure-preview stopped appending placeholder `missing:true`
 //      rows for dangling dependsOn references.
 
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { createAgent } from '../src/services/agent'
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -27,7 +28,7 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   opts: {
     dependsOn?: string[]
@@ -54,7 +55,7 @@ async function seedAgent(
 }
 
 registerProviderApplication('GET /api/agents/:id/closure', (buildHarness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let app: Hono
   beforeEach(() => {
     ;({ db, app } = buildHarness())
@@ -125,7 +126,7 @@ registerProviderApplication('GET /api/agents/:id/closure', (buildHarness) => {
     // depends_on directly.
     const top = await seedAgent(db, 'top')
     const { sql } = await import('drizzle-orm')
-    await db.run(sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
+    await rawExec(db, sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
 
     const res = await req(app, `/api/agents/${top.id}/closure`)
     expect(res.status).toBe(200)
@@ -148,7 +149,7 @@ registerProviderApplication('GET /api/agents/:id/closure', (buildHarness) => {
 })
 
 registerProviderApplication('POST /api/agents/closure-preview', (buildHarness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let app: Hono
   beforeEach(() => {
     ;({ db, app } = buildHarness())
@@ -222,7 +223,7 @@ registerProviderApplication('POST /api/agents/closure-preview', (buildHarness) =
 // 同步闭包交出去——形态与合并前逐字相同。
 function registerProviderApplication(
   name: string,
-  register: (buildHarness: () => { db: ProviderNeutralDatabase; app: Hono }) => void,
+  register: (buildHarness: () => { db: PersistenceDb; app: Hono }) => void,
 ): void {
   describeEachProviderHttpApplication(
     name,

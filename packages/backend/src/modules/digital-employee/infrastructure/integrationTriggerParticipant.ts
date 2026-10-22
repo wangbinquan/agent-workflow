@@ -1,16 +1,17 @@
 // RFC-345 T4c —— 数字员工作为集成触发器资源快照的 owner 参与者，绑定到调用方的事务句柄。
 // RFC-359 W4-D1：一份实现，两个 provider 共用；SQLite 侧不再有 dbTxSync 的同步参与者。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import { employeeDefinitionRevisions, employeeDefinitions, employeeTypePackages } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createDigitalEmployeeIntegrationTriggerParticipant } from '../application/adapters/integration-trigger-resource-adapter'
 
 /** Transaction-bound owner participant for T4c target freezing（两个引擎同一份）。 */
-export function createDigitalEmployeeIntegrationTriggerParticipantIn(tx: DatabaseTransaction) {
+export function createDigitalEmployeeIntegrationTriggerParticipantIn(tx: PersistenceTx) {
   return createDigitalEmployeeIntegrationTriggerParticipant({
     async loadIdentity(employeeDefinitionId) {
+      const { employeeDefinitions } = tablesOf(tx)
       return (
         (
           await tx
@@ -30,6 +31,7 @@ export function createDigitalEmployeeIntegrationTriggerParticipantIn(tx: Databas
       )
     },
     async loadDefinitionRevisionJson(employeeDefinitionId, revision) {
+      const { employeeDefinitionRevisions } = tablesOf(tx)
       return (
         (
           await tx
@@ -46,6 +48,7 @@ export function createDigitalEmployeeIntegrationTriggerParticipantIn(tx: Databas
       )
     },
     async loadTypePackage({ typeId, typeRevision }) {
+      const { employeeTypePackages } = tablesOf(tx)
       return (
         (
           await tx

@@ -14,6 +14,8 @@
 //      摘要携带子任务信息）。
 //   5. freezeCallClosure 纯服务：无 call 节点 → null；引用缺失 →
 //      workflow-call-ref-missing；A→B→A → workflow-call-cycle（id-only 载荷）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
@@ -25,7 +27,6 @@ import { monotonicFactory } from 'ulid'
 import { and, eq } from 'drizzle-orm'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
@@ -143,7 +144,8 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -223,14 +225,15 @@ interface Seeded {
 async function seedParentTask(h: Harness, workerId: string): Promise<Seeded> {
   const childDef = childDefinition(workerId)
   const childWorkflowId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: childWorkflowId,
     name: 'child-wf',
     definition: JSON.stringify(childDef),
   })
   const parentDef = parentDefinition()
   const parentWorkflowId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: parentWorkflowId,
     name: 'parent-wf',
     definition: JSON.stringify(parentDef),
@@ -239,7 +242,7 @@ async function seedParentTask(h: Harness, workerId: string): Promise<Seeded> {
     workflows: { 'child-wf': { id: childWorkflowId, version: 1, definition: childDef } },
   })
   const parentTaskId = ulid()
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: parentTaskId,
     name: 'rfc243-parent',
     workflowId: parentWorkflowId,
@@ -284,6 +287,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     expect(parent.status).toBe('done')
 
@@ -342,6 +346,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       JSON.stringify({ worker: { output: { out: 'CHILD', echo: 'context' } } }),
     )
     const { parentTaskId } = await seedParentTask(h, workerId)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     const closure = JSON.parse(parent.refClosureJson!) as {
       workflows: Record<
@@ -435,6 +440,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       // 子任务 agent 重试烧时间——压到 0 让失败立即冒泡。
       defaultNodeRetries: 0,
     })
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     expect(parent.status).toBe('failed')
     const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
@@ -473,6 +479,7 @@ describe('RFC-243 e2e — 生命周期', () => {
     // 等到子任务出现且 running（budget→iso→launch 全链完成）。
     let childId: string | null = null
     for (let i = 0; i < 200 && childId === null; i++) {
+      const { tasks } = tablesOf(h.db)
       const rows = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
       if (rows[0]?.status === 'running') childId = rows[0].id
       else await Bun.sleep(50)
@@ -480,6 +487,7 @@ describe('RFC-243 e2e — 生命周期', () => {
     expect(childId).not.toBeNull()
     await cancelViaEngine(h.db, parentTaskId)
     await running
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId!)))[0]!
     expect(parent.status).toBe('canceled')
@@ -505,6 +513,7 @@ describe('RFC-243 e2e — 生命周期', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
       defaultNodeRetries: 0,
     })
+    const { nodeRuns, tasks } = tablesOf(h.db)
     const failedCall = (
       await h.db
         .select()
@@ -593,6 +602,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       JSON.stringify({ worker: { output: { out: 'ROUND OUTPUT', echo: 'x' } } }),
     )
     const seeded = await seedParentTask(h, workerId)
+    const { tasks } = tablesOf(h.db)
     // 换成 loop 形态快照（复用已入库的 child-wf 与闭包）。
     await h.db
       .update(tasks)
@@ -648,6 +658,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
         },
       ],
     } as unknown as WorkflowDefinition
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     await h.db
       .update(tasks)
       .set({ workflowSnapshot: JSON.stringify(gitDef) })
@@ -693,6 +704,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     })
     let childId: string | null = null
     for (let i = 0; i < 200 && childId === null; i++) {
+      const { tasks } = tablesOf(h.db)
       const rows = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
       if (rows[0]?.status === 'running') childId = rows[0].id
       else await Bun.sleep(50)
@@ -705,6 +717,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     // 清空（真实重启后该表天然为空）。不等的话子任务仍被本进程持有，
     // resume 会以 task-active 冲突——那是测试假象，不是恢复语义。
     for (let i = 0; i < 200; i++) {
+      const { tasks } = tablesOf(h.db)
       const rows = await h.db.select().from(tasks)
       if (!rows.some((t) => isTaskActive(t.id))) break
       await Bun.sleep(50)
@@ -721,6 +734,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       awaitScheduler: true,
       runConfig: { binaryOverride: ['bun', 'run', h.mockPath] },
     }).resume(parentTaskId)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
     expect(`${parent.status}:${parent.errorSummary ?? ''}:${parent.errorMessage ?? ''}`).toBe(
       'done::',
@@ -749,7 +763,8 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     // 构造崩溃后现场：子任务 done + 输出行在库；调用行 interrupted、
     // mergeState='merged'（合并早已完成）；父任务 pending 等待重驱。
     const childId = ulid()
-    await h.db.insert(tasks).values({
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, tasks, {
       id: childId,
       name: 'seeded-child',
       workflowId: childWorkflowId,
@@ -767,7 +782,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       spaceKind: 'inherited',
     })
     const childOut = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: childOut,
       taskId: childId,
       nodeId: 'cout',
@@ -777,14 +792,14 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       startedAt: Date.now() - 60_000,
       finishedAt: Date.now() - 30_000,
     })
-    await h.db.insert(nodeRunOutputs).values({
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: childOut,
       portName: 'report',
       content: 'MERGED ALREADY',
       kind: 'text',
     })
     const callRun = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: callRun,
       taskId: parentTaskId,
       nodeId: 'call1',
@@ -823,7 +838,8 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
     const { parentTaskId } = await seedParentTask(h, workerId)
     const callRun = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: callRun,
       taskId: parentTaskId,
       nodeId: 'call1',
@@ -878,14 +894,15 @@ describe('RFC-243 §3.1 — freezeCallClosure', () => {
     }
     const idA = ulid()
     const idB = ulid()
-    await db.insert(workflows).values({ id: idB, name: 'wf-b', definition: JSON.stringify(defB) })
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, { id: idB, name: 'wf-b', definition: JSON.stringify(defB) })
     const defA = {
       $schema_version: 4,
       inputs: [],
       nodes: [{ id: 'ca', kind: 'call-workflow', workflowName: 'wf-b' }],
       edges: [],
     }
-    await db.insert(workflows).values({ id: idA, name: 'wf-a', definition: JSON.stringify(defA) })
+    await insertOne(db, workflows, { id: idA, name: 'wf-a', definition: JSON.stringify(defA) })
     const err = await freezeCallClosure(
       db,
       { id: idA, definition: defA as unknown as WorkflowDefinition },

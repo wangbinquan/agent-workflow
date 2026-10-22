@@ -12,6 +12,9 @@
 // 成 `memories` 时 SQLite 是否重写这两条自引用**依赖 legacy_alter_table 模式**，
 // 而 daemon 迁移期跑在 foreign_keys=OFF、直连 migrator 与测试跑在 ON。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec, queryWrite, queryRows, rawRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,8 +23,6 @@ import { sql } from 'drizzle-orm'
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, memories, repoGroups } from '../src/db/schema'
-
 // Historical 0131-only ORM projection. The current production schema no
 // longer exports the table removed by migration 0134.
 const legacyRepoGroupAttachments = sqliteTable(
@@ -58,7 +59,9 @@ function makeRepo(db: DbClient, slug: string): string {
   // This fixture intentionally stops at 0133, where the historical plaintext
   // column still exists. Use raw SQL instead of the HEAD ORM projection (0147
   // removes that column) so the frozen physical schema remains authoritative.
-  db.run(sql`
+  rawExec(
+    db,
+    sql`
     INSERT INTO cached_repos (
       id, url_hash, url, url_redacted, local_path, default_branch,
       last_fetched_at, created_at
@@ -66,14 +69,16 @@ function makeRepo(db: DbClient, slug: string): string {
       ${id}, ${slug.padEnd(8, '0').slice(0, 8)}, ${url}, ${url},
       ${`/tmp/repos/${slug}`}, 'main', ${now}, ${now}
     )
-  `)
+  `,
+  )
   return id
 }
 
 function makeGroup(db: DbClient, name: string): string {
   const id = ulid()
   const now = Date.now()
-  db.insert(repoGroups).values({ id, name, description: '', createdAt: now, updatedAt: now }).run()
+  const { repoGroups } = tablesOf(db)
+  insertOne(db, repoGroups, { id, name, description: '', createdAt: now, updatedAt: now })
   return id
 }
 
@@ -94,56 +99,54 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
   test('kind=repo 必须带 cached_repo_id 且不带 child_group_id', () => {
     const g = makeGroup(db, 'g')
     const r = makeRepo(db, 'app')
-    db.insert(legacyRepoGroupAttachments)
-      .values({ groupId: g, memberIndex: 0, kind: 'repo', cachedRepoId: r, mountPath: '' })
-      .run()
+    insertOne(db, legacyRepoGroupAttachments, {
+      groupId: g,
+      memberIndex: 0,
+      kind: 'repo',
+      cachedRepoId: r,
+      mountPath: '',
+    })
     // 两个都给 → CHECK 失败
     expect(() =>
-      db
-        .insert(legacyRepoGroupAttachments)
-        .values({
-          groupId: g,
-          memberIndex: 1,
-          kind: 'repo',
-          cachedRepoId: r,
-          childGroupId: g,
-          mountPath: 'x',
-        })
-        .run(),
+      insertOne(db, legacyRepoGroupAttachments, {
+        groupId: g,
+        memberIndex: 1,
+        kind: 'repo',
+        cachedRepoId: r,
+        childGroupId: g,
+        mountPath: 'x',
+      }),
     ).toThrow()
     // 都不给 → CHECK 失败
     expect(() =>
-      db
-        .insert(legacyRepoGroupAttachments)
-        .values({ groupId: g, memberIndex: 2, kind: 'repo', mountPath: 'y' })
-        .run(),
+      insertOne(db, legacyRepoGroupAttachments, {
+        groupId: g,
+        memberIndex: 2,
+        kind: 'repo',
+        mountPath: 'y',
+      }),
     ).toThrow()
   })
 
   test('kind=group 不得携带 ref / subdir（D19：内层组的 ref 听它自己的）', () => {
     const outer = makeGroup(db, 'outer')
     const inner = makeGroup(db, 'inner')
-    db.insert(legacyRepoGroupAttachments)
-      .values({
+    insertOne(db, legacyRepoGroupAttachments, {
+      groupId: outer,
+      memberIndex: 0,
+      kind: 'group',
+      childGroupId: inner,
+      mountPath: 'b',
+    })
+    expect(() =>
+      insertOne(db, legacyRepoGroupAttachments, {
         groupId: outer,
-        memberIndex: 0,
+        memberIndex: 1,
         kind: 'group',
         childGroupId: inner,
-        mountPath: 'b',
-      })
-      .run()
-    expect(() =>
-      db
-        .insert(legacyRepoGroupAttachments)
-        .values({
-          groupId: outer,
-          memberIndex: 1,
-          kind: 'group',
-          childGroupId: inner,
-          mountPath: 'c',
-          ref: 'main',
-        })
-        .run(),
+        mountPath: 'c',
+        ref: 'main',
+      }),
     ).toThrow()
   })
 
@@ -153,52 +156,63 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
     // 就把非法 kind 连带整个对象一起拒掉，@ts-expect-error 反而挂错了位置）。
     const g = makeGroup(db, 'g')
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO repo_group_members (group_id, member_index, kind, child_group_id, mount_path)
         VALUES (${g}, 0, 'wat', ${g}, '')
-      `),
+      `,
+      ),
     ).toThrow()
   })
 
   test('删组级联删成员行', () => {
     const g = makeGroup(db, 'g')
     const r = makeRepo(db, 'app')
-    db.insert(legacyRepoGroupAttachments)
-      .values({ groupId: g, memberIndex: 0, kind: 'repo', cachedRepoId: r, mountPath: '' })
-      .run()
-    db.run(sql`PRAGMA foreign_keys = ON`)
-    db.delete(repoGroups)
-      .where(sql`id = ${g}`)
-      .run()
-    expect(db.select().from(legacyRepoGroupAttachments).all()).toHaveLength(0)
+    insertOne(db, legacyRepoGroupAttachments, {
+      groupId: g,
+      memberIndex: 0,
+      kind: 'repo',
+      cachedRepoId: r,
+      mountPath: '',
+    })
+    rawExec(db, sql`PRAGMA foreign_keys = ON`)
+    const { repoGroups } = tablesOf(db)
+    queryWrite(db.delete(repoGroups).where(sql`id = ${g}`))
+    expect(queryRows(db.select().from(legacyRepoGroupAttachments))).toHaveLength(0)
   })
 
   test('cached_repo_id **不**级联——删仓必须走显式守卫（D13）', () => {
     // 静默级联会让组悄悄少一个仓，用户下次启动才发现。
     const g = makeGroup(db, 'g')
     const r = makeRepo(db, 'app')
-    db.insert(legacyRepoGroupAttachments)
-      .values({ groupId: g, memberIndex: 0, kind: 'repo', cachedRepoId: r, mountPath: '' })
-      .run()
-    db.run(sql`PRAGMA foreign_keys = ON`)
-    expect(() =>
-      db
-        .delete(cachedRepos)
-        .where(sql`id = ${r}`)
-        .run(),
-    ).toThrow()
+    insertOne(db, legacyRepoGroupAttachments, {
+      groupId: g,
+      memberIndex: 0,
+      kind: 'repo',
+      cachedRepoId: r,
+      mountPath: '',
+    })
+    rawExec(db, sql`PRAGMA foreign_keys = ON`)
+    expect(() => {
+      const { cachedRepos } = tablesOf(db)
+      return queryWrite(db.delete(cachedRepos).where(sql`id = ${r}`))
+    }).toThrow()
   })
 
   test('tasks / task_repos 的新列存在且默认值正确', () => {
-    const taskCols = db.all<{ name: string; dflt_value: string | null }>(
+    const taskCols = rawRows<{ name: string; dflt_value: string | null }>(
+      db,
       sql`SELECT name, dflt_value FROM pragma_table_info('tasks')`,
     )
     const names = taskCols.map((c) => c.name)
     expect(names).toContain('repo_group_id')
     expect(names).toContain('repo_group_name')
 
-    const trCols = db.all<{ name: string; dflt_value: string | null; notnull: number }>(
+    const trCols = rawRows<{ name: string; dflt_value: string | null; notnull: number }>(
+      db,
       sql`SELECT name, dflt_value, "notnull" FROM pragma_table_info('task_repos')`,
+      { notnull: 'int' },
     )
     const byName = new Map(trCols.map((c) => [c.name, c]))
     expect(byName.has('mount_path')).toBe(true)
@@ -223,14 +237,16 @@ describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1�
   // 架空。这一组测试从 `sqlite_master` 读真实 DDL 来钉死它们。
 
   function ddlOf(table: string): string {
-    const rows = db.all<{ sql: string }>(
+    const rows = rawRows<{ sql: string }>(
+      db,
       sql`SELECT sql FROM sqlite_master WHERE type='table' AND name=${table}`,
     )
     return rows[0]?.sql ?? ''
   }
 
   test('repo_groups 的 lower(name) 表达式唯一索引存在', () => {
-    const idx = db.all<{ name: string; sql: string }>(
+    const idx = rawRows<{ name: string; sql: string }>(
+      db,
       sql`SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='repo_groups'`,
     )
     const ci = idx.find((i) => i.name === 'idx_repo_groups_name_ci')
@@ -253,7 +269,8 @@ describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1�
   })
 
   test('两条外键刻意**不带** ON DELETE CASCADE（删除走显式守卫，D13）', () => {
-    const fks = db.all<{ table: string; from: string; on_delete: string }>(
+    const fks = rawRows<{ table: string; from: string; on_delete: string }>(
+      db,
       sql`SELECT "table", "from", "on_delete" FROM pragma_foreign_key_list('repo_group_members')`,
     )
     const byFrom = new Map(fks.map((f) => [f.from, f]))
@@ -265,9 +282,14 @@ describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1�
   })
 
   test('task_repos 的四个新列都是 migration 里声明的形态', () => {
-    const cols = db.all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(
-      sql`SELECT name, type, "notnull", dflt_value FROM pragma_table_info('task_repos')`,
-    )
+    const cols = rawRows<{
+      name: string
+      type: string
+      notnull: number
+      dflt_value: string | null
+    }>(db, sql`SELECT name, type, "notnull", dflt_value FROM pragma_table_info('task_repos')`, {
+      notnull: 'int',
+    })
     const by = new Map(cols.map((c) => [c.name, c]))
     expect(by.get('mount_path')).toMatchObject({ notnull: 1, dflt_value: "''" })
     expect(by.get('subdir')).toMatchObject({ notnull: 1, dflt_value: "''" })
@@ -283,21 +305,26 @@ describe('migration 0132 — memories.scope_type 扩到 repo_group', () => {
   })
 
   function insertMemory(scopeType: string, scopeId: string | null): void {
-    db.run(sql`
+    rawExec(
+      db,
+      sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
       VALUES (${ulid()}, ${scopeType}, ${scopeId}, 't', 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
-    `)
+    `,
+    )
   }
 
   test('repo_group 被 CHECK 接受', () => {
     expect(() => insertMemory('repo_group', ulid())).not.toThrow()
-    expect(db.select().from(memories).all()).toHaveLength(1)
+    const { memories } = tablesOf(db)
+    expect(queryRows(db.select().from(memories))).toHaveLength(1)
   })
 
   test('四种旧 scope 仍然接受（重建没有收窄枚举）', () => {
     for (const s of ['agent', 'workflow', 'repo']) insertMemory(s, ulid())
     insertMemory('global', null)
-    expect(db.select().from(memories).all()).toHaveLength(4)
+    const { memories } = tablesOf(db)
+    expect(queryRows(db.select().from(memories))).toHaveLength(4)
   })
 
   test('未知 scope 仍被 CHECK 拒绝', () => {
@@ -314,19 +341,20 @@ describe('migration 0132 — memories.scope_type 扩到 repo_group', () => {
   })
 
   test('RFC-223 的融合溯源列与索引都还在（照抄 0048 就会红）', () => {
-    const cols = db
-      .all<{ name: string }>(sql`SELECT name FROM pragma_table_info('memories')`)
-      .map((c) => c.name)
+    const cols = rawRows<{ name: string }>(
+      db,
+      sql`SELECT name FROM pragma_table_info('memories')`,
+    ).map((c) => c.name)
     expect(cols).toContain('fused_into_skill_id')
     expect(cols).toContain('fused_into_skill_version')
     expect(cols).toContain('fused_fusion_id')
     // 24 列——0117 的权威列集，一列不多一列不少。
     expect(cols).toHaveLength(24)
 
-    const idx = db
-      .all<{ name: string }>(
-        sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories' AND name LIKE 'idx_memories_%'`,
-      )
+    const idx = rawRows<{ name: string }>(
+      db,
+      sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories' AND name LIKE 'idx_memories_%'`,
+    )
       .map((r) => r.name)
       .sort()
     expect(idx).toEqual([
@@ -343,26 +371,31 @@ describe('migration 0132 — memories.scope_type 扩到 repo_group', () => {
   test('fused 的双向 CHECK 没被重建弄丢', () => {
     // status='fused' ⟺ fused_into_skill IS NOT NULL ⟺ fused_into_skill_id IS NOT NULL
     expect(() =>
-      db.run(sql`
+      rawExec(
+        db,
+        sql`
         INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
         VALUES (${ulid()}, 'repo', ${ulid()}, 't', 'b', '[]', 'fused', 'manual', ${Date.now()}, 1)
-      `),
+      `,
+      ),
     ).toThrow()
   })
 
   test('两条自引用 FK 在重建后仍指向 memories 自己', () => {
     // rename-first 顺序就是为了这条：先建 `__new_memories` 再 rename 的话，
     // 自引用可能被 SQLite 留在 `__new_memories` 上（依赖 legacy_alter_table 模式）。
-    const fks = db.all<{ table: string; from: string }>(
+    const fks = rawRows<{ table: string; from: string }>(
+      db,
       sql`SELECT "table", "from" FROM pragma_foreign_key_list('memories')`,
     )
     const selfRefs = fks.filter((f) => f.table === 'memories').map((f) => f.from)
     expect(selfRefs.sort()).toEqual(['superseded_by_id', 'supersedes_id'])
-    expect(db.all(sql`PRAGMA foreign_key_check('memories')`)).toHaveLength(0)
+    expect(rawRows(db, sql`PRAGMA foreign_key_check('memories')`)).toHaveLength(0)
   })
 
   test('迁移用的临时断言表不留在库里', () => {
-    const leftovers = db.all<{ name: string }>(
+    const leftovers = rawRows<{ name: string }>(
+      db,
       sql`SELECT name FROM sqlite_master WHERE name LIKE '%rfc248_assert%' OR name LIKE '__old_memories'`,
     )
     expect(leftovers).toHaveLength(0)

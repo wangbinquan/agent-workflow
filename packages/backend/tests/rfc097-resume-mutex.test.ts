@@ -19,6 +19,8 @@
 // 子进程完成之前就走完自己的 getTask + 状态门/CAS——要么 fast-path 读到 pending 409，
 // 要么 CAS affected=0 ConcurrentTaskTransition 409，两条路映射同一 code。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -29,7 +31,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -124,7 +125,8 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
   const workerId = ulid()
-  await db.insert(agents).values({
+  const { agents, workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, agents, {
     id: workerId,
     name: 'worker',
     description: 'test',
@@ -147,12 +149,12 @@ async function buildHarness(): Promise<Harness> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf-rfc097-mutex',
     definition: JSON.stringify(definition),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc097-mutex-task',
     workflowId,
@@ -170,7 +172,7 @@ async function buildHarness(): Promise<Harness> {
     failedNodeId: 'work',
   })
   const failedRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: failedRunId,
     taskId,
     nodeId: 'work',
@@ -241,8 +243,9 @@ async function waitFor(cond: () => boolean, what: string): Promise<void> {
 async function waitForTerminalTask(
   db: DbClient,
   taskId: string,
-): Promise<typeof tasks.$inferSelect> {
+): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
+    const { tasks } = tablesOf(db)
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
@@ -280,6 +283,7 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
+    const { nodeRuns } = tablesOf(h.db)
     // node_runs 无双份新行：seed failed(retryIndex 0) + 调度器恰一份新行，
     // retryIndex 不重复——若两个调度器都被 kick，这里会出现重复 retryIndex / 第三行。
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
@@ -313,6 +317,7 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
+    const { nodeRuns } = tablesOf(h.db)
     // 占位行 oracle：retry 赢者恰铸 1 行 errorMessage='queued for retry'；
     // 输者在 CAS 处出局（回滚与铸行都在 CAS 之后），不得多铸。
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))

@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   McpLocalConfigSchema,
   McpRemoteConfigSchema,
@@ -10,8 +11,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { mcps } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import {
@@ -82,7 +82,7 @@ export interface LegacyPreparedMcpCreate {
 
 export interface LegacyPreparedMcpUpdate {
   readonly id: string
-  readonly set: Partial<typeof mcps.$inferInsert>
+  readonly set: Partial<PersistenceTables['mcps']['$inferInsert']>
   readonly expectedConfigHash?: string
   readonly expectedOwnerUserId?: string | null
 }
@@ -105,6 +105,7 @@ export async function prepareLegacyMcpCreate(
 ): Promise<LegacyPreparedMcpCreate> {
   const ownerUserId = options.ownerUserId ?? null
   assertInitialResourceOwner(options.actor, ownerUserId)
+  const { mcps } = tablesOf(db)
   const occupied = await db
     .select({ id: mcps.id })
     .from(mcps)
@@ -128,6 +129,7 @@ export async function prepareLegacyMcpCreate(
 }
 
 export async function loadLegacyMcpById(db: DbClient, id: string): Promise<Mcp | null> {
+  const { mcps } = tablesOf(db)
   const row = (await db.select().from(mcps).where(eq(mcps.id, id)).limit(1))[0]
   return row === undefined ? null : mcpFromPersistenceRow(row)
 }
@@ -138,7 +140,7 @@ export type McpInsertRecord = Omit<McpCreateRecord, 'ownerUserId'> & {
 
 export type McpRowMatch =
   | { readonly kind: 'id'; readonly id: string }
-  | { readonly kind: 'captured-row'; readonly row: typeof mcps.$inferSelect }
+  | { readonly kind: 'captured-row'; readonly row: PersistenceTables['mcps']['$inferSelect'] }
 
 /** The caller retains its explicit schema version or database-default mechanism. */
 export function createMcpInsertValues(record: McpInsertRecord) {
@@ -154,13 +156,14 @@ export function createMcpInsertValues(record: McpInsertRecord) {
     aclRevision: record.aclRevision,
     createdAt: record.now,
     updatedAt: record.now,
-  } satisfies Omit<typeof mcps.$inferInsert, 'schemaVersion'>
+  } satisfies Omit<PersistenceTables['mcps']['$inferInsert'], 'schemaVersion'>
 }
 
 export async function insertMcpRowInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   record: McpInsertRecord,
 ): Promise<McpPersistenceRow[]> {
+  const { mcps } = tablesOf(tx)
   return await tx
     .insert(mcps)
     .values({
@@ -170,7 +173,8 @@ export async function insertMcpRowInTx(
     .returning()
 }
 
-function fullMcpRowWhere(row: typeof mcps.$inferSelect) {
+function fullMcpRowWhere(db: object, row: PersistenceTables['mcps']['$inferSelect']) {
+  const { mcps } = tablesOf(db)
   return and(
     eq(mcps.id, row.id),
     eq(mcps.name, row.name),
@@ -188,19 +192,20 @@ function fullMcpRowWhere(row: typeof mcps.$inferSelect) {
 }
 
 export async function updateMcpRowInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   match: McpRowMatch,
-  set: Partial<typeof mcps.$inferInsert>,
+  set: Partial<PersistenceTables['mcps']['$inferInsert']>,
 ): Promise<McpPersistenceRow[]> {
+  const { mcps } = tablesOf(tx)
   return await tx
     .update(mcps)
     .set(set)
-    .where(match.kind === 'id' ? eq(mcps.id, match.id) : fullMcpRowWhere(match.row))
+    .where(match.kind === 'id' ? eq(mcps.id, match.id) : fullMcpRowWhere(tx, match.row))
     .returning()
 }
 
 export async function commitLegacyMcpCreateInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   prepared: LegacyPreparedMcpCreate,
 ): Promise<void> {
   await insertMcpRowInTx(tx, {
@@ -212,9 +217,10 @@ export async function commitLegacyMcpCreateInTx(
 }
 
 export async function commitLegacyMcpUpdateInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   prepared: LegacyPreparedMcpUpdate,
 ): Promise<void> {
+  const { mcps } = tablesOf(tx)
   const row = (await tx.select().from(mcps).where(eq(mcps.id, prepared.id)).limit(1))[0]
   if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
   if (

@@ -24,7 +24,7 @@ import { renderRosterBlock } from '../src/modules/resource-catalog/application/w
 import { buildRosterAgentCards } from '../src/services/workgroup/state'
 
 import { createAgent } from '../src/services/agent'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const PLANNER_ID = 'agent-planner'
@@ -151,7 +151,7 @@ describe('renderRosterBlock — RFC-166 capability card injection (pure)', () =>
 })
 
 describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
-  async function seed(db: ProviderNeutralDatabase) {
+  async function seed(db: PersistenceDb) {
     await createAgent(db, agentPayload('planner', { description: 'plans the work' }), {
       id: PLANNER_ID,
     })

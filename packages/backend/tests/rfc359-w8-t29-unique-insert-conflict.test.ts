@@ -64,19 +64,13 @@
 // 相关：架构账本 `tests/architecture/rfc359-w8-t29-unnormalized-unique-insert.test.ts` 数「这个形状
 // 还剩几处」，本文件回答「其中哪几处真会咬人」——两半合起来才是一条完整的判据（同 W6-T28 的分工）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  committedEventFamilyCutovers,
-  mcps,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { LineageSlot } from '@/modules/task-execution/domain/executionIntent'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
@@ -145,9 +139,10 @@ function settledShapes<T>(
   )
 }
 
-async function seedCachedRepo(db: ProviderNeutralDatabase): Promise<string> {
+async function seedCachedRepo(db: PersistenceDb): Promise<string> {
   const id = `cr_${ulid()}`
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id,
     urlHash: `h_${id}`,
     urlRedacted: `https://example.invalid/${id}.git`,
@@ -163,10 +158,11 @@ const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
 ]
 
-async function seedTaskRow(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTaskRow(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -174,7 +170,7 @@ async function seedTaskRow(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -346,6 +342,7 @@ describeEachProvider('RFC-359 W8-T29 —— 同一聚合上两条并发的 commi
   test('两条都落库、序号是 1 和 2；READ COMMITTED 与 SERIALIZABLE 两种 opener 都成立', async () => {
     const db = harness.db
     const session = databaseSessionFor(db)
+    const { committedEventFamilyCutovers } = tablesOf(db)
     // cutover 处于 legacy 时 append 不落行、直接返回空 eventRef——那样这条用例测不到任何东西。
     await db
       .update(committedEventFamilyCutovers)
@@ -396,9 +393,10 @@ describeEachProvider('RFC-359 W8-T29 —— SERIALIZABLE 只兜得住「读过�
       const username = `t29-same-${ulid().toLowerCase()}`
       const run = () =>
         session.serializable(async (tx) => {
+          const { users } = tablesOf(tx)
           const hit = await tx.select().from(users).where(eq(users.username, username)).limit(1)
           if (hit.length > 0) return 'already-there'
-          await tx.insert(users).values({
+          await insertOne(tx, users, {
             id: `u_${ulid()}`,
             username,
             displayName: username,
@@ -420,9 +418,10 @@ describeEachProvider('RFC-359 W8-T29 —— SERIALIZABLE 只兜得住「读过�
       const username = `t29-cross-${ulid().toLowerCase()}`
       const run = () =>
         session.serializable(async (tx) => {
+          const { mcps, users } = tablesOf(tx)
           const unrelated = await tx.select({ id: mcps.id }).from(mcps)
           if (unrelated.length > 99) return 'already-there'
-          await tx.insert(users).values({
+          await insertOne(tx, users, {
             id: `u_${ulid()}`,
             username,
             displayName: username,

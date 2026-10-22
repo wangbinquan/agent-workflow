@@ -2,12 +2,13 @@
 // ownership contract.  This oracle locks the SQLite behavior and proves the
 // PostgreSQL implementation fences the same exact owner tuple and lease epoch.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import { taskRepos, tasks } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   createOwnershipToken,
@@ -70,7 +71,10 @@ function postgresqlFixture(responses: Response[]) {
       return rows({ objects: [{ generation_id: 'dbg_task_execution_pg' }] })
     return rows(responses.shift() ?? {})
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -96,47 +100,40 @@ function postgresqlFixture(responses: Response[]) {
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
 describe('RFC-349 task-execution provider adapters', () => {
   test('SQLite aggregate admits, claims, and heartbeats through Promise ports', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    db.insert(tasks)
-      .values({
-        id: 'task-1',
-        name: 'task-1',
-        workflowId: 'workflow-1',
-        workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-        workflowVersion: 1,
-        repoPath: '/tmp/repo',
-        worktreePath: '/tmp/worktree',
-        baseBranch: 'main',
-        branch: 'agent-workflow/task-1',
-        status: 'pending',
-        inputs: '{}',
-        startedAt: 1,
-        executionLineageId: 'task-1',
-        lineageSlotPathJson: canonicalJson([
-          {
-            stableNodeKey: 'task-root',
-            frozenOccurrenceKey: 'task-1',
-            workflowRevision: 1,
-          },
-        ]),
-      })
-      .run()
-    db.insert(taskRepos)
-      .values({
-        taskId: 'task-1',
-        repoIndex: 0,
-        repoPath: '/tmp/repo',
-        baseBranch: 'main',
-        branch: 'agent-workflow/task-1',
-        worktreePath: '/tmp/worktree',
-      })
-      .run()
+    const { tasks, taskRepos } = tablesOf(db)
+    insertOne(db, tasks, {
+      id: 'task-1',
+      name: 'task-1',
+      workflowId: 'workflow-1',
+      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+      workflowVersion: 1,
+      repoPath: '/tmp/repo',
+      worktreePath: '/tmp/worktree',
+      baseBranch: 'main',
+      branch: 'agent-workflow/task-1',
+      status: 'pending',
+      inputs: '{}',
+      startedAt: 1,
+      executionLineageId: 'task-1',
+      lineageSlotPathJson: canonicalJson([
+        {
+          stableNodeKey: 'task-root',
+          frozenOccurrenceKey: 'task-1',
+          workflowRevision: 1,
+        },
+      ]),
+    })
+    insertOne(db, taskRepos, {
+      taskId: 'task-1',
+      repoIndex: 0,
+      repoPath: '/tmp/repo',
+      baseBranch: 'main',
+      branch: 'agent-workflow/task-1',
+      worktreePath: '/tmp/worktree',
+    })
     const persistence = createTaskExecutionPersistence(db)
     await expect(persistence.drive.load('task-1')).resolves.toMatchObject({
       task: { id: 'task-1', status: 'pending' },
@@ -378,7 +375,7 @@ describe('RFC-349 task-execution provider adapters', () => {
     })
     expect(
       fake.executions.filter((execution) =>
-        execution.sql.includes('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'),
+        /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY/i.test(execution.sql),
       ),
     ).toHaveLength(1)
   })

@@ -7,6 +7,7 @@
 // task row is created. When passed, launchTestTask must NOT shell out to git;
 // when omitted, behavior is identical to the pre-RFC-020 path.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   beforeAll,
   afterEach,
@@ -25,7 +26,6 @@ import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { eq } from 'drizzle-orm'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
@@ -210,8 +210,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
       } as unknown as StartTask,
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,
@@ -249,8 +248,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
       } as unknown as StartTask,
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,
@@ -265,6 +263,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
 
   test('RFC-292: manual launch rejects trigger-dependent workflow before repo materialization and task INSERT', async () => {
     const { appHome, db, stubOpencode, wf } = await setup()
+    const { workflows, tasks } = tablesOf(db)
     const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]!
     const definition = JSON.parse(row.definition) as {
       $schema_version: number
@@ -288,8 +287,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
         } as unknown as StartTask,
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,
           binaryOverride: [stubOpencode],
         },
@@ -301,6 +299,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
 
   test('RFC-292: nested trigger context reaches the first agent prompt without root-input flattening', async () => {
     const { appHome, repoPath, db, stubOpencode, wf } = await setup()
+    const { workflows, nodeRuns } = tablesOf(db)
     const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]!
     const definition = JSON.parse(row.definition) as {
       $schema_version: number
@@ -323,8 +322,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
       } as unknown as StartTask,
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,

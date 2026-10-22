@@ -2,6 +2,8 @@
 // 投递审计 / 回放读模型（含 loose index scan 的仓库路径枚举）、MR 启动守卫与终态 effect 持久化（统一事务 +
 // 引擎能力矩阵的 advisory lock）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -9,19 +11,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  tasks,
-  users,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-  webhookMrLaunchGuards,
-  webhookMrStreamStates,
-  webhookTriggers,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCodeHostEventResponseDirectory } from '@/modules/integration/infrastructure/codeHostEventResponseDirectory'
 import {
   createMrLaunchGuardPersistence,
@@ -34,9 +24,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedUser(db: ProviderNeutralDatabase, role: 'admin' | 'user' = 'user') {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'user') {
   const id = `u_b4b_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -56,13 +47,14 @@ function actorFor(userId: string, role: 'admin' | 'user' = 'user'): Actor {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   owner: string,
-  extra: Partial<typeof tasks.$inferInsert> = {},
+  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ) {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -70,7 +62,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -88,9 +80,10 @@ async function seedTask(
   return id
 }
 
-async function seedEndpoint(db: ProviderNeutralDatabase) {
+async function seedEndpoint(db: PersistenceDb) {
   const id = `ep_${ulid()}`
-  await db.insert(webhookEndpoints).values({
+  const { webhookEndpoints } = tablesOf(db)
+  await insertOne(db, webhookEndpoints, {
     id,
     name: 'gl',
     provider: 'gitlab',
@@ -102,13 +95,14 @@ async function seedEndpoint(db: ProviderNeutralDatabase) {
 }
 
 async function seedTrigger(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   endpointId: string,
   owner: string,
-  extra: Partial<typeof webhookTriggers.$inferInsert> = {},
+  extra: Partial<PersistenceTables['webhookTriggers']['$inferInsert']> = {},
 ) {
   const id = `tr_${ulid()}`
-  await db.insert(webhookTriggers).values({
+  const { webhookTriggers } = tablesOf(db)
+  await insertOne(db, webhookTriggers, {
     id,
     name: `trigger ${id.slice(-4)}`,
     endpointId,
@@ -126,12 +120,13 @@ async function seedTrigger(
 }
 
 async function seedDelivery(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   endpointId: string,
-  extra: Partial<typeof webhookDeliveries.$inferInsert> = {},
+  extra: Partial<PersistenceTables['webhookDeliveries']['$inferInsert']> = {},
 ) {
   const id = `dl_${ulid()}`
-  await db.insert(webhookDeliveries).values({
+  const { webhookDeliveries } = tablesOf(db)
+  await insertOne(db, webhookDeliveries, {
     id,
     endpointId,
     eventUuid: null,
@@ -256,7 +251,8 @@ describeEachProvider('RFC-359 W4-B4b —— 事件响应目录与派发持久化
     expect(await dispatch.subscriptionEnvelope('missing')).toBeNull()
 
     const effectId = `effect_${ulid()}`
-    await db.insert(webhookMrControlEffects).values({
+    const { webhookMrControlEffects } = tablesOf(db)
+    await insertOne(db, webhookMrControlEffects, {
       id: effectId,
       deliveryId,
       endpointId,
@@ -310,7 +306,8 @@ describeEachProvider('RFC-359 W4-B4b —— 投递审计读模型', (harness) =>
     const visibleTask = await seedTask(db, owner)
     const hiddenTask = await seedTask(db, stranger)
     const effectId = `effect_${ulid()}`
-    await db.insert(webhookMrControlEffects).values({
+    const { webhookMrControlEffects, webhookMrControlTargets } = tablesOf(db)
+    await insertOne(db, webhookMrControlEffects, {
       id: effectId,
       deliveryId,
       endpointId,
@@ -325,7 +322,7 @@ describeEachProvider('RFC-359 W4-B4b —— 投递审计读模型', (harness) =>
       updatedAt: 1,
     })
     for (const taskId of [visibleTask, hiddenTask]) {
-      await db.insert(webhookMrControlTargets).values({
+      await insertOne(db, webhookMrControlTargets, {
         effectId,
         taskId,
         priorStatus: 'running',
@@ -357,7 +354,8 @@ describeEachProvider('RFC-359 W4-B4b —— MR 启动守卫与终态 effect', (h
     const db = harness.db
     const endpointId = await seedEndpoint(db)
     const streamKey = `gitlab:77:${ulid()}`
-    await db.insert(webhookMrStreamStates).values({
+    const { webhookMrStreamStates, webhookMrLaunchGuards, webhookMrControlEffects } = tablesOf(db)
+    await insertOne(db, webhookMrStreamStates, {
       endpointId,
       streamKey,
       projectId: '77',
@@ -436,7 +434,7 @@ describeEachProvider('RFC-359 W4-B4b —— MR 启动守卫与终态 effect', (h
       [restartReserved, 'reserved', null],
       [committed, 'task-committed', 'task-9'],
     ] as const) {
-      await db.insert(webhookMrLaunchGuards).values({
+      await insertOne(db, webhookMrLaunchGuards, {
         id,
         endpointId,
         streamKey,
@@ -478,7 +476,7 @@ describeEachProvider('RFC-359 W4-B4b —— MR 启动守卫与终态 effect', (h
       [older, 1, 10],
       [newer, 2, 11],
     ] as const) {
-      await db.insert(webhookMrControlEffects).values({
+      await insertOne(db, webhookMrControlEffects, {
         id,
         deliveryId: `delivery-${id}`,
         endpointId,

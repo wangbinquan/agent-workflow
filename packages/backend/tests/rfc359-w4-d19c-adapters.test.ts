@@ -6,20 +6,14 @@
 // 补一条端到端的回合断言：领队一轮派单 → 成员执行 → 领队收敛 done，沿途的房间消息、卡片状态与任务收场
 // 在两边逐字一致。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-  workgroupMessages,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,
@@ -77,9 +71,10 @@ function squadConfig(leaderAgentId: string, workerAgentId: string): Record<strin
   }
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: '',
@@ -90,21 +85,22 @@ async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<str
   return id
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const leaderAgentId = await seedAgent(db, `d19c-leader-${ulid().slice(-6).toLowerCase()}`)
   const workerAgentId = await seedAgent(db, `d19c-worker-${ulid().slice(-6).toLowerCase()}`)
   const config = squadConfig(leaderAgentId, workerAgentId)
   // 名册按 agentName 解析，所以配置里的名字要与刚落库的行一致。
   const members = config.members as Array<Record<string, unknown>>
+  const { agents, workflows, tasks } = tablesOf(db)
   const leaderRow = (await db.select().from(agents).where(eq(agents.id, leaderAgentId)).limit(1))[0]
   const workerRow = (await db.select().from(agents).where(eq(agents.id, workerAgentId)).limit(1))[0]
   members[0]!.agentName = leaderRow?.name ?? ''
   members[1]!.agentName = workerRow?.name ?? ''
 
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'd19c turn task',
     workflowId,
@@ -171,7 +167,7 @@ function outcomeWhy(outcome: WorkgroupTurnsOutcome): string {
 
 describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) => {
   test('领队派单 → 成员交付 → 领队收敛 done：两个引擎同一套回合', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
     const { hooks, requests } = scriptedHost({
       leader: [
@@ -209,6 +205,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     expect(requests[0]?.promptTemplate).toContain('## Workgroup roster')
     expect(requests[1]?.promptTemplate).toContain('## Your assignment')
 
+    const { workgroupAssignments, workgroupMessages } = tablesOf(db)
     const cards = await db
       .select()
       .from(workgroupAssignments)
@@ -231,7 +228,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
   })
 
   test('领队协议出错：按正典文案重提示一次后收敛（两个引擎同一条重试路径）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
     const { hooks, requests } = scriptedHost({
       leader: [
@@ -254,12 +251,13 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
   })
 
   test('重启杀掉的「已回答澄清」续跑在进门时按原样血缘复活（两个引擎同一条恢复）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
     // 人回答后铸出的那条 pending 续跑，被重启的 reaper 翻成了 interrupted。
     // RFC-374: the interrupted latest continuation has the smaller ID.
     const killedId = 'a-killed-latest'
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'z-older',
       seq: -1,
       taskId,
@@ -267,7 +265,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
       status: 'canceled',
       rerunCause: 'initial',
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       seq: 0,
       id: killedId,
       taskId,
@@ -304,7 +302,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
   test.each(['runtime-stream-interrupted', 'runtime-session-identity-invalid'] as const)(
     '成员瞬态故障 %s 后重跑：卡片改指新 run 并交付，领队继续收敛',
     async (failureCode) => {
-      const db = harness.db as unknown as ProviderNeutralDatabase
+      const db = harness.db as unknown as PersistenceDb
       const taskId = await seedTask(db)
       const { hooks, requests } = scriptedHost({
         leader: [
@@ -341,6 +339,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
       expect(memberRequests[1]?.promptTemplate).not.toContain(
         '## Protocol errors in your previous reply',
       )
+      const { workgroupAssignments, nodeRuns, workgroupMessages } = tablesOf(db)
       const cards = await db
         .select()
         .from(workgroupAssignments)
@@ -371,7 +370,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
   )
 
   test('成员瞬态故障重试耗尽：卡片落为 failed 并通知领队，不遗留 running 卡片', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
     const { hooks, requests } = scriptedHost({
       leader: [
@@ -407,6 +406,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
 
     expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
+    const { workgroupAssignments, nodeRuns, workgroupMessages } = tablesOf(db)
     const cards = await db
       .select()
       .from(workgroupAssignments)
@@ -436,7 +436,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
   })
 
   test('运行时流中断的重跑不吃协议预算，但必须自己进账本（两个引擎同一条转轨）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedTask(db)
     const { hooks, requests } = scriptedHost({
       leader: [
@@ -462,6 +462,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     // 换进程重来，不是「你上一轮答错了」——不能贴协议重提示。
     expect(requests[1]?.promptTemplate).not.toContain('## Protocol errors in your previous reply')
 
+    const { nodeRuns } = tablesOf(db)
     // 重跑要**自己占一格 retryIndex**、并按 `wg-protocol-retry` 记账。两件事都是用户可见的：
     // 前者是 node_run 的身份（design.md：重试产生按 retry_index 区分的独立 node_runs），撞号会让
     // 血缘/采纳挑错行；后者是**轮次记账的豁免**——free_collab 的 roundBudget 逐条数成员 run、只跳过

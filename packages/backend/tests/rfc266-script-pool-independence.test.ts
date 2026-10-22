@@ -10,6 +10,8 @@
 // 独立 ⇒ 任务照常跑完；退回共享一池 ⇒ 任务永远拿不到名额，测试超时失败。
 // 第三条反向锁住「脚本确实排在脚本池上」，防止有人把取闸整段删掉后前两条依然绿。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -18,7 +20,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { getNodePoolSemaphore } from '../src/services/processNodeConcurrency'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
@@ -46,7 +47,8 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -64,14 +66,15 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: `wf-${workflowId}`,
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -125,8 +128,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-const statusOf = async (h: Harness, taskId: string): Promise<string | undefined> =>
-  (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status
+const statusOf = async (h: Harness, taskId: string): Promise<string | undefined> => {
+  const { tasks } = tablesOf(h.db)
+  return (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status
+}
 
 describe('RFC-266 script nodes run in their own daemon pool', () => {
   let h: Harness
@@ -199,6 +204,7 @@ describe('RFC-266 script nodes run in their own daemon pool', () => {
     await Bun.sleep(400)
     // 名额没让出来，脚本必须还在排队 —— 任务不可能已经收尾。
     expect(await statusOf(h, taskId)).toBe('running')
+    const { nodeRuns } = tablesOf(h.db)
     const queued = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(queued.every((r) => r.status === 'pending')).toBe(true)
 

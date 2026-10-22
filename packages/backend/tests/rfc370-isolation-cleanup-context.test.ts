@@ -9,6 +9,8 @@
 // deadlocked: a merge-back held the window waiting for the fence while the
 // discard held the fence waiting for the window. Until the discard owns its
 // write window the receipt is recorded for SQLite daemon contexts only.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,8 +18,7 @@ import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionEffects, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionContext as createSqliteDaemonContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
@@ -58,10 +59,11 @@ function launch(taskId: string): CanonicalContinuationRequest {
   }
 }
 
-async function seedClaimedTask(db: ProviderNeutralDatabase) {
+async function seedClaimedTask(db: PersistenceDb) {
   const taskId = `t370iso_${ulid()}`
   const snapshot = '{"$schema_version":6,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc370-iso-cleanup',
     description: '',
@@ -69,7 +71,7 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
     version: 1,
     schemaVersion: 6,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -86,7 +88,7 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'writer',
@@ -121,7 +123,8 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
   }
 }
 
-async function cleanupEffects(db: ProviderNeutralDatabase, taskId: string) {
+async function cleanupEffects(db: PersistenceDb, taskId: string) {
+  const { taskExecutionEffects } = tablesOf(db)
   return await db
     .select({ state: taskExecutionEffects.state })
     .from(taskExecutionEffects)

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
 import { distillTick, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
@@ -19,18 +21,8 @@ import {
   DEFAULT_SOURCE_CONTEXT_BUDGET,
   QUARANTINED_SNAPSHOT_AGENT_ID,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  agents,
-  cachedRepos,
-  clarifyRounds,
-  memoryDistillJobs,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   buildDebounceKey,
   cancelPendingJob,
@@ -62,7 +54,7 @@ function admitted<T>(result: T | null): T {
   return result
 }
 
-function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
+function createMemoryDistillTestContext(db: PersistenceDb) {
   const previousHome = process.env.AGENT_WORKFLOW_HOME
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-provider-'))
   process.env.AGENT_WORKFLOW_HOME = root
@@ -118,7 +110,7 @@ function okRun(opts: SystemAgentRunOptions, eventText?: string): SystemAgentRunR
 const EMPTY_ENVELOPE_RUN: RunDistillOptions['runFn'] = async (opts) => okRun(opts)
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     repoUrl?: string | null
     cachedRepoId?: string | null
@@ -127,7 +119,8 @@ async function seedTask(
   } = {},
 ): Promise<{ taskId: string; workflowId: string }> {
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -144,7 +137,7 @@ async function seedTask(
     })),
   }
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -289,7 +282,7 @@ describe('extractAgentIdsFromWorkgroupConfig', () => {
 })
 
 describeEachProvider('computeEligibleScopes', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -302,7 +295,8 @@ describeEachProvider('computeEligibleScopes', (harness) => {
     expect(r).toEqual({ agentIds: [], workflowId: null, repoId: null, includeGlobal: true })
   })
   test('resolves workflowId + agentIds from frozen ids only', async () => {
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id: 'agent-codegen',
       name: 'codegen',
       description: '',
@@ -339,7 +333,8 @@ describeEachProvider('computeEligibleScopes', (harness) => {
   // so private repos never matched (and once the credential column is blanked it
   // would have matched arbitrary rows on '').
   test('resolves repoId via tasks.cached_repo_id', async () => {
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: 'cr-1',
       urlHash: 'aabbccdd',
       urlRedacted: 'https://github.com/acme/web.git',
@@ -363,7 +358,7 @@ describeEachProvider('computeEligibleScopes', (harness) => {
 })
 
 describeEachProvider('enqueueDistillJob', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -383,7 +378,8 @@ describeEachProvider('enqueueDistillJob', (harness) => {
     )
     expect(r.debounceKey).toBe(`${taskId}:clarify`)
     expect(r.nextRunAt).toBeGreaterThanOrEqual(before + 5_000 - 50)
-    const rows = await db.select().from(memoryDistillJobs).all()
+    const { memoryDistillJobs } = tablesOf(db)
+    const rows = await db.select().from(memoryDistillJobs)
     expect(rows.length).toBe(1)
     expect(rows[0]!.status).toBe('pending')
     expect(rows[0]!.attempts).toBe(0)
@@ -403,7 +399,7 @@ describeEachProvider('enqueueDistillJob', (harness) => {
 })
 
 describeEachProvider('distillTick', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -429,7 +425,8 @@ describeEachProvider('distillTick', (harness) => {
     expect(r.succeeded).toBe(1)
     expect(r.failed).toBe(0)
     expect(r.candidatesCreated).toBe(0)
-    const row = (await db.select().from(memoryDistillJobs).all())[0]!
+    const { memoryDistillJobs } = tablesOf(db)
+    const row = (await db.select().from(memoryDistillJobs))[0]!
     expect(row.status).toBe('done')
     expect(row.finishedAt).not.toBeNull()
   })
@@ -452,7 +449,8 @@ describeEachProvider('distillTick', (harness) => {
     const r = await distillTick({ ...workerDeps(memory), runFn })
     expect(runCalls).toBe(1)
     expect(r.succeeded).toBe(1)
-    const rows = await db.select().from(memoryDistillJobs).all()
+    const { memoryDistillJobs } = tablesOf(db)
+    const rows = await db.select().from(memoryDistillJobs)
     for (const row of rows) expect(row.status).toBe('done')
   })
 
@@ -473,7 +471,8 @@ describeEachProvider('distillTick', (harness) => {
     // backoff-shifted next_run_at.
     let now = Date.now() + 1
     await distillTick({ ...workerDeps(memory), runFn: explodeRun, now: () => now })
-    let row = (await db.select().from(memoryDistillJobs).all())[0]!
+    const { memoryDistillJobs } = tablesOf(db)
+    let row = (await db.select().from(memoryDistillJobs))[0]!
     expect(row.attempts).toBe(1)
     expect(row.status).toBe('pending')
     expect(row.nextRunAt).toBeGreaterThanOrEqual(now + DISTILL_BACKOFF_BASE_MS - 50)
@@ -481,14 +480,14 @@ describeEachProvider('distillTick', (harness) => {
     // Attempt 2 — pump time past backoff.
     now = row.nextRunAt + 1
     await distillTick({ ...workerDeps(memory), runFn: explodeRun, now: () => now })
-    row = (await db.select().from(memoryDistillJobs).all())[0]!
+    row = (await db.select().from(memoryDistillJobs))[0]!
     expect(row.attempts).toBe(2)
     expect(row.status).toBe('pending')
 
     // Attempt 3 = max — flip to failed.
     now = row.nextRunAt + 1
     await distillTick({ ...workerDeps(memory), runFn: explodeRun, now: () => now })
-    row = (await db.select().from(memoryDistillJobs).all())[0]!
+    row = (await db.select().from(memoryDistillJobs))[0]!
     expect(row.attempts).toBe(DISTILL_MAX_ATTEMPTS)
     expect(row.status).toBe('failed')
     expect(row.lastError).toContain('boom')
@@ -511,7 +510,8 @@ describeEachProvider('distillTick', (harness) => {
       },
       now: () => Date.now() + 1,
     })
-    const row = (await db.select().from(memoryDistillJobs).all())[0]!
+    const { memoryDistillJobs } = tablesOf(db)
+    const row = (await db.select().from(memoryDistillJobs))[0]!
     expect(result.failed).toBe(1)
     expect(row.status).toBe('pending')
     expect(row.attempts).toBe(1)
@@ -568,7 +568,8 @@ describeEachProvider('distillTick', (harness) => {
     // Seed an actual clarify_session with a source-agent node_run + events so
     // the loader path runs end-to-end (rather than the empty-clarify branch).
     const sourceRunId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds, nodeRunEvents, memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: sourceRunId,
       taskId,
       nodeId: 'agent-1',
@@ -581,7 +582,7 @@ describeEachProvider('distillTick', (harness) => {
       opencodeSessionId: 'sess-1',
     })
     const clarifyRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: clarifyRunId,
       taskId,
       nodeId: 'clarify-1',
@@ -591,7 +592,7 @@ describeEachProvider('distillTick', (harness) => {
       status: 'awaiting_human',
     })
     const clarifyId = ulid()
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       kind: 'self' as const,
       id: clarifyId,
       taskId,
@@ -606,7 +607,7 @@ describeEachProvider('distillTick', (harness) => {
       status: 'answered',
       createdAt: Date.now(),
     })
-    await db.insert(nodeRunEvents).values({
+    await insertOne(db, nodeRunEvents, {
       nodeRunId: sourceRunId,
       ts: 1,
       kind: 'text',
@@ -659,7 +660,7 @@ describeEachProvider('distillTick', (harness) => {
 })
 
 describeEachProvider('recoverRunning + manual control', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -676,16 +677,18 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
       taskId,
       debounceMs: 0,
     })
+    const { memoryDistillJobs } = tablesOf(db)
     await db.update(memoryDistillJobs).set({ status: 'running' })
     const r = await recoverRunning(memory.store)
     expect(r.recovered).toBe(1)
-    const row = (await db.select().from(memoryDistillJobs).all())[0]!
+    const row = (await db.select().from(memoryDistillJobs))[0]!
     expect(row.status).toBe('pending')
   })
 
   test('retryFailedJob: failed → pending with attempts reset to 0', async () => {
     const id = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id,
       debounceKey: 'k',
       sourceKind: 'clarify',
@@ -699,9 +702,7 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
       createdAt: Date.now(),
     })
     expect(await retryFailedJob(memory.store, id)).toBe(true)
-    const row = (
-      await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)).all()
-    )[0]!
+    const row = (await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)))[0]!
     expect(row.status).toBe('pending')
     expect(row.attempts).toBe(0)
     expect(row.lastError).toBeNull()
@@ -709,7 +710,8 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
 
   test('retryFailedJob rejects non-failed rows', async () => {
     const id = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id,
       debounceKey: 'k',
       sourceKind: 'clarify',
@@ -726,7 +728,8 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
 
   test('cancelPendingJob: pending → canceled', async () => {
     const id = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id,
       debounceKey: 'k',
       sourceKind: 'clarify',
@@ -739,14 +742,13 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
       createdAt: Date.now(),
     })
     expect(await cancelPendingJob(memory.store, id)).toBe(true)
-    const row = (
-      await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)).all()
-    )[0]!
+    const row = (await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)))[0]!
     expect(row.status).toBe('canceled')
   })
 
   test('listDistillJobs filters by status', async () => {
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id: 'a',
       debounceKey: 'k',
       sourceKind: 'clarify',
@@ -758,7 +760,7 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
       nextRunAt: Date.now(),
       createdAt: Date.now(),
     })
-    await db.insert(memoryDistillJobs).values({
+    await insertOne(db, memoryDistillJobs, {
       id: 'b',
       debounceKey: 'k',
       sourceKind: 'review',
@@ -782,7 +784,7 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
 // distilling the same debounce_key twice. The retired timer wrapper had ZERO test
 // coverage before this.
 describeEachProvider('daemon lifecycle memory-distill polling reentrancy', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -883,8 +885,10 @@ describeEachProvider('daemon lifecycle memory-distill polling reentrancy', (harn
       // races ahead of the status write and the final assertion below fails
       // instead (CI run 30888287151, the first version of this fix).
       const deadline = Date.now() + 5_000
-      const doneCount = async (): Promise<number> =>
-        (await db.select().from(memoryDistillJobs).all()).filter((r) => r.status === 'done').length
+      const doneCount = async (): Promise<number> => {
+        const { memoryDistillJobs } = tablesOf(db)
+        return (await db.select().from(memoryDistillJobs)).filter((r) => r.status === 'done').length
+      }
       while ((await doneCount()) < 2 && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 5))
       }
@@ -896,8 +900,9 @@ describeEachProvider('daemon lifecycle memory-distill polling reentrancy', (harn
       release()
     }
 
+    const { memoryDistillJobs } = tablesOf(db)
     // Both jobs ended `done` exactly once — no double-distill.
-    const rows = await db.select().from(memoryDistillJobs).all()
+    const rows = await db.select().from(memoryDistillJobs)
     expect(rows.map((r) => r.status).sort()).toEqual(['done', 'done'])
   })
 })

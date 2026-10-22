@@ -15,6 +15,8 @@
 // 必须前进（否则后续 fast-forward 发布拿旧 sha 当 CAS 期望值，必推不上去），
 // 以及 `__mr.factsCollectedAt` 归零（head 变了，mr.* 全部要重采）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -39,10 +41,9 @@ import {
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
 } from '../src/modules/source-control/composition'
-import { cachedRepos } from '../src/db/schema'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { requirementBundlePath } from '@agent-workflow/shared'
 import { createRequirementBundleRefPersistence } from '../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import {
@@ -146,7 +147,7 @@ function startLaneWorld(): void {
 
 /** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
 async function seedLaneDatabase(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   conflictRetryDefaults?: { readonly sameSession: number; readonly freshSession: number },
 ): Promise<void> {
   launches.length = 0
@@ -164,7 +165,8 @@ async function seedLaneDatabase(
       },
     ],
   })
-  await fx.db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(fx.db)
+  await insertOne(fx.db, cachedRepos, {
     id: 'repo-1',
     urlHash: 't78dead',
     localPath: repoPath,

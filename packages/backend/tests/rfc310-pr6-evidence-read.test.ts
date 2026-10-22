@@ -19,7 +19,7 @@ process.env.AGENT_WORKFLOW_HOME = HOME
 
 import type { Hono } from 'hono'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from './helpers/userFixture'
@@ -42,7 +42,7 @@ setDefaultTimeout(120_000)
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let fx: ProviderPr3Fixture
 let app: Hono
 let token: string

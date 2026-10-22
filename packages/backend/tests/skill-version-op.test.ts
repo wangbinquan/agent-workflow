@@ -5,6 +5,9 @@
 // staged/version dirs; rollforward verifies the committed snapshot and publishes
 // canonical live before freeing the lock).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import {
@@ -21,8 +24,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
@@ -45,7 +47,7 @@ import { isSkillBootVerified } from '../src/modules/resource-catalog/infrastruct
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -155,7 +157,8 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
       ),
     ).rejects.toThrow('producer-fault')
     expect((await getActiveOp(db, skillId))?.phase).toBe('intent')
-    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    const { skillOperationLocks } = tablesOf(db)
+    expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
         /^files\.op-.*\.staged$/.test(name),
@@ -164,7 +167,7 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
 
     await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
     expect(await getActiveOp(db, skillId)).toBeNull()
-    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(0)
+    expect(await db.select().from(skillOperationLocks)).toHaveLength(0)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
         /^files\.op-.*\.(?:staged|backup|candidate)$/.test(name),
@@ -199,19 +202,17 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
       async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
     )
     await databaseSessionFor(db).transaction(async (tx) => {
-      await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId)).run()
-      await tx
-        .insert(skillVersions)
-        .values({
-          id: ulid(),
-          skillId,
-          versionIndex: 2,
-          filesPath: skillVersionRelPath(skillId, 2),
-          source: 'editor',
-          authorUserId: 'u',
-          contentHash,
-        })
-        .run()
+      const { skills, skillVersions } = tablesOf(tx)
+      await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId))
+      await insertOne(tx, skillVersions, {
+        id: ulid(),
+        skillId,
+        versionIndex: 2,
+        filesPath: skillVersionRelPath(skillId, 2),
+        source: 'editor',
+        authorUserId: 'u',
+        contentHash,
+      })
       await advancePhase(tx, opId, 'db-committed')
     })
 
@@ -249,7 +250,8 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
       ),
     ).rejects.toThrow(/live publish does not match committed content hash/)
     expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    const { skillOperationLocks } = tablesOf(db)
+    expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
       'body0',
@@ -282,14 +284,13 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
       ),
     ).rejects.toThrow('post-commit-fault')
     expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    const { skillOperationLocks, skills } = tablesOf(db)
+    expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(
-      await db
-        .select({ version: skills.contentVersion })
-        .from(skills)
-        .where(eq(skills.id, skillId))
-        .get(),
+      await first(
+        db.select({ version: skills.contentVersion }).from(skills).where(eq(skills.id, skillId)),
+      ),
     ).toEqual({ version: 2 })
   })
 })

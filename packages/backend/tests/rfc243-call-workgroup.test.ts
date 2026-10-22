@@ -11,6 +11,8 @@
 //      `result` 端口 = leader done decision 的 body → 父 output 节点消费。
 //   4. 子任务行：workgroupId 判别（taskExecutionKind='workgroup'）+
 //      parentTaskId/spaceKind='inherited' 正交并存。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,7 +22,6 @@ import { and, eq } from 'drizzle-orm'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRunOutputs, nodeRuns, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { createAgent } from '../src/services/agent'
 import { createWorkgroup } from '../src/services/workgroups'
@@ -199,7 +200,8 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       ],
     } as unknown as WorkflowDefinition
     const parentWorkflowId = ulid()
-    await h.db.insert(workflows).values({
+    const { workflows, tasks, workgroupTaskState, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, workflows, {
       id: parentWorkflowId,
       name: 'parent-wg-wf',
       definition: JSON.stringify(parentDef),
@@ -209,7 +211,7 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       workgroups: { 'e2e-wg': { id: group.id, version: group.version, group } },
     })
     const parentTaskId = ulid()
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       id: parentTaskId,
       name: 'rfc243-wg-parent',
       workflowId: parentWorkflowId,

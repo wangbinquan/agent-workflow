@@ -1,19 +1,21 @@
 // RFC-359 W4-B6 批 c —— source-control 仓库传输凭据仓库合一，两个引擎各跑一遍：发布连接投影的 upsert 与
 // 凭据修订推进、个人凭据的 upsert / 修订 / 计数 / 删除、绑定变化时个人凭据级联清除、管理员连接的围栏式同步与删除。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleRepositoryTransportCredentialRepository } from '@/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_b6c_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,

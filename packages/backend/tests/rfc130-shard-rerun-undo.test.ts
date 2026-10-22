@@ -16,6 +16,8 @@
 //     done+merged candidate exists; with ≥2 merged generations it falls back to
 //     superimposition (== pre-T14, never destructive).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,7 +27,6 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit, snapshotFullState } from '../src/util/git'
 import { undoPriorShardDeltaInIso } from '../src/services/nodeIsolation'
@@ -251,7 +252,8 @@ async function seedGen1(
   db: DbClient,
   canon: string,
 ): Promise<{ taskId: string; wrapperRunId: string; doneShardId: string }> {
-  await db.insert(agents).values({
+  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulidMono(),
     name: 'worker',
     description: 'test',
@@ -271,14 +273,14 @@ async function seedGen1(
   const def = await canonicalizeWorkflowAgentIds(db, fanoutDef())
   const workflowId = ulidMono()
   const taskId = ulidMono()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't14-e2e',
     workflowId,
@@ -292,7 +294,7 @@ async function seedGen1(
     startedAt: Date.now(),
   })
   const wrapperRunId = ulidMono()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: wrapperRunId,
     taskId,
     nodeId: 'fan',
@@ -304,7 +306,7 @@ async function seedGen1(
     startedAt: Date.now(),
   })
   const doneShardId = ulidMono()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: doneShardId,
     taskId,
     nodeId: 'inner',
@@ -320,9 +322,11 @@ async function seedGen1(
     startedAt: Date.now(),
     finishedAt: Date.now(),
   })
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId: doneShardId, portName: 'result', content: 'alpha' })
+  await insertOne(db, nodeRunOutputs, {
+    nodeRunId: doneShardId,
+    portName: 'result',
+    content: 'alpha',
+  })
   return { taskId, wrapperRunId, doneShardId }
 }
 
@@ -338,6 +342,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const canon = await initCanon(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedGen1(db, canon)
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({ inputs: JSON.stringify({ docs: 'alpha-NEW' }) })
@@ -368,6 +373,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const canon = await initCanon(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedGen1(db, canon)
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({ inputs: JSON.stringify({ docs: 'alpha-FAIL' }) })
@@ -395,8 +401,9 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const canon = await initCanon(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, wrapperRunId } = await seedGen1(db, canon)
+    const { nodeRuns, tasks } = tablesOf(db)
     // A prior replacement attempt that FAILED before merge → non-done freshest row.
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulidMono(),
       taskId,
       nodeId: 'inner',
@@ -440,7 +447,8 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const gen2Base = await snapshotFullState(canon)
     writeFileSync(join(canon, 'f_beta.txt'), 'beta\n')
     const gen2Node = await snapshotFullState(canon)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: ulidMono(),
       taskId,
       nodeId: 'inner',

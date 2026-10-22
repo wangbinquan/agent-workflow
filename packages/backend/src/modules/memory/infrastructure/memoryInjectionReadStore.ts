@@ -1,9 +1,9 @@
 // RFC-359 W4-B4 —— 记忆注入读存储：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos, memories, nodeRuns, tasks, taskRepos } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MemoryInjectionReadStore,
   MemoryInjectionRecord,
@@ -15,7 +15,8 @@ import type {
  * number mapper 就会丢失，createdAt / version / approvedAt 以字符串回到调用方
  * （RFC-359 W4-B4a 双引擎用例实测；老的 PG 适配器同样以顶层常量捕获，同一缺陷）。
  */
-function injectionColumns() {
+function injectionColumns(db: object) {
+  const { memories } = tablesOf(db)
   return {
     id: memories.id,
     scopeType: memories.scopeType,
@@ -46,9 +47,10 @@ function recordOf(row: MemoryInjectionRecord): MemoryInjectionRecord {
 }
 
 export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async findTaskContext(taskId: string) {
+    const { tasks } = tablesOf(this.db)
     const rows = await this.db
       .select({
         workflowId: tasks.workflowId,
@@ -69,6 +71,7 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
   }
 
   async listTaskRepositoryIds(taskId: string): Promise<readonly string[]> {
+    const { taskRepos } = tablesOf(this.db)
     return (
       await this.db
         .select({ cachedRepoId: taskRepos.cachedRepoId })
@@ -79,6 +82,7 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
 
   async filterExistingRepositoryIds(repositoryIds: readonly string[]): Promise<readonly string[]> {
     if (repositoryIds.length === 0) return []
+    const { cachedRepos } = tablesOf(this.db)
     return (
       await this.db
         .select({ id: cachedRepos.id })
@@ -93,13 +97,14 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
   ): Promise<readonly MemoryInjectionRecord[]> {
     const ids = input.scopeIds
     if (ids !== null && ids.length === 0) return []
+    const { memories } = tablesOf(this.db)
     const scopeCondition =
       ids === null
         ? eq(memories.scopeType, input.scopeType)
         : and(eq(memories.scopeType, input.scopeType), inArray(memories.scopeId, [...ids]))!
     return (
       await this.db
-        .select(injectionColumns())
+        .select(injectionColumns(this.db))
         .from(memories)
         .where(and(scopeCondition, eq(memories.status, 'approved')))
         .orderBy(desc(memories.createdAt))
@@ -107,6 +112,7 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
   }
 
   async listRunRecords(input: Parameters<MemoryInjectionReadStore['listRunRecords']>[0]) {
+    const { nodeRuns } = tablesOf(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,

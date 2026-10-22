@@ -9,6 +9,8 @@
 // `describeEachProvider` registration faces (auth+CRUD, install paths), each
 // composing the real application on the harness's selected database.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { access, chmod, copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -16,11 +18,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { stillParkedAfterBarrier } from './helpers/stillParked'
 import {
@@ -37,7 +38,7 @@ let originalPath: string | undefined
 
 // RFC-359 W46: the existing full application borrows the selected harness database.
 interface ProviderPluginHarness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
 }
 interface ProviderPluginCrudHarness extends ProviderPluginHarness {
@@ -108,14 +109,11 @@ async function pluginRevision(app: Hono, path: string): Promise<string> {
   return ((await response.json()) as { operationConfigHash: string }).operationConfigHash
 }
 
-async function seedPluginRow(
-  db: ProviderNeutralDatabase,
-  name: string,
-  spec: string,
-): Promise<string> {
+async function seedPluginRow(db: PersistenceDb, name: string, spec: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(plugins).values({
+  const { plugins } = tablesOf(db)
+  await insertOne(db, plugins, {
     id,
     name,
     spec,
@@ -186,7 +184,7 @@ afterEach(async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describeProviderPluginCrud('/api/plugins auth + CRUD (DB-seeded)', (getFixture) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let app: Hono
   let seededId: string
   beforeEach(() => {
@@ -297,6 +295,7 @@ describeProviderPluginCrud('/api/plugins auth + CRUD (DB-seeded)', (getFixture) 
 
   test('ACL owner transfer invalidates a captured config-hash fence', async () => {
     const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
+    const { plugins } = tablesOf(db)
     await db
       .update(plugins)
       .set({ ownerUserId: 'other-owner', aclRevision: 1 })

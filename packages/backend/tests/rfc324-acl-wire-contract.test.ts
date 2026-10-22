@@ -14,12 +14,13 @@
 // AC-16（bypass 判定不变）的完整证明在 rfc324-access-policy-equivalence 的穷举里；
 // 这里补一条 HTTP 层的对照，确认那条纯函数结论真的接到了端点上。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -44,7 +45,7 @@ interface AclBody {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Principal
   alice: Principal
@@ -68,7 +69,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   }
   const owner = await mk('owner', 'user')
   const agentId = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: agentId,
     name: `rfc324-wire-${agentId.slice(-6)}`,
     description: 'seeded',

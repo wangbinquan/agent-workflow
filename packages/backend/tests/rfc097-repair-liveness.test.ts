@@ -15,6 +15,8 @@
 // those suites double as the gate's negative control; test 2 locks that
 // explicitly.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,7 +27,6 @@ import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, tasks, workflows } from '../src/db/schema'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
@@ -125,7 +126,8 @@ function gatedDef(): WorkflowDefinition {
 }
 
 async function seedInterruptedTask(h: LiveHarness): Promise<string> {
-  await h.db.insert(agents).values({
+  const { agents, workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, agents, {
     id: ulid(),
     name: 'slow',
     description: 'test',
@@ -138,12 +140,12 @@ async function seedInterruptedTask(h: LiveHarness): Promise<string> {
   const def = await canonicalizeWorkflowAgentIds(h.db, gatedDef())
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc097-liveness',
     definition: JSON.stringify(def),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'rfc097-liveness',
     workflowId,
@@ -175,6 +177,7 @@ async function waitFor<T>(
 }
 
 async function taskStatusOf(db: DbClient, taskId: string): Promise<string> {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({ status: tasks.status })
     .from(tasks)

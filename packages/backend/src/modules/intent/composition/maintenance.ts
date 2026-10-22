@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger, type Logger } from '@/util/log'
 import type { IntentMaintenancePersistence } from '../application/ports/intentPersistence'
 import type { IntentScratchStore } from '../application/ports/intentScratchStore'
@@ -65,7 +65,7 @@ function composeIntentMaintenanceSnapshotQueries(input: {
  * 进程内的围栏，不是可以从 journal 行反推的东西；合一取强侧。
  */
 export function composeIntentMaintenanceSnapshotQueriesFor(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** The exact selected apply-operations instance; its process-local fence must
    * not be reconstructed from persisted journal rows. */
   readonly activity: IntentApplyActivitySource
@@ -171,7 +171,7 @@ interface ProviderIntentMaintenanceCompositionInput {
  */
 export function composeIntentMaintenanceCommandsForDatabase(
   input: ProviderIntentMaintenanceCompositionInput & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly pluginsDir: string
   } & Pick<
       Parameters<typeof composeIntentApplyConvergence>[0],

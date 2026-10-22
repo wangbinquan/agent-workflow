@@ -5,22 +5,19 @@
 // 索引，撞库经能力矩阵归类后翻译成 typed 409（RFC-223 惯例）。ACL identity 面绑定 resource-catalog 交来的
 // 目录写事务句柄（`ResourceAclIdentityPersistence`），owner 只回答自己那张表。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { developmentAdapterDefinitionRevisions, developmentAdapterDefinitions } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   DevelopmentAdapterAclIdentityMutation,
   DevelopmentAdapterAclIdentityPersistence,
   DevelopmentAdapterIdentityRow,
   DevelopmentAdapterStore,
 } from '@/modules/integration/application/developmentAdapterCommands'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
 import { ConflictError } from '@/util/errors'
 
@@ -34,7 +31,7 @@ const OWNER_NAME_CONSTRAINT = 'development_adapter_definitions_owner_name_unique
  * owner / visibility 给出不同投影。
  */
 export function toIdentityRow(
-  row: typeof developmentAdapterDefinitions.$inferSelect,
+  row: PersistenceTables['developmentAdapterDefinitions']['$inferSelect'],
 ): DevelopmentAdapterIdentityRow {
   return {
     id: row.id,
@@ -52,7 +49,7 @@ export function toIdentityRow(
 
 /** owner + name 撞库：先经能力矩阵判是不是唯一冲突，再核约束名（PG 带约束名，SQLite 只有一句 message）。 */
 export function isDevelopmentAdapterOwnerNameConstraintError(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   error: unknown,
 ): boolean {
   if (engineOf(db).classifyError(error) !== 'unique-violation') return false
@@ -61,11 +58,12 @@ export function isDevelopmentAdapterOwnerNameConstraintError(
 }
 
 function createDevelopmentAdapterAclIdentity(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DevelopmentAdapterAclIdentityPersistence {
   const identity: DevelopmentAdapterAclIdentityPersistence = {
     type: 'development_adapter',
     async getRevision(resourceId) {
+      const { developmentAdapterDefinitions } = tablesOf(db)
       const rows = await db
         .select({ aclRevision: developmentAdapterDefinitions.aclRevision })
         .from(developmentAdapterDefinitions)
@@ -74,9 +72,10 @@ function createDevelopmentAdapterAclIdentity(
       return rows[0]?.aclRevision ?? 0
     },
     async loadForMutation(
-      transaction: DatabaseTransaction,
+      transaction: PersistenceTx,
       resourceId: string,
     ): Promise<DevelopmentAdapterAclIdentityMutation | undefined> {
+      const { developmentAdapterDefinitions } = tablesOf(transaction)
       const row = (
         await transaction
           .select({
@@ -133,9 +132,7 @@ function createDevelopmentAdapterAclIdentity(
   return Object.freeze(identity)
 }
 
-export function createDevelopmentAdapterStore(
-  db: ProviderNeutralDatabase,
-): DevelopmentAdapterStore {
+export function createDevelopmentAdapterStore(db: PersistenceDb): DevelopmentAdapterStore {
   const session = databaseSessionFor(db)
   return {
     resourceAclIdentity: createDevelopmentAdapterAclIdentity(db),
@@ -143,6 +140,7 @@ export function createDevelopmentAdapterStore(
     async create(input) {
       const id = ulid()
       try {
+        const { developmentAdapterDefinitions } = tablesOf(db)
         const rows = await db
           .insert(developmentAdapterDefinitions)
           .values({
@@ -174,6 +172,7 @@ export function createDevelopmentAdapterStore(
     },
 
     async getById(id) {
+      const { developmentAdapterDefinitions } = tablesOf(db)
       const rows = await db
         .select()
         .from(developmentAdapterDefinitions)
@@ -183,11 +182,13 @@ export function createDevelopmentAdapterStore(
       return row === undefined ? null : toIdentityRow(row)
     },
     async list() {
+      const { developmentAdapterDefinitions } = tablesOf(db)
       return (await db.select().from(developmentAdapterDefinitions)).map(toIdentityRow)
     },
 
     async updateDraft(input) {
       try {
+        const { developmentAdapterDefinitions } = tablesOf(db)
         await db
           .update(developmentAdapterDefinitions)
           .set({
@@ -209,7 +210,9 @@ export function createDevelopmentAdapterStore(
 
     async publish(input) {
       await session.transaction(async (tx) => {
-        await tx.insert(developmentAdapterDefinitionRevisions).values({
+        const { developmentAdapterDefinitionRevisions, developmentAdapterDefinitions } =
+          tablesOf(tx)
+        await insertOne(tx, developmentAdapterDefinitionRevisions, {
           adapterId: input.id,
           revision: input.revision,
           contentJson: input.contentJson,
@@ -225,6 +228,7 @@ export function createDevelopmentAdapterStore(
     },
 
     async archive(input) {
+      const { developmentAdapterDefinitions } = tablesOf(db)
       await db
         .update(developmentAdapterDefinitions)
         .set({ archivedAt: input.now, updatedAt: input.now })
@@ -232,6 +236,7 @@ export function createDevelopmentAdapterStore(
     },
 
     async getRevision(id, revision) {
+      const { developmentAdapterDefinitionRevisions } = tablesOf(db)
       const rows = await db
         .select({
           contentJson: developmentAdapterDefinitionRevisions.contentJson,

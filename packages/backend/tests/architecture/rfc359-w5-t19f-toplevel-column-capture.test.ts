@@ -1,61 +1,6 @@
-// RFC-359 W5-T19f —— PostgreSQL 执行面上禁止**模块顶层**捕获 `@/db/schema` 的表列（只降不升）。
-//
-// 机制：`@/db/schema` 导出的不是表，是**按 provider 投影的 Proxy 门面**
-// -------------------------------------------------------------------------
-// `db/schema.ts` 导出由 contribution 经 `materializeDrizzle` 编译、`providerTableFacade` 包装的表：
-// 一个 Proxy，`get` 陷阱按**当时激活的 provider**（`selectDatabaseSchemaProvider` /
-// `currentDatabaseSchemaProvider`）把属性解析到 SQLite 或 PostgreSQL 那一份具体列对象上。
-// 也就是说 `tasks` 与 `tasks.id` 的**正确性依赖于「什么时候读它」**，而不是「读到了什么名字」。
-//
-// 于是 `const COLUMNS = { createdAt: memories.createdAt, … }` 这种写在**模块作用域**的捕获，
-// 求值时刻是**模块加载时**——那时进程往往还没选 provider（缺省 sqlite，测试进程里几乎必然）。
-// RFC-359 W4-B4a 在真 PostgreSQL 上第一次跑就撞到它：捕获到 SQLite 列之后，PG 侧
-// `bigint({ mode: 'number' })` 的 mapper 整个丢失，`createdAt` / `version` / `approvedAt`
-// 这些数值列以**字符串**回到调用方——**不报错**，只是结果错（P1）。老的
-// `postgresqlMemoryInjectionReadStore.ts` 同病，长期无人可见；W4-D10 又在 mission 列表页的
-// **游标**上撞了同一形状（游标是 bigint，原样回成字符串后翻页判据全错）。
-//
-// W4-D10 之后 `columnFacadeFor` 把列也做成了访问时解析的 Proxy，最坏后果被兜了一层；但这条
-// 纪律没有因此作废，理由有三：
-//   ① 兜底只覆盖「经由表门面的 `get` 取到列」这一条路。顶层常量一旦被
-//      `Object.entries(表)` / `getTableColumns(表)` 这类**枚举**取值（表门面没有 `ownKeys` /
-//      `getOwnPropertyDescriptor` 陷阱），拿到的仍是 SQLite 的具体列对象，兜底当场失效；
-//   ② 顶层捕获让「这段代码在哪个 provider 上跑」变成**加载顺序**的函数——这正是 RFC-359 要
-//      消灭的那类「两个引擎一个好一个不好」的隐式分支，且它不会以异常的形式暴露；
-//   ③ 兜底本身是 provider 门面的实现细节，业务代码不该把正确性押在它身上。
-// 规矩因此是**形状级**的：列引用只在**查询函数体内**取（`function projection() { return { … } }`
-// 每次调用再取），不要在模块作用域缓存表列 / 投影对象。见 `docs/dev-gotchas.md`
-// §「模块顶层常量捕获 `@/db/schema` 的列会绕过 provider 投影」。
-//
-// 判据为什么必须是 AST 而不是正则
-// -------------------------------------------------------------------------
-// 本守卫要判的**恰恰是位置**：同一段 `{ id: tasks.id }`，写在模块顶层是违规，写在函数体内是
-// 正解。文本判据分不开这两者（也分不开注释与代码），只会把「把取列挪进函数体」这个唯一正确的
-// 修法也判成红——那会逼着人绕开守卫而不是修代码。所以这里用 `typescript` 的 AST：
-//   · **顶层** = 不在任何函数体内（function / 箭头 / 方法 / 构造器 / getter / setter），
-//     且不在**实例**字段初始化式里（那是构造时求值）；`static` 字段初始化式**算**顶层。
-//   · **来自 `@/db/schema`** = 顺着 import 声明解析标识符来源（含 `import * as ns` 与相对路径
-//     `./schema`），不靠名字猜——叫 `tasks` 的局部对象不该被误判。
-//   · **类型位置不算**：`typeof tasks.$inferSelect` 是类型查询，零运行时求值。
-//
-// 账本为什么是高水位而不是 exact 0
-// -------------------------------------------------------------------------
-// **先对齐计划原文，免得下一个人以为守卫写错了**：`design/RFC-359-database-provider-unification/plan.md`
-// §5 W5-T19f 写的是「存量逐条改为函数内取列后钉 0」——那句话把「0」当成了**起点**。实测不是：
-// 本守卫**上线当天的存量就是 83 处 / 8 个文件**。计划写下时还没做这次全语料 AST 清点，估低了。
-// 所以 T19f 的「钉 0」是**终点**，本文件是通往它的棘轮；账本清空的那一天再把断言换成 exact 0。
-//
-// 这 83 处全是 RFC-311 那一轮为「列表页别读重列」抽出来的投影常量
-// （`DISPATCH_RUN_COLUMNS` / `SUMMARY_COLUMNS` / `TASK_LIST_COLUMNS` …）。修法是机械的
-// （常量改成函数、调用点加一对括号），但它们分属 6 个 bounded context、和别的在制品重叠，
-// 一次性改完必然在并发工作树上撞车。所以本轮**只上守卫、不做迁移**：先把「还剩多少」变成
-// 可计数、可防守的量。机制同 `rfc359-sync-transaction-highwater.test.ts`：逐文件计数、
-// **逐字相等**——**增**了红（有人又在顶层钉了一个 provider），**减**了也红（收敛发生了，
-// 把账本一起改小，让每一次减少留下一次有署名的提交记录）。长期目标是 0。
-//
-// 计数粒度是**列引用数**（83），不是**捕获点常量数**（8）。这是刻意的：按常量数计，往一个
-// 已经欠着债的 `TASK_LIST_COLUMNS` 里再塞 5 列就免检通过了——那等于给存量债发扩容许可证。
-// 按列计，任何一次「多钉一列」都当场红。
+// RFC-395 I-b: retain the top-level capture guard and extend it to session table lookup.
+// Native columns belong to a session; module scope cannot choose a database handle.
+// Legacy imports remain recognized as negative controls; direct imports have their own guard.
 
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -72,6 +17,7 @@ const SRC_ROOT = resolve(import.meta.dir, '..', '..', 'src')
 
 export type CaptureForm =
   /** `const X = { a: 表.列 }` —— 顶层读到了一个具体列。 */
+  | 'session'
   | 'column'
   /** 顶层 `select({ … })` / `.select({ … })` —— 整个投影对象被钉在加载时的 provider 上。 */
   | 'projection'
@@ -111,17 +57,25 @@ export function resolvesToDatabaseSchema(fromPath: string, specifier: string): b
 
 interface SchemaBindings {
   /** `import { tasks } from '@/db/schema'` —— 标识符本身就是表门面。 */
+  readonly sessions: ReadonlySet<string>
   readonly tables: ReadonlySet<string>
   /** `import * as schema from '@/db/schema'` —— `schema.tasks` 才是表门面。 */
   readonly namespaces: ReadonlySet<string>
 }
 
 function schemaBindings(path: string, source: ts.SourceFile): SchemaBindings {
+  const sessions = new Set<string>()
   const tables = new Set<string>()
   const namespaces = new Set<string>()
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement)) continue
     if (!ts.isStringLiteral(statement.moduleSpecifier)) continue
+    if (statement.moduleSpecifier.text === '@/platform/persistence/sessionTables') {
+      const named = statement.importClause?.namedBindings
+      if (named && ts.isNamedImports(named))
+        for (const item of named.elements)
+          if ((item.propertyName ?? item.name).text === 'tablesOf') sessions.add(item.name.text)
+    }
     if (!resolvesToDatabaseSchema(path, statement.moduleSpecifier.text)) continue
     const clause = statement.importClause
     // `import type { … }` 整条是类型：零运行时求值，不可能捕获到列。
@@ -134,7 +88,7 @@ function schemaBindings(path: string, source: ts.SourceFile): SchemaBindings {
       for (const element of bindings.elements)
         if (!element.isTypeOnly) tables.add(element.name.text)
   }
-  return { tables, namespaces }
+  return { tables, namespaces, sessions }
 }
 
 function isFunctionLike(node: ts.Node): boolean {
@@ -198,6 +152,12 @@ export function topLevelSchemaColumnCaptures(
     const nowDeferred = deferred || isFunctionLike(node) || isDeferredClassField(node)
     if (!nowDeferred) {
       if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        bindings.sessions.has(node.expression.text)
+      )
+        report(node, 'session')
+      if (
         (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
         isSchemaTableReference(node.expression, bindings)
       ) {
@@ -239,15 +199,7 @@ export function topLevelSchemaColumnCaptures(
  * 修法（全部 8 条同一个）：把 `const X = { a: 表.列 }` 改成 `function xColumns() { return { a: 表.列 } }`，
  * 调用点写 `db.select(xColumns())`。列在每次查询时才取，于是永远跟着**当前**激活的 provider。
  */
-export const TOPLEVEL_COLUMN_CAPTURE_DEBT: readonly string[] = [
-  'auth/infrastructure/tokenCallAudit.ts: 2',
-  'modules/development-automation/infrastructure/missionReadModels.ts: 18',
-  'modules/identity-access/infrastructure/userAccessPersistence.ts: 5',
-  'modules/resource-catalog/infrastructure/mcpRepository.ts: 5',
-  'modules/resource-catalog/infrastructure/pluginRepository.ts: 5',
-  'modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts: 3',
-  'modules/task-execution/infrastructure/taskRouteOperations.ts: 22',
-]
+export const TOPLEVEL_COLUMN_CAPTURE_DEBT: readonly string[] = []
 
 /**
  * 语料：**会在 PostgreSQL 上执行 SQL 的全部后端源文件**，与 RFC-349 三条陷阱守卫共用
@@ -258,7 +210,7 @@ const SURFACE: readonly PostgresqlSurfaceFile[] = postgresqlExecutionSurface(SRC
 
 /** 语料里真的 import 了 `@/db/schema` 的那些——本守卫的实际扫描面。 */
 const SCHEMA_CONSUMERS: readonly PostgresqlSurfaceFile[] = SURFACE.filter((file) =>
-  /(^|[^\w])(from\s+['"](@\/db\/schema|\.{1,2}\/(?:[\w./-]*\/)?schema)['"])/u.test(file.text),
+  file.text.includes('@/platform/persistence/sessionTables'),
 )
 
 interface Scan {
@@ -300,7 +252,7 @@ describe('RFC-359 W5-T19f —— PG 执行面禁止模块顶层捕获 schema 表
     ).toBeGreaterThanOrEqual(100)
     expect(
       SCHEMA_CONSUMERS.length,
-      '语料里一个 `@/db/schema` 消费者都没有 ⇒ import 解析或语料判据其一失效了',
+      '语料里一个 sessionTables 消费者都没有 ⇒ import 解析或语料判据其一失效了',
     ).toBeGreaterThanOrEqual(60)
   })
 
@@ -347,6 +299,27 @@ interface Fixture {
 const IMPORT = "import { tasks, nodeRuns } from '@/db/schema'\n"
 
 const FIXTURES: readonly Fixture[] = [
+  {
+    name: 'session table lookup at module scope is captured',
+    path: 'modules/x/infrastructure/foo.ts',
+    source:
+      "import { tablesOf } from '@/platform/persistence/sessionTables'\nconst t = tablesOf(db).tasks",
+    forms: ['session'],
+  },
+  {
+    name: 'session lookup aliases and destructuring remain covered',
+    path: 'modules/x/infrastructure/foo.ts',
+    source:
+      "import { tablesOf as schemaOf } from '@/platform/persistence/sessionTables'\nconst { tasks } = schemaOf(db)",
+    forms: ['session'],
+  },
+  {
+    name: 'a session projection factory defers native table lookup',
+    path: 'modules/x/infrastructure/foo.ts',
+    source:
+      "import { tablesOf } from '@/platform/persistence/sessionTables'\nconst fields = db => ({ id: tablesOf(db).tasks.id })",
+    forms: [],
+  },
   {
     name: '顶层 `const X = { a: 表.列 }` ⇒ 报（这就是 W4-B4a 撞到的那个形状）',
     path: 'modules/x/infrastructure/foo.ts',

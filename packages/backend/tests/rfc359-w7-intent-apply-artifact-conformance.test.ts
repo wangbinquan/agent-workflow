@@ -25,12 +25,13 @@
 // 端口层早有同结论的记载（`modules/intent/ports/skillArtifactCompensation.ts` 头注释：
 // 「端口按消费者的真实需要划，不按对称美感划」）——这份测试把它从注释变成可跑的判据。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
-import { plugins } from '@/db/schema'
 import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
@@ -230,7 +231,8 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
 
     const now = Date.now()
     const cachedPath = generationDir('published')
-    await harness.db.insert(plugins).values({
+    const { plugins } = tablesOf(harness.db)
+    await insertOne(harness.db, plugins, {
       id: 'published',
       name: 'published',
       description: '',
@@ -242,7 +244,7 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as typeof plugins.$inferInsert)
+    } as PersistenceTables['plugins']['$inferInsert'])
 
     const published = recordingLog()
     await expect(

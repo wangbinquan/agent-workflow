@@ -18,16 +18,17 @@
 //    making `finalizeClaimedWorkspace` throw at a task-terminal event. The
 //    legacy SQLite path (systemWorkspaceGc.ts) classified it as 'busy'.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
@@ -49,11 +50,12 @@ const rootPath = (taskId: string): readonly LineageSlot[] => [
 ]
 
 async function seedTask(
-  database: ProviderNeutralDatabase,
+  database: PersistenceDb,
   taskId: string,
   worktreePath: string,
 ): Promise<void> {
-  await database.insert(tasks).values({
+  const { tasks } = tablesOf(database)
+  await insertOne(database, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-watermark-coverage',
@@ -94,7 +96,7 @@ function continuation(taskId: string): CanonicalContinuationRequest {
  * — what a re-run of the same slot leaves behind — then went quiescent.
  */
 async function settledTwoGenerationTask(
-  database: ProviderNeutralDatabase,
+  database: PersistenceDb,
   taskId: string,
 ): Promise<{
   readonly module: ReturnType<typeof createTaskExecutionTestModule>
@@ -154,6 +156,7 @@ async function settledTwoGenerationTask(
   await settleGeneration(0, { operation: 'first-request' }, 61)
   await settleGeneration(1, { operation: 'second-request' }, 63)
 
+  const { tasks } = tablesOf(database)
   await database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId))
   const owner = (await module.ownershipFor(database).read(taskId))!
   await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
@@ -171,7 +174,7 @@ async function settledTwoGenerationTask(
   return { module }
 }
 
-async function claimWorkspaceGc(database: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function claimWorkspaceGc(database: PersistenceDb, taskId: string): Promise<void> {
   const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(database)
   const members = await terminalMaintenance.snapshotTree(taskId)
   await terminalMaintenance.claim({
@@ -194,7 +197,7 @@ async function claimWorkspaceGc(database: ProviderNeutralDatabase, taskId: strin
  * 语义也相同（准入的跨行不变量走 SERIALIZABLE），所以直接换过来，同步那层随之删除。
  */
 function submitIntent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
 ): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
   return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
@@ -210,7 +213,7 @@ function submitIntent(
  * （`gateContinuationEffectPersistence.ts` 的两处 await 就是它）；挡着它们的只有测试夹具。
  * 两侧入参逐字相同（只少一个 `db`）、返回结构相同，所以夹具是**平移**不是改写。
  */
-function effectsOf(db: ProviderNeutralDatabase): DrizzleTaskExecutionEffectPersistence {
+function effectsOf(db: PersistenceDb): DrizzleTaskExecutionEffectPersistence {
   return new DrizzleTaskExecutionEffectPersistence(db)
 }
 
@@ -227,6 +230,7 @@ describeEachProvider('终态维护保留水位覆盖（双引擎）', (harness) 
       const taskId = 'task-watermark-erased'
       const database = harness.db
       await settledTwoGenerationTask(database, taskId)
+      const { taskExecutionLineageOperationRecords } = tablesOf(database)
       await database.delete(taskExecutionLineageOperationRecords)
       await expect(claimWorkspaceGc(database, taskId)).rejects.toThrow(
         /lacks a complete retained watermark/,
@@ -248,6 +252,7 @@ describeEachProvider('终态维护保留水位覆盖（双引擎）', (harness) 
         // terminal maintenance store rejects the claim with a transient conflict.
         const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
         module.claimGate.leave(owned.permit)
+        const { tasks } = tablesOf(database)
         await database
           .update(tasks)
           .set({ status: 'done', finishedAt: 65, workspacePruningAt: 66 })

@@ -14,10 +14,11 @@
 // 另锁一条口径：**不删 evidence blob**。这一版只标记，因为本仓没有覆盖全部生产者
 // 的引用索引（pipeline bundle 根本没有 DB 指针行），删 blob 等于按猜测删证据。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { developmentAgentAttempts, developmentBundleRefs } from '../src/db/schema'
 import {
   sweepDevelopmentRetention,
   type RetentionPolicyReader,
@@ -115,7 +116,8 @@ async function seedMission(
     now: 0,
   })
   const attemptId = ulid()
-  await fx.db.insert(developmentAgentAttempts).values({
+  const { developmentAgentAttempts, developmentBundleRefs } = tablesOf(fx.db)
+  await insertOne(fx.db, developmentAgentAttempts, {
     id: attemptId,
     actionRunId: runId,
     rerunSeq: 0,
@@ -130,7 +132,7 @@ async function seedMission(
   })
 
   const bundleRefId = ulid()
-  await fx.db.insert(developmentBundleRefs).values({
+  await insertOne(fx.db, developmentBundleRefs, {
     id: bundleRefId,
     missionId,
     purpose: 'requirement-bundle',
@@ -145,11 +147,13 @@ async function seedMission(
 }
 
 async function attemptExists(fx: Pr3Fixture, id: string): Promise<boolean> {
+  const { developmentAgentAttempts } = tablesOf(fx.db)
   const rows = await fx.db.select().from(developmentAgentAttempts)
   return rows.some((row) => row.id === id)
 }
 
 async function bundleState(fx: Pr3Fixture, id: string): Promise<string | undefined> {
+  const { developmentBundleRefs } = tablesOf(fx.db)
   const rows = await fx.db.select().from(developmentBundleRefs)
   return rows.find((row) => row.id === id)?.retentionState
 }

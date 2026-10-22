@@ -6,24 +6,25 @@
 //   - GET /api/memory-distill-jobs/:id/session    multi-attempt grouping +
 //                                                 capture-failed marker handling
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   daemonToken: string
   userToken: string
@@ -48,9 +49,10 @@ function authed(token: string, url: string, init: RequestInit = {}): Request {
   return new Request(`http://localhost${url}`, { ...init, headers })
 }
 
-async function seedJob(db: ProviderNeutralDatabase): Promise<string> {
+async function seedJob(db: PersistenceDb): Promise<string> {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'k',
     sourceKind: 'feedback',
@@ -125,8 +127,9 @@ describeEachProviderHttpApplication(
 
     test('GET /:id/session groups events by attempt_index and excludes capture-failed marker from tree', async () => {
       const id = await seedJob(h.db)
+      const { memoryDistillEvents } = tablesOf(h.db)
       // attempt 0: 1 real event
-      await h.db.insert(memoryDistillEvents).values({
+      await insertOne(h.db, memoryDistillEvents, {
         distillJobId: id,
         attemptIndex: 0,
         sessionId: 'sess-A',
@@ -142,7 +145,7 @@ describeEachProviderHttpApplication(
         }),
       })
       // attempt 1: capture-failed marker only
-      await h.db.insert(memoryDistillEvents).values({
+      await insertOne(h.db, memoryDistillEvents, {
         distillJobId: id,
         attemptIndex: 1,
         sessionId: 'sess-B',

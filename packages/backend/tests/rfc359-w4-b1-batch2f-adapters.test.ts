@@ -1,6 +1,8 @@
 // RFC-359 W4-B1 批 2f —— 三对合一，两个引擎各跑一遍：node run 执行投影（产品里最热的写路径：统一写事务 +
 // owner 围栏 + 能力矩阵的聚合根行锁）、任务列表页的客户端绑定、任务目录源装配（两对薄壳）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -8,16 +10,7 @@ import { asc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionOwners,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
   createTaskExecutionContext,
@@ -44,9 +37,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const OWNER = 'u_b2f_owner'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
+  const { users, workflows, tasks } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -59,7 +53,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
       updatedAt: 1,
     })
     .onConflictDoNothing()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -67,7 +61,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -85,12 +79,13 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  over: Partial<typeof nodeRuns.$inferInsert> = {},
+  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n',
@@ -103,11 +98,12 @@ async function seedRun(
 }
 
 async function seedClaimedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ token: OwnershipToken; context: TaskExecutionContextRef }> {
   const identity = createWorkerIdentity({ ownerId: `owner_${ulid()}`, daemonGeneration: 'gen-a' })
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: identity.ownerId,
     daemonGeneration: identity.daemonGeneration,
@@ -133,7 +129,7 @@ async function seedClaimedOwner(
   return { token, context }
 }
 
-function ownerIdentityQueriesFor(db: ProviderNeutralDatabase) {
+function ownerIdentityQueriesFor(db: PersistenceDb) {
   // RFC-359 W4-D8：owner 身份查询的装配入口收中立句柄，两个 provider 同一份。
   return composeOwnerIdentityQueries(db)
 }
@@ -153,6 +149,7 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
     expect((await persistence.list({ taskId, childOnly: true })).map((run) => run.id)).toEqual([
       nested,
     ])
+    const { nodeRunEvents } = tablesOf(db)
     await db.insert(nodeRunEvents).values([
       { nodeRunId: runId, ts: 1, kind: 'text', payload: '[rfc-audit] framework line' },
       { nodeRunId: runId, ts: 2, kind: 'text', payload: 'agent line' },
@@ -209,6 +206,7 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
       logicalSessionId: 'logical',
       supersededSessionIds: ['old-1'],
     })
+    const { nodeRunEvents, nodeRunOutputs } = tablesOf(db)
     const events = await db
       .select({ sessionId: nodeRunEvents.sessionId, parent: nodeRunEvents.parentSessionId })
       .from(nodeRunEvents)

@@ -26,6 +26,8 @@
 //               closed gate 409s. POST dw-save-as-workflow persists the
 //               generated DAG as a reusable workflows row.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -46,15 +48,6 @@ import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import {
-  agents,
-  nodeRuns,
-  runtimes,
-  tasks,
-  users,
-  workflows,
-  workgroupTaskState,
-} from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
@@ -161,6 +154,7 @@ const GENERATION_SNAPSHOT = {
 }
 
 async function seedPoolAgents(db: DbClient): Promise<void> {
+  const { runtimes, agents } = tablesOf(db)
   // A registered runtime whose binary does not exist: any REAL dispatch of a
   // pool agent (post-approve runScope in the HTTP tests) fails fast at spawn
   // (ENOENT) instead of launching an actual opencode process on the dev box.
@@ -235,13 +229,14 @@ async function seedDynamicTask(
 ): Promise<{ taskId: string }> {
   const taskId = ulid()
   const config = await stampConfigMemberAgentIds(db, opts.config ?? dynamicConfig())
-  await db.insert(workflows).values({
+  const { workflows, tasks, workgroupTaskState } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf-anchor-${taskId}`,
     name: `dw-anchor-${taskId}`,
     definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
     builtin: true,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'dw-task',
     workflowId: `wf-anchor-${taskId}`,
@@ -259,7 +254,7 @@ async function seedDynamicTask(
   })
   // RFC-217 T2 — the dw checkpoint rides workgroup_task_state (startTaskImpl
   // seeds it in production; the fixture mirrors that).
-  await db.insert(workgroupTaskState).values({
+  await insertOne(db, workgroupTaskState, {
     taskId,
     gateStatus: 'idle',
     dwStateJson: JSON.stringify(opts.dw),
@@ -366,6 +361,7 @@ describe('RFC-167 engine — generation pass', () => {
     expect(idByNode.get('code')).toBe(coderId)
     expect(JSON.stringify(def)).not.toContain('member#')
 
+    const { nodeRuns } = tablesOf(db)
     const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const holder = runs.filter((r) => r.rerunCause === DW_GATE_CAUSE)
     expect(holder).toHaveLength(1)
@@ -453,6 +449,7 @@ describe('RFC-167 engine — generation pass', () => {
     const dw = await readDw(db, taskId)
     expect(dw?.phase).toBe('generating')
     expect(dw?.generateAttempts).toBe(DW_MAX_GENERATE_ATTEMPTS)
+    const { nodeRuns } = tablesOf(db)
     // no confirm gate was opened
     const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.rerunCause === DW_GATE_CAUSE,
@@ -489,8 +486,9 @@ describe('RFC-167 engine — generation pass', () => {
     const { taskId } = await seedDynamicTask(db, {
       dw: { ...initialDwState(), phase: 'awaiting_confirm', generatedDef: def },
     })
+    const { nodeRuns } = tablesOf(db)
     // holder present → nothing minted, no orchestrator run
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -525,6 +523,7 @@ describe('RFC-167 engine — generation pass', () => {
     const hooks: WorkgroupTurnHostOperations = {
       runHost: async (r) => {
         requests.push(r)
+        const { tasks } = tablesOf(db)
         // simulate a PUT config landing WHILE the orchestrator runs: a new
         // top-level key must survive the engine's dw persist.
         const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -538,6 +537,7 @@ describe('RFC-167 engine — generation pass', () => {
     }
     const result = await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
     expect(result.kind).toBe('awaiting_review')
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
     expect(cfg.probe).toBe('keep-me') // the concurrent edit was NOT stomped
@@ -642,7 +642,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           createTestTaskExecutionLaunchParticipant({
             db,
             appHome,
-            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
               .schedulerDriver,
           }),
           db,
@@ -708,6 +708,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           edges: [],
         }),
       })
+      const { users, tasks } = tablesOf(db)
       // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——启动参与者的工作组臂 → 根内核。
       // 内核要为非系统 actor 解析 Git 提交身份，所以这一行用户是完整的（email + gitName）。
       await db
@@ -728,8 +729,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           runConfig: { binaryOverride: OPENCODE_CMD },
         }),
         db,
@@ -775,6 +775,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       status: 'pending',
     })
     await runTask({ taskId, db, appHome: '/tmp/aw-rfc167-nonexistent' })
+    const { tasks, nodeRuns } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(row?.status).toBe('failed')
     // runScope's failure shape for the REAL DAG node (g1): agent resolution
@@ -792,6 +793,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       status: 'pending',
     })
     await runTask({ taskId, db, appHome: '/tmp/aw-rfc167-nonexistent' })
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorSummary).toBe('dw-phase-invariant')
@@ -870,7 +872,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     await seedPoolAgents(db)
     app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'a'.repeat(64),
@@ -958,7 +960,8 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       ownerUserId: ownerId,
     })
     if (opts.withHolder !== false) {
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -975,10 +978,13 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
   /** Poll the background fire-and-forget runTask to a terminal state so it
    *  can't bleed into other tests. */
-  async function settleTask(taskId: string): Promise<typeof tasks.$inferSelect | undefined> {
+  async function settleTask(
+    taskId: string,
+  ): Promise<PersistenceTables['tasks']['$inferSelect'] | undefined> {
     const deadline = Date.now() + 5000
-    let final: typeof tasks.$inferSelect | undefined
+    let final: PersistenceTables['tasks']['$inferSelect'] | undefined
     while (Date.now() < deadline) {
+      const { tasks } = tablesOf(db)
       final = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       const s = final?.status
       if (s !== 'pending' && s !== 'running' && s !== 'awaiting_review') break
@@ -997,6 +1003,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       })
       expect(res.status).toBe(200)
 
+      const { tasks, nodeRuns } = tablesOf(db)
       const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       // RFC-223 (PR-3b): the swapped-in snapshot is the id-canonical generated
       // def — node p1 carries wg-planner's frozen agentId (stamped at seed time).
@@ -1028,6 +1035,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
   test('approve rejects a trigger-dependent proposal before holder/snapshot mutation when context is missing', async () => {
     const { taskId } = await seedConfirmable({ generatedDef: TRIGGER_DEF })
+    const { tasks, nodeRuns } = tablesOf(db)
     const before = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
       method: 'POST',
@@ -1050,6 +1058,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     const wt = mkdtempSync(join(tmpdir(), 'aw-rfc292-dw-'))
     try {
       const { taskId } = await seedConfirmable({ worktreePath: wt, generatedDef: TRIGGER_DEF })
+      const { tasks } = tablesOf(db)
       await db
         .update(tasks)
         .set({
@@ -1088,6 +1097,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     // gate untouched: still confirmable (reject-with-feedback path stays open)
     const dw = await readDw(db, taskId)
     expect(dw?.phase).toBe('awaiting_confirm')
+    const { nodeRuns } = tablesOf(db)
     const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.rerunCause === DW_GATE_CAUSE,
     )
@@ -1098,6 +1108,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     const wt = mkdtempSync(join(tmpdir(), 'aw-rfc167-fw-'))
     try {
       const { taskId } = await seedConfirmable({ worktreePath: wt, generatedDef: POOL_DEF })
+      const { tasks } = tablesOf(db)
       // A "concurrent" config edit lands after the handler's entry snapshot
       // would have been taken: adds a top-level key. The approve must keep it.
       const row0 = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -1124,6 +1135,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
   test('approve validates against the FRESH pool: removing the referenced member concurrently → 409 stale', async () => {
     const { taskId } = await seedConfirmable({ generatedDef: POOL_DEF })
+    const { tasks } = tablesOf(db)
     // Concurrently shrink the pool so POOL_DEF's wg-planner is no longer a
     // member — the fresh-view revalidation must catch it (dw-agent-outside-pool).
     const row0 = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -1168,7 +1180,8 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
         worktreePath: wt,
         ownerUserId: ownerId,
       })
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -1257,6 +1270,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     expect(dw?.phase).toBe('awaiting_confirm') // untouched — gate still open
     expect(dw?.rejectRounds).toBe(0)
     expect(dw?.generatedDef).toBeDefined()
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(row?.status).toBe('awaiting_review')
   })
@@ -1271,6 +1285,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as { exhausted?: boolean }).exhausted).toBe(true)
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorSummary).toBe('dw-reject-exhausted')
@@ -1323,6 +1338,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       status: 'running',
       ownerUserId: ownerId,
     })
+    const { workgroupTaskState } = tablesOf(db)
     // strip the dw checkpoint the seed helper stamps — lw tasks never carry one
     await db
       .update(workgroupTaskState)
@@ -1348,6 +1364,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     expect(res.status).toBe(201)
     const body = (await res.json()) as { id: string; name: string }
     expect(body.name).toBe('saved-dw')
+    const { workflows } = tablesOf(db)
     const wf = (await db.select().from(workflows).where(eq(workflows.id, body.id)))[0]
     expect(wf).toMatchObject({
       ownerUserId: ownerId,

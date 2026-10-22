@@ -22,6 +22,7 @@
 // 工作组入口，门面（`services/execution/executor.ts`）退役后生产零消费者。工作组启动现在只有
 // 一条：启动参与者的工作组臂 → 根启动内核（两个引擎共用）。本文件剩下的是**合成宿主快照**与
 // 运行期配置那几件事，启动路与测试都还在用。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   resolveWorkgroupOutputContract,
   serializeWorkflowDefinitionStorageV1,
@@ -31,8 +32,7 @@ import {
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import { buildClarifyEdges } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
@@ -144,11 +144,12 @@ export function buildWorkgroupRuntimeConfig(
  * NOT a migration seed — a migration-seeded row would surface in every fresh
  * DB and break empty-fixture expectations; idempotent via onConflictDoNothing.
  *
- * RFC-359：形参收成 `ProviderNeutralDatabase`。函数体本来就只有一条带
+ * RFC-359：形参收成 `PersistenceDb`。函数体本来就只有一条带
  * `onConflictDoNothing` 的 insert（中立面广泛支持），此前写成 bun:sqlite 专有的 `DbClient`
  * 纯属未收敛——代价是任何想调它的用例都被钉死在 SQLite 上。
  */
-export async function ensureWorkgroupHostWorkflow(db: ProviderNeutralDatabase): Promise<void> {
+export async function ensureWorkgroupHostWorkflow(db: PersistenceDb): Promise<void> {
+  const { workflows } = tablesOf(db)
   await db
     .insert(workflows)
     .values({

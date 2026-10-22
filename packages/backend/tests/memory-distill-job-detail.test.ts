@@ -1,34 +1,27 @@
 // RFC-043 T4 — getDistillJobDetail aggregator unit tests.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  docVersions,
-  memories,
-  memoryDistillJobs,
-  nodeRuns,
-  taskFeedback,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   parseDedupSnapshot,
   summarizeClarifyQuestions,
 } from '../src/modules/memory/application/distillQueries'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
 
-function getDistillJobDetail(db: ProviderNeutralDatabase, jobId: string) {
+function getDistillJobDetail(db: PersistenceDb, jobId: string) {
   return composeMemoryDistillQueries(db).getJobDetail(jobId)
 }
 
 async function seedTaskWithReviewRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -37,7 +30,7 @@ async function seedTaskWithReviewRun(
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -52,7 +45,7 @@ async function seedTaskWithReviewRun(
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'r1',
@@ -65,11 +58,12 @@ async function seedTaskWithReviewRun(
 }
 
 async function seedJob(
-  db: ProviderNeutralDatabase,
-  overrides: Partial<typeof memoryDistillJobs.$inferInsert> = {},
+  db: PersistenceDb,
+  overrides: Partial<PersistenceTables['memoryDistillJobs']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'k1',
     sourceKind: 'feedback',
@@ -87,7 +81,7 @@ async function seedJob(
 
 describe('getDistillJobDetail', () => {
   describeEachProvider('database behavior', (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -98,7 +92,8 @@ describe('getDistillJobDetail', () => {
 
     test('happy path: returns job + siblings + sourceEvents + candidates + dedupSnapshot', async () => {
       const taskId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks, taskFeedback, memories } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: ulid(),
         name: 'w',
         definition: '{}',
@@ -106,7 +101,7 @@ describe('getDistillJobDetail', () => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 't',
         workflowId: (await db.select().from(workflows))[0]!.id,
@@ -121,7 +116,7 @@ describe('getDistillJobDetail', () => {
         startedAt: Date.now(),
       })
       const feedbackId = ulid()
-      await db.insert(taskFeedback).values({
+      await insertOne(db, taskFeedback, {
         id: feedbackId,
         taskId,
         authorUserId: null,
@@ -144,7 +139,7 @@ describe('getDistillJobDetail', () => {
         stderrExcerpt: 'note',
       })
       // Candidate memory produced by this job
-      await db.insert(memories).values({
+      await insertOne(db, memories, {
         id: ulid(),
         scopeType: 'global',
         scopeId: null,
@@ -204,7 +199,8 @@ describe('getDistillJobDetail', () => {
     test('clarify source event resolves to its first question title', async () => {
       const { taskId, nodeRunId } = await seedTaskWithReviewRun(db)
       const sessId = ulid()
-      await db.insert(clarifyRounds).values({
+      const { clarifyRounds } = tablesOf(db)
+      await insertOne(db, clarifyRounds, {
         kind: 'self' as const,
         id: sessId,
         taskId,
@@ -234,7 +230,8 @@ describe('getDistillJobDetail', () => {
     test('review source event resolves to decision + version label', async () => {
       const { taskId, nodeRunId } = await seedTaskWithReviewRun(db)
       const dvId = ulid()
-      await db.insert(docVersions).values({
+      const { docVersions } = tablesOf(db)
+      await insertOne(db, docVersions, {
         id: dvId,
         taskId,
         reviewNodeId: 'r1',

@@ -14,6 +14,9 @@
 // the drift-proof column discriminator, deterministic seed self-heal, and the
 // DB-level "≤1 built-in per name" guarantee that de-ambiguates fusionWorkflowId.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { WorkflowDetail } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
@@ -22,10 +25,9 @@ import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
-import { agents, skills, tasks, workflows } from '../src/db/schema'
 import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
@@ -53,11 +55,11 @@ const SRC = resolve(import.meta.dir, '..', 'src')
 
 async function buildApp(
   scope: ProviderHttpApplicationScope,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   return { db: scope.harness.db, app: (await scope.open()).app }
 }
 
-function seedFusionResourcesForDb(db: ProviderNeutralDatabase): Promise<void> {
+function seedFusionResourcesForDb(db: PersistenceDb): Promise<void> {
   return seedFusionResources(
     composeSqliteFusionPersistence({
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
@@ -89,7 +91,7 @@ function agentPayload(name: string): Record<string, unknown> {
   }
 }
 
-async function builtinWorkflowId(db: ProviderNeutralDatabase): Promise<string> {
+async function builtinWorkflowId(db: PersistenceDb): Promise<string> {
   const wf = (await listWorkflows(db)).find(
     (w) => w.name === SKILL_FUSION_WORKFLOW_NAME && w.builtin,
   )
@@ -97,7 +99,8 @@ async function builtinWorkflowId(db: ProviderNeutralDatabase): Promise<string> {
   return wf.id
 }
 
-async function builtinAgentId(db: ProviderNeutralDatabase): Promise<string> {
+async function builtinAgentId(db: PersistenceDb): Promise<string> {
+  const { agents } = tablesOf(db)
   const agent = (
     await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
   ).find((row) => row.builtin)
@@ -130,9 +133,10 @@ async function agentRevision(
 }
 
 /** Insert a task row whose workflow is the built-in (mirrors task-collab-launch). */
-async function seedTaskOnWorkflow(db: ProviderNeutralDatabase, wfId: string): Promise<string> {
+async function seedTaskOnWorkflow(db: PersistenceDb, wfId: string): Promise<string> {
   const id = ulid()
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: 'fixture',
     workflowId: wfId,
@@ -206,6 +210,7 @@ describeEachProviderHttpApplication(
         }),
       )
 
+      const { agents } = tablesOf(db)
       // The row survived all three attempts, unmodified.
       const row = (
         await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
@@ -236,6 +241,7 @@ describeEachProviderHttpApplication(
       })
       expect(ok.status).toBe(200)
       const updated = (await ok.clone().json()) as { updatedAt: number; aclRevision?: number }
+      const { agents } = tablesOf(db)
       expect(
         (await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)))[0]
           ?.runtime,
@@ -286,6 +292,7 @@ describeEachProviderHttpApplication(
           body: JSON.stringify({ expectedVersion: workflow.version, clientMutationId: ulid() }),
         }),
       )
+      const { workflows } = tablesOf(db)
       expect((await db.select().from(workflows).where(eq(workflows.id, id)))[0]?.builtin).toBe(true)
     })
 
@@ -316,6 +323,7 @@ describeEachProviderHttpApplication(
           }),
         }),
       )
+      const { workflows } = tablesOf(db)
       // Owner + visibility unchanged → still hidden + still resolvable as built-in.
       const wf = (await db.select().from(workflows).where(eq(workflows.id, id)))[0]
       expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
@@ -417,6 +425,8 @@ describe('RFC-104 — assertNotBuiltin / isBuiltinRow are the actor-blind single
       QUARANTINED_FUSION_SKILL_ID,
     ]
     expect(new Set(reservedIds).size).toBe(reservedIds.length)
+    const db = schemaFixtureDb()
+    const { skills } = tablesOf(db)
     expect(Object.hasOwn(skills, 'builtin')).toBe(false)
   })
 
@@ -454,6 +464,7 @@ describeEachProviderHttpApplication(
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
       const id = await builtinWorkflowId(db)
+      const { workflows } = tablesOf(db)
       // Simulate someone having moved owner + flipped visibility (builtin kept).
       await db
         .update(workflows)
@@ -471,6 +482,7 @@ describeEachProviderHttpApplication(
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
       const id = await builtinWorkflowId(db)
+      const { workflows } = tablesOf(db)
       // Migration backfill could miss a row; simulate builtin=0 with owner intact.
       await db.update(workflows).set({ builtin: false }).where(eq(workflows.id, id))
 
@@ -481,6 +493,7 @@ describeEachProviderHttpApplication(
     test('agent drift with __system__ owner intact (builtin/visibility) is repaired on re-seed', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
+      const { agents } = tablesOf(db)
       // The fixed ID is the authority, so identity-field drift is repaired.
       // A random-ID same-name squatter is still never adopted (covered below).
       await db
@@ -500,6 +513,7 @@ describeEachProviderHttpApplication(
     test('re-seed preserves merger customization and repairs only workflow agentId once', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
+      const { workflows, agents } = tablesOf(db)
       const workflow = (
         await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
       )[0]!
@@ -560,6 +574,7 @@ describeEachProviderHttpApplication(
     test('workflow repair never adopts another node by the merger display name', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
+      const { workflows } = tablesOf(db)
       const workflow = (
         await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
       )[0]!
@@ -596,9 +611,12 @@ describeEachProviderHttpApplication(
 
     test('a wrong-name fixed-id occupant fails closed and remains untouched', async () => {
       const { db } = await buildApp(scope)
-      await db
-        .insert(agents)
-        .values({ id: SKILL_MERGER_AGENT_ID, name: 'ordinary-agent', builtin: false })
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
+        id: SKILL_MERGER_AGENT_ID,
+        name: 'ordinary-agent',
+        builtin: false,
+      })
 
       await expect(seedFusionResourcesForDb(db)).rejects.toThrow(/stable built-in agent id/)
       expect(
@@ -609,8 +627,9 @@ describeEachProviderHttpApplication(
     test('a user same-named workflow (builtin=false) coexists; exactly one built-in remains', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
+      const { workflows } = tablesOf(db)
       // A user creates/imports their own workflow reusing the reserved name.
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: ulid(),
         name: SKILL_FUSION_WORKFLOW_NAME,
         description: 'mine',
@@ -631,23 +650,22 @@ describeEachProviderHttpApplication(
       expect(all.filter((w) => w.builtin).length).toBe(1)
 
       // The partial unique index forbids a SECOND built-in with the same name.
-      expect(
-        async () =>
-          await db.insert(workflows).values({
-            id: ulid(),
-            name: SKILL_FUSION_WORKFLOW_NAME,
-            description: 'rogue',
-            definition: JSON.stringify({
-              $schema_version: 4,
-              inputs: [],
-              nodes: [],
-              edges: [],
-              outputs: [],
-            }),
-            ownerUserId: SYSTEM_USER_ID,
-            builtin: true,
+      expect(async () => {
+        return await insertOne(db, workflows, {
+          id: ulid(),
+          name: SKILL_FUSION_WORKFLOW_NAME,
+          description: 'rogue',
+          definition: JSON.stringify({
+            $schema_version: 4,
+            inputs: [],
+            nodes: [],
+            edges: [],
+            outputs: [],
           }),
-      ).toThrow()
+          ownerUserId: SYSTEM_USER_ID,
+          builtin: true,
+        })
+      }).toThrow()
     })
 
     test('reserved-name user row coexists with the system-owned built-in bucket', async () => {
@@ -657,7 +675,8 @@ describeEachProviderHttpApplication(
       // remains untouched while the framework publishes its own system row.
       const uid = ulid()
       const userAgentId = ulid()
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         id: userAgentId,
         name: SKILL_MERGER_AGENT_NAME,
         ownerUserId: uid,

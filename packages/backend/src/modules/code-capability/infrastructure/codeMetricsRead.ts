@@ -1,13 +1,14 @@
 // RFC-359 W12 — one row reader behind the shared code metrics projection.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, count, eq, gte, isNotNull } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { codeFindings, codeWorkItems, codeWorkRounds } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CodeMetricsReadPort } from '../application/ports/codeMetricsRead'
 
-export function createCodeMetricsRead(db: ProviderNeutralDatabase): CodeMetricsReadPort {
+export function createCodeMetricsRead(db: PersistenceDb): CodeMetricsReadPort {
   return {
     async loadSince(since) {
+      const { codeFindings, codeWorkItems, codeWorkRounds } = tablesOf(db)
       // Only findings that were actually published count. An unpublished one
       // was never shown to anyone and cannot be outstanding adoption work.
       const findings = await db

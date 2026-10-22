@@ -8,9 +8,9 @@
 // both resume a paused parent and wait until the platform reports it running
 // with a ready volume. `find` / `list` are registration reads without platform
 // I/O and must never wake a volume.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, ne } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskWorkspaces } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
@@ -81,7 +81,7 @@ const REQUEST_KEY_MAX = 128
 export const HOSTED_NO_ARTIFACTS_REASON =
   'agent-workflow keeps task results in its own records; the workspace volume holds only a working copy'
 
-type Row = typeof hostedTaskWorkspaces.$inferSelect
+type Row = PersistenceTables['hostedTaskWorkspaces']['$inferSelect']
 
 /** RFC-370 §9.2 V4 — the parent's container or volume is unusable (failed,
  * or its resources are failed / unobservable after provisioning). A node, or
@@ -205,7 +205,7 @@ export const TERMINAL_SUBTASK_STATES: ReadonlySet<string> = new Set([
 ])
 
 export function createHostedTaskWorkspaces(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly api: CrewStationBusinessExecution
   readonly fence: CrewStationMutationFence
   readonly installation: string
@@ -233,15 +233,17 @@ export function createHostedTaskWorkspaces(input: {
     release === null
       ? `aw-task:${installation}:${taskId}`
       : `aw-task:${installation}:${taskId}@${sha256Hex(release).slice(0, 16)}`
-  const read = async (db: ProviderNeutralDatabase, taskId: string): Promise<Row | undefined> =>
-    (
+  const read = async (db: PersistenceDb, taskId: string): Promise<Row | undefined> => {
+    const { hostedTaskWorkspaces } = tablesOf(db)
+    return (
       await db
         .select()
         .from(hostedTaskWorkspaces)
         .where(eq(hostedTaskWorkspaces.taskId, taskId))
         .limit(1)
     )[0]
-  const write = async <T>(operation: (tx: ProviderNeutralDatabase) => Promise<T>) => {
+  }
+  const write = async <T>(operation: (tx: PersistenceDb) => Promise<T>) => {
     const fence = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, fence)
@@ -300,6 +302,7 @@ export function createHostedTaskWorkspaces(input: {
           const current = await read(tx, row.taskId)
           if (current === undefined || current.state === 'closing' || current.state === 'closed')
             throw new Error('hosted-workspace-closed')
+          const { hostedTaskWorkspaces } = tablesOf(tx)
           await tx
             .update(hostedTaskWorkspaces)
             .set({ state: 'ready', updatedAt: now() })
@@ -369,6 +372,7 @@ export function createHostedTaskWorkspaces(input: {
       ) {
         throw new Error('hosted-workspace-receipt-mismatch')
       }
+      const { hostedTaskWorkspaces } = tablesOf(tx)
       await tx
         .update(hostedTaskWorkspaces)
         .set({ businessTaskId: task.id, updatedAt: now() })
@@ -384,6 +388,7 @@ export function createHostedTaskWorkspaces(input: {
       ? null
       : { taskId: row.taskId, businessTaskId: row.businessTaskId }
   const list = async (): Promise<readonly HostedTaskWorkspace[]> => {
+    const { hostedTaskWorkspaces } = tablesOf(input.db)
     const rows = await input.db
       .select()
       .from(hostedTaskWorkspaces)
@@ -451,6 +456,7 @@ export function createHostedTaskWorkspaces(input: {
     }
     // CS accepted the close: from here on the parent is never reused.
     await write(async (tx) => {
+      const { hostedTaskWorkspaces } = tablesOf(tx)
       await tx
         .update(hostedTaskWorkspaces)
         .set({ state: 'closing', updatedAt: now() })
@@ -476,6 +482,7 @@ export function createHostedTaskWorkspaces(input: {
       if (released.state !== 'closed' || released.resourceState !== 'released') return false
     }
     await write(async (tx) => {
+      const { hostedTaskWorkspaces } = tablesOf(tx)
       await tx
         .update(hostedTaskWorkspaces)
         .set({ state: 'closed', updatedAt: now() })
@@ -532,6 +539,7 @@ export function createHostedTaskWorkspaces(input: {
       ? `${requestKey}~${sha256Hex(row.requestKey).slice(0, 12)}`
       : requestKey
     return write(async (tx) => {
+      const { hostedTaskWorkspaces } = tablesOf(tx)
       await tx
         .update(hostedTaskWorkspaces)
         .set({ requestKey: key, businessTaskId: null, state: 'creating', updatedAt: now() })
@@ -552,6 +560,7 @@ export function createHostedTaskWorkspaces(input: {
       // Persist the parent request key before network I/O so concurrent
       // preparations and a lost create response resolve to the same volume.
       let row = await write(async (tx) => {
+        const { hostedTaskWorkspaces } = tablesOf(tx)
         await tx
           .insert(hostedTaskWorkspaces)
           .values({ taskId, requestKey, state: 'creating', createdAt: now(), updatedAt: now() })
@@ -643,6 +652,7 @@ export function createHostedTaskWorkspaces(input: {
       if (hostedWorkspaceOwnerKind(taskId) !== 'task')
         throw new Error('hosted-workspace-abandon-requires-task-owner')
       await write(async (tx) => {
+        const { hostedTaskWorkspaces } = tablesOf(tx)
         await tx
           .update(hostedTaskWorkspaces)
           .set({ state: 'closing', updatedAt: now() })

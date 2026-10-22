@@ -9,11 +9,12 @@
 // routing layer runs, not just the service layer. Each route's failure mode
 // (404 / 409 / 422) is locked here so the front-end can rely on stable codes.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
@@ -23,7 +24,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -47,7 +48,7 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
 }
 
 async function seedSession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     taskId?: string
     sourceShardKey?: string | null
@@ -68,6 +69,7 @@ async function seedSession(
   }
   // Idempotently seed workflow + task rows for this clarify session.
   const workflowId = `wf_${taskId}`
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
   await db
     .insert(workflows)
     .values({
@@ -99,7 +101,7 @@ async function seedSession(
     })
     .onConflictDoNothing()
   const sourceRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -234,6 +236,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
       expect(body.roundKind).toBe('self')
       // the auto-dispatched self continuation rerun
       expect((body.reruns[0]?.nodeRunId ?? '').length).toBeGreaterThan(0)
+      const { clarifyRounds } = tablesOf(db)
       // server-sealed labels (client forgery defended) + answered flip persist on the round.
       const round = (
         await db
@@ -312,6 +315,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
           }),
         })
         expect(res.status).toBe(200)
+        const { clarifyRounds } = tablesOf(db)
         // RFC-132 PR-B: directive persists on the round via the seal (autodispatch path).
         const round = (
           await db
@@ -344,6 +348,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
           }),
         })
         expect(res.status).toBe(200)
+        const { clarifyRounds } = tablesOf(db)
         // RFC-132 PR-B: 'stop' round-trips onto the round via the seal (autodispatch path).
         const round = (
           await db
@@ -388,7 +393,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedSessionFixture: typeof seedSession,
   ) => void,
 ): void {

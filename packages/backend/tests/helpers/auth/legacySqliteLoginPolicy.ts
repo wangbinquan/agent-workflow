@@ -1,6 +1,9 @@
 // RFC-221 — single source of truth for the global login policy and the
 // one-way daemon-token → first-human-admin bootstrap handoff.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
@@ -12,14 +15,13 @@ import type {
 } from '@agent-workflow/shared'
 import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from './legacySqliteSessionStore'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 const GLOBAL_POLICY_ID = 'global'
 
-function materialize(row: typeof authLoginPolicy.$inferSelect): AuthLoginPolicy {
+function materialize(row: PersistenceTables['authLoginPolicy']['$inferSelect']): AuthLoginPolicy {
   return {
     passwordLoginEnabled: row.passwordLoginEnabled,
     oidcDefaultRole: row.oidcDefaultRole,
@@ -37,11 +39,10 @@ function missingPolicy(): never {
 }
 
 export function getAuthLoginPolicy(db: DbClient): AuthLoginPolicy {
-  const row = db
-    .select()
-    .from(authLoginPolicy)
-    .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-    .get()
+  const { authLoginPolicy } = tablesOf(db)
+  const row = first(
+    db.select().from(authLoginPolicy).where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID)),
+  )
   return row === undefined ? missingPolicy() : materialize(row)
 }
 
@@ -56,6 +57,7 @@ export async function getAuthMethodDiscovery(
   oidcRuntimeAvailable: boolean,
 ): Promise<AuthMethodDiscovery> {
   return await databaseSessionFor(db).transaction(async (tx) => {
+    const { authLoginPolicy, oidcProviders } = tablesOf(tx)
     const policy = (
       await tx
         .select()
@@ -111,11 +113,12 @@ export async function updateAuthLoginPolicy(
   // RFC-359：函数体早已是中立的（`databaseSessionFor(db).transaction` + await 的 select），
   // 只有入参类型还钉在 SQLite 上——那把这三个夹具挡在了双引擎用例之外。同文件里真正同步的
   // 那几个（`getAuthLoginPolicy` / `isBootstrapRequired` 用 `.get()`）没动。
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   patch: UpdateAuthLoginPolicyBody,
   now: number = Date.now(),
 ): Promise<AuthLoginPolicy> {
   return await databaseSessionFor(db).transaction(async (tx) => {
+    const { authLoginPolicy, oidcProviders } = tablesOf(tx)
     const current = (
       await tx
         .select()
@@ -167,7 +170,7 @@ export async function updateAuthLoginPolicy(
 }
 
 export async function setPasswordLoginEnabled(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   enabled: boolean,
   now: number = Date.now(),
 ): Promise<AuthLoginPolicy> {
@@ -175,7 +178,7 @@ export async function setPasswordLoginEnabled(
 }
 
 export async function setOidcDefaultRole(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   role: OidcDefaultRole,
   now: number = Date.now(),
 ): Promise<AuthLoginPolicy> {
@@ -206,13 +209,14 @@ export async function createPasswordLoginSession(
   input: CreatePasswordLoginSessionInput,
 ): Promise<{
   token: string
-  user: typeof users.$inferSelect
+  user: PersistenceTables['users']['$inferSelect']
 }> {
   const now = input.now ?? Date.now()
   const ttlMs = input.ttlMs ?? SESSION_DEFAULT_TTL_MS
   const token = generateSessionToken()
   const sessionId = ulid()
   return await databaseSessionFor(db).transaction(async (tx) => {
+    const { authLoginPolicy, users, userSessions } = tablesOf(tx)
     const policy = (
       await tx
         .select()
@@ -239,7 +243,7 @@ export async function createPasswordLoginSession(
     ) {
       throw new UnauthorizedError('invalid username or password')
     }
-    await tx.insert(userSessions).values({
+    await insertOne(tx, userSessions, {
       id: sessionId,
       userId: user.id,
       tokenHash: hashToken(token),

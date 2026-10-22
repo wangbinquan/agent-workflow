@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import {
   DwStateSchema,
   WorkgroupRuntimeConfigSchema,
@@ -7,19 +10,12 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm'
 
-import {
-  agents,
-  workgroupAssignments,
-  workgroupMemberCursors,
-  workgroupMessages,
-  workgroupTaskState,
-} from '@/db/schema'
 import type {
   WorkgroupHostLedgerOperation,
   WorkgroupHostLedgerParticipantInTx,
   WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { runWorkgroupCommit } from './workgroupCommitQueue'
 import {
@@ -52,7 +48,7 @@ export interface WorkgroupHostLedgerParticipantFactory {
 }
 
 export interface WorkgroupTurnsDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly hostLedgerFactory: WorkgroupHostLedgerParticipantFactory
   /** RFC-359 T7e：反问许可判定（RFC-207 §3.7.2 唯一判定点）——RC 自有端口，bootstrap 用 collaboration 的实现接上。 */
   readonly clarifyAskGate: WorkgroupClarifyAllowedPort
@@ -98,7 +94,9 @@ export function readonlyPermission(permission: unknown): boolean {
   return Reflect.get(permission, 'edit') === 'deny' && Reflect.get(permission, 'write') === 'deny'
 }
 
-function messageFromRow(row: typeof workgroupMessages.$inferSelect): WorkgroupMessage {
+function messageFromRow(
+  row: PersistenceTables['workgroupMessages']['$inferSelect'],
+): WorkgroupMessage {
   const templateParams = recordJson(row.templateParamsJson)
   const templateKey = templateParams === null ? null : row.templateKey
   return {
@@ -119,7 +117,9 @@ function messageFromRow(row: typeof workgroupMessages.$inferSelect): WorkgroupMe
   }
 }
 
-function assignmentFromRow(row: typeof workgroupAssignments.$inferSelect): WorkgroupTurnAssignment {
+function assignmentFromRow(
+  row: PersistenceTables['workgroupAssignments']['$inferSelect'],
+): WorkgroupTurnAssignment {
   return {
     id: row.id,
     taskId: row.taskId,
@@ -154,29 +154,37 @@ async function loadSnapshot(
   }
   const config = WorkgroupRuntimeConfigSchema.safeParse(parseJson(hostSnapshot.workgroupConfigJson))
   if (!config.success) return null
+  const {
+    workgroupTaskState,
+    workgroupAssignments,
+    workgroupMessages,
+    workgroupMemberCursors,
+    agents,
+  } = tablesOf(transaction)
   const [stateRow, assignmentRows, messageRows, cursorRows] = await Promise.all([
-    transaction
-      .select()
-      .from(workgroupTaskState)
-      .where(eq(workgroupTaskState.taskId, taskId))
-      .get(),
-    transaction
-      .select()
-      .from(workgroupAssignments)
-      .where(eq(workgroupAssignments.taskId, taskId))
-      .orderBy(asc(workgroupAssignments.id))
-      .all(),
-    transaction
-      .select()
-      .from(workgroupMessages)
-      .where(eq(workgroupMessages.taskId, taskId))
-      .orderBy(asc(workgroupMessages.id))
-      .all(),
-    transaction
-      .select()
-      .from(workgroupMemberCursors)
-      .where(eq(workgroupMemberCursors.taskId, taskId))
-      .all(),
+    first(
+      transaction.select().from(workgroupTaskState).where(eq(workgroupTaskState.taskId, taskId)),
+    ),
+    queryRows(
+      transaction
+        .select()
+        .from(workgroupAssignments)
+        .where(eq(workgroupAssignments.taskId, taskId))
+        .orderBy(asc(workgroupAssignments.id)),
+    ),
+    queryRows(
+      transaction
+        .select()
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.taskId, taskId))
+        .orderBy(asc(workgroupMessages.id)),
+    ),
+    queryRows(
+      transaction
+        .select()
+        .from(workgroupMemberCursors)
+        .where(eq(workgroupMemberCursors.taskId, taskId)),
+    ),
   ])
   const agentIds = [
     ...new Set(
@@ -192,7 +200,7 @@ async function loadSnapshot(
   const agentRows =
     agentIds.length === 0
       ? []
-      : await transaction.select().from(agents).where(inArray(agents.id, agentIds)).all()
+      : await transaction.select().from(agents).where(inArray(agents.id, agentIds))
   const agentById = new Map(
     agentRows.map((row) => {
       const agent = agentFromPersistenceRow(row)
@@ -258,26 +266,24 @@ async function insertMessage(
   taskId: string,
   message: WorkgroupTurnMessageDraft,
 ): Promise<void> {
-  await transaction
-    .insert(workgroupMessages)
-    .values({
-      id: message.id,
-      taskId,
-      round: message.round,
-      authorKind: message.authorKind,
-      authorMemberId: message.authorMemberId,
-      authorUserId: message.authorUserId,
-      kind: message.kind,
-      bodyMd: message.bodyMd,
-      templateKey: message.templateKey,
-      templateParamsJson:
-        message.templateParams === null ? null : JSON.stringify(message.templateParams),
-      mentionsJson: JSON.stringify(message.mentionMemberIds),
-      assignmentId: message.assignmentId,
-      triggerMessageId: message.triggerMessageId,
-      createdAt: message.createdAt,
-    })
-    .run()
+  const { workgroupMessages } = tablesOf(transaction)
+  await insertOne(transaction, workgroupMessages, {
+    id: message.id,
+    taskId,
+    round: message.round,
+    authorKind: message.authorKind,
+    authorMemberId: message.authorMemberId,
+    authorUserId: message.authorUserId,
+    kind: message.kind,
+    bodyMd: message.bodyMd,
+    templateKey: message.templateKey,
+    templateParamsJson:
+      message.templateParams === null ? null : JSON.stringify(message.templateParams),
+    mentionsJson: JSON.stringify(message.mentionMemberIds),
+    assignmentId: message.assignmentId,
+    triggerMessageId: message.triggerMessageId,
+    createdAt: message.createdAt,
+  })
 }
 
 function assertAssignmentTransition(
@@ -344,6 +350,7 @@ async function applyResourceCatalogOperation(
   const engine = engineOf(transaction)
   const now = Date.now()
   if (operation.kind === 'ensure-task-state') {
+    const { workgroupTaskState } = tablesOf(transaction)
     await transaction
       .insert(workgroupTaskState)
       .values({
@@ -356,21 +363,23 @@ async function applyResourceCatalogOperation(
         updatedAt: now,
       })
       .onConflictDoNothing({ target: workgroupTaskState.taskId })
-      .run()
     return null
   }
   if (operation.kind === 'seed-goal-if-empty') {
-    const existing = await transaction
-      .select({ id: workgroupMessages.id })
-      .from(workgroupMessages)
-      .where(eq(workgroupMessages.taskId, taskId))
-      .limit(1)
-      .get()
+    const { workgroupMessages } = tablesOf(transaction)
+    const existing = await first(
+      transaction
+        .select({ id: workgroupMessages.id })
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.taskId, taskId))
+        .limit(1),
+    )
     if (existing === undefined) await insertMessage(transaction, taskId, operation.message)
     return null
   }
   if (operation.kind === 'transition-assignment') {
     assertAssignmentTransition(operation)
+    const { workgroupAssignments } = tablesOf(transaction)
     const changed = await transaction
       .update(workgroupAssignments)
       .set({
@@ -395,11 +404,11 @@ async function applyResourceCatalogOperation(
         ),
       )
       .returning({ id: workgroupAssignments.id })
-      .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
     return null
   }
   if (operation.kind === 'repoint-assignment-run') {
+    const { workgroupAssignments } = tablesOf(transaction)
     const changed = await transaction
       .update(workgroupAssignments)
       .set({ nodeRunId: operation.nodeRunId, updatedAt: now })
@@ -411,51 +420,53 @@ async function applyResourceCatalogOperation(
         ),
       )
       .returning({ id: workgroupAssignments.id })
-      .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
     return null
   }
   if (operation.kind === 'create-assignment') {
     if (operation.assignment.dedupKey !== null) {
-      const occupied = await transaction
-        .select({ id: workgroupAssignments.id })
-        .from(workgroupAssignments)
-        .where(
-          and(
-            eq(workgroupAssignments.taskId, taskId),
-            eq(workgroupAssignments.dedupKey, operation.assignment.dedupKey),
-            ne(workgroupAssignments.status, 'canceled'),
-          ),
-        )
-        .limit(1)
-        .get()
+      const { workgroupAssignments } = tablesOf(transaction)
+      const occupied = await first(
+        transaction
+          .select({ id: workgroupAssignments.id })
+          .from(workgroupAssignments)
+          .where(
+            and(
+              eq(workgroupAssignments.taskId, taskId),
+              eq(workgroupAssignments.dedupKey, operation.assignment.dedupKey),
+              ne(workgroupAssignments.status, 'canceled'),
+            ),
+          )
+          .limit(1),
+      )
       // 撞上还没取消的同名卡：这一条被丢弃，把键报给调用方去贴系统消息。
       if (occupied !== undefined) return operation.operationKey
     }
-    await transaction
-      .insert(workgroupAssignments)
-      .values({ ...operation.assignment, taskId })
-      .run()
+    const { workgroupAssignments } = tablesOf(transaction)
+    await insertOne(transaction, workgroupAssignments, { ...operation.assignment, taskId })
     return null
   }
   if (operation.kind === 'create-message') {
     if (operation.message.kind === 'dispatch' && operation.message.assignmentId !== null) {
-      const assignment = await transaction
-        .select({ id: workgroupAssignments.id })
-        .from(workgroupAssignments)
-        .where(
-          and(
-            eq(workgroupAssignments.taskId, taskId),
-            eq(workgroupAssignments.id, operation.message.assignmentId),
+      const { workgroupAssignments } = tablesOf(transaction)
+      const assignment = await first(
+        transaction
+          .select({ id: workgroupAssignments.id })
+          .from(workgroupAssignments)
+          .where(
+            and(
+              eq(workgroupAssignments.taskId, taskId),
+              eq(workgroupAssignments.id, operation.message.assignmentId),
+            ),
           ),
-        )
-        .get()
+      )
       if (assignment === undefined) return null
     }
     await insertMessage(transaction, taskId, operation.message)
     return null
   }
   if (operation.kind === 'advance-member-cursor') {
+    const { workgroupMemberCursors } = tablesOf(transaction)
     await transaction
       .insert(workgroupMemberCursors)
       .values({
@@ -474,11 +485,11 @@ async function applyResourceCatalogOperation(
           updatedAt: now,
         },
       })
-      .run()
     return null
   }
   if (operation.kind === 'transition-gate') {
     assertGateTransition(operation)
+    const { workgroupTaskState } = tablesOf(transaction)
     const changed = await transaction
       .update(workgroupTaskState)
       .set({ gateStatus: operation.to, updatedAt: now, ...gatePatch(operation) })
@@ -489,21 +500,21 @@ async function applyResourceCatalogOperation(
         ),
       )
       .returning({ taskId: workgroupTaskState.taskId })
-      .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
     return null
   }
   if (operation.kind === 'set-pause-reason') {
+    const { workgroupTaskState } = tablesOf(transaction)
     const changed = await transaction
       .update(workgroupTaskState)
       .set({ pauseReason: operation.reason, updatedAt: now })
       .where(eq(workgroupTaskState.taskId, taskId))
       .returning({ taskId: workgroupTaskState.taskId })
-      .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
     return null
   }
   if (operation.kind === 'set-dynamic-workflow-state') {
+    const { workgroupTaskState } = tablesOf(transaction)
     const changed = await transaction
       .update(workgroupTaskState)
       .set({
@@ -512,16 +523,15 @@ async function applyResourceCatalogOperation(
       })
       .where(eq(workgroupTaskState.taskId, taskId))
       .returning({ taskId: workgroupTaskState.taskId })
-      .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
     return null
   }
+  const { workgroupTaskState } = tablesOf(transaction)
   const changed = await transaction
     .update(workgroupTaskState)
     .set({ resultMessageId: operation.messageId, updatedAt: now })
     .where(eq(workgroupTaskState.taskId, taskId))
     .returning({ taskId: workgroupTaskState.taskId })
-    .all()
   if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
   return null
 }

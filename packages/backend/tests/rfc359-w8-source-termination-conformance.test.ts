@@ -54,12 +54,13 @@
 //   交错窗口靠 RFC-300 的回收策略回调撑开——两个引擎都在「读到 priorStatus 之后、终态写之前」
 //   await 它一次，是唯一一个对两侧都成立的确定性交错点，不用 sleep、不用墙钟。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { and, desc, eq, sql as sqlExpr } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { committedEvents, nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { EventObservationParticipant } from '@/modules/event-center/public/participants'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
 import type {
@@ -91,7 +92,7 @@ function participantFor(harness: ProviderHarness): TaskSourceTerminationParticip
  * RFC-300 的生产策略本体（provider 中立），两个引擎注册的是同一份。
  * 全局单例——每个用例后必须还原，否则会漏给同进程的其它测试。
  */
-function registerProductionPrunePolicy(db: ProviderNeutralDatabase): void {
+function registerProductionPrunePolicy(db: PersistenceDb): void {
   registerTerminalWorkspacePrunePolicy(
     createWebhookTerminalWorkspacePrunePolicy({
       attribution: createWebhookTerminalWorkspaceAttributionQueries(db),
@@ -124,7 +125,7 @@ interface Seeded {
   readonly intentId: string
 }
 
-async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}): Promise<Seeded> {
+async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<Seeded> {
   const taskId = overrides.taskId ?? `task-${ulid()}`
   const openRunId = `run-open-${ulid()}`
   const doneRunId = `run-done-${ulid()}`
@@ -133,7 +134,8 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
   const slotPath = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ])
-  await db.insert(tasks).values({
+  const { tasks, nodeRuns, taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w8-source-termination',
@@ -186,7 +188,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
       operationGeneration: 0,
     },
   ])
-  await db.insert(taskExecutionIntents).values({
+  await insertOne(db, taskExecutionIntents, {
     id: intentId,
     taskId,
     kind: 'launch',
@@ -225,7 +227,8 @@ async function apply(
   return await participantFor(harness).apply(mintSourceTerminationEffectCapability(input), input)
 }
 
-async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
+async function taskRow(db: PersistenceDb, taskId: string) {
+  const { tasks } = tablesOf(db)
   const rows = await db
     .select({
       status: tasks.status,
@@ -246,9 +249,10 @@ async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
 
 /** 这次转移落下的 `task.lifecycle-transitioned.v1` **整个信封**（消费者吃的就是它）。 */
 async function lifecycleEventEnvelope(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<CommittedEventEnvelopeV1> {
+  const { committedEvents } = tablesOf(db)
   const rows = await db
     .select({ payloadJson: committedEvents.payloadJson })
     .from(committedEvents)
@@ -267,9 +271,10 @@ async function lifecycleEventEnvelope(
 
 /** 这次转移落下的 `task.lifecycle-transitioned.v1` payload（没有就是 null）。 */
 async function lifecycleEventPayload(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<Record<string, unknown> | null> {
+  const { committedEvents } = tablesOf(db)
   const rows = await db
     .select({ payloadJson: committedEvents.payloadJson })
     .from(committedEvents)
@@ -288,7 +293,8 @@ async function lifecycleEventPayload(
   return envelope.payload ?? null
 }
 
-async function runRow(db: ProviderNeutralDatabase, id: string) {
+async function runRow(db: PersistenceDb, id: string) {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ status: nodeRuns.status, errorMessage: nodeRuns.errorMessage })
     .from(nodeRuns)
@@ -297,7 +303,8 @@ async function runRow(db: ProviderNeutralDatabase, id: string) {
   return rows[0]
 }
 
-async function intentRow(db: ProviderNeutralDatabase, id: string) {
+async function intentRow(db: PersistenceDb, id: string) {
+  const { taskExecutionIntents } = tablesOf(db)
   const rows = await db
     .select({ state: taskExecutionIntents.state, failureCode: taskExecutionIntents.failureCode })
     .from(taskExecutionIntents)
@@ -570,6 +577,7 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
     registerTerminalWorkspacePrunePolicy(async () => {
       if (!raced) {
         raced = true
+        const { tasks } = tablesOf(harness.db)
         await harness.db
           .update(tasks)
           .set({
@@ -667,6 +675,7 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
         fence: 'closed',
         effectRevision: 5,
       })
+      const { committedEvents } = tablesOf(harness.db)
       const events = await harness.db
         .select({ id: committedEvents.id })
         .from(committedEvents)

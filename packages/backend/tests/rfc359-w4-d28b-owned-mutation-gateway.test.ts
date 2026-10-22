@@ -13,22 +13,22 @@
 //      当场拒绝，且拒绝之后那一行原样不动。这是迁移**带来的**行为变化——旧的同步网关在无上下文
 //      分支里既不开事务也不设围栏，直接裸写；PG 侧一直是有围栏的，合一即以有围栏的那侧为准。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionOwners, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTaskWithNodeRun(
-  db: ProviderNeutralDatabase,
-): Promise<{ taskId: string; runId: string }> {
+async function seedTaskWithNodeRun(db: PersistenceDb): Promise<{ taskId: string; runId: string }> {
   const taskId = `d28b_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-d28b',
     description: '',
@@ -36,7 +36,7 @@ async function seedTaskWithNodeRun(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -55,7 +55,7 @@ async function seedTaskWithNodeRun(
     ]),
   })
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -67,9 +67,10 @@ async function seedTaskWithNodeRun(
 }
 
 /** 一个活着的 owner：无主围栏正是要为它让路的那种写手。 */
-async function seedLiveOwner(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function seedLiveOwner(db: PersistenceDb, taskId: string): Promise<void> {
   const now = Date.now()
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: `owner_${ulid()}`,
     daemonGeneration: `gen_${ulid()}`,
@@ -82,7 +83,8 @@ async function seedLiveOwner(db: ProviderNeutralDatabase, taskId: string): Promi
   })
 }
 
-async function mergeStateOf(db: ProviderNeutralDatabase, runId: string): Promise<string | null> {
+async function mergeStateOf(db: PersistenceDb, runId: string): Promise<string | null> {
+  const { nodeRuns } = tablesOf(db)
   const rows = await db
     .select({ mergeState: nodeRuns.mergeState })
     .from(nodeRuns)

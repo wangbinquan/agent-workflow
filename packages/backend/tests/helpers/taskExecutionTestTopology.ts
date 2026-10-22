@@ -55,7 +55,7 @@ import { createTaskExecutionPersistence as createChildPersistence } from '../../
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createLogger } from '../../src/util/log'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
 import type { CodeHostConnectionsService } from '../../src/services/codeHost/connections'
@@ -102,7 +102,7 @@ export function createTaskExecutionTestIdentity(db: DbClient) {
  * 与 `server.ts` 回退路同形——走**同一份** `composeWorkgroupLaunchResourceOperations`，
  * 别在测试里手拼 ACL 读法（批次二 ① 实撞过：手拼的那版认不出委派 actor，PG 上 500）。
  */
-export function composeTestChildLaunchWorkgroup(db: ProviderNeutralDatabase) {
+export function composeTestChildLaunchWorkgroup(db: PersistenceDb) {
   return composeWorkgroupLaunchResourceOperations({
     db,
     integrity: composeDatabaseAgentResourceIntegrity({

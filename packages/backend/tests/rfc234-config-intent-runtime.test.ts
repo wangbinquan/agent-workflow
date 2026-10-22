@@ -14,7 +14,7 @@ import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApp
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveIntentTurnConfig } from '@/modules/intent/application/turnEngine'
 import { intentTurnRuntimeResolverForTest } from './helpers/intentResourceCatalogBinding'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -28,7 +28,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function buildApplication<TDatabase extends ProviderNeutralDatabase>(
+async function buildApplication<TDatabase extends PersistenceDb>(
   database: () => TDatabase,
   compose: (db: TDatabase, root: string, configPath: string) => Hono | Promise<Hono>,
 ): Promise<{ app: Hono; configPath: string; db: TDatabase }> {
@@ -126,7 +126,7 @@ function registerProviderApplication(
     makeApp: () => Promise<{
       app: Hono
       configPath: string
-      db: ProviderNeutralDatabase
+      db: PersistenceDb
     }>,
   ) => void,
 ): void {

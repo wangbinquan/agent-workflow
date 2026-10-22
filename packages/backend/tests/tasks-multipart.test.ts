@@ -30,7 +30,7 @@ import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -117,7 +117,7 @@ describeEachProvider('RFC-359 W51 multipart database', (databaseHarness) => {
     }
 
     interface Harness {
-      db: ProviderNeutralDatabase
+      db: PersistenceDb
       app: Hono
       repoPath: string
       workflowId: string

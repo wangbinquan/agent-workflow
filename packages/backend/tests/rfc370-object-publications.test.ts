@@ -4,14 +4,11 @@
 // bytes; owner release is unpinned only behind the backup release horizon;
 // links pin without copying; settled rows are purged; nothing here blocks a
 // backup. Replaces the six per-owner journals deleted by §9.3.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import {
-  developmentObjectArtifacts,
-  hostedDatabaseBackups,
-  hostedObjectPublications,
-} from '@/db/schema'
 import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/infrastructure/crewstation/backupReleaseHorizon'
 import {
   createHostedObjectPublications,
@@ -72,13 +69,15 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
       publications: journal.publications,
       maintenance: (sweeps: readonly HostedObjectOwnerSweep[] = []) =>
         journal.maintenance({ horizon, sweeps }),
-      row: async (owner: string, key: string) =>
-        (
+      row: async (owner: string, key: string) => {
+        const { hostedObjectPublications } = tablesOf(harness.db)
+        return (
           await harness.db
             .select()
             .from(hostedObjectPublications)
             .where(eq(hostedObjectPublications.id, hostedPublicationId(owner, key)))
-        )[0],
+        )[0]
+      },
       advance: (ms: number) => {
         timestamp += ms
       },
@@ -100,7 +99,8 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
       [{ owner: 'development-evidence', key: `blob:${bytes.sha256}`, content: bytes }],
       {
         commit: async (tx, [receipt]) => {
-          await tx.insert(developmentObjectArtifacts).values({
+          const { developmentObjectArtifacts } = tablesOf(tx)
+          await insertOne(tx, developmentObjectArtifacts, {
             reference: `blob:${bytes.sha256}`,
             objectId: receipt!.id,
             digest: receipt!.sha256,
@@ -113,6 +113,7 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
     const row = await f.row('development-evidence', `blob:${bytes.sha256}`)
     expect(row).toMatchObject({ state: 'ready', objectId: object!.id, sourceSealed: null })
     expect(f.pins).toEqual([hostedPublicationPin(row!)])
+    const { developmentObjectArtifacts } = tablesOf(harness.db)
     expect(await harness.db.select().from(developmentObjectArtifacts)).toHaveLength(1)
     // A repeated publication reuses the receipt without reopening the source.
     const [again] = await f.publications.publish([
@@ -172,7 +173,8 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
   test('an abandoned upload whose bytes never arrived settles without a platform release', async () => {
     const f = fixture()
     const bytes = content('never uploaded')
-    await harness.db.insert(hostedObjectPublications).values({
+    const { hostedObjectPublications } = tablesOf(harness.db)
+    await insertOne(harness.db, hostedObjectPublications, {
       id: hostedPublicationId('task-artifact', 'runs/t2/inputs/manifest.json'),
       owner: 'task-artifact',
       logicalKey: 'runs/t2/inputs/manifest.json',
@@ -247,8 +249,9 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
       state: 'building' | 'ready' | 'failed',
       createdAt: number,
       snapshotAt: number | null,
-    ) =>
-      harness.db.insert(hostedDatabaseBackups).values({
+    ) => {
+      const { hostedDatabaseBackups } = tablesOf(harness.db)
+      return harness.db.insert(hostedDatabaseBackups).values({
         id,
         epoch: 1,
         kind: 'manual',
@@ -268,6 +271,7 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
         createdAt,
         updatedAt: createdAt,
       })
+    }
     const start = f.now()
     await f.publications.publish([
       { owner: 'task-artifact', key: 'k1', scope: 't', bytes: Buffer.from('one') },
@@ -280,6 +284,7 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
     await f.publications.release({ owner: 'task-artifact', keys: ['k1'] })
     expect(await f.maintenance().run()).toMatchObject({ protected: 1, released: 0 })
     expect(f.releases).toEqual([])
+    const { hostedDatabaseBackups } = tablesOf(harness.db)
     // Once that backup is released, the object is unpinned on a later pass.
     await harness.db
       .update(hostedDatabaseBackups)
@@ -302,7 +307,8 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
     await f.publications.publish([
       { owner: 'task-artifact', key: 'k', scope: 't', bytes: Buffer.from('x') },
     ])
-    await harness.db.insert(hostedDatabaseBackups).values({
+    const { hostedDatabaseBackups } = tablesOf(harness.db)
+    await insertOne(harness.db, hostedDatabaseBackups, {
       id: '01a13e6d-3e00-7000-9e3c-0000000000b1',
       epoch: 1,
       kind: 'manual',

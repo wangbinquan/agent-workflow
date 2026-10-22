@@ -1,9 +1,9 @@
 // RFC-349 — PostgreSQL AI-attempt reads preserve the bounded public projection
 // and retry ordering used by the SQLite behavior oracle.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   ATTEMPTS_PER_ROUND,
   createCodeRoundAttemptsQuery,
@@ -31,7 +31,10 @@ function fixture(response: readonly (readonly unknown[])[]) {
     executions.push({ sql: query, parameters })
     return rows(response)
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -60,10 +63,6 @@ function fixture(response: readonly (readonly unknown[])[]) {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL code attempts adapter', () => {
   test('projects attempt identity, retry counters, verdict, and runtime references', async () => {

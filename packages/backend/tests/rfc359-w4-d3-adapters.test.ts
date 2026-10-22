@@ -3,12 +3,13 @@
 // actor 的 grant 等级）、identity 行 CAS 与 grants 整体替换、after-write 钩子在同一事务里、非自有类型拒绝、
 // owner+name 唯一键撞库经能力矩阵归类。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createResourceAclReadPort,
   createResourceCatalogAclIdentityReadPort,
@@ -27,11 +28,12 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: 'active' | 'disabled' = 'active',
 ): Promise<string> {
   const id = `u_d3_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -44,12 +46,13 @@ async function seedUser(
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   ownerUserId: string,
   name = id,
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'd3',
@@ -130,6 +133,7 @@ describeEachProvider('RFC-359 W4-D3 —— resource-catalog ACL 内核', (harnes
     const changes: Array<{ readonly resourceId: string; readonly grantsSeenInTx: number }> = []
     const mutations = createResourceAclMutationPort(db, {
       async afterWriteInTransaction(tx, change) {
+        const { resourceGrants } = tablesOf(tx)
         const rows = await tx
           .select({ userId: resourceGrants.userId })
           .from(resourceGrants)
@@ -226,6 +230,7 @@ describeEachProvider('RFC-359 W4-D3 —— resource-catalog ACL 内核', (harnes
       },
     )
     expect(second?.aclRevision).toBe(2)
+    const { resourceGrants, agents } = tablesOf(db)
     expect(
       (await db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a')))[0],
     ).toMatchObject({

@@ -20,6 +20,8 @@
 // 另保留 `digitalEmployeeExecutionIsLive` 的四条纯判据：它仍是 inspect 报 `pending` 的唯一
 // 依据，`interrupted` 是终态但「daemon 重启打断、自动恢复未停用」那一种必须算活着。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
@@ -31,8 +33,7 @@ import {
   reactionService,
   seedReaction,
 } from './helpers/rfc368ReactionFixture'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DigitalEmployeeExecutionCore } from '@/modules/task-execution/application/ports/digitalEmployeeExecutionCore'
 import { composeReactionExecutionPortV1 } from '@/modules/task-execution/application/adapters/reaction-execution-adapter'
 import {
@@ -42,7 +43,8 @@ import {
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
-async function insertTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function insertTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
   await db
     .insert(workflows)
     .values({
@@ -54,29 +56,25 @@ async function insertTask(db: ProviderNeutralDatabase, taskId: string): Promise<
       updatedAt: 1,
     })
     .onConflictDoNothing()
-    .run()
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: `wf-${taskId}`,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/e9c',
-      worktreePath: '/tmp/e9c',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      baseCommit: null,
-      status: 'running',
-      inputs: '{}',
-      startedAt: 1,
-      digitalEmployeeRoundId: REACTION_ROUND,
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: taskId,
+    workflowId: `wf-${taskId}`,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/e9c',
+    worktreePath: '/tmp/e9c',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    baseCommit: null,
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+    digitalEmployeeRoundId: REACTION_ROUND,
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+  })
 }
 
 describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
@@ -182,12 +180,12 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
     }
 
     async function taskRowsForRound(): Promise<string[]> {
+      const { tasks } = tablesOf(harness.db)
       return (
         await harness.db
           .select({ id: tasks.id })
           .from(tasks)
           .where(eq(tasks.digitalEmployeeRoundId, REACTION_ROUND))
-          .all()
       ).map((row) => row.id)
     }
 

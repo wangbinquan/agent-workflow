@@ -20,6 +20,8 @@
 //   ⑤ 版本提交 / 回滚 —— 版本行与 live 内容在两个引擎上同形
 //   ⑥ 孤儿锁 GC
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,8 +29,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skills, skillOperationLocks, skillOperations } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   createManagedSkill,
@@ -78,11 +79,7 @@ function appHomeDir(): string {
   return dir
 }
 
-async function seed(
-  db: ProviderNeutralDatabase,
-  appHome: string,
-  name: string,
-): Promise<{ id: string }> {
+async function seed(db: PersistenceDb, appHome: string, name: string): Promise<{ id: string }> {
   const skill = await createManagedSkill(
     db,
     { appHome },
@@ -146,6 +143,7 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
       status: 409,
       code: 'skill-name-in-use',
     })
+    const { skills, skillOperationLocks } = tablesOf(harness.db)
     // 失败的那次不留残渣：没有多出来的行、没有挂着的 op 或锁。
     expect(await harness.db.select().from(skills)).toHaveLength(1)
     expect(await listActiveOps(harness.db)).toHaveLength(0)
@@ -161,7 +159,8 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     // 一行 reservation_state='reserving' 的技能（对 list/read 不可见）+ 一个 active 的 reserve op + 锁。
     // dual-provider-parity-audit P0-11 说的正是这个残留在 PG 上永远没人清——该技能存不下来、同名也永远建不了。
     const opId = await session.transaction(async (tx) => {
-      await tx.insert(skills).values({
+      const { skills } = tablesOf(tx)
+      await insertOne(tx, skills, {
         id: orphanId,
         name: 'crashed-create',
         description: 'never completed',
@@ -185,6 +184,7 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     const report = await recoverSkillOperations(harness.db, { appHome }, SKILL_OP_RECOVERY_REGISTRY)
     expect(report).toMatchObject({ total: 1, rolledBack: 1, noHandler: 0, quarantined: 0 })
     expect(await listActiveOps(harness.db)).toHaveLength(0)
+    const { skillOperationLocks, skills } = tablesOf(harness.db)
     expect(
       await harness.db.select().from(skillOperationLocks).where(eq(skillOperationLocks.opId, opId)),
     ).toHaveLength(0)
@@ -278,6 +278,7 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
         }),
     )
     await session.transaction(async (tx) => {
+      const { skillOperations } = tablesOf(tx)
       await tx.delete(skillOperations).where(eq(skillOperations.opId, orphanOp))
     })
     expect((await listOrphanLocks(harness.db)).map((lock) => lock.opId)).toEqual([orphanOp])
@@ -285,6 +286,7 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     const cleared = await session.transaction(async (tx) => await gcOrphanLocks(tx))
     expect(cleared).toBe(1)
     expect(await listOrphanLocks(harness.db)).toHaveLength(0)
+    const { skillOperationLocks } = tablesOf(harness.db)
     // 活着那个 op 的锁没被顺手清掉。
     expect(
       await harness.db
@@ -317,6 +319,7 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     await session.transaction(async (tx) => await finishOperation(tx, opId))
 
     expect(await listActiveOps(harness.db)).toHaveLength(0)
+    const { skillOperationLocks, skills } = tablesOf(harness.db)
     expect(
       await harness.db.select().from(skillOperationLocks).where(eq(skillOperationLocks.opId, opId)),
     ).toHaveLength(0)

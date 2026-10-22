@@ -1,8 +1,10 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { fusions, memories, skills, skillVersions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { repairFusionProvenance } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
 import { composeFusionPersistenceFor } from '../src/modules/knowledge-evolution/composition/fusion'
@@ -10,58 +12,52 @@ import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
 import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function addSkill(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db
-    .insert(skills)
-    .values({
-      id,
-      name: `name-${id}`,
-      managedPath: `skills/${id}/files`,
-      contentVersion: 10,
-      versionState: 'snapshot-authoritative',
-    })
-    .run()
+async function addSkill(db: PersistenceDb, id: string): Promise<void> {
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
+    id,
+    name: `name-${id}`,
+    managedPath: `skills/${id}/files`,
+    contentVersion: 10,
+    versionState: 'snapshot-authoritative',
+  })
 }
 
 async function addFusionVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fusionId: string,
   skillId: string,
   versionIndex: number,
 ): Promise<void> {
-  await db
-    .insert(skillVersions)
-    .values({
-      id: `version-${fusionId}-${skillId}-${versionIndex}`,
-      skillId,
-      versionIndex,
-      filesPath: `skills/${skillId}/versions/v${versionIndex}/files`,
-      source: 'fusion',
-      fusionId,
-      createdAt: versionIndex,
-    })
-    .run()
+  const { skillVersions } = tablesOf(db)
+  await insertOne(db, skillVersions, {
+    id: `version-${fusionId}-${skillId}-${versionIndex}`,
+    skillId,
+    versionIndex,
+    filesPath: `skills/${skillId}/versions/v${versionIndex}/files`,
+    source: 'fusion',
+    fusionId,
+    createdAt: versionIndex,
+  })
 }
 
 async function addFusion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
-  patch: Partial<typeof fusions.$inferInsert> = {},
+  patch: Partial<PersistenceTables['fusions']['$inferInsert']> = {},
 ): Promise<void> {
-  await db
-    .insert(fusions)
-    .values({
-      id,
-      skillId: QUARANTINED_FUSION_SKILL_ID,
-      skillName: `historical-${id}`,
-      baseSkillVersion: 1,
-      memoryIdsJson: '[]',
-      status: 'failed',
-      ownerUserId: '__system__',
-      createdAt: 1,
-      ...patch,
-    })
-    .run()
+  const { fusions } = tablesOf(db)
+  await insertOne(db, fusions, {
+    id,
+    skillId: QUARANTINED_FUSION_SKILL_ID,
+    skillName: `historical-${id}`,
+    baseSkillVersion: 1,
+    memoryIdsJson: '[]',
+    status: 'failed',
+    ownerUserId: '__system__',
+    createdAt: 1,
+    ...patch,
+  })
 }
 
 describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
@@ -134,63 +130,61 @@ describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
       }),
     })
 
-    await db
-      .insert(memories)
-      .values([
-        {
-          id: 'memory-exact',
-          scopeType: 'global',
-          scopeId: null,
-          title: 'exact',
-          bodyMd: 'body',
-          status: 'fused',
-          sourceKind: 'manual',
-          createdAt: 1,
-          fusedIntoSkill: 'historical',
-          fusedIntoSkillId: QUARANTINED_FUSION_SKILL_ID,
-          fusedIntoSkillVersion: 2,
-          fusedFusionId: 'malformed-ledger',
-        },
-        {
-          id: 'memory-wrong-version',
-          scopeType: 'global',
-          scopeId: null,
-          title: 'wrong',
-          bodyMd: 'body',
-          status: 'fused',
-          sourceKind: 'manual',
-          createdAt: 2,
-          fusedIntoSkill: 'historical',
-          fusedIntoSkillId: 'skill-ledger',
-          fusedIntoSkillVersion: 3,
-          fusedFusionId: 'malformed-ledger',
-        },
-        {
-          id: 'memory-quarantined-parent',
-          scopeType: 'global',
-          scopeId: null,
-          title: 'quarantined',
-          bodyMd: 'body',
-          status: 'fused',
-          sourceKind: 'manual',
-          createdAt: 3,
-          fusedIntoSkill: 'historical',
-          fusedIntoSkillId: 'deleted-skill-id',
-          fusedIntoSkillVersion: 2,
-          fusedFusionId: 'token-ledger-disagree',
-        },
-        {
-          id: 'memory-approved',
-          scopeType: 'global',
-          scopeId: null,
-          title: 'approved',
-          bodyMd: 'body',
-          status: 'approved',
-          sourceKind: 'manual',
-          createdAt: 4,
-        },
-      ])
-      .run()
+    const { memories, fusions } = tablesOf(db)
+    await db.insert(memories).values([
+      {
+        id: 'memory-exact',
+        scopeType: 'global',
+        scopeId: null,
+        title: 'exact',
+        bodyMd: 'body',
+        status: 'fused',
+        sourceKind: 'manual',
+        createdAt: 1,
+        fusedIntoSkill: 'historical',
+        fusedIntoSkillId: QUARANTINED_FUSION_SKILL_ID,
+        fusedIntoSkillVersion: 2,
+        fusedFusionId: 'malformed-ledger',
+      },
+      {
+        id: 'memory-wrong-version',
+        scopeType: 'global',
+        scopeId: null,
+        title: 'wrong',
+        bodyMd: 'body',
+        status: 'fused',
+        sourceKind: 'manual',
+        createdAt: 2,
+        fusedIntoSkill: 'historical',
+        fusedIntoSkillId: 'skill-ledger',
+        fusedIntoSkillVersion: 3,
+        fusedFusionId: 'malformed-ledger',
+      },
+      {
+        id: 'memory-quarantined-parent',
+        scopeType: 'global',
+        scopeId: null,
+        title: 'quarantined',
+        bodyMd: 'body',
+        status: 'fused',
+        sourceKind: 'manual',
+        createdAt: 3,
+        fusedIntoSkill: 'historical',
+        fusedIntoSkillId: 'deleted-skill-id',
+        fusedIntoSkillVersion: 2,
+        fusedFusionId: 'token-ledger-disagree',
+      },
+      {
+        id: 'memory-approved',
+        scopeType: 'global',
+        scopeId: null,
+        title: 'approved',
+        bodyMd: 'body',
+        status: 'approved',
+        sourceKind: 'manual',
+        createdAt: 4,
+      },
+    ])
 
     const first = await repairFusionProvenance(persistence)
     expect(first.repairedFusions).toBe(2)
@@ -201,7 +195,6 @@ describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
     const rows = await db
       .select({ id: fusions.id, skillId: fusions.skillId, status: fusions.status })
       .from(fusions)
-      .all()
     const byId = new Map(rows.map((row) => [row.id, row]))
     expect(byId.get('token-only')?.skillId).toBe('deleted-skill-id')
     expect(byId.get('malformed-ledger')?.skillId).toBe('skill-ledger')
@@ -224,7 +217,6 @@ describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
           .select({ id: memories.id, skillId: memories.fusedIntoSkillId })
           .from(memories)
           .where(eq(memories.status, 'fused'))
-          .all()
       ).sort((a, b) => a.id.localeCompare(b.id)),
     ).toEqual([
       { id: 'memory-exact', skillId: 'skill-ledger' },
@@ -235,11 +227,12 @@ describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
       { id: 'memory-wrong-version', skillId: QUARANTINED_FUSION_SKILL_ID },
     ])
     expect(
-      await db
-        .select({ skillId: memories.fusedIntoSkillId })
-        .from(memories)
-        .where(eq(memories.id, 'memory-approved'))
-        .get(),
+      await firstRow(
+        db
+          .select({ skillId: memories.fusedIntoSkillId })
+          .from(memories)
+          .where(eq(memories.id, 'memory-approved')),
+      ),
     ).toEqual({ skillId: null })
 
     expect(await repairFusionProvenance(persistence)).toEqual({

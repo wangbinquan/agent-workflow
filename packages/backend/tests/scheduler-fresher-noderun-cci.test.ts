@@ -9,11 +9,10 @@
 // pending row still outranks any prior done row at a lower clarifyIteration,
 // even when retryIndex was inflated by RFC-042 same-session retries.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { isFresherNodeRun } from '../src/services/scheduler'
-import type { nodeRuns } from '../src/db/schema'
-
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 function mkRow(opts: {
   id: string

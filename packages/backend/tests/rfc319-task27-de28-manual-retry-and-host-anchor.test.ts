@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-319 TASK-27 / DE-28 —— 两条被 RFC-359 AC-1 合一顺手丢掉的装配步骤。
 //
@@ -24,7 +25,6 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { workflows } from '@/db/schema'
 import {
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME,
@@ -107,6 +107,7 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
 describeEachProvider('RFC-319 DE-28 —— 数字员工宿主工作流的锚行', (harness) => {
   test('库内缺省端口里的 hostWorkflow.ensure() 真的把 builtin 锚行写进去，且幂等', async () => {
     const db = harness.db
+    const { workflows } = tablesOf(db)
     const before = await db
       .select({ id: workflows.id })
       .from(workflows)

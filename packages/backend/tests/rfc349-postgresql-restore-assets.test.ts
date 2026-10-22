@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BackupManifestV2 } from '@/services/backupManifest'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlProviderRestoreApplicationAssets } from '@/modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets'
 
 const TARGET_DATABASE = Object.freeze({
@@ -67,7 +67,7 @@ describe('RFC-349 PostgreSQL portable restore application assets', () => {
       appHome,
       databaseConfig: TARGET_DATABASE,
       // config / skills 那一半完全不碰库；`includesWorktrees: false` 时 db 一次也不用。
-      db: {} as ProviderNeutralDatabase,
+      db: {} as PersistenceDb,
     })
     await expect(assets.apply({ stagingDirectory, manifest: manifest(false) })).resolves.toEqual({
       config: true,
@@ -92,7 +92,7 @@ describe('RFC-349 PostgreSQL portable restore application assets', () => {
     // `rfc359-w9-system-operations-application-assets-conformance.test.ts` ⑤ 上对**两个真引擎**跑。
     const appHome = temporaryRoot('rfc349-pg-restore-worktree-')
     const stagingDirectory = temporaryRoot('rfc349-pg-restore-worktree-staging-')
-    const composed = {} as ProviderNeutralDatabase
+    const composed = {} as PersistenceDb
     let reconstructed: unknown
     const assets = createPostgresqlProviderRestoreApplicationAssets({
       appHome,

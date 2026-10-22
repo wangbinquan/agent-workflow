@@ -1,5 +1,7 @@
 // RFC-370: the real provider drive keeps multi-repository order, waits for the
 // selected profile acknowledgement and persists the existing failure facts.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,7 +9,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
-import { taskRepos, tasks, users, workflows } from '@/db/schema'
 import {
   bindWorkspaceExcludeProfile,
   selectWorkspaceExcludeProfileFactory,
@@ -45,7 +46,8 @@ async function fixture(
   const appHome = mkdtempSync(join(tmpdir(), 'aw-exclude-selected-'))
   let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
   try {
-    await db.insert(users).values({
+    const { users, workflows, tasks, taskRepos } = tablesOf(db)
+    await insertOne(db, users, {
       id: userId,
       username: userId,
       displayName: userId,
@@ -60,10 +62,12 @@ async function fixture(
       nodes: [],
       edges: [],
     }
-    await db
-      .insert(workflows)
-      .values({ id: workflowId, name: workflowId, definition: JSON.stringify(definition) })
-    await db.insert(tasks).values({
+    await insertOne(db, workflows, {
+      id: workflowId,
+      name: workflowId,
+      definition: JSON.stringify(definition),
+    })
+    await insertOne(db, tasks, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([
@@ -85,7 +89,7 @@ async function fixture(
       autoCommitPush: false,
     })
     for (const [repoIndex, mountPath] of ['', 'nested', 'nested/deeper'].entries()) {
-      await db.insert(taskRepos).values({
+      await insertOne(db, taskRepos, {
         taskId,
         repoIndex,
         mountPath,
@@ -141,7 +145,7 @@ async function fixture(
       async driveSeededChild() {
         const parent = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
         const childId = ulid()
-        await db.insert(tasks).values({
+        await insertOne(db, tasks, {
           ...parent,
           id: childId,
           name: childId,
@@ -192,13 +196,16 @@ async function fixture(
             .parentTaskId,
         }
       },
-      rows: () =>
-        db
+      rows: () => {
+        return db
           .select()
           .from(taskRepos)
           .where(eq(taskRepos.taskId, taskId))
-          .orderBy(taskRepos.repoIndex),
-      task: async () => (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!,
+          .orderBy(taskRepos.repoIndex)
+      },
+      task: async () => {
+        return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      },
       async close() {
         await execution!.shutdown()
         rmSync(appHome, { recursive: true, force: true })

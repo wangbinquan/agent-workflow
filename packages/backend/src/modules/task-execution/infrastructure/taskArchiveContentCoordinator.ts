@@ -30,54 +30,16 @@
 // `SQLITE_MAX_VARIABLE_NUMBER` 上限且随构建而变（`util/sqlChunk.ts`），中立实现按最保守构建取值。
 // JSONL 的写批次仍是 2000 行一段——那只关乎 `appendFileSync` 的粒度，与绑定参数无关。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, isNull, lte, or } from 'drizzle-orm'
 import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
 import { ulid } from 'ulid'
 
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  collaborationGateArtifacts,
-  collaborationGateOperations,
-  docVersions,
-  hostedTaskArtifacts,
-  hostedExecutionBindings,
-  hostedExecutionEvents,
-  nodeExecutionEventSources,
-  lifecycleAlerts,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  recoveryEvents,
-  reviewComments,
-  reviewNodeReviewers,
-  taskArchiveAudit,
-  taskCollaborators,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  taskExecutionOwners,
-  taskFeedback,
-  taskNodeClarifyDirectives,
-  taskQuestions,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  workgroupAssignments,
-  workgroupMemberCursors,
-  workgroupMessages,
-  workgroupTaskState,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 import { chunkedAll, SQL_IN_CHUNK } from '@/util/sqlChunk'
@@ -113,7 +75,7 @@ const MAX_TREE_DEPTH = 64
 // （cancel 事件的 allowed-from 不含 interrupted），又永远等不到归档，成为库里唯一一类永久居民。
 const TERMINAL = TERMINAL_TASK_STATUSES
 
-type ArchiveReader = ProviderNeutralDatabase | DatabaseTransaction
+type ArchiveReader = PersistenceDb | PersistenceTx
 type ArchiveOptions = TaskArchiveMaintenanceOptions & { readonly source?: 'sweep' | 'manual' }
 
 /** 一棵树的全部任务 id（root 优先，去重，深度有界）。 */
@@ -122,11 +84,10 @@ async function collectTree(db: ArchiveReader, rootTaskId: string): Promise<strin
   const seen = new Set(out)
   let frontier = [rootTaskId]
   for (let depth = 0; frontier.length > 0 && depth < MAX_TREE_DEPTH; depth += 1) {
-    const children = await chunkedAll(
-      frontier,
-      async (chunk) =>
-        await db.select({ id: tasks.id }).from(tasks).where(inArray(tasks.parentTaskId, chunk)),
-    )
+    const children = await chunkedAll(frontier, async (chunk) => {
+      const { tasks } = tablesOf(db)
+      return await db.select({ id: tasks.id }).from(tasks).where(inArray(tasks.parentTaskId, chunk))
+    })
     const next: string[] = []
     for (const child of children) {
       if (seen.has(child.id)) continue
@@ -147,10 +108,11 @@ interface TreeCandidate {
 
 /** 可归档的树：整树全终态，且 max(finishedAt) 早于 cutoff。 */
 async function findArchivableTrees(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   cutoff: number,
   limit: number,
 ): Promise<readonly TreeCandidate[]> {
+  const { tasks } = tablesOf(db)
   const roots = await db
     .select({ id: tasks.id })
     .from(tasks)
@@ -166,14 +128,12 @@ async function findArchivableTrees(
   const out: TreeCandidate[] = []
   for (const root of roots) {
     const taskIds = await collectTree(db, root.id)
-    const rows = await chunkedAll(
-      taskIds,
-      async (chunk) =>
-        await db
-          .select({ status: tasks.status, finishedAt: tasks.finishedAt })
-          .from(tasks)
-          .where(inArray(tasks.id, chunk)),
-    )
+    const rows = await chunkedAll(taskIds, async (chunk) => {
+      return await db
+        .select({ status: tasks.status, finishedAt: tasks.finishedAt })
+        .from(tasks)
+        .where(inArray(tasks.id, chunk))
+    })
     // 整树判据：任一成员消失 / 非终态 / 未完成 / 仍在保留期内 ⇒ 整树跳过。
     if (
       rows.length !== taskIds.length ||
@@ -226,212 +186,228 @@ async function writeJsonl(
  * 键序进 manifest 的 `rows`，`rows` 又进 digest —— **不要重排**。
  */
 async function loadArchiveRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskIds: readonly string[],
 ): Promise<Readonly<Record<string, readonly unknown[]>>> {
   const byTask = <T>(load: (ids: string[]) => Promise<T[]>) => chunkedAll(taskIds, load)
-  const operationRows = await byTask(
-    async (ids) =>
-      await db
-        .select()
-        .from(collaborationGateOperations)
-        .where(inArray(collaborationGateOperations.taskId, ids)),
-  )
+  const operationRows = await byTask(async (ids) => {
+    const { collaborationGateOperations } = tablesOf(db)
+    return await db
+      .select()
+      .from(collaborationGateOperations)
+      .where(inArray(collaborationGateOperations.taskId, ids))
+  })
   const operationIds = operationRows.map((row) => row.id)
-  const documentRows = await byTask(
-    async (ids) => await db.select().from(docVersions).where(inArray(docVersions.taskId, ids)),
-  )
+  const documentRows = await byTask(async (ids) => {
+    const { docVersions } = tablesOf(db)
+    return await db.select().from(docVersions).where(inArray(docVersions.taskId, ids))
+  })
   const documentIds = documentRows.map((row) => row.id)
-  const runRows = await byTask(
-    async (ids) => await db.select().from(nodeRuns).where(inArray(nodeRuns.taskId, ids)),
-  )
+  const runRows = await byTask(async (ids) => {
+    const { nodeRuns } = tablesOf(db)
+    return await db.select().from(nodeRuns).where(inArray(nodeRuns.taskId, ids))
+  })
   const runIds = runRows.map((row) => row.id)
-  const hostedBindings = await byTask(
-    async (ids) =>
-      await db
-        .select()
-        .from(hostedExecutionBindings)
-        .where(inArray(hostedExecutionBindings.taskId, ids)),
-  )
+  const hostedBindings = await byTask(async (ids) => {
+    const { hostedExecutionBindings } = tablesOf(db)
+    return await db
+      .select()
+      .from(hostedExecutionBindings)
+      .where(inArray(hostedExecutionBindings.taskId, ids))
+  })
   const hostedExecutionIds = hostedBindings.map((row) => row.executionId)
-  const effectRows = await byTask(
-    async (ids) =>
-      await db.select().from(taskExecutionEffects).where(inArray(taskExecutionEffects.taskId, ids)),
-  )
+  const effectRows = await byTask(async (ids) => {
+    const { taskExecutionEffects } = tablesOf(db)
+    return await db
+      .select()
+      .from(taskExecutionEffects)
+      .where(inArray(taskExecutionEffects.taskId, ids))
+  })
   const effectIds = effectRows.map((row) => row.id)
-  const attemptRows = await chunkedAll(
-    effectIds,
-    async (ids) =>
-      await db
-        .select()
-        .from(taskExecutionEffectAttempts)
-        .where(inArray(taskExecutionEffectAttempts.effectId, ids)),
-  )
+  const attemptRows = await chunkedAll(effectIds, async (ids) => {
+    const { taskExecutionEffectAttempts } = tablesOf(db)
+    return await db
+      .select()
+      .from(taskExecutionEffectAttempts)
+      .where(inArray(taskExecutionEffectAttempts.effectId, ids))
+  })
   const attemptIds = attemptRows.map((row) => row.id)
-  const lineage = new Map<string, typeof taskExecutionLineageOperationRecords.$inferSelect>()
-  for (const row of await byTask(
-    async (ids) =>
-      await db
-        .select()
-        .from(taskExecutionLineageOperationRecords)
-        .where(
-          or(
-            inArray(taskExecutionLineageOperationRecords.rootAnchorTaskId, ids),
-            inArray(taskExecutionLineageOperationRecords.ancestorAnchorTaskId, ids),
-            inArray(taskExecutionLineageOperationRecords.currentAnchorTaskId, ids),
-            inArray(taskExecutionLineageOperationRecords.sourceTaskId, ids),
-          ),
+  const lineage = new Map<
+    string,
+    PersistenceTables['taskExecutionLineageOperationRecords']['$inferSelect']
+  >()
+  for (const row of await byTask(async (ids) => {
+    const { taskExecutionLineageOperationRecords } = tablesOf(db)
+    return await db
+      .select()
+      .from(taskExecutionLineageOperationRecords)
+      .where(
+        or(
+          inArray(taskExecutionLineageOperationRecords.rootAnchorTaskId, ids),
+          inArray(taskExecutionLineageOperationRecords.ancestorAnchorTaskId, ids),
+          inArray(taskExecutionLineageOperationRecords.currentAnchorTaskId, ids),
+          inArray(taskExecutionLineageOperationRecords.sourceTaskId, ids),
         ),
-  )) {
+      )
+  })) {
     lineage.set(row.id, row)
   }
-  for (const row of await chunkedAll(
-    effectIds,
-    async (ids) =>
-      await db
-        .select()
-        .from(taskExecutionLineageOperationRecords)
-        .where(inArray(taskExecutionLineageOperationRecords.sourceEffectId, ids)),
-  )) {
+  for (const row of await chunkedAll(effectIds, async (ids) => {
+    const { taskExecutionLineageOperationRecords } = tablesOf(db)
+    return await db
+      .select()
+      .from(taskExecutionLineageOperationRecords)
+      .where(inArray(taskExecutionLineageOperationRecords.sourceEffectId, ids))
+  })) {
     lineage.set(row.id, row)
   }
 
   return {
-    tasks: await byTask(async (ids) => await db.select().from(tasks).where(inArray(tasks.id, ids))),
-    task_repos: await byTask(
-      async (ids) => await db.select().from(taskRepos).where(inArray(taskRepos.taskId, ids)),
-    ),
-    task_space_nodes: await byTask(
-      async (ids) =>
-        await db.select().from(taskSpaceNodes).where(inArray(taskSpaceNodes.taskId, ids)),
-    ),
-    task_collaborators: await byTask(
-      async (ids) =>
-        await db.select().from(taskCollaborators).where(inArray(taskCollaborators.taskId, ids)),
-    ),
-    review_node_reviewers: await byTask(
-      async (ids) =>
-        await db.select().from(reviewNodeReviewers).where(inArray(reviewNodeReviewers.taskId, ids)),
-    ),
-    task_questions: await byTask(
-      async (ids) =>
-        await db.select().from(taskQuestions).where(inArray(taskQuestions.taskId, ids)),
-    ),
-    task_feedback: await byTask(
-      async (ids) => await db.select().from(taskFeedback).where(inArray(taskFeedback.taskId, ids)),
-    ),
-    task_node_clarify_directives: await byTask(
-      async (ids) =>
-        await db
-          .select()
-          .from(taskNodeClarifyDirectives)
-          .where(inArray(taskNodeClarifyDirectives.taskId, ids)),
-    ),
-    clarify_rounds: await byTask(
-      async (ids) =>
-        await db.select().from(clarifyRounds).where(inArray(clarifyRounds.taskId, ids)),
-    ),
+    tasks: await byTask(async (ids) => {
+      const { tasks } = tablesOf(db)
+      return await db.select().from(tasks).where(inArray(tasks.id, ids))
+    }),
+    task_repos: await byTask(async (ids) => {
+      const { taskRepos } = tablesOf(db)
+      return await db.select().from(taskRepos).where(inArray(taskRepos.taskId, ids))
+    }),
+    task_space_nodes: await byTask(async (ids) => {
+      const { taskSpaceNodes } = tablesOf(db)
+      return await db.select().from(taskSpaceNodes).where(inArray(taskSpaceNodes.taskId, ids))
+    }),
+    task_collaborators: await byTask(async (ids) => {
+      const { taskCollaborators } = tablesOf(db)
+      return await db.select().from(taskCollaborators).where(inArray(taskCollaborators.taskId, ids))
+    }),
+    review_node_reviewers: await byTask(async (ids) => {
+      const { reviewNodeReviewers } = tablesOf(db)
+      return await db
+        .select()
+        .from(reviewNodeReviewers)
+        .where(inArray(reviewNodeReviewers.taskId, ids))
+    }),
+    task_questions: await byTask(async (ids) => {
+      const { taskQuestions } = tablesOf(db)
+      return await db.select().from(taskQuestions).where(inArray(taskQuestions.taskId, ids))
+    }),
+    task_feedback: await byTask(async (ids) => {
+      const { taskFeedback } = tablesOf(db)
+      return await db.select().from(taskFeedback).where(inArray(taskFeedback.taskId, ids))
+    }),
+    task_node_clarify_directives: await byTask(async (ids) => {
+      const { taskNodeClarifyDirectives } = tablesOf(db)
+      return await db
+        .select()
+        .from(taskNodeClarifyDirectives)
+        .where(inArray(taskNodeClarifyDirectives.taskId, ids))
+    }),
+    clarify_rounds: await byTask(async (ids) => {
+      const { clarifyRounds } = tablesOf(db)
+      return await db.select().from(clarifyRounds).where(inArray(clarifyRounds.taskId, ids))
+    }),
     collaboration_gate_operations: operationRows,
-    collaboration_gate_artifacts: await chunkedAll(
-      operationIds,
-      async (ids) =>
-        await db
-          .select()
-          .from(collaborationGateArtifacts)
-          .where(inArray(collaborationGateArtifacts.operationId, ids)),
-    ),
+    collaboration_gate_artifacts: await chunkedAll(operationIds, async (ids) => {
+      const { collaborationGateArtifacts } = tablesOf(db)
+      return await db
+        .select()
+        .from(collaborationGateArtifacts)
+        .where(inArray(collaborationGateArtifacts.operationId, ids))
+    }),
     doc_versions: documentRows,
-    review_comments: await chunkedAll(
-      documentIds,
-      async (ids) =>
-        await db.select().from(reviewComments).where(inArray(reviewComments.docVersionId, ids)),
-    ),
-    lifecycle_alerts: await byTask(
-      async (ids) =>
-        await db.select().from(lifecycleAlerts).where(inArray(lifecycleAlerts.taskId, ids)),
-    ),
-    recovery_events: await byTask(
-      async (ids) =>
-        await db.select().from(recoveryEvents).where(inArray(recoveryEvents.taskId, ids)),
-    ),
-    workgroup_task_state: await byTask(
-      async (ids) =>
-        await db.select().from(workgroupTaskState).where(inArray(workgroupTaskState.taskId, ids)),
-    ),
-    workgroup_assignments: await byTask(
-      async (ids) =>
-        await db
-          .select()
-          .from(workgroupAssignments)
-          .where(inArray(workgroupAssignments.taskId, ids)),
-    ),
-    workgroup_messages: await byTask(
-      async (ids) =>
-        await db.select().from(workgroupMessages).where(inArray(workgroupMessages.taskId, ids)),
-    ),
-    workgroup_member_cursors: await byTask(
-      async (ids) =>
-        await db
-          .select()
-          .from(workgroupMemberCursors)
-          .where(inArray(workgroupMemberCursors.taskId, ids)),
-    ),
+    review_comments: await chunkedAll(documentIds, async (ids) => {
+      const { reviewComments } = tablesOf(db)
+      return await db.select().from(reviewComments).where(inArray(reviewComments.docVersionId, ids))
+    }),
+    lifecycle_alerts: await byTask(async (ids) => {
+      const { lifecycleAlerts } = tablesOf(db)
+      return await db.select().from(lifecycleAlerts).where(inArray(lifecycleAlerts.taskId, ids))
+    }),
+    recovery_events: await byTask(async (ids) => {
+      const { recoveryEvents } = tablesOf(db)
+      return await db.select().from(recoveryEvents).where(inArray(recoveryEvents.taskId, ids))
+    }),
+    workgroup_task_state: await byTask(async (ids) => {
+      const { workgroupTaskState } = tablesOf(db)
+      return await db
+        .select()
+        .from(workgroupTaskState)
+        .where(inArray(workgroupTaskState.taskId, ids))
+    }),
+    workgroup_assignments: await byTask(async (ids) => {
+      const { workgroupAssignments } = tablesOf(db)
+      return await db
+        .select()
+        .from(workgroupAssignments)
+        .where(inArray(workgroupAssignments.taskId, ids))
+    }),
+    workgroup_messages: await byTask(async (ids) => {
+      const { workgroupMessages } = tablesOf(db)
+      return await db.select().from(workgroupMessages).where(inArray(workgroupMessages.taskId, ids))
+    }),
+    workgroup_member_cursors: await byTask(async (ids) => {
+      const { workgroupMemberCursors } = tablesOf(db)
+      return await db
+        .select()
+        .from(workgroupMemberCursors)
+        .where(inArray(workgroupMemberCursors.taskId, ids))
+    }),
     node_runs: runRows,
-    node_run_outputs: await chunkedAll(
-      runIds,
-      async (ids) =>
-        await db.select().from(nodeRunOutputs).where(inArray(nodeRunOutputs.nodeRunId, ids)),
-    ),
-    node_run_events: await chunkedAll(
-      runIds,
-      async (ids) =>
-        await db.select().from(nodeRunEvents).where(inArray(nodeRunEvents.nodeRunId, ids)),
-    ),
-    task_execution_owners: await byTask(
-      async (ids) =>
-        await db.select().from(taskExecutionOwners).where(inArray(taskExecutionOwners.taskId, ids)),
-    ),
-    task_execution_intents: await byTask(
-      async (ids) =>
-        await db
-          .select()
-          .from(taskExecutionIntents)
-          .where(inArray(taskExecutionIntents.taskId, ids)),
-    ),
+    node_run_outputs: await chunkedAll(runIds, async (ids) => {
+      const { nodeRunOutputs } = tablesOf(db)
+      return await db.select().from(nodeRunOutputs).where(inArray(nodeRunOutputs.nodeRunId, ids))
+    }),
+    node_run_events: await chunkedAll(runIds, async (ids) => {
+      const { nodeRunEvents } = tablesOf(db)
+      return await db.select().from(nodeRunEvents).where(inArray(nodeRunEvents.nodeRunId, ids))
+    }),
+    task_execution_owners: await byTask(async (ids) => {
+      const { taskExecutionOwners } = tablesOf(db)
+      return await db
+        .select()
+        .from(taskExecutionOwners)
+        .where(inArray(taskExecutionOwners.taskId, ids))
+    }),
+    task_execution_intents: await byTask(async (ids) => {
+      const { taskExecutionIntents } = tablesOf(db)
+      return await db
+        .select()
+        .from(taskExecutionIntents)
+        .where(inArray(taskExecutionIntents.taskId, ids))
+    }),
     task_execution_effects: effectRows,
     task_execution_effect_attempts: attemptRows,
-    task_execution_effect_fences: await chunkedAll(
-      attemptIds,
-      async (ids) =>
-        await db
-          .select()
-          .from(taskExecutionEffectFences)
-          .where(inArray(taskExecutionEffectFences.effectAttemptId, ids)),
-    ),
+    task_execution_effect_fences: await chunkedAll(attemptIds, async (ids) => {
+      const { taskExecutionEffectFences } = tablesOf(db)
+      return await db
+        .select()
+        .from(taskExecutionEffectFences)
+        .where(inArray(taskExecutionEffectFences.effectAttemptId, ids))
+    }),
     task_execution_lineage_operation_records: [...lineage.values()].sort((left, right) =>
       left.id.localeCompare(right.id),
     ),
-    hosted_task_artifacts: await byTask(
-      async (ids) =>
-        await db.select().from(hostedTaskArtifacts).where(inArray(hostedTaskArtifacts.taskId, ids)),
-    ),
+    hosted_task_artifacts: await byTask(async (ids) => {
+      const { hostedTaskArtifacts } = tablesOf(db)
+      return await db
+        .select()
+        .from(hostedTaskArtifacts)
+        .where(inArray(hostedTaskArtifacts.taskId, ids))
+    }),
     hosted_execution_bindings: hostedBindings,
-    hosted_execution_events: await chunkedAll(
-      hostedExecutionIds,
-      async (ids) =>
-        await db
-          .select()
-          .from(hostedExecutionEvents)
-          .where(inArray(hostedExecutionEvents.executionId, ids)),
-    ),
-    node_execution_event_sources: await chunkedAll(
-      runIds,
-      async (ids) =>
-        await db
-          .select()
-          .from(nodeExecutionEventSources)
-          .where(inArray(nodeExecutionEventSources.nodeRunId, ids)),
-    ),
+    hosted_execution_events: await chunkedAll(hostedExecutionIds, async (ids) => {
+      const { hostedExecutionEvents } = tablesOf(db)
+      return await db
+        .select()
+        .from(hostedExecutionEvents)
+        .where(inArray(hostedExecutionEvents.executionId, ids))
+    }),
+    node_execution_event_sources: await chunkedAll(runIds, async (ids) => {
+      const { nodeExecutionEventSources } = tablesOf(db)
+      return await db
+        .select()
+        .from(nodeExecutionEventSources)
+        .where(inArray(nodeExecutionEventSources.nodeRunId, ids))
+    }),
   }
 }
 
@@ -483,7 +459,7 @@ export const ARCHIVE_EXEMPT_TABLES: readonly string[] = ['runtime_session_leases
  * 重试）每次都从同一个 revision 起算。
  */
 async function finalizeDatabase(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   rootTaskId: string,
   taskIds: readonly string[],
   claim: TerminalMaintenanceClaim,
@@ -498,6 +474,7 @@ async function finalizeDatabase(
     }
     for (let offset = 0; offset < expectedIds.length; offset += SQL_IN_CHUNK) {
       const chunk = expectedIds.slice(offset, offset + SQL_IN_CHUNK)
+      const { taskFeedback, tasks } = tablesOf(tx)
       // `task_feedback` 不是 FK 级联后代，显式先删；`tasks` 的删除带走其余级联族。
       await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, chunk))
       await tx.delete(tasks).where(inArray(tasks.id, chunk))
@@ -511,7 +488,7 @@ async function finalizeDatabase(
  * 保留，只重建可复现的 DB JSONL。
  */
 async function archiveClaimed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   maintenance: TerminalMaintenanceStore,
   rootTaskId: string,
   taskIds: readonly string[],
@@ -559,6 +536,7 @@ async function archiveClaimed(
     counts[`${kind}_dirs`] = moved
   }
 
+  const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(db)
   // 这两条读必须 `await`：少写 await 在 bun:sqlite 上照样拿得到行，在 PostgreSQL 上会把两个
   // **Promise** 写进 manifest（claimRow 恒真、于是连「认领消失了」这条判据都失效），而 tsc 不报错。
   const claimRows = await db
@@ -621,7 +599,7 @@ async function archiveClaimed(
  * 这棵树因为什么离开了在线库。
  */
 async function archiveTree(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   maintenance: TerminalMaintenanceStore,
   rootTaskId: string,
   options: ArchiveOptions,
@@ -674,7 +652,7 @@ function parseArchiveCleanupPlan(value: string): ArchiveCleanupPlanV2 | null {
  * 不改它的状态（判据缺口 10 的强侧行为）。
  */
 async function recoverClaimedArchives(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   maintenance: TerminalMaintenanceStore,
   options: TaskArchiveMaintenanceOptions,
   content: TaskArchiveContentPort,
@@ -699,6 +677,7 @@ async function recoverClaimedArchives(
     let state = item.state
     const tmpDir = content.resolve(plan.archiveRoot, `.tmp-${item.rootTaskId}`)
     const finalDir = content.resolve(plan.archiveRoot, item.rootTaskId)
+    const { tasks } = tablesOf(db)
     const rootRows = await db
       .select({ id: tasks.id })
       .from(tasks)
@@ -766,7 +745,7 @@ async function recoverClaimedArchives(
  * 活得比它们久，否则「谁归档了多少」随归档一起消失。
  */
 async function writeArchiveAudit(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   row: {
     readonly source: 'sweep' | 'manual'
     readonly actorUserId: string | null
@@ -776,7 +755,8 @@ async function writeArchiveAudit(
     readonly now: number
   },
 ): Promise<void> {
-  await db.insert(taskArchiveAudit).values({
+  const { taskArchiveAudit } = tablesOf(db)
+  await insertOne(db, taskArchiveAudit, {
     id: ulid(),
     source: row.source,
     actorUserId: row.actorUserId,
@@ -790,7 +770,7 @@ async function writeArchiveAudit(
 }
 
 async function archiveCandidates(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   maintenance: TerminalMaintenanceStore,
   candidates: readonly TreeCandidate[],
   options: ArchiveOptions,
@@ -815,7 +795,7 @@ async function archiveCandidates(
 
 /** 终态任务树归档出库：一份实现，SQLite / PostgreSQL 共用。 */
 export function createTaskArchiveContentCoordinator(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   content: TaskArchiveContentPort,
 ): TaskArchiveMaintenanceCommand {
   const maintenance: TerminalMaintenanceStore = new DrizzleTerminalMaintenancePersistence(db)
@@ -915,10 +895,14 @@ export function createTaskArchiveContentCoordinator(
         runsDir: options.runsDir,
         logsDir: options.logsDir,
         claimedRoots: claims.claimedRoots,
-        taskExists: async (taskId) =>
-          (
-            await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
-          )[0] !== undefined,
+        taskExists: async (taskId) => {
+          const { tasks } = tablesOf(db)
+          return (
+            (
+              await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+            )[0] !== undefined
+          )
+        },
       })
       const promoted = [...claims.promoted, ...swept.promoted]
       const discarded = [...swept.discarded]

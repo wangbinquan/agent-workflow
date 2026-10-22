@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { DbClient } from '../../src/db/client'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -77,7 +77,7 @@ export const DEFAULT_PR3_RULES: readonly Pr3PolicyRule[] = [
   },
 ]
 
-export interface Pr3FixtureOptions<Database extends ProviderNeutralDatabase = DbClient> {
+export interface Pr3FixtureOptions<Database extends PersistenceDb = DbClient> {
   readonly rules?: readonly Pr3PolicyRule[]
   /**
    * 夹具要铺配置的库。**必填**（RFC-359 AC-6 收尾）：此前它可选，缺省现建一个内存 SQLite 库
@@ -110,7 +110,7 @@ export interface Pr3FixtureOptions<Database extends ProviderNeutralDatabase = Db
   }
 }
 
-export interface Pr3Fixture<Database extends ProviderNeutralDatabase = DbClient> {
+export interface Pr3Fixture<Database extends PersistenceDb = DbClient> {
   readonly db: Database
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
@@ -127,9 +127,9 @@ export interface Pr3Fixture<Database extends ProviderNeutralDatabase = DbClient>
   launchExternal(idempotencyKey: string, externalId: string): Promise<string>
 }
 
-export type ProviderPr3Fixture = Pr3Fixture<ProviderNeutralDatabase>
+export type ProviderPr3Fixture = Pr3Fixture<PersistenceDb>
 
-function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
+function lookupOf(db: PersistenceDb): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const row = await resolveAdmissionAssignment(db, scope)
@@ -157,7 +157,7 @@ function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
 }
 
 export async function buildPr3Fixture(
-  options: Pr3FixtureOptions<ProviderNeutralDatabase>,
+  options: Pr3FixtureOptions<PersistenceDb>,
 ): Promise<ProviderPr3Fixture> {
   const db = options.db
   const now = () => Date.now()

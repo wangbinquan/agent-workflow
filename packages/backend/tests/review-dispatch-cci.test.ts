@@ -26,8 +26,10 @@
 //      these go red the cci-aware short-circuit drifted; investigate before
 //      relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,14 +37,6 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   dispatchReviewNode,
   pickFreshestReviewRun,
@@ -74,8 +68,8 @@ const PATCH_MD_PATH = resolve(
 // ---------------------------------------------------------------------------
 
 function row(
-  partial: Partial<typeof nodeRuns.$inferSelect> & { id: string; status: string },
-): typeof nodeRuns.$inferSelect {
+  partial: Partial<PersistenceTables['nodeRuns']['$inferSelect']> & { id: string; status: string },
+): PersistenceTables['nodeRuns']['$inferSelect'] {
   return {
     parentNodeRunId: null,
     iteration: 0,
@@ -102,7 +96,7 @@ function row(
     taskId: 't',
     nodeId: 'review',
     ...partial,
-  } as unknown as typeof nodeRuns.$inferSelect
+  } as unknown as PersistenceTables['nodeRuns']['$inferSelect']
 }
 
 beforeEach(() => {
@@ -169,7 +163,7 @@ describe('RFC-056 patch-2026-05-26 — pickFreshestReviewRun', () => {
 describeEachProvider(
   'RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circuit',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let worktree: string
 
@@ -189,12 +183,13 @@ describeEachProvider(
 
     async function seed(): Promise<{
       taskId: string
-      task: typeof tasks.$inferSelect
+      task: PersistenceTables['tasks']['$inferSelect']
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     }> {
       const agentId = ulid()
-      await db.insert(agentsTable).values({
+      const { agents, workflows, tasks } = tablesOf(db)
+      await insertOne(db, agents, {
         id: agentId,
         name: 'designer',
         description: '',
@@ -223,7 +218,7 @@ describeEachProvider(
         edges: [],
       }
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -231,7 +226,7 @@ describeEachProvider(
         version: 1,
       })
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         name: 'cci-fixture',
         id: taskId,
         workflowId,
@@ -253,7 +248,8 @@ describeEachProvider(
       const { taskId, task, definition, reviewNode } = await seed()
       // Upstream designer done at cci=0.
       const designerRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -263,13 +259,13 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: designerRunId,
         portName: 'docpath',
         content: '# inline body',
       })
       // Review done at cci=0 — RFC-052 baseline.
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: 'rev',
@@ -309,7 +305,8 @@ describeEachProvider(
       // Old designer done — the version the prior review approved. RFC-074 PR-C:
       // freshness is pure id-order, so ids are CAUSAL (new minted after old).
       const oldDesignerId = '01A_OLD_DESIGNER'
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: oldDesignerId,
         taskId,
         nodeId: 'designer',
@@ -319,14 +316,14 @@ describeEachProvider(
         startedAt: Date.now() - 5000,
         finishedAt: Date.now() - 4000,
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: oldDesignerId,
         portName: 'docpath',
         content: '# original body',
       })
       // Fresher designer done (e.g. a later rerun) — this is the current source.
       const newDesignerId = '01B_NEW_DESIGNER'
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: newDesignerId,
         taskId,
         nodeId: 'designer',
@@ -336,13 +333,13 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: newDesignerId,
         portName: 'docpath',
         content: '# updated body',
       })
       // Prior review done that CONSUMED the old designer run (stale provenance).
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: 'rev',
@@ -386,7 +383,8 @@ describeEachProvider(
       // Workflow that never sees cross-clarify must not regress.
       const { taskId, task, definition, reviewNode } = await seed()
       const designerRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -396,12 +394,12 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: designerRunId,
         portName: 'docpath',
         content: '# body',
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: 'rev',
@@ -412,7 +410,7 @@ describeEachProvider(
         finishedAt: Date.now() - 500,
       })
       const stuckId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: stuckId,
         taskId,
         nodeId: 'rev',
@@ -438,7 +436,8 @@ describeEachProvider(
     test('No done review row at all → not short-circuited (must dispatch fresh)', async () => {
       const { taskId, task, definition, reviewNode } = await seed()
       const designerRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -448,7 +447,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: designerRunId,
         portName: 'docpath',
         content: '# body',

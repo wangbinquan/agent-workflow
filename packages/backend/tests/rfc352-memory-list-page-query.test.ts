@@ -9,12 +9,13 @@
 // 因此本文件的主断言是**等价性**：同一份数据、同一个调用者，逐页拼起来必须与全量逐条相同，
 // 且分页项的字段集与全量项**逐字相同**（游标用的 `createdAt` 只活在内部，绝不能漏上 wire）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, memories } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import type { MemoryCatalogOperations } from '../src/modules/memory/public/catalog'
@@ -27,7 +28,7 @@ function actorOfRole(role: 'admin' | 'user', id = `u_${role}`): Actor {
   })
 }
 
-function catalogOf(db: ProviderNeutralDatabase): MemoryCatalogOperations {
+function catalogOf(db: PersistenceDb): MemoryCatalogOperations {
   return composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
@@ -35,7 +36,7 @@ function catalogOf(db: ProviderNeutralDatabase): MemoryCatalogOperations {
   })
 }
 
-function scopeAuthorityOf(db: ProviderNeutralDatabase, actor: Actor) {
+function scopeAuthorityOf(db: PersistenceDb, actor: Actor) {
   const identityAccess = composeIdentityAccess(db)
   const context = identityAccess.contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },
@@ -45,10 +46,11 @@ function scopeAuthorityOf(db: ProviderNeutralDatabase, actor: Actor) {
 }
 
 /** 造 n 条 global scope 的 approved 记忆；createdAt 递减，且**故意让部分同毫秒**。 */
-async function seedGlobal(db: ProviderNeutralDatabase, n: number): Promise<void> {
+async function seedGlobal(db: PersistenceDb, n: number): Promise<void> {
   const base = 1_700_000_000_000
   for (let i = 0; i < n; i += 1) {
-    await db.insert(memories).values({
+    const { memories } = tablesOf(db)
+    await insertOne(db, memories, {
       id: `m_${String(i).padStart(4, '0')}`,
       scopeType: 'global',
       scopeId: null,
@@ -144,7 +146,8 @@ describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
 describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
   test('候选收窄（RFC-285 Q4）在分页路径上照样生效', async () => {
     const db = harness.db
-    await db.insert(memories).values({
+    const { memories } = tablesOf(db)
+    await insertOne(db, memories, {
       id: 'm_candidate',
       scopeType: 'global',
       scopeId: null,
@@ -179,7 +182,8 @@ describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
     // 外人看不见私有 agent 名下的记忆——分页必须把它们跳过去继续凑，而不是返回带空洞的一页。
     const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
-    await db.insert(agents).values({
+    const { agents, memories } = tablesOf(db)
+    await insertOne(db, agents, {
       id: 'agt_private',
       name: 'private-agent',
       ownerUserId: owner.user.id,
@@ -187,7 +191,7 @@ describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
     })
     const base = 1_700_000_000_000
     for (let i = 0; i < 12; i += 1) {
-      await db.insert(memories).values({
+      await insertOne(db, memories, {
         id: `m_${String(i).padStart(2, '0')}`,
         // 交替：一半挂私有 agent（外人不可见），一半 global（全员可读）
         scopeType: i % 2 === 0 ? 'agent' : 'global',

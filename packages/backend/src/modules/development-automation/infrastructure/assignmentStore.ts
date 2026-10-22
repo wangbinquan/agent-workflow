@@ -7,19 +7,12 @@
 // 存在——挂一个从未发布过的 revision 属配置错误，当场拒绝。并发写同一 scope 由唯一索引兜底，撞库经能力
 // 矩阵归类成 typed 409。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  automationPolicyRevisions,
-  digitalEmployeeRevisions,
-  repositoryEmployeeAssignments,
-} from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 export type AssignmentScopeKind = 'repository' | 'repository-group' | 'global-default'
@@ -49,7 +42,9 @@ export interface UpsertAssignmentInput {
   readonly now?: number
 }
 
-function assignmentOf(row: typeof repositoryEmployeeAssignments.$inferSelect): AssignmentRow {
+function assignmentOf(
+  row: PersistenceTables['repositoryEmployeeAssignments']['$inferSelect'],
+): AssignmentRow {
   if (
     row.scopeKind !== 'repository' &&
     row.scopeKind !== 'repository-group' &&
@@ -71,7 +66,8 @@ function assignmentOf(row: typeof repositoryEmployeeAssignments.$inferSelect): A
   }
 }
 
-function scopeWhere(scopeKind: AssignmentScopeKind, scopeRef: string | null) {
+function scopeWhere(db: object, scopeKind: AssignmentScopeKind, scopeRef: string | null) {
+  const { repositoryEmployeeAssignments } = tablesOf(db)
   return and(
     eq(repositoryEmployeeAssignments.scopeKind, scopeKind),
     scopeRef === null
@@ -81,9 +77,10 @@ function scopeWhere(scopeKind: AssignmentScopeKind, scopeRef: string | null) {
 }
 
 async function assertEmployeeRevision(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   ref: { readonly id: string; readonly revision: number },
 ): Promise<void> {
+  const { digitalEmployeeRevisions } = tablesOf(tx)
   const rows = await tx
     .select({ revision: digitalEmployeeRevisions.revision })
     .from(digitalEmployeeRevisions)
@@ -103,10 +100,11 @@ async function assertEmployeeRevision(
 }
 
 async function assertPolicyRevision(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   ref: { readonly id: string; readonly revision: number },
   where: string,
 ): Promise<void> {
+  const { automationPolicyRevisions } = tablesOf(tx)
   const rows = await tx
     .select({ revision: automationPolicyRevisions.revision })
     .from(automationPolicyRevisions)
@@ -126,7 +124,7 @@ async function assertPolicyRevision(
 }
 
 export async function upsertAssignment(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: UpsertAssignmentInput,
 ): Promise<AssignmentRow> {
   if (input.scopeKind === 'global-default' && input.scopeRef !== null) {
@@ -158,11 +156,12 @@ export async function upsertAssignment(
       ) {
         throw new ValidationError('assignment-empty', 'assignment must set at least one field')
       }
+      const { repositoryEmployeeAssignments } = tablesOf(tx)
       const existing = (
         await tx
           .select({ id: repositoryEmployeeAssignments.id })
           .from(repositoryEmployeeAssignments)
-          .where(scopeWhere(input.scopeKind, input.scopeRef))
+          .where(scopeWhere(tx, input.scopeKind, input.scopeRef))
           .limit(1)
       )[0]
       const values = {
@@ -210,33 +209,36 @@ export async function upsertAssignment(
 }
 
 export async function findAssignment(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scopeKind: AssignmentScopeKind,
   scopeRef: string | null,
 ): Promise<AssignmentRow | null> {
+  const { repositoryEmployeeAssignments } = tablesOf(db)
   const row = (
     await db
       .select()
       .from(repositoryEmployeeAssignments)
-      .where(scopeWhere(scopeKind, scopeRef))
+      .where(scopeWhere(db, scopeKind, scopeRef))
       .limit(1)
   )[0]
   return row === undefined ? null : assignmentOf(row)
 }
 
 export async function deleteAssignment(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scopeKind: AssignmentScopeKind,
   scopeRef: string | null,
 ): Promise<void> {
   const existing = await findAssignment(db, scopeKind, scopeRef)
   if (existing === null) throw new NotFoundError('assignment-not-found', 'assignment not found')
+  const { repositoryEmployeeAssignments } = tablesOf(db)
   await db
     .delete(repositoryEmployeeAssignments)
     .where(eq(repositoryEmployeeAssignments.id, existing.id))
 }
 
-export async function listAssignments(db: ProviderNeutralDatabase): Promise<AssignmentRow[]> {
+export async function listAssignments(db: PersistenceDb): Promise<AssignmentRow[]> {
+  const { repositoryEmployeeAssignments } = tablesOf(db)
   const rows = await db
     .select()
     .from(repositoryEmployeeAssignments)
@@ -246,7 +248,7 @@ export async function listAssignments(db: ProviderNeutralDatabase): Promise<Assi
 
 /** §3.8 唯一解析：exact repository > repository-group > global default。 */
 export async function resolveAdmissionAssignment(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scope: { readonly repositoryId: string; readonly repositoryGroupId: string | null },
 ): Promise<AssignmentRow | null> {
   const repo = await findAssignment(db, 'repository', scope.repositoryId)

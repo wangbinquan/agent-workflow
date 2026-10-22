@@ -21,6 +21,7 @@
 //   packages/backend/src/services/scheduler.ts (buildReviewPromptContext
 //     call before runNode in BOTH the agent-single and agent-multi paths).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -32,7 +33,6 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
@@ -184,13 +184,14 @@ async function buildHarness(): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
     },
   )
 
+  const { nodeRuns } = tablesOf(db)
   const reviewRuns = await db
     .select()
     .from(nodeRuns)
@@ -271,6 +272,7 @@ describe('RFC-005 review iterate — comments reach the upstream re-run prompt',
       binaryOverride: h.stubOpencode,
     })
 
+    const { nodeRuns } = tablesOf(h.db)
     const designerRuns = await h.db
       .select()
       .from(nodeRuns)

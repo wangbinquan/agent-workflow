@@ -10,7 +10,7 @@
 //   3. run every owner's restore-normalization participant (no cross-context SQL);
 //   4. finalize: record the per-table digests the verify Job checks and clear
 //      the live-write marker that the normalization writes themselves set.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -97,7 +97,7 @@ export async function restoreHostedDatabaseInstallation(input: {
   readonly now?: () => number
   readonly openArtifact?: typeof openHostedDatabaseBackupArchive
   readonly openTarget?: typeof openPostgresqlLogicalTarget
-  readonly openClient?: (runtime: PostgresqlDatabaseRuntime) => ProviderNeutralDatabase
+  readonly openClient?: (runtime: PostgresqlDatabaseRuntime) => PersistenceDb
 }): Promise<{ restored: boolean; backupId: string; normalized: Readonly<Record<string, number>> }> {
   const now = input.now ?? Date.now
   const log = createLogger('hosted-database-restore')

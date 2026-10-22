@@ -6,6 +6,9 @@
 // Stage 2 (migration 0032, follow-up) drops the old tables after services
 // switch to read/write the new table.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { insertLegacySelfClarify, insertLegacyCrossClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
@@ -13,15 +16,14 @@ import { eq, sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
 import { LAST_LEGACY_CLARIFY_IDX, freezeAt } from './migration-freeze'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
   const id = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${id}`
   const def = { $schema_version: 3, inputs: [], nodes: [], edges: [], outputs: [] }
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'mig-test',
     description: '',
@@ -29,7 +31,7 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: 'mig-test',
     workflowId: wfId,
@@ -49,18 +51,20 @@ describe('RFC-058 migration 0031 — clarify_rounds table shape', () => {
   test('clarify_rounds table exists with all columns + indexes after migrate', () => {
     const db = createInMemoryDb(MIGRATIONS)
     // sqlite_master lookup confirms the migration ran and table exists.
-    const tables = db
-      .select({ name: sql<string>`name` })
-      .from(sql`sqlite_master`)
-      .where(sql`type = 'table' AND name = 'clarify_rounds'`)
-      .all() as Array<{ name: string }>
+    const tables = queryRows(
+      db
+        .select({ name: sql<string>`name` })
+        .from(sql`sqlite_master`)
+        .where(sql`type = 'table' AND name = 'clarify_rounds'`),
+    ) as Array<{ name: string }>
     expect(tables.length).toBe(1)
     // Indexes also present
-    const indexes = db
-      .select({ name: sql<string>`name` })
-      .from(sql`sqlite_master`)
-      .where(sql`type = 'index' AND tbl_name = 'clarify_rounds'`)
-      .all() as Array<{ name: string }>
+    const indexes = queryRows(
+      db
+        .select({ name: sql<string>`name` })
+        .from(sql`sqlite_master`)
+        .where(sql`type = 'index' AND tbl_name = 'clarify_rounds'`),
+    ) as Array<{ name: string }>
     const idxNames = indexes.map((r) => r.name)
     expect(idxNames).toContain('idx_clarify_rounds_task')
     expect(idxNames).toContain('idx_clarify_rounds_kind_status')
@@ -71,11 +75,12 @@ describe('RFC-058 migration 0031 — clarify_rounds table shape', () => {
 
   test('legacy clarify_sessions and cross_clarify_sessions still exist post-stage-1 (era-locked at 0106; 0107 drops them)', () => {
     const db = createInMemoryDb(freezeAt(LAST_LEGACY_CLARIFY_IDX))
-    const t = db
-      .select({ name: sql<string>`name` })
-      .from(sql`sqlite_master`)
-      .where(sql`type = 'table' AND name IN ('clarify_sessions','cross_clarify_sessions')`)
-      .all() as Array<{ name: string }>
+    const t = queryRows(
+      db
+        .select({ name: sql<string>`name` })
+        .from(sql`sqlite_master`)
+        .where(sql`type = 'table' AND name IN ('clarify_sessions','cross_clarify_sessions')`),
+    ) as Array<{ name: string }>
     expect(t.length).toBe(2)
   })
 })
@@ -84,7 +89,8 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
   test('rejects kind=self + status=abandoned (CR-1 invariant is cross-only)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
       nodeId: 'designer',
@@ -92,7 +98,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_b',
       taskId,
       nodeId: 'clarify1',
@@ -100,29 +106,27 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    expect(() =>
-      db
-        .insert(clarifyRounds)
-        .values({
-          id: 'r1',
-          taskId,
-          kind: 'self',
-          askingNodeId: 'designer',
-          askingNodeRunId: 'nr_a',
-          intermediaryNodeId: 'clarify1',
-          intermediaryNodeRunId: 'nr_b',
-          iteration: 0,
-          questionsJson: '[]',
-          status: 'abandoned', // ← violates CHECK
-        })
-        .run(),
-    ).toThrow(/Failed to run the query|CHECK constraint/i)
+    expect(() => {
+      return insertOne(db, clarifyRounds, {
+        id: 'r1',
+        taskId,
+        kind: 'self',
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_a',
+        intermediaryNodeId: 'clarify1',
+        intermediaryNodeRunId: 'nr_b',
+        iteration: 0,
+        questionsJson: '[]',
+        status: 'abandoned', // ← violates CHECK
+      })
+    }).toThrow(/Failed to run the query|CHECK constraint/i)
   })
 
   test('rejects kind=cross + status=canceled (task-cancel path is self-only)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
       nodeId: 'questioner',
@@ -130,7 +134,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_b',
       taskId,
       nodeId: 'cc1',
@@ -138,29 +142,27 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    expect(() =>
-      db
-        .insert(clarifyRounds)
-        .values({
-          id: 'r2',
-          taskId,
-          kind: 'cross',
-          askingNodeId: 'questioner',
-          askingNodeRunId: 'nr_a',
-          intermediaryNodeId: 'cc1',
-          intermediaryNodeRunId: 'nr_b',
-          iteration: 0,
-          questionsJson: '[]',
-          status: 'canceled', // ← violates CHECK
-        })
-        .run(),
-    ).toThrow(/Failed to run the query|CHECK constraint/i)
+    expect(() => {
+      return insertOne(db, clarifyRounds, {
+        id: 'r2',
+        taskId,
+        kind: 'cross',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_a',
+        intermediaryNodeId: 'cc1',
+        intermediaryNodeRunId: 'nr_b',
+        iteration: 0,
+        questionsJson: '[]',
+        status: 'canceled', // ← violates CHECK
+      })
+    }).toThrow(/Failed to run the query|CHECK constraint/i)
   })
 
   test('accepts legitimate (self, canceled) and (cross, abandoned) combinations', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
       nodeId: 'designer',
@@ -168,7 +170,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_b',
       taskId,
       nodeId: 'clarify1',
@@ -176,7 +178,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: 'r3',
       taskId,
       kind: 'self',
@@ -188,7 +190,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       questionsJson: '[]',
       status: 'canceled',
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_c',
       taskId,
       nodeId: 'questioner',
@@ -196,7 +198,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_d',
       taskId,
       nodeId: 'cc1',
@@ -204,7 +206,7 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: 'r4',
       taskId,
       kind: 'cross',
@@ -225,7 +227,8 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
   test('rejects an unknown kind literal', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
       nodeId: 'designer',
@@ -233,7 +236,7 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_b',
       taskId,
       nodeId: 'clarify1',
@@ -242,21 +245,25 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
       iteration: 0,
     })
     expect(() =>
-      db.run(sql`INSERT INTO clarify_rounds (
+      rawExec(
+        db,
+        sql`INSERT INTO clarify_rounds (
         id, task_id, kind, asking_node_id, asking_node_run_id,
         intermediary_node_id, intermediary_node_run_id, iteration,
         questions_json, status
       ) VALUES (
         'r_bad_kind', ${taskId}, 'hybrid', 'designer', 'nr_a',
         'clarify1', 'nr_b', 0, '[]', 'awaiting_human'
-      )`),
+      )`,
+      ),
     ).toThrow(/Failed to run the query|CHECK constraint/i)
   })
 
   test('rejects directive other than continue/stop', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
       nodeId: 'designer',
@@ -264,7 +271,7 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_b',
       taskId,
       nodeId: 'clarify1',
@@ -273,14 +280,17 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
       iteration: 0,
     })
     expect(() =>
-      db.run(sql`INSERT INTO clarify_rounds (
+      rawExec(
+        db,
+        sql`INSERT INTO clarify_rounds (
         id, task_id, kind, asking_node_id, asking_node_run_id,
         intermediary_node_id, intermediary_node_run_id, iteration,
         questions_json, status, directive
       ) VALUES (
         'r_bad_dir', ${taskId}, 'self', 'designer', 'nr_a',
         'clarify1', 'nr_b', 0, '[]', 'answered', 'restart'
-      )`),
+      )`,
+      ),
     ).toThrow(/Failed to run the query|CHECK constraint/i)
   })
 })
@@ -289,7 +299,8 @@ describe('RFC-058 migration 0031 →（RFC-217 T8 终态）legacy 形状经 fixt
   test('legacy 键名 fixture 助手写入 clarify_rounds 并可读回（双表时代结束）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
       nodeId: 'designer',
@@ -313,7 +324,7 @@ describe('RFC-058 migration 0031 →（RFC-217 T8 终态）legacy 形状经 fixt
       .where(eq(clarifyRounds.id, 'legacy-self'))
     expect(selfRows.length).toBe(1)
 
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: 'nr_b',
       taskId,
       nodeId: 'questioner',

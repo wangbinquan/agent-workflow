@@ -14,6 +14,8 @@
 // 确定性：纯本地 git（init/commit/stash create/gc/reset），无网络/clone（同
 // scheduler-audit-s11 不加 RUN_GIT_NETWORK 门控）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,7 +26,6 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTask } from '../src/services/task'
 import { gitStashSnapshot, runGit, snapshotRefName } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -65,11 +66,14 @@ async function buildHarness(): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'w', definition: JSON.stringify(definition) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'w',
+    definition: JSON.stringify(definition),
+  })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -105,7 +109,8 @@ async function insertFailedRun(
   id: string,
   preSnapshot: string | null,
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,

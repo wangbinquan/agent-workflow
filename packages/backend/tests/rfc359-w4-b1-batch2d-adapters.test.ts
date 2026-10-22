@@ -2,22 +2,15 @@
 // 运行时会话捕获（appendEvents 受围栏）、人工门 continuation pre-drive（inspect / releaseClarifyForRetry
 // 按 token 精确围栏）、merge_state 迁移（读 + CAS 写同一事务）、TaskEngine drive 快照 + 工作区 profile 更新。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunEvents,
-  nodeRuns,
-  taskExecutionIntents,
-  taskExecutionOwners,
-  taskRepos,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
   createTaskExecutionContext,
@@ -39,10 +32,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -50,7 +44,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -67,12 +61,13 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedClaimedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   epoch = 1,
 ): Promise<{ token: OwnershipToken; context: TaskExecutionContextRef }> {
   const identity = createWorkerIdentity({ ownerId: `owner_${ulid()}`, daemonGeneration: 'gen-a' })
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: identity.ownerId,
     daemonGeneration: identity.daemonGeneration,
@@ -99,12 +94,13 @@ async function seedClaimedOwner(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  over: Partial<typeof nodeRuns.$inferInsert> = {},
+  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n',
@@ -150,6 +146,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 运行时会话捕获持久化
     await runWithTaskExecutionContext(context, () =>
       persistence.appendEvents({ taskId, nodeRunId: runA, events: [event('ses-a')] }),
     )
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db
       .select({ sessionId: nodeRunEvents.sessionId })
       .from(nodeRunEvents)
@@ -160,12 +157,13 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 运行时会话捕获持久化
 
 describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-drive', (harness) => {
   async function seedIntent(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     taskId: string,
-    over: Partial<typeof taskExecutionIntents.$inferInsert> = {},
+    over: Partial<PersistenceTables['taskExecutionIntents']['$inferInsert']> = {},
   ): Promise<string> {
     const intentId = `intent_${ulid()}`
-    await db.insert(taskExecutionIntents).values({
+    const { taskExecutionIntents } = tablesOf(db)
+    await insertOne(db, taskExecutionIntents, {
       id: intentId,
       taskId,
       kind: 'gate-continuation',
@@ -235,6 +233,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
     }
     expect(await step.run(context)).toEqual({ kind: 'ready' })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
+    const { taskExecutionIntents } = tablesOf(db)
     expect(
       (
         await db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.id, intentId))
@@ -259,6 +258,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
     const intentId = await seedIntent(db, taskId)
     const persistence = new DrizzleGateContinuationPreDrivePersistence(db)
     await persistence.releaseClarifyForRetry({ taskId, intentId, token, now: 5 })
+    const { taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
     const rows = await db
       .select({
         state: taskExecutionIntents.state,
@@ -297,6 +297,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— merge_state 迁移', (harness)
         extra: { isoWorktreePath: '/tmp/iso' },
       }),
     ).toEqual({ from: null, to: 'isolating' })
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ mergeState: nodeRuns.mergeState, iso: nodeRuns.isoWorktreePath })
       .from(nodeRuns)
@@ -331,7 +332,8 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— TaskEngine drive 持久化', (
   test('load 拼任务 / 仓库 / 协作者快照；findStatus；updateWorkspaceProfile 受围栏且缺行 ⇒ false', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    await db.insert(taskRepos).values({
+    const { taskRepos } = tablesOf(db)
+    await insertOne(db, taskRepos, {
       taskId,
       repoIndex: 0,
       repoPath: '/tmp/repo',

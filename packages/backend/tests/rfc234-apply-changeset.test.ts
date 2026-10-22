@@ -6,6 +6,9 @@
 //  a stale fence or an in-tx crash yields ZERO visible resources with staged
 //  side effects compensated (P0-5); a post-commit crash converges forward.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -21,21 +24,7 @@ import {
   canonicalIntentJson,
   parseIntentChangeset,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents,
-  intentApplyJournal,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  mcps,
-  resourceGrants,
-  plugins,
-  skills,
-  users,
-  workflows,
-  workgroups,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
@@ -45,7 +34,7 @@ import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding
 const OWNER = 'user_owner_apply_0000000000'
 const APPROVER = 'user_approver_apply_000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 let fixtureTimings: ReturnType<typeof crashTiming>[]
 
@@ -98,7 +87,8 @@ const actor: Actor = {
 }
 
 async function seedUser(id: string, username: string): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -106,13 +96,14 @@ async function seedUser(id: string, username: string): Promise<void> {
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 async function seedAgent(name: string): Promise<{ id: string; updatedAt: number }> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'existing',
@@ -121,7 +112,7 @@ async function seedAgent(name: string): Promise<{ id: string; updatedAt: number 
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as typeof agents.$inferInsert)
+  } as PersistenceTables['agents']['$inferInsert'])
   return { id, updatedAt: now }
 }
 
@@ -140,7 +131,8 @@ async function installDraft(
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  await db.insert(intentDrafts).values({
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  await insertOne(db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -325,11 +317,23 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       expect(receipt.commitSeq).toBe(1)
 
       const byOp = new Map(receipt.applied.map((a) => [a.opId, a]))
-      const skillRow = await db
-        .select()
-        .from(skills)
-        .where(eq(skills.id, byOp.get('op-1')?.resourceId ?? ''))
-        .get()
+      const {
+        skills,
+        mcps,
+        plugins,
+        agents,
+        workflows,
+        workgroups,
+        intentProvenance,
+        intentSessions,
+        intentApplyJournal,
+      } = tablesOf(db)
+      const skillRow = await firstRow(
+        db
+          .select()
+          .from(skills)
+          .where(eq(skills.id, byOp.get('op-1')?.resourceId ?? '')),
+      )
       expect(skillRow?.reservationState).toBe('ready')
       expect(skillRow?.ownerUserId).toBe(OWNER)
       expect(skillRow?.visibility).toBe('private')
@@ -337,61 +341,64 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         readFileSync(join(appHome, 'skills', skillRow?.id ?? '', 'files', 'SKILL.md'), 'utf8'),
       ).toContain('# Checklist')
 
-      const mcpRow = await db
-        .select()
-        .from(mcps)
-        .where(eq(mcps.id, byOp.get('op-2')?.resourceId ?? ''))
-        .get()
+      const mcpRow = await firstRow(
+        db
+          .select()
+          .from(mcps)
+          .where(eq(mcps.id, byOp.get('op-2')?.resourceId ?? '')),
+      )
       expect(JSON.parse(mcpRow?.config ?? '{}').env.TOKEN).toBe('real-token-value')
 
-      const pluginRow = await db
-        .select()
-        .from(plugins)
-        .where(eq(plugins.id, byOp.get('op-3')?.resourceId ?? ''))
-        .get()
+      const pluginRow = await firstRow(
+        db
+          .select()
+          .from(plugins)
+          .where(eq(plugins.id, byOp.get('op-3')?.resourceId ?? '')),
+      )
       expect(pluginRow?.sourceKind).toBe('file')
 
-      const agentRow = await db
-        .select()
-        .from(agents)
-        .where(eq(agents.id, byOp.get('op-4')?.resourceId ?? ''))
-        .get()
+      const agentRow = await firstRow(
+        db
+          .select()
+          .from(agents)
+          .where(eq(agents.id, byOp.get('op-4')?.resourceId ?? '')),
+      )
       expect(JSON.parse(agentRow?.mcp ?? '[]')).toEqual([byOp.get('op-2')?.resourceId])
       expect(JSON.parse(agentRow?.plugins ?? '[]')).toEqual([byOp.get('op-3')?.resourceId])
       expect(JSON.parse(agentRow?.skills ?? '[]')).toEqual([
         { kind: 'managed', skillId: byOp.get('op-1')?.resourceId },
       ])
 
-      const wfRow = await db
-        .select()
-        .from(workflows)
-        .where(eq(workflows.id, byOp.get('op-5')?.resourceId ?? ''))
-        .get()
+      const wfRow = await firstRow(
+        db
+          .select()
+          .from(workflows)
+          .where(eq(workflows.id, byOp.get('op-5')?.resourceId ?? '')),
+      )
       const def = JSON.parse(wfRow?.definition ?? '{}') as { nodes: Array<Record<string, unknown>> }
       expect(def.nodes[0]?.agentId).toBe(byOp.get('op-4')?.resourceId)
       expect(def.nodes[1]?.agentId).toBe(existing.id)
 
-      const wgRow = await db
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.id, byOp.get('op-6')?.resourceId ?? ''))
-        .get()
+      const wgRow = await firstRow(
+        db
+          .select()
+          .from(workgroups)
+          .where(eq(workgroups.id, byOp.get('op-6')?.resourceId ?? '')),
+      )
       expect(wgRow?.leaderMemberId).not.toBeNull()
 
       const provenance = await db.select().from(intentProvenance)
       expect(provenance.length).toBe(6)
       expect(new Set(provenance.map((p) => p.commitId)).size).toBe(1)
 
-      const freshSession = await db
-        .select()
-        .from(intentSessions)
-        .where(eq(intentSessions.id, session.id))
-        .get()
+      const freshSession = await firstRow(
+        db.select().from(intentSessions).where(eq(intentSessions.id, session.id)),
+      )
       expect(freshSession?.commitSeq).toBe(1)
       expect(freshSession?.contextRevision).toBe(1)
       expect(freshSession?.currentDraftId).toBeNull()
 
-      const journal = await db.select().from(intentApplyJournal).get()
+      const journal = await firstRow(db.select().from(intentApplyJournal))
       expect(journal?.state).toBe('committed')
     })
 
@@ -445,7 +452,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       })
       const workflowId = first.applied[0]?.resourceId ?? ''
       const readGeometry = async () => {
-        const row = await db.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+        const { workflows } = tablesOf(db)
+        const row = await firstRow(db.select().from(workflows).where(eq(workflows.id, workflowId)))
         const definition = JSON.parse(row?.definition ?? '{}') as {
           nodes: Array<{ position?: unknown; size?: unknown }>
         }
@@ -505,7 +513,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         decisions: [],
       })
       const workflowId = result.applied[0]?.resourceId ?? ''
-      const row = await db.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+      const { workflows } = tablesOf(db)
+      const row = await firstRow(db.select().from(workflows).where(eq(workflows.id, workflowId)))
       const definition = JSON.parse(row?.definition ?? '{}') as {
         nodes: Array<Record<string, unknown>>
       }
@@ -535,6 +544,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         decisions: happyDecisions,
       })
       expect(second).toEqual(first)
+      const { agents, intentApplyJournal } = tablesOf(db)
       expect((await db.select().from(agents)).length).toBe(2) // existing + one created
       expect((await db.select().from(intentApplyJournal)).length).toBe(1)
     })
@@ -580,10 +590,11 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           decisions: [],
         }),
       ).rejects.toThrow()
+      const { skills, agents, intentApplyJournal } = tablesOf(db)
       expect((await db.select().from(skills)).length).toBe(0)
-      const agentRow = await db.select().from(agents).where(eq(agents.id, existing.id)).get()
+      const agentRow = await firstRow(db.select().from(agents).where(eq(agents.id, existing.id)))
       expect(agentRow?.description).toBe('existing')
-      expect((await db.select().from(intentApplyJournal).get())?.state).toBe('failed')
+      expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('failed')
     })
 
     test('in-tx crash rolls everything back and compensates prestaged effects', async () => {
@@ -606,13 +617,23 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: happyDecisions },
         ),
       ).rejects.toThrow(/boom-in-tx/)
+      const {
+        skills,
+        mcps,
+        plugins,
+        workflows,
+        workgroups,
+        agents,
+        intentApplyJournal,
+        intentProvenance,
+      } = tablesOf(db)
       expect((await db.select().from(skills)).length).toBe(0)
       expect((await db.select().from(mcps)).length).toBe(0)
       expect((await db.select().from(plugins)).length).toBe(0)
       expect((await db.select().from(workflows)).length).toBe(0)
       expect((await db.select().from(workgroups)).length).toBe(0)
       expect((await db.select().from(agents)).length).toBe(1) // only the seed
-      expect((await db.select().from(intentApplyJournal).get())?.state).toBe('failed')
+      expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('failed')
       expect((await db.select().from(intentProvenance)).length).toBe(0)
     })
 
@@ -642,7 +663,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         ),
       ).rejects.toThrow(/boom-before-tx/)
 
-      const pending = (await db.select().from(intentApplyJournal).get())!
+      const { intentApplyJournal } = tablesOf(db)
+      const pending = (await firstRow(db.select().from(intentApplyJournal)))!
       expect(compensationAttempts).toBeGreaterThan(0)
       expect(pending.state).toBe('prepared')
       expect(pending.error).toContain('compensation incomplete')
@@ -661,7 +683,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         failed: 1,
         rolledForward: 0,
       })
-      expect((await db.select().from(intentApplyJournal).get())?.state).toBe('failed')
+      expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('failed')
     })
 
     test('post-commit crash: resources visible, convergence replays roll-forward', async () => {
@@ -684,8 +706,9 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: happyDecisions },
         ),
       ).rejects.toThrow(/boom-post-commit/)
+      const { intentApplyJournal, skills } = tablesOf(db)
       // Committed: the bundle IS visible even though roll-forward crashed…
-      expect((await db.select().from(intentApplyJournal).get())?.state).toBe('committed')
+      expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('committed')
       expect((await db.select().from(skills)).length).toBe(1)
       // …and convergence replays the idempotent tail.
       const converged = await composeIntentApplyConvergence({
@@ -712,6 +735,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         fullBundle(existing.id, filePluginFixture()),
         manifestWithAgent(existing.id, existing.updatedAt),
       )
+      const { intentSessions, intentApplyJournal } = tablesOf(db)
       await db
         .update(intentSessions)
         .set({ contextRevision: 5 })
@@ -749,7 +773,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     test('foreign-owner update: modify forbidden, copy lands a new resource', async () => {
       const foreignId = ulid()
       const now = Date.now()
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         id: foreignId,
         name: 'foreign-agent',
         description: 'someone else owns this',
@@ -758,7 +783,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         visibility: 'public',
         createdAt: now,
         updatedAt: now,
-      } as typeof agents.$inferInsert)
+      } as PersistenceTables['agents']['$inferInsert'])
       const { session } = await createIntentSession(db, actor, { message: 'x' })
       const changeset = {
         $schema_version: 1,
@@ -796,7 +821,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           decisions: [],
         }),
       ).rejects.toMatchObject({ code: 'intent-foreign-modify-forbidden' })
-      const untouched = await db.select().from(agents).where(eq(agents.id, foreignId)).get()
+      const untouched = await firstRow(db.select().from(agents).where(eq(agents.id, foreignId)))
       expect(untouched?.description).toBe('someone else owns this')
 
       const receipt = await applyIntentChangeset(deps(), {
@@ -808,15 +833,16 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         ],
       })
       expect(receipt.applied[0]?.fromCopy).toBe(true)
-      const copied = await db
-        .select()
-        .from(agents)
-        .where(eq(agents.id, receipt.applied[0]?.resourceId ?? ''))
-        .get()
+      const copied = await firstRow(
+        db
+          .select()
+          .from(agents)
+          .where(eq(agents.id, receipt.applied[0]?.resourceId ?? '')),
+      )
       expect(copied?.ownerUserId).toBe(OWNER)
       expect(copied?.name).toBe('my-copy')
       expect(
-        (await db.select().from(agents).where(eq(agents.id, foreignId)).get())?.description,
+        (await firstRow(db.select().from(agents).where(eq(agents.id, foreignId))))?.description,
       ).toBe('someone else owns this')
     })
 
@@ -830,6 +856,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         fullBundle(existing.id, filePluginFixture()),
         manifestWithAgent(existing.id, existing.updatedAt),
       )
+      const { intentSessions, intentApplyJournal } = tablesOf(db)
       // A newer draft becomes current (same epoch — no rebase).
       await db
         .update(intentSessions)
@@ -867,6 +894,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           ],
         }),
       ).rejects.toMatchObject({ code: 'intent-slot-value-invalid' })
+      const { skills } = tablesOf(db)
       expect((await db.select().from(skills)).length).toBe(0)
     })
 
@@ -910,8 +938,9 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           decisions: [],
         }),
       ).rejects.toMatchObject({ code: 'intent-op-canonical-invalid' })
+      const { workflows, intentApplyJournal } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
-      expect((await db.select().from(intentApplyJournal).get())?.state).toBe('failed')
+      expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('failed')
     })
 
     // Design-gate P2-2 crash matrix: the three pre-commit breakpoints not
@@ -949,13 +978,15 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
             ),
           ).rejects.toThrow(new RegExp(`boom-${point}`))
           diagnostic?.mark('zero-visible-resources')
+          const { skills, mcps, plugins, workflows, workgroups, agents, intentApplyJournal } =
+            tablesOf(db)
           expect((await db.select().from(skills)).length).toBe(0)
           expect((await db.select().from(mcps)).length).toBe(0)
           expect((await db.select().from(plugins)).length).toBe(0)
           expect((await db.select().from(workflows)).length).toBe(0)
           expect((await db.select().from(workgroups)).length).toBe(0)
           expect((await db.select().from(agents)).length).toBe(1)
-          expect((await db.select().from(intentApplyJournal).get())?.state).toBe('failed')
+          expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('failed')
           // Idempotent replay of a failed journal: original error, no side effects.
           diagnostic?.mark('failed-replay')
           await expect(
@@ -1000,7 +1031,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     ): Promise<string> {
       const id = ulid()
       const now = Date.now()
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id,
         name,
         description: '',
@@ -1016,7 +1048,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         builtin: false,
         createdAt: now,
         updatedAt: now,
-      } as typeof workflows.$inferInsert)
+      } as PersistenceTables['workflows']['$inferInsert'])
       return id
     }
 
@@ -1027,7 +1059,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     ): Promise<string> {
       const id = ulid()
       const now = Date.now()
-      await db.insert(workgroups).values({
+      const { workgroups } = tablesOf(db)
+      await insertOne(db, workgroups, {
         id,
         name,
         description: '',
@@ -1037,7 +1070,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         visibility,
         createdAt: now,
         updatedAt: now,
-      } as typeof workgroups.$inferInsert)
+      } as PersistenceTables['workgroups']['$inferInsert'])
       return id
     }
 
@@ -1083,6 +1116,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       await expect(
         applyCall({ id: 'n1', kind: 'call-workflow', workflowName: 'secret-flow' }),
       ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+      const { workflows } = tablesOf(db)
       // all-or-nothing: the caller workflow must not exist either
       expect((await db.select().from(workflows)).length).toBe(1) // only the seeded one
     })
@@ -1099,6 +1133,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           goalTemplate: 'do it',
         }),
       ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+      const { workgroups } = tablesOf(db)
       expect((await db.select().from(workgroups)).length).toBe(1)
     })
 
@@ -1110,6 +1145,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         workflowName: 'my-flow',
       })) as { applied: unknown[] }
       expect(receipt.applied.length).toBe(1)
+      const { workflows } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(2)
     })
 
@@ -1151,7 +1187,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     const OTHER2 = 'user_other2_apply_00000000'
 
     async function seedForeignPrivateWorkflow(name: string): Promise<void> {
-      await db.insert(users).values({
+      const { users, workflows } = tablesOf(db)
+      await insertOne(db, users, {
         id: OTHER2,
         username: 'other2',
         displayName: 'other2',
@@ -1159,8 +1196,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         status: 'active',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as typeof users.$inferInsert)
-      await db.insert(workflows).values({
+      } as PersistenceTables['users']['$inferInsert'])
+      await insertOne(db, workflows, {
         id: ulid(),
         name,
         description: '',
@@ -1176,7 +1213,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         builtin: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as typeof workflows.$inferInsert)
+      } as PersistenceTables['workflows']['$inferInsert'])
     }
 
     /** Two creates: a caller referencing `child-flow` by name, and `child-flow`
@@ -1232,6 +1269,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       test(`bundle-internal target resolves with caller ${callerFirst ? 'BEFORE' : 'AFTER'} it`, async () => {
         const receipt = (await applyPair(callerFirst)) as { applied: unknown[] }
         expect(receipt.applied.length).toBe(2)
+        const { workflows } = tablesOf(db)
         expect((await db.select().from(workflows)).length).toBe(2)
       })
     }
@@ -1243,6 +1281,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         await seedForeignPrivateWorkflow('child-flow')
         const receipt = (await applyPair(callerFirst)) as { applied: unknown[] }
         expect(receipt.applied.length).toBe(2)
+        const { workflows } = tablesOf(db)
         // the actor's own child row exists alongside the foreign one
         const rows = await db.select().from(workflows)
         expect(rows.filter((r) => r.name === 'child-flow').length).toBe(2)
@@ -1389,7 +1428,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     const OWNER3 = 'user_owner3_apply_00000000'
 
     async function seedOtherUser(id: string): Promise<void> {
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id,
         username: id,
         displayName: id,
@@ -1397,12 +1437,13 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         status: 'active',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as typeof users.$inferInsert)
+      } as PersistenceTables['users']['$inferInsert'])
     }
 
     async function seedPrivateWorkgroup(name: string, ownerUserId: string): Promise<string> {
       const id = ulid()
-      await db.insert(workgroups).values({
+      const { workgroups } = tablesOf(db)
+      await insertOne(db, workgroups, {
         id,
         name,
         description: '',
@@ -1412,13 +1453,14 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         visibility: 'private',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as typeof workgroups.$inferInsert)
+      } as PersistenceTables['workgroups']['$inferInsert'])
       return id
     }
 
     async function seedPrivateWorkflow(name: string, ownerUserId: string): Promise<string> {
       const id = ulid()
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id,
         name,
         description: '',
@@ -1434,7 +1476,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         builtin: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as typeof workflows.$inferInsert)
+      } as PersistenceTables['workflows']['$inferInsert'])
       return id
     }
 
@@ -1533,6 +1575,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           ],
         })) as { applied: unknown[] }
         expect(receipt.applied.length).toBe(2)
+        const { workgroups } = tablesOf(db)
         expect((await db.select().from(workgroups)).length).toBe(1)
       })
     }
@@ -1551,13 +1594,14 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     test('an explicit grant makes a private workgroup referenceable', async () => {
       await seedOtherUser(OWNER3)
       const wgId = await seedPrivateWorkgroup('granted-squad', OWNER3)
-      await db.insert(resourceGrants).values({
+      const { resourceGrants } = tablesOf(db)
+      await insertOne(db, resourceGrants, {
         resourceType: 'workgroup',
         resourceId: wgId,
         userId: OWNER,
         addedBy: OWNER3,
         addedAt: Date.now(),
-      } as typeof resourceGrants.$inferInsert)
+      } as PersistenceTables['resourceGrants']['$inferInsert'])
       const receipt = (await applyWith(actor, wgNode('granted-squad'))) as { applied: unknown[] }
       expect(receipt.applied.length).toBe(1)
     })
@@ -1565,13 +1609,14 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     test('an explicit grant makes a private workflow referenceable', async () => {
       await seedOtherUser(OWNER3)
       const wfId = await seedPrivateWorkflow('granted-flow', OWNER3)
-      await db.insert(resourceGrants).values({
+      const { resourceGrants } = tablesOf(db)
+      await insertOne(db, resourceGrants, {
         resourceType: 'workflow',
         resourceId: wfId,
         userId: OWNER,
         addedBy: OWNER3,
         addedAt: Date.now(),
-      } as typeof resourceGrants.$inferInsert)
+      } as PersistenceTables['resourceGrants']['$inferInsert'])
       const receipt = (await applyWith(actor, {
         id: 'n1',
         kind: 'call-workflow',

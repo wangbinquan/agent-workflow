@@ -268,3 +268,68 @@ II-pre 由 Codex 实施、本会话审核，一次提交落地，不改产品行
   「物化后在插入事务内复查版本 / 存在性」没有生产对应物。阶段 II 重建 Task 写协议（design §3.3）时一并考虑。
 - **遗留（不属于本 RFC）**：手动性能脚本 `packages/backend/scripts/perf-sweep.ts` 不在 typecheck 范围，2026-09-17 起已因
   `listTasks` / `getNodeRunEvents` 导出移除而无法运行，本次删除的 `startTask` 也是它的引用之一；需要按生产启动路径重写。
+
+### 6.9 I-b 交付记录（2026-10-22）
+
+I-b 由 Codex 实施（S0～S5），本会话审核并补正，一次提交落地，不改物理 schema、迁移文件、API 与产品行为。
+
+- **落位**：
+  - 中立查询面 `platform/persistence/querySurface.ts`（`PersistenceDb` / `PersistenceTx`，入口 `persistenceDb.ts`）：只收实测用到的
+    builder（select / selectDistinct / from / where / having / groupBy / orderBy / limit / offset / innerJoin / leftJoin / crossJoin /
+    unionAll / insert / values / onConflictDoNothing / onConflictDoUpdate / returning / update / set / delete，可直接 await），
+    结果类型复用 drizzle 根层类型（含 left join 可空性），每个子句只能调一次；运行时就是原生 drizzle 对象，不包一层。
+    类型级一致性测试 `rfc395-query-surface` 锁住两个原生库对象无需断言即可赋值、错误列类型被拒。
+  - 表：`schema/nativeTables.ts` 由同一份 contribution 生成两套原生表（`nativeTableSets.sqlite` / `.postgresql`，按定义缓存，
+    与 `@/db/schema` 留给 drizzle-kit 的导出是同一批对象）；`sessionTables.ts` 把表集与能力绑定在句柄上，事务与 savepoint 继承，
+    业务一律 `tablesOf(db)`；`schema/neutral.ts` 是去掉方言品牌的中立表类型。全表集先给出，收窄到本模块的表留给 T11。
+  - 辅助（`queryHelpers.ts`）：`first`（select 加 `limit 1`，带 RETURNING 的写照常整条执行）、`affectedRows`（bun:sqlite
+    `changes` / Bun.SQL `count`）、`rawRows` / `rawFirst` / `rawExec`（按合同 codec 解码 int8、布尔、JSON），以及保留 SQLite
+    同步事务程序原有执行时序的 `queryRows` / `queryWrite`；中立别名 `tableAlias.ts`；单行插入入口 `singleInsert.ts` 的 `insertOne`。
+  - 能力矩阵签名改为中立 `Table` / `Column`；新增 `instr`（SQLite `instr` / PostgreSQL `strpos`，两侧测试
+    `rfc395-instr-capability`），标量 `max(a, b)` 走既有 `greatest`；删除 `numericFromRawRow`；两个能力工厂改为单例，
+    `session.engine` 与 `engineOf(tx)` 恒为同一对象。
+  - PostgreSQL 改原生 `drizzle-orm/bun-sql`：先 reserve 再在该连接上 begin（不嵌套 reserve，reserve 等待遥测覆盖 begin），
+    隔离级别走 `PgTransactionConfig`，嵌套事务用原生 savepoint，40001 / 40P01 重试保留；连接包装只按语句分类（读放行，写前依次执行
+    部署写闸、首写标记与世代围栏），不改写 SQL。单行 INSERT 往返合并改为原生构造
+    `INSERT … SELECT … WHERE EXISTS (活跃世代)`，经 `insertOne` 显式进入（生产 182 处），仍是一次往返；`on conflict` /
+    `returning` / 多行 / 首写标记之前 / 配了部署写闸时回到原生 builder 与分类连接。AC-11 的三条锁按原生客户端重写后保持。
+- **删除**：`db/providerSchema.ts` 整份（`providerTableFacade`、`concreteDatabaseTable`、`selectDatabaseSchemaProvider`、
+  `currentDatabaseSchemaProvider`）；`ProviderNeutralDatabase` 与 `DatabaseTransaction` 类型；sqlite-proxy PostgreSQL 客户端与
+  `compilePostgresqlSql`、`SQLiteAsyncDialect` 原始编译、`decorateDatabase`；daemon 启动的投影切换；测试侧的投影切换（harness
+  种子改为两套表按定义逐表复制）。`taskOverviewQuery` 的模板缓存改为随会话持有。
+- **规模**：1,953 个路径（新增 18、删除 1），其中 `src` 547 个文件。同口径 grep（`src` / `tests`）：
+  - 无参数 `.get / .all / .run`：948 → 92 / 1,868 → 679；按类型识别的 drizzle builder 终端为 858 → 0 / 1,197 → 1（测试侧剩下的
+    是 `@ts-expect-error` 负例），grep 剩余的是 bun:sqlite 语句、Map 等非查询对象；生产侧库级原始执行只剩持久化边界 4 处
+    （围栏插入的原生 execute，SQLite 的 BEGIN / COMMIT / ROLLBACK）；
+  - `ProviderNeutralDatabase` 1,491 → 0 / 2,997 → 0，`DatabaseTransaction` 381 → 0 / 31 → 0，`BaseSQLiteDatabase` 9 → 0 / 10 → 0；
+  - 从 `@/db/schema` 导入表的文件 336 → 3 / 1,140 → 14（生产 3 个都是 schema 接线；测试 12 个是守卫负例文本，2 个是历史 SQLite
+    迁移的原生 schema 构造）；三个投影切换符号 17 → 0 / 173 → 0。
+- **守卫与账本**：新增 `rfc395-neutral-query-boundary`（持久化接线之外不得用方言终端或库级原始执行、不得 import `sqlite-core`）与
+  `rfc395-session-table-imports`（持久化接线之外不得直接导入方言表）；`postgresqlSurface`、RFC-349 surface / cutover、W5 系列、
+  T17～T20、`architectureReport` 等改指原生面，未删除或放宽。`counts.json` 未变。T28 / T29 扫描器学会识别 `first(…)`、
+  元素访问与块体事务步骤后，各补录一处既有形状（`scheduledTaskPersistence.ts` 的 limit + 下标读、`graph-development/designStore.ts`
+  经别名展开的插入），业务流程未改，属识别范围扩大。
+- **审核补正（本会话）**：
+  - PostgreSQL 写结果计数：Bun.SQL 的 `begin()` / `savepoint()` 把回调返回的数组过一遍 `Promise.all`，`count` 随之丢失。
+    事务外的单条写经围栏事务回来、事务体把写结果返回给调用方，这两种情况的影响行数都成了 0，依赖「恰好 1 行」的 CAS 判定会误判。
+    客户端改为装箱跨过事务边界，`rfc395-query-helpers` 增加两条真库断言；
+  - `rfc395-database-defaults`：SQLite 侧按 I-a 已审漂移账本（`rfc395-sqlite-drift.json`，由
+    `rfc395-provider-catalog-equivalence` 精确锁定）放行 `workgroup_member_cursors.updated_at` 的历史默认值差异，PostgreSQL 侧
+    保持严格（真库逐表逐列相等）；
+  - `rfc359-w27` 两处 PostgreSQL 期望值仍按 int8 字符串写，改为按 codec 解码后的数字；
+  - 收敛 codemod 留下的冗余：同一函数内对同一句柄的重复 `tablesOf` 解构合并到第一处支配位置（`src` 777 处、测试 2,940 处），
+    插在注释与其所注释语句之间的解构移到注释上方（`src` 82 处、测试 385 处），5 个生产文件里内联的 `tablesOf(x).表.列` 改回原有
+    形状；清除指向已删机制的过时注释，`docs/dev-gotchas.md` 七处追加 I-b 更正。
+- **验证**（本地仅作诊断，两个 provider 的全量以 CI 为准）：
+  - 静态：backend typecheck（6144 MiB 堆，与 CI 一致）、全部改动 TypeScript 文件的 `eslint --max-warnings=0` 与 prettier 通过；
+    Codex 另跑 depcheck、`lint:promises`、`db:check` 与性能微基准门（回归 0），均通过；
+  - SQLite：Codex 的全量跑了一次（分片 4 完成：4,822 过 / 51 失败；分片 1～3 到 45 分钟时限，未出总数），初始失败的 110 个文件
+    逐个隔离复跑后 103 个转绿。其余 7 个文件是 6 个 Codex 沙箱读不到进程信息的已知失败，加上默认值对拍；本会话在本机复跑这 7 个文件，
+    73 过 / 0 失败。两个新守卫与 T17～T20、T28、T29 等 15 个文件 130 过 / 0 失败；
+  - PostgreSQL（本机 postgres:17，`--timeout 60000`）：Codex 列出的 21 个重点文件中有 3 例失败，即上面补正的写结果计数与 W27；
+    修复后连同受影响文件在两种数据库上复跑 10 个文件，148 过 / 0 失败。postgresql-evidence 的 T10-C 预言 10 个文件
+    （含逐表真库 INSERT 写矩阵）73 过 / 0 失败。
+- **偏离与遗留**：
+  - `onCurrentSelected` 钩子已无生产调用方，只剩两份测试用它观察割接后正在服务的 session，暂留；
+  - PostgreSQL 同名 shim 在 CHECK / 默认值里的用法（`json_valid` / `unixepoch` / `hex`）按 D12 保留到新 baseline；
+  - 部署写闸配置时单行插入不走一次往返的快路径（与改动前一致）。

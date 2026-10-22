@@ -2,6 +2,8 @@
 // Bypasses startTask's worktree creation by inserting the task row directly —
 // real worktree creation is exercised in tasks.test.ts.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -11,10 +13,9 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { runGit } from '../src/util/git'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import {
   createProviderTaskExecutionTestTopology,
@@ -26,7 +27,7 @@ import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
   db: TDatabase
   postgresql: boolean
   appHome: string
@@ -60,12 +61,13 @@ async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[] = ['summary'],
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -85,6 +87,7 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string> = {},
 ): Promise<{ workflowId: string; taskId: string }> {
+  const { agents, workflows, tasks } = tablesOf(h.db)
   const agentRows = await h.db.select({ id: agents.id, name: agents.name }).from(agents)
   const agentIdByName = new Map(agentRows.map((row) => [row.name, row.id]))
   const canonicalDefinition: WorkflowDefinition = {
@@ -99,14 +102,14 @@ async function seedWorkflowAndTask(
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -206,6 +209,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(finalTask?.status).toBe('done')
     expect(finalTask?.errorMessage).toBeNull()
@@ -256,6 +260,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorSummary).toContain('no-such-agent')
@@ -281,6 +286,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorSummary).toContain('wrapper-git')
@@ -316,6 +322,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorSummary).toContain('cycle')
@@ -339,6 +346,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorSummary).toBe('workflow-node-id-duplicate')
@@ -364,6 +372,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.failedNodeId).toBe('a1')
@@ -413,6 +422,7 @@ function registerNativeCases2() {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -457,6 +467,7 @@ function registerNativeCases2() {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       signal: controller.signal,
     })
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')
     expect(t?.errorSummary).toContain('canceled')
@@ -487,6 +498,7 @@ function registerNativeCases2() {
           signal: controller.signal,
         }),
     )
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')
   })
@@ -561,6 +573,7 @@ function registerProviderCases3(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -600,6 +613,7 @@ function registerProviderCases3(provider: ProviderHarness) {
           maxConcurrentNodes: 2,
         }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     // Parallelism is asserted STRUCTURALLY via execution-window OVERLAP, NOT a
@@ -654,6 +668,7 @@ function registerProviderCases3(provider: ProviderHarness) {
           defaultNodeRetries: 2,
         }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     // We should have 3 node_runs: retry_index 0,1 failed; 2 done.
@@ -700,6 +715,7 @@ function registerProviderCases3(provider: ProviderHarness) {
           sessionRestartBudget: 0,
         }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.failedNodeId).toBe('a1')
@@ -769,6 +785,7 @@ process.exit(0)
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', shimPath],
     })
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const wrapRun = (
@@ -835,6 +852,7 @@ process.exit(0)
           maxConcurrentNodes: 4,
         }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     // Both writers reached done AND merged their iso delta back into canonical.
@@ -906,6 +924,7 @@ function registerProviderCases4(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const loopRun = (
@@ -958,6 +977,7 @@ function registerProviderCases4(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-exhausted')
@@ -1017,6 +1037,7 @@ function registerProviderCases4(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -1075,6 +1096,7 @@ function registerProviderCases4(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-continue-on-max-iterations')
@@ -1111,6 +1133,7 @@ function registerProviderCases4(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -1155,6 +1178,7 @@ function registerProviderCases4(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const auditRuns = await h.db
@@ -1197,6 +1221,7 @@ function registerProviderCases4(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
   })
@@ -1242,6 +1267,7 @@ function registerProviderCases4(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     // Loop done after iter 0; wrapper-git ran once.
@@ -1260,12 +1286,13 @@ describeEachProvider('runTask: loop wrapper (M4 P-4-01 / P-4-03)', (provider) =>
 })
 
 async function seedReadonlyAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[],
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',

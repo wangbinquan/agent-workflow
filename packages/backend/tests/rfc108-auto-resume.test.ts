@@ -5,12 +5,13 @@
 // （放过其它状态/其它 errorSummary）；② 每条成功 resume 记 auto-resume recovery_event；
 // ③ 已隔离任务跳过；④ resume 抛错不中断循环、计入熔断；⑤ 熔断触顶后续跳过。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
@@ -28,7 +29,7 @@ afterEach(() => {
 })
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: string,
   errorSummary: string | null,
   workgroup?: { workgroupId: string; mode: string },
@@ -36,8 +37,9 @@ async function seedTask(
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },

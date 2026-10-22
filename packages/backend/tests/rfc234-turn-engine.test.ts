@@ -5,6 +5,9 @@
 //  installs a draft — design-gate P0-3), nonce persisted on the turn row
 //  (P2-1), boot recovery and scratch GC.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
@@ -19,8 +22,7 @@ import {
   canonicalIntentJson,
   parseIntentChangeset,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { createRuntime, setRuntimeEnabled } from './helpers/runtimeRegistryApplication'
 import { RUNTIME_INVENTORY_RULE } from '@/modules/intent/application/dumpBuilder'
@@ -57,7 +59,7 @@ import type { IntentResolvedRuntime } from '../src/modules/intent/application/po
 
 const OWNER = 'user_owner_intent_000000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 let persistence: IntentPersistence
 
@@ -149,16 +151,13 @@ const MINIMAL_CHANGESET = JSON.stringify({
  */
 interface FirstWriteFaultSeam {
   /** 交给被测代码的库句柄（原句柄的透明代理）。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   arm(): void
   disarm(): void
   fired(): number
 }
 
-function firstWriteFaultSeam(
-  target: ProviderNeutralDatabase,
-  message: string,
-): FirstWriteFaultSeam {
+function firstWriteFaultSeam(target: PersistenceDb, message: string): FirstWriteFaultSeam {
   let armed = false
   let fired = 0
   const trip = (): void => {
@@ -219,7 +218,8 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
   persistence = intentPersistenceForTest(db)
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-engine-'))
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER,
     username: 'owner',
     displayName: 'Owner',
@@ -227,7 +227,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
@@ -252,6 +252,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         }),
       ).toBe(true)
 
+      const { intentSessions, intentTurns } = tablesOf(db)
       const fresh = (
         await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
       )[0]
@@ -281,6 +282,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       })
       expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
 
+      const { intentSessions, intentTurns } = tablesOf(db)
       const fresh = (
         await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
       )[0]
@@ -310,6 +312,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       expect(outcome.kind).toBe('changeset')
       expect(outcome.draftRevision).toBe(1)
 
+      const { intentSessions, intentDrafts, intentTurns } = tablesOf(db)
       const fresh = (
         await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
       )[0]
@@ -378,6 +381,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       )
 
       expect(outcome.kind).toBe('changeset')
+      const { intentDrafts, intentTurns } = tablesOf(db)
       const draft = (
         await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
       )[0]
@@ -445,20 +449,17 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       )
 
       expect(outcome.kind).toBe('changeset')
-      const draft = await db
-        .select()
-        .from(intentDrafts)
-        .where(eq(intentDrafts.sessionId, session.id))
-        .get()
+      const { intentDrafts, intentTurns } = tablesOf(db)
+      const draft = await firstRow(
+        db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id)),
+      )
       const report = JSON.parse(draft?.validationJson ?? '{}') as { errors: string[] }
       expect(report.errors[0]).toBe(
         'op-1: workflow definition cannot be auto-laid out (duplicate node id duplicate) (intent-workflow-layout-input-invalid)',
       )
-      const turn = await db
-        .select()
-        .from(intentTurns)
-        .where(eq(intentTurns.id, outcome.turnId))
-        .get()
+      const turn = await firstRow(
+        db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)),
+      )
       expect(JSON.parse(turn?.contentJson ?? '{}').blockingErrors).toBeGreaterThan(0)
     })
 
@@ -554,11 +555,10 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         { sessionId: exactSession.id, actor },
       )
       expect(exactOutcome.kind).toBe('changeset')
-      const exactDraft = await db
-        .select()
-        .from(intentDrafts)
-        .where(eq(intentDrafts.sessionId, exactSession.id))
-        .get()
+      const { intentDrafts, intentTurns } = tablesOf(db)
+      const exactDraft = await firstRow(
+        db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, exactSession.id)),
+      )
       expect(Buffer.byteLength(exactDraft?.changesetJson ?? '', 'utf8')).toBe(
         INTENT_LIMITS.maxChangesetBytes,
       )
@@ -605,11 +605,9 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         (await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, overflowSession.id)))
           .length,
       ).toBe(0)
-      const turn = await db
-        .select()
-        .from(intentTurns)
-        .where(eq(intentTurns.id, outcome.turnId))
-        .get()
+      const turn = await firstRow(
+        db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId)),
+      )
       expect(turn?.scratchRetained).toBe(true)
       expect(existsSync(scratchDir)).toBe(true)
       const content = JSON.parse(turn?.contentJson ?? '{}') as { code: string; errors: string[] }
@@ -640,6 +638,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         { sessionId: session.id, actor },
       )
       expect(first.kind).toBe('questions')
+      const { intentSessions } = tablesOf(db)
       expect(
         JSON.parse(
           (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
@@ -693,12 +692,14 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         )
         expect(outcome.kind).toBe('error')
         expect(outcome.errorCode).toBe(code)
+        const { intentSessions } = tablesOf(db)
         const fresh = (
           await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
         )[0]
         expect(fresh?.inFlightTurnId).toBeNull()
         expect(fresh?.currentDraftId).toBeNull()
       }
+      const { intentTurns } = tablesOf(db)
       const turns = await db
         .select()
         .from(intentTurns)
@@ -742,6 +743,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         },
         { sessionId: session.id, actor },
       )
+      const { intentTurns } = tablesOf(db)
       const failedTurn = (
         await db.select().from(intentTurns).where(eq(intentTurns.id, failed.turnId))
       )[0]
@@ -821,6 +823,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         { sessionId: session.id, actor },
       )
       expect(outcome.kind).toBe('changeset')
+      const { intentDrafts } = tablesOf(db)
       const draft = (
         await db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id))
       )[0]
@@ -852,6 +855,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       )
       // Wait until the in-flight slot is visibly taken.
       for (let i = 0; i < 100; i++) {
+        const { intentSessions } = tablesOf(db)
         const row = (
           await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
         )[0]
@@ -866,6 +870,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       const outcome = await running
       expect(outcome.kind).toBe('error')
       expect(outcome.errorCode).toBe('intent-run-aborted')
+      const { intentSessions } = tablesOf(db)
       const fresh = (
         await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
       )[0]
@@ -891,12 +896,14 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         { sessionId: session.id, actor },
       )
       for (let i = 0; i < 100; i++) {
+        const { intentSessions } = tablesOf(db)
         const row = (
           await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
         )[0]
         if (row?.inFlightTurnId !== null) break
         await new Promise((r) => setTimeout(r, 10))
       }
+      const { intentSessions, intentDrafts } = tablesOf(db)
       // Simulate a future epoch mover racing the run.
       await db
         .update(intentSessions)
@@ -957,6 +964,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       )
 
       expect(seam.fired()).toBe(1)
+      const { intentTurns } = tablesOf(db)
       const turn = (
         await db.select().from(intentTurns).where(eq(intentTurns.id, outcome.turnId))
       )[0]
@@ -1018,6 +1026,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         { sessionId: session.id, actor },
       )
       expect(turn.kind).toBe('changeset')
+      const { intentTurns, intentSessions } = tablesOf(db)
       const turnRow = (
         await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
       ).find((t) => t.kind === 'changeset')
@@ -1036,7 +1045,8 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
     test('boot recovery settles orphaned in-flight turns', async () => {
       const { session } = await createIntentSession(db, actor, { message: 'x' })
       const turnId = ulid()
-      await db.insert(intentTurns).values({
+      const { intentTurns, intentSessions } = tablesOf(db)
+      await insertOne(db, intentTurns, {
         id: turnId,
         sessionId: session.id,
         seq: 2,
@@ -1046,7 +1056,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         contextRevision: 0,
         captureState: 'live',
         createdAt: Date.now(),
-      } as typeof intentTurns.$inferInsert)
+      } as PersistenceTables['intentTurns']['$inferInsert'])
       await db
         .update(intentSessions)
         .set({ inFlightTurnId: turnId, turnSeq: 2 })
@@ -1070,7 +1080,8 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       ): Promise<{ sessionId: string; turnId: string }> => {
         const { session } = await createIntentSession(db, actor, { message })
         const turnId = ulid()
-        await db.insert(intentTurns).values({
+        const { intentTurns, intentSessions } = tablesOf(db)
+        await insertOne(db, intentTurns, {
           id: turnId,
           sessionId: session.id,
           seq: 2,
@@ -1080,7 +1091,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
           contextRevision: 0,
           captureState: 'live',
           createdAt: Date.now(),
-        } as typeof intentTurns.$inferInsert)
+        } as PersistenceTables['intentTurns']['$inferInsert'])
         await db
           .update(intentSessions)
           .set({ inFlightTurnId: turnId, turnSeq: 2 })
@@ -1093,6 +1104,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       const current = await reserveRunningTurn('current generation')
 
       expect(await recoverIntentTurnsOnBoot(persistence, undefined, bootSnapshot)).toBe(1)
+      const { intentTurns, intentSessions } = tablesOf(db)
       expect(
         (await db.select().from(intentTurns).where(eq(intentTurns.id, orphaned.turnId)))[0]?.kind,
       ).toBe('error')
@@ -1108,7 +1120,8 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
     test('boot recovery preserves an already-settled capture state', async () => {
       const { session } = await createIntentSession(db, actor, { message: 'x' })
       const turnId = ulid()
-      await db.insert(intentTurns).values({
+      const { intentTurns, intentSessions } = tablesOf(db)
+      await insertOne(db, intentTurns, {
         id: turnId,
         sessionId: session.id,
         seq: 2,
@@ -1146,6 +1159,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       }
       const terminalTurn = ulid()
       const runningTurn = ulid()
+      const { intentTurns } = tablesOf(db)
       await db.insert(intentTurns).values([
         {
           id: terminalTurn,
@@ -1167,7 +1181,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
           contextRevision: 0,
           createdAt: Date.now(),
         },
-      ] as Array<typeof intentTurns.$inferInsert>)
+      ] as Array<PersistenceTables['intentTurns']['$inferInsert']>)
       mk(terminalTurn, true)
       mk(runningTurn, true)
       mk('orphan-unknown', true)
@@ -1224,6 +1238,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       expect(seen?.configDirEnv).toBe('CLAUDE_CONFIG_DIR')
       expect(seen?.configDirName).toBe('.claude')
       expect(seen?.isSandbox).toBe(true)
+      const { intentDrafts } = tablesOf(db)
       const drafts = await db.select().from(intentDrafts)
       expect(drafts.length).toBe(1)
     })
@@ -1455,6 +1470,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       )
       expect(ran).toBe(false)
       expect(result.kind).toBe('error')
+      const { intentTurns } = tablesOf(db)
       const turns = await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
       const errorTurn = turns.find((t) => t.kind === 'error')
       expect(errorTurn).toBeDefined()

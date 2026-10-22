@@ -15,11 +15,12 @@
 // 重扫全表」这两类回归的直接签名。墙钟仍然打印出来作诊断基线（RFC-359 AC-11 要的「两个
 // 引擎各取各的 P95」），但不再是判据。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { tasks, users, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 
@@ -54,8 +55,9 @@ const ROWS_FETCHED_RATCHET = 21_100
 
 describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
   test('20k tasks support one root page plus twenty bounded child expansions', async () => {
-    const db: ProviderNeutralDatabase = harness.db
-    await db.insert(users).values({
+    const db: PersistenceDb = harness.db
+    const { users, workflows, tasks } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'capacity-owner',
       username: 'capacity-owner',
       displayName: 'Capacity Owner',
@@ -63,13 +65,13 @@ describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: 'capacity-workflow',
       name: 'Capacity workflow',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
     })
 
-    const rows: (typeof tasks.$inferInsert)[] = []
+    const rows: PersistenceTables['tasks']['$inferInsert'][] = []
     for (let rootIndex = 0; rootIndex < ROOT_COUNT; rootIndex += 1) {
       const rootId = `capacity-root-${String(rootIndex).padStart(2, '0')}`
       rows.push(taskRow(rootId, null, rootIndex * 10_000))
@@ -158,7 +160,7 @@ function taskRow(
   id: string,
   parentTaskId: string | null,
   startedAt: number,
-): typeof tasks.$inferInsert {
+): PersistenceTables['tasks']['$inferInsert'] {
   return {
     id,
     name: id,

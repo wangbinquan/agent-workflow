@@ -1,6 +1,9 @@
 // The pure controls execute the three exact pre-W28 projection bodies. Private
 // source exposure is not a provider execution; DB cases call the selected real
 // package composition, and the existing W26 Intent controls run separately.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -23,7 +26,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { agents, users, workgroups, workgroupMembers, resourceBundleApplies } from '@/db/schema'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
@@ -50,8 +52,8 @@ import { ValidationError } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-type Row = typeof workgroups.$inferSelect
-type MemberRow = typeof workgroupMembers.$inferSelect
+type Row = PersistenceTables['workgroups']['$inferSelect']
+type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 type SnapshotEntry = (row: Row, members: readonly MemberRow[]) => WorkgroupDraftSnapshot
 const T0 = 1_700_000_000_000
 
@@ -147,8 +149,8 @@ function originalWorkgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnaps
 }
 
 function originalWorkgroupSnapshotFromRows(
-  row: typeof workgroups.$inferSelect,
-  members: readonly (typeof workgroupMembers.$inferSelect)[],
+  row: PersistenceTables['workgroups']['$inferSelect'],
+  members: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
 ): WorkgroupDraftSnapshot {
   const group = workgroupFromRows(row, members)
   const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
@@ -172,8 +174,8 @@ function originalWorkgroupSnapshotFromRows(
 }
 
 function originalCurrentWorkgroupSnapshot(
-  row: typeof workgroups.$inferSelect,
-  memberRows: readonly (typeof workgroupMembers.$inferSelect)[],
+  row: PersistenceTables['workgroups']['$inferSelect'],
+  memberRows: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
 ): WorkgroupDraftSnapshot {
   const current = workgroupFromRows(row, memberRows)
   const ordered = [...current.members].sort(
@@ -463,19 +465,18 @@ function packageBytes(revision: number): Uint8Array {
   ])
 }
 async function physical(harness: ProviderHarness, id: string) {
+  const { workgroups, workgroupMembers, resourceBundleApplies } = tablesOf(harness.db)
   return {
-    group: await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).get(),
+    group: await first(harness.db.select().from(workgroups).where(eq(workgroups.id, id))),
     members: await harness.db
       .select()
       .from(workgroupMembers)
       .where(eq(workgroupMembers.workgroupId, id))
-      .orderBy(workgroupMembers.sortOrder)
-      .all(),
+      .orderBy(workgroupMembers.sortOrder),
     journal: await harness.db
       .select()
       .from(resourceBundleApplies)
-      .orderBy(resourceBundleApplies.id)
-      .all(),
+      .orderBy(resourceBundleApplies.id),
   }
 }
 describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository', (harness) => {
@@ -486,8 +487,11 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
   async function fixture() {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-w28-snapshot-'))
     temporary.push(appHome)
-    await harness.db.insert(users).values({ ...actor.user, createdAt: T0, updatedAt: T0 })
-    await harness.db.insert(agents).values(
+    const { users, agents } = tablesOf(harness.db)
+    await insertOne(harness.db, users, { ...actor.user, createdAt: T0, updatedAt: T0 })
+    await insertOne(
+      harness.db,
+      agents,
       createAgentPersistenceValues({
         id: AGENT,
         agent: CreateAgentSchema.parse({ name: AGENT }),
@@ -678,7 +682,8 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
           targetId: id,
         })
         expect(receipt.applied[0]?.action).toBe('update')
-        const updated = await tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
+        const { workgroups, resourceBundleApplies } = tablesOf(tx)
+        const updated = await first(tx.select().from(workgroups).where(eq(workgroups.id, id)))
         expect(updated).toEqual({
           ...before.group!,
           description: 'revision 3',

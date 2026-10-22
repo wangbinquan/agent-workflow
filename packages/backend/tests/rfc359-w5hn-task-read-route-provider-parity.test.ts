@@ -8,6 +8,8 @@
 // 这一刀取**差异面最小**的一组：`node-runs` 的投影。它不需要真跑任务——直接把 `node_runs` /
 // `doc_versions` / `clarify_rounds` 播种成确定的形状，读的就是投影本身，
 // 而投影正是这一对唯一可能分叉的地方（PG 那侧自带评审轮次计时、clarify 轮次、nav kind）。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,8 +18,7 @@ import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, docVersions, nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '@/util/git'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -132,6 +133,7 @@ describeEachProviderHttpApplication(
       expect(launched.status, await launched.clone().text()).toBe(201)
       const taskId = String(((await launched.json()) as { id: string }).id)
 
+      const { nodeRuns, docVersions, clarifyRounds } = tablesOf(scope.harness.db)
       // **确定形状的播种**：三条 run 覆盖三种时间线位置（未开始 / 跑完 / 等人审），
       // 外加一条评审版本与一条 clarify 轮次，把 PG 那侧独有的派生（轮次计时 / nav kind /
       // clarify 状态）全都点亮——分叉只可能在这些派生里。
@@ -169,7 +171,7 @@ describeEachProviderHttpApplication(
           operationGeneration: 0,
         },
       ])
-      await scope.harness.db.insert(docVersions).values({
+      await insertOne(scope.harness.db, docVersions, {
         id: 'dv-0001',
         taskId,
         reviewNodeId: 'writer',
@@ -184,7 +186,7 @@ describeEachProviderHttpApplication(
         decision: 'pending',
         createdAt: NOW + 2_500,
       })
-      await scope.harness.db.insert(clarifyRounds).values({
+      await insertOne(scope.harness.db, clarifyRounds, {
         id: 'cr-0001',
         taskId,
         kind: 'self',
@@ -261,8 +263,9 @@ async function launchReadFixtureTask(app: Hono, label: string): Promise<string> 
 }
 
 /** 播种一条 node_run，回它的 id。 */
-async function seedRun(db: ProviderNeutralDatabase, taskId: string, id: string): Promise<string> {
-  await db.insert(nodeRuns).values({
+async function seedRun(db: PersistenceDb, taskId: string, id: string): Promise<string> {
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'writer',
@@ -289,7 +292,8 @@ const READ_EVENT_ROWS = [
   { kind: 'text' as const, payload: 'last line' },
 ]
 
-async function seedReadEvents(db: ProviderNeutralDatabase, nodeRunId: string): Promise<void> {
+async function seedReadEvents(db: PersistenceDb, nodeRunId: string): Promise<void> {
+  const { nodeRunEvents } = tablesOf(db)
   await db.insert(nodeRunEvents).values(
     READ_EVENT_ROWS.map((row, index) => ({
       nodeRunId,
@@ -448,6 +452,7 @@ describeEachProviderHttpApplication(
 
       const taskId = await launchReadFixtureTask(app, 'read-diff')
       const point = async (worktreePath: string, baseCommit: string | null): Promise<void> => {
+        const { tasks } = tablesOf(scope.harness.db)
         await scope.harness.db
           .update(tasks)
           .set({ worktreePath, baseCommit, repoCount: 1 })

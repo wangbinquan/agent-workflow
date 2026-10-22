@@ -1,5 +1,7 @@
 // RFC-201 T10.2 — immutable Plugin generations and full-row publication CAS.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
@@ -7,9 +9,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, plugins, tasks, workflows } from '../src/db/schema'
 import { composePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
 import {
   composePluginServiceBindingForTest,
@@ -35,7 +36,7 @@ import { ConflictError } from '../src/util/errors'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let pluginsDir = ''
 let binding: PluginServiceBinding
 
@@ -51,7 +52,7 @@ async function setupPluginsDirFixture(): Promise<void> {
   resetNpmProbeCacheForTests()
 }
 
-async function setupProviderFixture(database: ProviderNeutralDatabase): Promise<void> {
+async function setupProviderFixture(database: PersistenceDb): Promise<void> {
   db = database
   await setupPluginsDirFixture()
   binding = composePluginServiceBindingForTest(db, deps())
@@ -113,6 +114,7 @@ describeEachProvider('immutable generation publication', (harness) => {
       ...deps(),
       beforePublish: async (_captured, prepared) => {
         preparedPath = prepared.cachedPath
+        const { plugins } = tablesOf(db)
         await db
           .update(plugins)
           .set({
@@ -188,7 +190,7 @@ describe('generation GC safety', () => {
   beforeEach(setupPluginsDirFixture)
 
   test('empty plugin storage bypasses the active-run database scan', async () => {
-    const dbThatMustNotBeRead = new Proxy({} as ProviderNeutralDatabase, {
+    const dbThatMustNotBeRead = new Proxy({} as PersistenceDb, {
       get() {
         throw new Error('unexpected-database-read')
       },
@@ -209,7 +211,7 @@ describe('generation GC safety', () => {
   test('fresh filesystem generations bypass the reference scan until grace expires', async () => {
     const fresh = join(pluginsDir, 'fresh-id', 'generations', 'fresh-op')
     await mkdir(fresh, { recursive: true })
-    const dbThatMustNotBeRead = new Proxy({} as ProviderNeutralDatabase, {
+    const dbThatMustNotBeRead = new Proxy({} as PersistenceDb, {
       get() {
         throw new Error('unexpected-database-read')
       },
@@ -257,14 +259,15 @@ describeEachProvider('generation GC safety', (harness) => {
     const workflowId = ulid()
     const taskId = ulid()
     const nodeRunId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'gc-active-workflow',
       definition: '{}',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'gc-active-task',
       workflowId,
@@ -282,7 +285,7 @@ describeEachProvider('generation GC safety', (harness) => {
         { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
       ]),
     })
-    await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
+    await insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
 
     const now = Date.now() + 60_000
     const command = composePluginGenerationGcCommand(

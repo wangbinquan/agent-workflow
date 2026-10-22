@@ -3,7 +3,7 @@ import type { RepositoryBaselineEffectsFactory } from '../application/ports/repo
 
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   cancelMission,
   launchMission,
@@ -702,7 +702,7 @@ function composeDevelopmentMissionOperationsFromPersistence(
 }
 
 export interface DevelopmentMissionOperationCompositionDeps extends DevelopmentMissionOperationCompositionOptions {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }
 
 /** 一份装配，两个 provider 共用（RFC-359 W4-D12）。 */

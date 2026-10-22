@@ -12,12 +12,13 @@
 // `DrizzleTaskOwnershipPersistence`（provider 中立），装配不再分叉，因此这里不再按能力矩阵
 // 挑实现。**这份文件锁住的每一条在合一前后都成立**——它当初就是这么用的。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionIntents, taskExecutionOwners, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskOwnershipPersistence } from '@/modules/task-execution/application/ports/taskOwnershipPersistence'
 import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import {
@@ -29,18 +30,19 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const LEASE_MS = 60_000
 
-function ownershipFor(db: ProviderNeutralDatabase): TaskOwnershipPersistence {
+function ownershipFor(db: PersistenceDb): TaskOwnershipPersistence {
   return new DrizzleTaskOwnershipPersistence(db)
 }
 
 /** 一个任务 + 一条 pending intent —— 归属端口能开工的最小前置。 */
-async function seed(db: ProviderNeutralDatabase): Promise<{ taskId: string; intentId: string }> {
+async function seed(db: PersistenceDb): Promise<{ taskId: string; intentId: string }> {
   const taskId = `task-${ulid()}`
   const intentId = `intent-${ulid()}`
   const slotPath = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ])
-  await db.insert(tasks).values({
+  const { tasks, taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-d28a',
@@ -57,7 +59,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<{ taskId: string; inte
     executionLineageId: taskId,
     lineageSlotPathJson: slotPath,
   })
-  await db.insert(taskExecutionIntents).values({
+  await insertOne(db, taskExecutionIntents, {
     id: intentId,
     taskId,
     kind: 'launch',
@@ -94,6 +96,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
 
     const snapshot = await ownership.read(taskId)
     expect(snapshot).toMatchObject({ taskId, state: 'claimed' })
+    const { taskExecutionIntents } = tablesOf(harness.db)
     const intent = (
       await harness.db
         .select({ state: taskExecutionIntents.state })
@@ -123,6 +126,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
       }),
     ).rejects.toMatchObject({ code: 'task-execution-owner-conflict' })
 
+    const { taskExecutionOwners } = tablesOf(harness.db)
     expect(
       await harness.db
         .select()

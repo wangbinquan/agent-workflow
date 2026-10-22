@@ -15,7 +15,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowDetail, WorkflowNode } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createWorkflow,
@@ -69,7 +69,7 @@ function seedDefinition(): WorkflowDefinition {
   }
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<WorkflowDetail> {
+async function seed(db: PersistenceDb): Promise<WorkflowDetail> {
   // 建的时候走 system principal（不传 actor）：现实里这份工作流是管理员 / manager
   // 做好后归属给普通用户的，这里只要复现「库里已经有特权节点」这个前提。
   return createWorkflow(
@@ -96,7 +96,7 @@ function withNodes(
 }
 
 function save(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflow: WorkflowDetail,
   definition: WorkflowDefinition,
   principal: WorkflowWritePrincipal,
@@ -113,10 +113,7 @@ function save(
   )
 }
 
-async function storedDefinition(
-  db: ProviderNeutralDatabase,
-  id: string,
-): Promise<WorkflowDefinition> {
+async function storedDefinition(db: PersistenceDb, id: string): Promise<WorkflowDefinition> {
   const detail = await getWorkflow(db, id)
   if (detail === null) throw new Error('workflow vanished')
   return detail.definition

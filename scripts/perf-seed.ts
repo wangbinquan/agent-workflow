@@ -10,28 +10,20 @@
 // 生成的数据满足 RFC-311 PR-4 的物化列不变量(branch_started_at = 子树
 // max(started_at)),否则 /api/tasks/page 快路径的基准数字不可信。
 
+import { tablesOf } from '../packages/backend/src/platform/persistence/sessionTables'
 import { Database } from 'bun:sqlite'
 import { mkdirSync, existsSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { openDb } from '../packages/backend/src/db/client'
 import { createHash } from 'node:crypto'
 import { eq, getTableColumns, gt } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../packages/backend/src/db/query'
-import {
-  authLoginPolicy,
-  cachedRepos,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  userPats,
-  users,
-  webhookDeliveries,
-  workflows,
-} from '../packages/backend/src/db/schema'
+import type {
+  PersistenceDb,
+  PersistenceTx,
+} from '../packages/backend/src/platform/persistence/persistenceDb'
 import {
   databaseSessionFor,
   type DatabaseSession,
-  type DatabaseTransaction,
 } from '../packages/backend/src/platform/persistence/databaseTransaction'
 import {
   PERF_CORPUS_CHUNKS,
@@ -98,7 +90,7 @@ export interface PerfCorpusSeedReceipt {
 
 interface PerfCorpusDatabase {
   /** Both handles must belong to the same already migrated, initialized database. */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly session: DatabaseSession
 }
 
@@ -106,7 +98,7 @@ interface PerfCorpusDatabase {
 export async function seedPerformanceCorpusEntry({ session }: PerfCorpusDatabase): Promise<void> {
   await session.transaction(async (tx) => {
     await tx
-      .insert(users)
+      .insert(tablesOf(tx).users)
       .values({
         id: PERF_CORPUS_ENTRY.userId,
         username: PERF_CORPUS_ENTRY.username,
@@ -116,23 +108,20 @@ export async function seedPerformanceCorpusEntry({ session }: PerfCorpusDatabase
         updatedAt: PERF_CORPUS_ENTRY.now,
       })
       .onConflictDoNothing()
-      .run()
     await tx
-      .insert(workflows)
+      .insert(tablesOf(tx).workflows)
       .values({
         id: PERF_CORPUS_ENTRY.workflowId,
         name: PERF_CORPUS_ENTRY.workflowName,
         definition: PERF_CORPUS_ENTRY.workflowDefinition,
       })
       .onConflictDoNothing()
-      .run()
     await tx
-      .update(authLoginPolicy)
+      .update(tablesOf(tx).authLoginPolicy)
       .set({ bootstrapCompletedAt: PERF_CORPUS_ENTRY.now })
-      .where(eq(authLoginPolicy.id, 'global'))
-      .run()
+      .where(eq(tablesOf(tx).authLoginPolicy.id, 'global'))
     await tx
-      .insert(userPats)
+      .insert(tablesOf(tx).userPats)
       .values({
         id: PERF_CORPUS_ENTRY.patId,
         userId: PERF_CORPUS_ENTRY.userId,
@@ -144,7 +133,6 @@ export async function seedPerformanceCorpusEntry({ session }: PerfCorpusDatabase
         createdAt: PERF_CORPUS_ENTRY.now,
       })
       .onConflictDoNothing()
-      .run()
   })
 }
 
@@ -154,7 +142,7 @@ interface CorpusRows<Row> {
   readonly chunk: number
   readonly columnCount: number
   readonly rowAt: (index: number) => Row
-  readonly insert: (tx: DatabaseTransaction, rows: Row[]) => Promise<unknown>
+  readonly insert: (tx: PersistenceTx, rows: Row[]) => Promise<unknown>
 }
 
 async function writeCorpusRows<Row>(
@@ -197,7 +185,7 @@ export async function seedPerformanceCorpus(
       table: 'cachedRepos',
       total: dimensions.repos,
       chunk: Math.max(1, dimensions.repos),
-      columnCount: Object.keys(getTableColumns(cachedRepos)).length,
+      columnCount: Object.keys(getTableColumns(tablesOf(options.db).cachedRepos)).length,
       rowAt: (i) => {
         const row = perfRepoRow(i)
         return {
@@ -207,7 +195,7 @@ export async function seedPerformanceCorpus(
         }
       },
       insert: async (tx, rows) =>
-        await tx.insert(cachedRepos).values(rows).onConflictDoNothing().run(),
+        await tx.insert(tablesOf(tx).cachedRepos).values(rows).onConflictDoNothing(),
     },
     onProgress,
   )
@@ -217,9 +205,10 @@ export async function seedPerformanceCorpus(
       table: 'tasks',
       total: dimensions.tasks,
       chunk: PERF_CORPUS_CHUNKS.tasks,
-      columnCount: Object.keys(getTableColumns(tasks)).length,
+      columnCount: Object.keys(getTableColumns(tablesOf(options.db).tasks)).length,
       rowAt: (i) => perfTaskRow(i, dimensions),
-      insert: async (tx, rows) => await tx.insert(tasks).values(rows).onConflictDoNothing().run(),
+      insert: async (tx, rows) =>
+        await tx.insert(tablesOf(tx).tasks).values(rows).onConflictDoNothing(),
     },
     onProgress,
   )
@@ -229,10 +218,10 @@ export async function seedPerformanceCorpus(
       table: 'nodeRuns',
       total: dimensions.tasks * dimensions.runsPerTask,
       chunk: PERF_CORPUS_CHUNKS.nodeRuns,
-      columnCount: Object.keys(getTableColumns(nodeRuns)).length,
+      columnCount: Object.keys(getTableColumns(tablesOf(options.db).nodeRuns)).length,
       rowAt: (i) => perfNodeRunRow(i, dimensions),
       insert: async (tx, rows) =>
-        await tx.insert(nodeRuns).values(rows).onConflictDoNothing().run(),
+        await tx.insert(tablesOf(tx).nodeRuns).values(rows).onConflictDoNothing(),
     },
     onProgress,
   )
@@ -242,10 +231,10 @@ export async function seedPerformanceCorpus(
       table: 'nodeRunEvents',
       total: dimensions.events,
       chunk: PERF_CORPUS_CHUNKS.nodeRunEvents,
-      columnCount: Object.keys(getTableColumns(nodeRunEvents)).length,
+      columnCount: Object.keys(getTableColumns(tablesOf(options.db).nodeRunEvents)).length,
       rowAt: (i) => perfEventRow(i, dimensions),
       // Preserve the original append-on-reseed event IDs, generated by the database.
-      insert: async (tx, rows) => await tx.insert(nodeRunEvents).values(rows).run(),
+      insert: async (tx, rows) => await tx.insert(tablesOf(tx).nodeRunEvents).values(rows),
     },
     onProgress,
   )
@@ -255,10 +244,10 @@ export async function seedPerformanceCorpus(
       table: 'webhookDeliveries',
       total: dimensions.deliveries,
       chunk: PERF_CORPUS_CHUNKS.webhookDeliveries,
-      columnCount: Object.keys(getTableColumns(webhookDeliveries)).length,
+      columnCount: Object.keys(getTableColumns(tablesOf(options.db).webhookDeliveries)).length,
       rowAt: perfDeliveryRow,
       insert: async (tx, rows) =>
-        await tx.insert(webhookDeliveries).values(rows).onConflictDoNothing().run(),
+        await tx.insert(tablesOf(tx).webhookDeliveries).values(rows).onConflictDoNothing(),
     },
     onProgress,
   )
@@ -296,7 +285,7 @@ async function readDigest<Id extends string | number, Row extends { readonly id:
 
 /** Ordered keyset reads cover every row, so pre-existing or appended data fails equality. */
 export async function readPerformanceCorpusReceipt(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   dimensions: PerfCorpusDimensions,
 ): Promise<PerfCorpusSeedReceipt> {
   const expectedCounts = perfCorpusCounts(dimensions)
@@ -315,22 +304,21 @@ export async function readPerformanceCorpusReceipt(
       async (after: string | undefined) =>
         await tx
           .select({
-            id: cachedRepos.id,
-            urlHash: cachedRepos.urlHash,
-            urlRedacted: cachedRepos.urlRedacted,
-            localPath: cachedRepos.localPath,
-            defaultBranch: cachedRepos.defaultBranch,
-            lastFetchedAt: cachedRepos.lastFetchedAt,
-            createdAt: cachedRepos.createdAt,
-            lastAutoRefreshAt: cachedRepos.lastAutoRefreshAt,
-            hasSubmodules: cachedRepos.hasSubmodules,
-            lastSubmoduleSyncOk: cachedRepos.lastSubmoduleSyncOk,
+            id: tablesOf(tx).cachedRepos.id,
+            urlHash: tablesOf(tx).cachedRepos.urlHash,
+            urlRedacted: tablesOf(tx).cachedRepos.urlRedacted,
+            localPath: tablesOf(tx).cachedRepos.localPath,
+            defaultBranch: tablesOf(tx).cachedRepos.defaultBranch,
+            lastFetchedAt: tablesOf(tx).cachedRepos.lastFetchedAt,
+            createdAt: tablesOf(tx).cachedRepos.createdAt,
+            lastAutoRefreshAt: tablesOf(tx).cachedRepos.lastAutoRefreshAt,
+            hasSubmodules: tablesOf(tx).cachedRepos.hasSubmodules,
+            lastSubmoduleSyncOk: tablesOf(tx).cachedRepos.lastSubmoduleSyncOk,
           })
-          .from(cachedRepos)
-          .where(after === undefined ? undefined : gt(cachedRepos.id, after))
-          .orderBy(cachedRepos.id)
-          .limit(RECEIPT_PAGE_SIZE)
-          .all(),
+          .from(tablesOf(tx).cachedRepos)
+          .where(after === undefined ? undefined : gt(tablesOf(tx).cachedRepos.id, after))
+          .orderBy(tablesOf(tx).cachedRepos.id)
+          .limit(RECEIPT_PAGE_SIZE),
       (row) => ({
         ...row,
         hasSubmodules: row.hasSubmodules === null ? null : Number(row.hasSubmodules),
@@ -342,91 +330,87 @@ export async function readPerformanceCorpusReceipt(
       async (after: string | undefined) =>
         await tx
           .select({
-            id: tasks.id,
-            name: tasks.name,
-            workflowId: tasks.workflowId,
-            workflowSnapshot: tasks.workflowSnapshot,
-            repoPath: tasks.repoPath,
-            worktreePath: tasks.worktreePath,
-            baseBranch: tasks.baseBranch,
-            branch: tasks.branch,
-            status: tasks.status,
-            inputs: tasks.inputs,
-            startedAt: tasks.startedAt,
-            finishedAt: tasks.finishedAt,
-            runningMs: tasks.runningMs,
-            ownerUserId: tasks.ownerUserId,
-            launchOrigin: tasks.launchOrigin,
-            parentTaskId: tasks.parentTaskId,
-            invocationDepth: tasks.invocationDepth,
-            cachedRepoId: tasks.cachedRepoId,
-            branchStartedAt: tasks.branchStartedAt,
-            rootTaskId: tasks.rootTaskId,
-            executionLineageId: tasks.executionLineageId,
-            lineageSlotPathJson: tasks.lineageSlotPathJson,
+            id: tablesOf(tx).tasks.id,
+            name: tablesOf(tx).tasks.name,
+            workflowId: tablesOf(tx).tasks.workflowId,
+            workflowSnapshot: tablesOf(tx).tasks.workflowSnapshot,
+            repoPath: tablesOf(tx).tasks.repoPath,
+            worktreePath: tablesOf(tx).tasks.worktreePath,
+            baseBranch: tablesOf(tx).tasks.baseBranch,
+            branch: tablesOf(tx).tasks.branch,
+            status: tablesOf(tx).tasks.status,
+            inputs: tablesOf(tx).tasks.inputs,
+            startedAt: tablesOf(tx).tasks.startedAt,
+            finishedAt: tablesOf(tx).tasks.finishedAt,
+            runningMs: tablesOf(tx).tasks.runningMs,
+            ownerUserId: tablesOf(tx).tasks.ownerUserId,
+            launchOrigin: tablesOf(tx).tasks.launchOrigin,
+            parentTaskId: tablesOf(tx).tasks.parentTaskId,
+            invocationDepth: tablesOf(tx).tasks.invocationDepth,
+            cachedRepoId: tablesOf(tx).tasks.cachedRepoId,
+            branchStartedAt: tablesOf(tx).tasks.branchStartedAt,
+            rootTaskId: tablesOf(tx).tasks.rootTaskId,
+            executionLineageId: tablesOf(tx).tasks.executionLineageId,
+            lineageSlotPathJson: tablesOf(tx).tasks.lineageSlotPathJson,
           })
-          .from(tasks)
-          .where(after === undefined ? undefined : gt(tasks.id, after))
-          .orderBy(tasks.id)
-          .limit(RECEIPT_PAGE_SIZE)
-          .all(),
+          .from(tablesOf(tx).tasks)
+          .where(after === undefined ? undefined : gt(tablesOf(tx).tasks.id, after))
+          .orderBy(tablesOf(tx).tasks.id)
+          .limit(RECEIPT_PAGE_SIZE),
     )
     const runs = await readDigest(
       async (after: string | undefined) =>
         await tx
           .select({
-            id: nodeRuns.id,
-            taskId: nodeRuns.taskId,
-            nodeId: nodeRuns.nodeId,
-            status: nodeRuns.status,
-            iteration: nodeRuns.iteration,
-            retryIndex: nodeRuns.retryIndex,
-            startedAt: nodeRuns.startedAt,
-            finishedAt: nodeRuns.finishedAt,
-            continuationSlotKey: nodeRuns.continuationSlotKey,
-            lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
-            scopePath: nodeRuns.scopePath,
+            id: tablesOf(tx).nodeRuns.id,
+            taskId: tablesOf(tx).nodeRuns.taskId,
+            nodeId: tablesOf(tx).nodeRuns.nodeId,
+            status: tablesOf(tx).nodeRuns.status,
+            iteration: tablesOf(tx).nodeRuns.iteration,
+            retryIndex: tablesOf(tx).nodeRuns.retryIndex,
+            startedAt: tablesOf(tx).nodeRuns.startedAt,
+            finishedAt: tablesOf(tx).nodeRuns.finishedAt,
+            continuationSlotKey: tablesOf(tx).nodeRuns.continuationSlotKey,
+            lineageSlotPathJson: tablesOf(tx).nodeRuns.lineageSlotPathJson,
+            scopePath: tablesOf(tx).nodeRuns.scopePath,
           })
-          .from(nodeRuns)
-          .where(after === undefined ? undefined : gt(nodeRuns.id, after))
-          .orderBy(nodeRuns.id)
-          .limit(RECEIPT_PAGE_SIZE)
-          .all(),
+          .from(tablesOf(tx).nodeRuns)
+          .where(after === undefined ? undefined : gt(tablesOf(tx).nodeRuns.id, after))
+          .orderBy(tablesOf(tx).nodeRuns.id)
+          .limit(RECEIPT_PAGE_SIZE),
     )
     const events = await readDigest(
       async (after: number | undefined) =>
         await tx
           .select({
-            id: nodeRunEvents.id,
-            nodeRunId: nodeRunEvents.nodeRunId,
-            ts: nodeRunEvents.ts,
-            kind: nodeRunEvents.kind,
-            payload: nodeRunEvents.payload,
+            id: tablesOf(tx).nodeRunEvents.id,
+            nodeRunId: tablesOf(tx).nodeRunEvents.nodeRunId,
+            ts: tablesOf(tx).nodeRunEvents.ts,
+            kind: tablesOf(tx).nodeRunEvents.kind,
+            payload: tablesOf(tx).nodeRunEvents.payload,
           })
-          .from(nodeRunEvents)
-          .where(after === undefined ? undefined : gt(nodeRunEvents.id, after))
-          .orderBy(nodeRunEvents.id)
-          .limit(RECEIPT_PAGE_SIZE)
-          .all(),
+          .from(tablesOf(tx).nodeRunEvents)
+          .where(after === undefined ? undefined : gt(tablesOf(tx).nodeRunEvents.id, after))
+          .orderBy(tablesOf(tx).nodeRunEvents.id)
+          .limit(RECEIPT_PAGE_SIZE),
     )
     const deliveries = await readDigest(
       async (after: string | undefined) =>
         await tx
           .select({
-            id: webhookDeliveries.id,
-            endpointId: webhookDeliveries.endpointId,
-            eventUuid: webhookDeliveries.eventUuid,
-            objectKind: webhookDeliveries.objectKind,
-            eventType: webhookDeliveries.eventType,
-            status: webhookDeliveries.status,
-            receivedAt: webhookDeliveries.receivedAt,
-            bodyJson: webhookDeliveries.bodyJson,
+            id: tablesOf(tx).webhookDeliveries.id,
+            endpointId: tablesOf(tx).webhookDeliveries.endpointId,
+            eventUuid: tablesOf(tx).webhookDeliveries.eventUuid,
+            objectKind: tablesOf(tx).webhookDeliveries.objectKind,
+            eventType: tablesOf(tx).webhookDeliveries.eventType,
+            status: tablesOf(tx).webhookDeliveries.status,
+            receivedAt: tablesOf(tx).webhookDeliveries.receivedAt,
+            bodyJson: tablesOf(tx).webhookDeliveries.bodyJson,
           })
-          .from(webhookDeliveries)
-          .where(after === undefined ? undefined : gt(webhookDeliveries.id, after))
-          .orderBy(webhookDeliveries.id)
-          .limit(RECEIPT_PAGE_SIZE)
-          .all(),
+          .from(tablesOf(tx).webhookDeliveries)
+          .where(after === undefined ? undefined : gt(tablesOf(tx).webhookDeliveries.id, after))
+          .orderBy(tablesOf(tx).webhookDeliveries.id)
+          .limit(RECEIPT_PAGE_SIZE),
     )
     return {
       cachedRepos: repos,

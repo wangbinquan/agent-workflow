@@ -6,6 +6,9 @@
 // barrier migrate the surviving root to skills/{id}. Sentinels in oldHome prove
 // no historical absolute path is ever touched.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
@@ -23,8 +26,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 import {
@@ -46,7 +48,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 
 describeEachProvider('RFC-223 legacy reserve op upgrade matrix', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let oldHome: string
   let appHome: string
 
@@ -87,7 +89,8 @@ describeEachProvider('RFC-223 legacy reserve op upgrade matrix', (harness) => {
       }
       if (phase === 'db-committed') {
         await databaseSessionFor(db).transaction(async (tx) => {
-          await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
+          const { skills } = tablesOf(tx)
+          await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id))
           await advancePhase(tx, opId, 'db-committed')
         })
       }
@@ -102,10 +105,12 @@ describeEachProvider('RFC-223 legacy reserve op upgrade matrix', (harness) => {
       expect(await getActiveOp(db, id)).toBeNull()
       expect(await lockCount(db)).toBe(0)
       if (phase === 'db-committed') {
-        expect(await db.select().from(skills).where(eq(skills.id, id)).get()).toBeDefined()
+        const { skills } = tablesOf(db)
+        expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeDefined()
         expect(existsSync(skillRootAbs(appHome, id))).toBe(true)
       } else {
-        expect(await db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
+        const { skills } = tablesOf(db)
+        expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
         expect(existsSync(join(appHome, 'skills', name))).toBe(false)
       }
     })
@@ -113,7 +118,7 @@ describeEachProvider('RFC-223 legacy reserve op upgrade matrix', (harness) => {
 })
 
 describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let oldHome: string
   let appHome: string
 
@@ -152,7 +157,8 @@ describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
       }
       if (phase === 'db-committed') {
         await databaseSessionFor(db).transaction(async (tx) => {
-          await tx.delete(skills).where(eq(skills.id, id)).run()
+          const { skills } = tablesOf(tx)
+          await tx.delete(skills).where(eq(skills.id, id))
           await advancePhase(tx, opId, 'db-committed')
         })
       }
@@ -165,7 +171,8 @@ describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
       expect(await getActiveOp(db, id)).toBeNull()
       expect(await lockCount(db)).toBe(0)
       if (phase === 'db-committed') {
-        expect(await db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
+        const { skills } = tablesOf(db)
+        expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
         expect(existsSync(currentTrash)).toBe(false)
       } else {
         expect(existsSync(skillRootAbs(appHome, id))).toBe(true)
@@ -191,7 +198,8 @@ describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
         },
       ),
     ).rejects.toThrow('fault-after-delete-commit')
-    expect(await db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
+    const { skills } = tablesOf(db)
+    expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
     expect((await getActiveOp(db, id))?.phase).toBe('db-committed')
     expect(await lockCount(db)).toBe(1)
 
@@ -221,7 +229,8 @@ describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
       async (tx) => await advancePhase(tx, opId, 'fs-staged', { backupPath: trash }),
     )
     await databaseSessionFor(db).transaction(async (tx) => {
-      await tx.delete(skills).where(eq(skills.id, id)).run()
+      const { skills } = tablesOf(tx)
+      await tx.delete(skills).where(eq(skills.id, id))
       await advancePhase(tx, opId, 'db-committed')
     })
     const canonicalRoot = skillRootAbs(appHome, id)
@@ -240,7 +249,7 @@ describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
 })
 
 describeEachProvider('RFC-223 legacy version-write op upgrade matrix', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let oldHome: string
   let appHome: string
 
@@ -298,19 +307,17 @@ describeEachProvider('RFC-223 legacy version-write op upgrade matrix', (harness)
       if (phase === 'db-committed' || phase === 'fs-published') {
         const contentHash = hashDir(currentVersion)
         await databaseSessionFor(db).transaction(async (tx) => {
-          await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, id)).run()
-          await tx
-            .insert(skillVersions)
-            .values({
-              id: ulid(),
-              skillId: id,
-              versionIndex: 2,
-              filesPath: `skills/${name}/versions/v2/files`,
-              source: 'editor',
-              authorUserId: '__system__',
-              contentHash,
-            })
-            .run()
+          const { skills, skillVersions } = tablesOf(tx)
+          await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, id))
+          await insertOne(tx, skillVersions, {
+            id: ulid(),
+            skillId: id,
+            versionIndex: 2,
+            filesPath: `skills/${name}/versions/v2/files`,
+            source: 'editor',
+            authorUserId: '__system__',
+            contentHash,
+          })
           await advancePhase(tx, opId, 'db-committed')
         })
       }
@@ -340,20 +347,21 @@ describeEachProvider('RFC-223 legacy version-write op upgrade matrix', (harness)
         expect(readFileSync(join(skillFilesAbs(appHome, id), 'payload.txt'), 'utf-8')).toBe(
           `new-${phase}`,
         )
+        const { skillVersions } = tablesOf(db)
         expect(
           (
             await db
               .select({ path: skillVersions.filesPath })
               .from(skillVersions)
               .where(eq(skillVersions.skillId, id))
-              .all()
           )
             .map((row) => row.path)
             .sort(),
         ).toEqual([skillVersionRelPath(id, 1), skillVersionRelPath(id, 2)])
       } else {
+        const { skillVersions } = tablesOf(db)
         expect(
-          await db.select().from(skillVersions).where(eq(skillVersions.skillId, id)).all(),
+          await db.select().from(skillVersions).where(eq(skillVersions.skillId, id)),
         ).toHaveLength(1)
       }
     })
@@ -361,7 +369,7 @@ describeEachProvider('RFC-223 legacy version-write op upgrade matrix', (harness)
 })
 
 async function seedLegacyRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   id: string,
   name: string,
@@ -372,37 +380,32 @@ async function seedLegacyRow(
 ): Promise<void> {
   const filesDir = join(appHome, 'skills', name, 'files')
   writeTree(filesDir, 'legacy-live-v1')
-  await db
-    .insert(skills)
-    .values({
-      id,
-      name,
-      managedPath: `skills/${name}/files`,
-      contentVersion: opts.withVersion ? 1 : 0,
-      reservationState: opts.reservationState ?? 'ready',
-      versionState: opts.withVersion ? 'snapshot-authoritative' : 'legacy-unbackfilled',
-    })
-    .run()
+  const { skills, skillVersions } = tablesOf(db)
+  await insertOne(db, skills, {
+    id,
+    name,
+    managedPath: `skills/${name}/files`,
+    contentVersion: opts.withVersion ? 1 : 0,
+    reservationState: opts.reservationState ?? 'ready',
+    versionState: opts.withVersion ? 'snapshot-authoritative' : 'legacy-unbackfilled',
+  })
   if (opts.withVersion) {
     const versionDir = join(appHome, 'skills', name, 'versions', 'v1', 'files')
     cpSync(filesDir, versionDir, { recursive: true })
-    await db
-      .insert(skillVersions)
-      .values({
-        id: ulid(),
-        skillId: id,
-        versionIndex: 1,
-        filesPath: `skills/${name}/versions/v1/files`,
-        source: 'initial',
-        authorUserId: '__system__',
-        contentHash: hashDir(versionDir),
-      })
-      .run()
+    await insertOne(db, skillVersions, {
+      id: ulid(),
+      skillId: id,
+      versionIndex: 1,
+      filesPath: `skills/${name}/versions/v1/files`,
+      source: 'initial',
+      authorUserId: '__system__',
+      contentHash: hashDir(versionDir),
+    })
   }
 }
 
 async function seedCanonicalRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   id: string,
   name: string,
@@ -411,29 +414,24 @@ async function seedCanonicalRow(
   const versionDir = skillVersionAbs(appHome, id, 1)
   writeTree(filesDir, 'canonical-live')
   cpSync(filesDir, versionDir, { recursive: true })
-  await db
-    .insert(skills)
-    .values({
-      id,
-      name,
-      managedPath: skillFilesRel(id),
-      contentVersion: 1,
-      reservationState: 'ready',
-      versionState: 'snapshot-authoritative',
-    })
-    .run()
-  await db
-    .insert(skillVersions)
-    .values({
-      id: ulid(),
-      skillId: id,
-      versionIndex: 1,
-      filesPath: skillVersionRelPath(id, 1),
-      source: 'initial',
-      authorUserId: '__system__',
-      contentHash: hashDir(versionDir),
-    })
-    .run()
+  const { skills, skillVersions } = tablesOf(db)
+  await insertOne(db, skills, {
+    id,
+    name,
+    managedPath: skillFilesRel(id),
+    contentVersion: 1,
+    reservationState: 'ready',
+    versionState: 'snapshot-authoritative',
+  })
+  await insertOne(db, skillVersions, {
+    id: ulid(),
+    skillId: id,
+    versionIndex: 1,
+    filesPath: skillVersionRelPath(id, 1),
+    source: 'initial',
+    authorUserId: '__system__',
+    contentHash: hashDir(versionDir),
+  })
 }
 
 function writeTree(root: string, marker: string): void {
@@ -442,6 +440,7 @@ function writeTree(root: string, marker: string): void {
   writeFileSync(join(root, 'payload.txt'), marker)
 }
 
-async function lockCount(db: ProviderNeutralDatabase): Promise<number> {
-  return (await db.select().from(skillOperationLocks).all()).length
+async function lockCount(db: PersistenceDb): Promise<number> {
+  const { skillOperationLocks } = tablesOf(db)
+  return (await db.select().from(skillOperationLocks)).length
 }

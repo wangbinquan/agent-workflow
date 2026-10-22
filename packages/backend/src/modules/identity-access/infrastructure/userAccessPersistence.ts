@@ -15,6 +15,8 @@
 // 就退回本进程缓存——缓存由授权读（findAccessSnapshot / listAccessSnapshots）预热、本进程写事务提交后刷新；
 // 未命中回 null，传输层按 fail closed 处置。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, ne, or, sql, type SQL } from 'drizzle-orm'
 import {
   normalizeStoredAdditionalPermissions,
@@ -24,21 +26,9 @@ import {
 } from '@agent-workflow/shared'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  mcpRuntimeTestSessions,
-  oidcProviders,
-  userAccessAudit,
-  userIdentities,
-  userPermissionGrants,
-  users,
-} from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
-import {
-  affectedRows,
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { initialGrantsForRole } from '../domain/initialGrants'
 import type { OidcIdentityRecord } from '../application/ports/oidcIdentityCrossContext'
 import type { UserAccessAuditRecord } from '../application/ports/userAccessAuditRepository'
@@ -75,7 +65,7 @@ function grantKey(userId: string, permission: string): string {
   return `${userId}\u0000${permission}`
 }
 
-function mapUser(row: typeof users.$inferSelect): UserAccessRecord {
+function mapUser(row: PersistenceTables['users']['$inferSelect']): UserAccessRecord {
   return {
     id: row.id,
     username: row.username,
@@ -95,7 +85,9 @@ function mapUser(row: typeof users.$inferSelect): UserAccessRecord {
   }
 }
 
-function mapGrant(row: typeof userPermissionGrants.$inferSelect): UserPermissionGrantRecord {
+function mapGrant(
+  row: PersistenceTables['userPermissionGrants']['$inferSelect'],
+): UserPermissionGrantRecord {
   return {
     userId: row.userId,
     permission: row.permission,
@@ -141,16 +133,19 @@ interface RawAuthorityFenceRow {
   readonly access_revision: number
 }
 
-const PUBLIC_USER_COLUMNS = {
-  id: users.id,
-  username: users.username,
-  displayName: users.displayName,
-  role: users.role,
-  status: users.status,
+const PUBLIC_USER_COLUMNS = (db: object) => {
+  const { users } = tablesOf(db)
+  return {
+    id: users.id,
+    username: users.username,
+    displayName: users.displayName,
+    role: users.role,
+    status: users.status,
+  }
 }
 
 export function createUserAccessRepository(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fenceCache: AuthorityFenceCache,
 ): UserAccessReadRepository & UserAccessFenceReader {
   const engine = databaseSessionFor(db).engine
@@ -172,9 +167,10 @@ export function createUserAccessRepository(
     },
 
     async findByUsername(username) {
+      const { users } = tablesOf(db)
       const row = (
         await db
-          .select(PUBLIC_USER_COLUMNS)
+          .select(PUBLIC_USER_COLUMNS(db))
           .from(users)
           .where(and(ne(users.id, SYSTEM_USER_ID), eq(users.username, username)))
           .limit(1)
@@ -185,8 +181,9 @@ export function createUserAccessRepository(
     async search(input) {
       const q = (input.q ?? '').trim().toLowerCase()
       const excluded = new Set(input.excludeIds)
+      const { users } = tablesOf(db)
       const rows = await db
-        .select(PUBLIC_USER_COLUMNS)
+        .select(PUBLIC_USER_COLUMNS(db))
         .from(users)
         .where(
           and(
@@ -213,7 +210,11 @@ export function createUserAccessRepository(
     async lookup(ids) {
       const wanted = [...new Set(ids)].filter((id) => id !== SYSTEM_USER_ID)
       if (wanted.length === 0) return []
-      const rows = await db.select(PUBLIC_USER_COLUMNS).from(users).where(inArray(users.id, wanted))
+      const { users } = tablesOf(db)
+      const rows = await db
+        .select(PUBLIC_USER_COLUMNS(db))
+        .from(users)
+        .where(inArray(users.id, wanted))
       const byId = new Map(rows.map((row) => [row.id, mapPublicUser(row)]))
       return wanted.flatMap((id) => {
         const row = byId.get(id)
@@ -222,6 +223,7 @@ export function createUserAccessRepository(
     },
 
     async findAccessSnapshot(id) {
+      const { users, userPermissionGrants } = tablesOf(db)
       const rows = await db
         .select({ user: users, grant: userPermissionGrants })
         .from(users)
@@ -239,6 +241,7 @@ export function createUserAccessRepository(
     },
 
     async listAccessSnapshots() {
+      const { users, userPermissionGrants } = tablesOf(db)
       const rows = await db
         .select({ user: users, grant: userPermissionGrants })
         .from(users)
@@ -499,16 +502,18 @@ export function stageInitialUserAccess(
 }
 
 export async function loadUserAccessState(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   readSet: UserAccessTransactionReadSet,
 ): Promise<LoadedUserAccessState> {
   const loadedUsers = new Map<string, UserAccessRecord>()
   const loadRows = async (condition: SQL<unknown>): Promise<void> => {
+    const { users } = tablesOf(tx)
     const rows = await tx.select().from(users).where(condition)
     for (const row of rows) loadedUsers.set(row.id, mapUser(row))
   }
 
   const userIds = [...new Set(readSet.userIds ?? [])]
+  const { users, userPermissionGrants, userIdentities, oidcProviders } = tablesOf(tx)
   if (userIds.length > 0) await loadRows(inArray(users.id, userIds))
   const usernames = [...new Set(readSet.usernames ?? [])]
   if (usernames.length > 0) await loadRows(inArray(users.username, usernames))
@@ -577,13 +582,15 @@ export async function loadUserAccessState(
 
 /** 按顺序回放缓冲的操作。`update-user` 的 CAS 判据「恰好 1 行」在两个引擎上都成立（`affectedRows`）。 */
 export async function persistUserAccessOperations(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   operations: ReadonlyArray<UserAccessOperation>,
 ): Promise<void> {
   for (const operation of operations) {
+    const { users, userIdentities, userPermissionGrants, mcpRuntimeTestSessions, userAccessAudit } =
+      tablesOf(tx)
     switch (operation.kind) {
       case 'insert-user':
-        await tx.insert(users).values({
+        await insertOne(tx, users, {
           id: operation.record.id,
           username: operation.record.username,
           email: operation.record.email,
@@ -602,7 +609,7 @@ export async function persistUserAccessOperations(
         })
         break
       case 'update-user': {
-        const values: Partial<typeof users.$inferInsert> = {}
+        const values: Partial<PersistenceTables['users']['$inferInsert']> = {}
         const patch = operation.update.values
         if (patch.displayName !== undefined) values.displayName = patch.displayName
         if (patch.gitName !== undefined) values.gitName = patch.gitName
@@ -641,7 +648,7 @@ export async function persistUserAccessOperations(
           .where(eq(users.id, operation.userId))
         break
       case 'update-oidc-identity': {
-        const values: Partial<typeof userIdentities.$inferInsert> = {}
+        const values: Partial<PersistenceTables['userIdentities']['$inferInsert']> = {}
         if (operation.update.email !== undefined) values.email = operation.update.email
         if (operation.update.emailVerified !== undefined) {
           values.emailVerified = operation.update.emailVerified ? 1 : 0
@@ -656,7 +663,7 @@ export async function persistUserAccessOperations(
         break
       }
       case 'insert-identity':
-        await tx.insert(userIdentities).values(operation.record)
+        await insertOne(tx, userIdentities, operation.record)
         break
       case 'delete-grant':
         await tx
@@ -669,7 +676,7 @@ export async function persistUserAccessOperations(
           )
         break
       case 'insert-grant':
-        await tx.insert(userPermissionGrants).values(operation.record)
+        await insertOne(tx, userPermissionGrants, operation.record)
         break
       case 'transition-disabled-owner':
         // 账号禁用时结束它名下所有活跃的 MCP runtime 试跑会话（原 SQLite 侧经 mcpRuntimeTestTransitions 的
@@ -691,7 +698,7 @@ export async function persistUserAccessOperations(
           )
         break
       case 'append-audit':
-        await tx.insert(userAccessAudit).values({
+        await insertOne(tx, userAccessAudit, {
           id: operation.record.id,
           targetUserId: operation.record.targetUserId,
           actorUserId: operation.record.actorUserId,
@@ -744,7 +751,7 @@ export function mapUserAccessError(
 }
 
 export function createUserAccessTransactionRunner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fenceCache: AuthorityFenceCache,
 ): UserAccessTransactionRunner {
   const session = databaseSessionFor(db)

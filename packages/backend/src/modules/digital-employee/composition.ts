@@ -1,7 +1,6 @@
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
@@ -116,7 +115,7 @@ export type { ProgramArtifactPort, EmployeeInputArtifactPort }
 
 /** Worker-bootstrap composition for the context-owned temporary-input cleanup（两个 provider 同一份，RFC-359 W4-D7a）。 */
 export function composeDigitalEmployeeMaintenanceCommands(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeMaintenanceCommands {
   const uploads = createEmployeeInputUploadPersistence(db)
   return {
@@ -126,7 +125,7 @@ export function composeDigitalEmployeeMaintenanceCommands(
 
 /** 两个 provider 同一份（RFC-359 W4-D7a）。 */
 export function composeDigitalEmployeeWriterCutoverFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeWriterCutoverOperations {
   return createDigitalEmployeeWriterCutoverOperations(
     createDigitalEmployeeWriterCutoverPersistence(db),
@@ -138,7 +137,7 @@ export const composeDigitalEmployeeWriterCutover = composeDigitalEmployeeWriterC
 
 /** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
 export async function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<readonly string[]> {
   return await createDigitalEmployeeAuthoringPersistence(db).listTypePackageDescriptorJsons()
 }
@@ -150,7 +149,7 @@ export interface DigitalEmployeeBootstrapReads {
 
 /** 两个 provider 同一份（RFC-359 W4-D6c）。 */
 export function composeDigitalEmployeeBootstrapReadsFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeBootstrapReads {
   const authoring = createDigitalEmployeeAuthoringPersistence(db)
   return Object.freeze({
@@ -165,7 +164,7 @@ export function composeDigitalEmployeeBootstrapReadsFor(
  * receives only the branded, data-only participant and therefore cannot import
  * employee tables, authoring stores, or schema-shaped rows.
  */
-export function composeDigitalEmployeeIntegrationTriggerParticipant(tx: DatabaseTransaction) {
+export function composeDigitalEmployeeIntegrationTriggerParticipant(tx: PersistenceTx) {
   return createDigitalEmployeeIntegrationTriggerParticipantIn(tx)
 }
 
@@ -449,7 +448,7 @@ export interface DigitalEmployeeCompositionOptions {
  *     自己的产物视图交过去，根上不形成装配环。
  */
 export interface DigitalEmployeeReactionExecutionProvider {
-  readonly admission: (tx: ProviderNeutralDatabase) => ReactionExecutionAdmissionParticipantV1
+  readonly admission: (tx: PersistenceDb) => ReactionExecutionAdmissionParticipantV1
   port(artifacts: {
     readonly retryFeedback: ReactionRetryFeedbackReaderV1
     readonly diagnosticsSink: ReactionDiagnosticsSinkV1
@@ -466,7 +465,7 @@ type DigitalEmployeeRuntimeBinding = {
 
 export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   /** 两个 provider 同一份持久化（RFC-359 W4-D6c/D7a/D7b），装配入口收中立句柄。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly writerCutover?: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
   readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
@@ -502,7 +501,7 @@ interface DigitalEmployeePersistenceBundle {
  * （都只是 `createReactionRoundQueries(db)`），只差形参上一个更窄的标注，已退役。
  */
 export function createEmployeeReactionRoundQueries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): EmployeeReactionRoundQueryPort {
   return createReactionRoundQueries(db)
 }
@@ -525,7 +524,7 @@ export type DigitalEmployeeAuthoringReads = Pick<
 >
 
 export function createDigitalEmployeeAuthoringReads(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeAuthoringReads {
   return createDigitalEmployeeAuthoringPersistence(db)
 }
@@ -1162,7 +1161,7 @@ type EmployeeAutomationWorkStartProviderInput = Parameters<
 
 export function createEmployeeAutomationWorkStartProvider(
   input: Omit<EmployeeAutomationWorkStartProviderInput, 'receiptFor'> & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
   },
 ): ReturnType<typeof bindEmployeeAutomationWorkStartProvider> {
   const runtime = createRuntimePersistence(input.db)

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
@@ -35,15 +37,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import {
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  taskRepos,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { DrizzleTerminalMaintenancePersistence } from '../src/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
@@ -55,7 +50,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const GC_ON = { worktreeAutoGc: { enabled: true, olderThanDays: 1 } }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   cleanup: () => void
 }
@@ -71,18 +66,19 @@ function buildHarness(provider: ProviderHarness): Harness {
 
 async function seedTask(
   h: Harness,
-  overrides: Partial<typeof tasks.$inferInsert>,
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -107,6 +103,7 @@ async function seedTask(
 }
 
 async function taskRow(h: Harness, id: string) {
+  const { tasks } = tablesOf(h.db)
   return (await h.db.select().from(tasks).where(eq(tasks.id, id)))[0]!
 }
 
@@ -151,6 +148,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       expect(row.workspacePruningAt).not.toBe(null)
       expect(row.workspacePruneCause).toBeNull()
       expect(row.workspacePrunedAt).not.toBe(null)
+      const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(h.db)
       expect(
         await h.db
           .select({
@@ -169,6 +167,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
     test('G2 held claim blocks revive with 409 workspace-pruning', async () => {
       const dir = mkDir(h, 'ws-claimed')
       const id = await seedTask(h, { status: 'failed', worktreePath: dir })
+      const { tasks } = tablesOf(h.db)
       await h.db.update(tasks).set({ workspacePruningAt: Date.now() }).where(eq(tasks.id, id))
 
       await expect(
@@ -185,6 +184,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
 
     test('G3 finalized tombstone blocks revive with 410 workspace-pruned', async () => {
       const id = await seedTask(h, { status: 'failed', worktreePath: '' })
+      const { tasks } = tablesOf(h.db)
       await h.db.update(tasks).set({ workspacePrunedAt: Date.now() }).where(eq(tasks.id, id))
 
       await expect(
@@ -262,6 +262,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       const scan = store.listGcCandidates.bind(store)
       store.listGcCandidates = async () => {
         const candidates = await scan()
+        const { tasks } = tablesOf(h.db)
         await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, id))
         injected = true
         return candidates
@@ -432,6 +433,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       // (b) a held claim (workspace GC mid-delete) → back off, container stays.
       const idB = await seedTask(h, { status: 'done', worktreePath: '' })
       const isoB = mkDir(h, 'iso', idB)
+      const { tasks } = tablesOf(h.db)
       await h.db.update(tasks).set({ workspacePruningAt: Date.now() }).where(eq(tasks.id, idB))
       r = await workspaceMaintenanceForTest(h.db, h.appHome).runGcPhase({
         phase: 'iso',
@@ -468,6 +470,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         repoPath: dir,
       })
       const now = Date.now()
+      const { tasks, taskExecutionMaintenanceClaims } = tablesOf(h.db)
       await h.db.update(tasks).set({ workspacePruningAt: now }).where(eq(tasks.id, id))
       const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(h.db)
       const members = await terminalMaintenance.snapshotMembers([id])
@@ -568,6 +571,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
 
       const container = mkDir(h, 'multi-ct')
       const id = await seedTask(h, { status: 'done', worktreePath: container, repoCount: 2 })
+      const { taskRepos } = tablesOf(h.db)
       await h.db.insert(taskRepos).values([
         {
           taskId: id,

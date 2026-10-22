@@ -16,6 +16,8 @@
 // 「两个引擎跑同一份代码」这句话在对拍里是假的。A 段是公共契约，B 段（原「实测分叉」）
 // 已经没有一条按引擎分叉的断言，整段变成「不许再分家」的锁。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -26,19 +28,7 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  docVersions,
-  lifecycleAlerts,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskCollaborators,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
@@ -120,7 +110,7 @@ function unusedDependency(name: string): never {
  * `assertManualExecutionAllowed` 是本地实现、根本不碰资源权威。合一之后两侧走同一份实现，
  * 替身也必须是同一个——**不然「两个引擎跑同一份代码」这句话在对拍里就是假的**。
  */
-function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
+function resourceAuthorityFor(db: PersistenceDb): () => never {
   return () =>
     ({
       resources: {
@@ -130,6 +120,7 @@ function resourceAuthorityFor(db: ProviderNeutralDatabase): () => never {
         ) {
           const request = requests[0]
           if (request === undefined) return []
+          const { workflows } = tablesOf(db)
           const rows = await db
             .select()
             .from(workflows)
@@ -255,8 +246,9 @@ function definition(): WorkflowDefinition {
 }
 
 /** `tasks.owner_user_id` 在 SQLite 上带 FK，所以每个夹具先把这四个用户种好（幂等）。 */
-async function seedUsers(db: ProviderNeutralDatabase): Promise<void> {
+async function seedUsers(db: PersistenceDb): Promise<void> {
   const now = Date.now()
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values(
@@ -274,11 +266,12 @@ async function seedUsers(db: ProviderNeutralDatabase): Promise<void> {
 }
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: { builtin?: boolean; name?: string } = {},
 ): Promise<string> {
   const id = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: options.name ?? 'rfc359-w7-taskroute',
     description: '',
@@ -306,14 +299,12 @@ interface SeedTaskOptions {
   readonly sourceAgentName?: string
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  options: SeedTaskOptions = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promise<string> {
   const id = `t_${ulid()}`
   await seedUsers(db)
   const workflowId = options.workflowId ?? (await seedWorkflow(db))
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: options.name ?? 'rfc359 w7 task',
     workflowId,
@@ -339,30 +330,32 @@ async function seedTask(
 }
 
 async function seedMembers(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   rows: ReadonlyArray<{ userId: string; role: 'owner' | 'collaborator' | 'observer' }>,
 ): Promise<void> {
   if (rows.length === 0) return
+  const { taskCollaborators } = tablesOf(db)
   await db
     .insert(taskCollaborators)
     .values(rows.map((row) => ({ taskId, ...row, addedBy: OWNER, addedAt: Date.now() })))
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  values: Partial<typeof nodeRuns.$inferInsert> & { nodeId: string },
+  values: Partial<PersistenceTables['nodeRuns']['$inferInsert']> & { nodeId: string },
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     status: 'done',
     retryIndex: 0,
     iteration: 0,
     ...values,
-  } as typeof nodeRuns.$inferInsert)
+  } as PersistenceTables['nodeRuns']['$inferInsert'])
   return id
 }
 
@@ -390,6 +383,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
 
     const failedNode = 'writer'
     const taskId = await seedTask(harness.db, { status: 'failed', name: 'A1' })
+    const { tasks } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({ failedNodeId: failedNode, errorSummary: 'boom' })
@@ -463,6 +457,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
     const ops = operations(harness)
     const workflowId = await seedWorkflow(harness.db)
     const taskId = await seedTask(harness.db, { workflowId })
+    const { lifecycleAlerts } = tablesOf(harness.db)
     await harness.db.insert(lifecycleAlerts).values([
       {
         id: `al_${ulid()}`,
@@ -593,6 +588,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
     const taskId = await seedTask(harness.db)
     const otherTaskId = await seedTask(harness.db)
     const runId = await seedRun(harness.db, taskId, { nodeId: WRITER })
+    const { nodeRunEvents } = tablesOf(harness.db)
     await harness.db.insert(nodeRunEvents).values(
       [1, 2, 3].map((index) => ({
         id: index,
@@ -620,6 +616,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db)
     const runId = await seedRun(harness.db, taskId, { nodeId: WRITER })
+    const { nodeRunEvents } = tablesOf(harness.db)
     await harness.db.insert(nodeRunEvents).values([
       { id: 1, nodeRunId: runId, ts: 1, kind: 'text' as const, payload: 'alpha' },
       { id: 2, nodeRunId: runId, ts: 2, kind: 'stderr' as const, payload: 'noise' },
@@ -640,7 +637,8 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
       finishedAt: 6_000,
     })
     const pending = await seedRun(harness.db, taskId, { nodeId: 'later', status: 'pending' })
-    await harness.db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs } = tablesOf(harness.db)
+    await insertOne(harness.db, nodeRunOutputs, {
       nodeRunId: started,
       portName: 'out',
       content: 'value',
@@ -669,7 +667,8 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
       startedAt: 2_000,
       finishedAt: 3_000,
     })
-    await harness.db.insert(docVersions).values({
+    const { docVersions } = tablesOf(harness.db)
+    await insertOne(harness.db, docVersions, {
       id: `dv_${ulid()}`,
       taskId,
       reviewNodeId: REVIEW,
@@ -711,6 +710,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
       worktreePath: APP_HOME,
       baseCommit: null,
     })
+    const { taskRepos } = tablesOf(harness.db)
     await harness.db.insert(taskRepos).values([0, 1].map((index) => repoRow(taskId, index)))
     expect(await code(ops.diff(taskId))).toBe('task-no-base-commit')
   })
@@ -875,6 +875,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
     const taskId = await seedTask(harness.db)
     const runId = await seedRun(harness.db, taskId, { nodeId: WRITER })
     const total = 1_200
+    const { nodeRunEvents } = tablesOf(harness.db)
     await harness.db.insert(nodeRunEvents).values(
       Array.from({ length: total }, (_unused, index) => ({
         id: index + 1,
@@ -941,6 +942,7 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     const ops = operations(harness)
     const workflowId = await seedWorkflow(harness.db)
     const taskId = await seedTask(harness.db, { workflowId })
+    const { workflows } = tablesOf(harness.db)
     await harness.db.delete(workflows).where(eq(workflows.id, workflowId))
     expect(await code(ops.assertManualExecutionAllowed(actorOf(OWNER), taskId))).toBe(
       'workflow-not-found',
@@ -958,6 +960,7 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     const taskId = await seedTask(harness.db, {
       worktreePath: join(APP_HOME, 'wt', 'pruned'),
     })
+    const { tasks } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({ workspacePrunedAt: Date.now() })
@@ -1001,6 +1004,7 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
   test('B6→A 任务行投影的严格度两侧同一档：枚举外的 space_kind 一律拒绝', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db)
+    const { tasks } = tablesOf(harness.db)
     await harness.db
       .update(tasks)
       .set({ spaceKind: 'isolated' as 'local' })
@@ -1049,7 +1053,7 @@ describeEachProvider('rfc359-w7 task route launch · C 段可驱动面', (harnes
   })
 })
 
-function repoRow(taskId: string, index: number): typeof taskRepos.$inferInsert {
+function repoRow(taskId: string, index: number): PersistenceTables['taskRepos']['$inferInsert'] {
   return {
     taskId,
     repoIndex: index,

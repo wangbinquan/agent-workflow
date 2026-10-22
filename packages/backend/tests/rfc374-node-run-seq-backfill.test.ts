@@ -1,8 +1,10 @@
 // RFC-374 AC-3/7: legacy catch-up preserves causal choices, resumes after failure and retains the identity high-water row.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { asc, eq, max } from 'drizzle-orm'
 import { compareNodeRunMintOrder } from '@agent-workflow/shared'
-import { nodeRuns, nodeRunSeqAllocations } from '@/db/schema'
 import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
 import { planNodeRunSeqBackfill } from '@/modules/task-execution/domain/nodeRunSeqBackfill'
 import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
@@ -43,6 +45,7 @@ describeEachProvider('RFC-374 resumable sequence backfill', (harness) => {
   test('all-NULL tasks preserve the ID oracle, stay at or below zero, and are idempotent', async () => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
+    const { nodeRuns } = tablesOf(db)
     await db
       .insert(nodeRuns)
       .values(['c', 'a', 'b'].map((id) => ({ id, taskId, nodeId: 'n', status: 'done' as const })))
@@ -63,6 +66,7 @@ describeEachProvider('RFC-374 resumable sequence backfill', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
     await mintSequenceRun(db, taskId, { id: 'm' })
+    const { nodeRuns, nodeRunSeqAllocations } = tablesOf(db)
     await db
       .insert(nodeRuns)
       .values(
@@ -83,17 +87,18 @@ describeEachProvider('RFC-374 resumable sequence backfill', (harness) => {
     expect(allocations).toHaveLength(1)
     expect(allocations[0]!.seq).toBe(Math.max(...rows.map((row) => row.seq!)))
     await mintSequenceRun(db, taskId, { id: 'clock-rewound' })
-    const newest = await db.select().from(nodeRuns).where(eq(nodeRuns.id, 'clock-rewound')).get()
+    const newest = await firstRow(
+      db.select().from(nodeRuns).where(eq(nodeRuns.id, 'clock-rewound')),
+    )
     expect(newest!.seq!).toBeGreaterThan(allocations[0]!.seq)
   })
   test('task failure preserves completed tasks and the next invocation resumes remaining work', async () => {
     const db = harness.db,
       first = await seedSequenceTask(db),
       second = await seedSequenceTask(db)
+    const { nodeRuns } = tablesOf(db)
     for (const taskId of [first, second])
-      await db
-        .insert(nodeRuns)
-        .values({ id: `legacy-${taskId}`, taskId, nodeId: 'n', status: 'done' })
+      await insertOne(db, nodeRuns, { id: `legacy-${taskId}`, taskId, nodeId: 'n', status: 'done' })
     const store = createNodeRunSeqBackfillStore(db)
     let attempts = 0
     await expect(
@@ -114,13 +119,17 @@ describeEachProvider('RFC-374 resumable sequence backfill', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
     await mintSequenceRun(db, taskId)
-    const highest = await db
-      .select({ seq: max(nodeRunSeqAllocations.seq) })
-      .from(nodeRunSeqAllocations)
-      .get()
-    await db
-      .insert(nodeRuns)
-      .values({ id: 'corrupt', taskId, nodeId: 'n', status: 'done', seq: highest!.seq! + 1 })
+    const { nodeRunSeqAllocations, nodeRuns } = tablesOf(db)
+    const highest = await firstRow(
+      db.select({ seq: max(nodeRunSeqAllocations.seq) }).from(nodeRunSeqAllocations),
+    )
+    await insertOne(db, nodeRuns, {
+      id: 'corrupt',
+      taskId,
+      nodeId: 'n',
+      status: 'done',
+      seq: highest!.seq! + 1,
+    })
     const before = await db.select().from(nodeRunSeqAllocations)
     await expect(backfillNodeRunSequences(createNodeRunSeqBackfillStore(db))).rejects.toThrow(
       'node-run-seq-allocator-behind',
@@ -132,6 +141,7 @@ describeEachProvider('RFC-374 resumable sequence backfill', (harness) => {
       a = await seedSequenceTask(db),
       b = await seedSequenceTask(db)
     for (const taskId of [a, b, a, b]) await mintSequenceRun(db, taskId)
+    const { nodeRunSeqAllocations } = tablesOf(db)
     const before = await db
       .select()
       .from(nodeRunSeqAllocations)
@@ -152,6 +162,7 @@ describeEachProvider('RFC-374 resumable sequence backfill', (harness) => {
       const db = harness.db,
         taskId = await seedSequenceTask(db)
       const isShard = shape === 'fanout-reuse'
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         { id: 'wrapper', taskId, nodeId: 'wrapper', status: 'interrupted' },
         { id: 'fanout', taskId, nodeId: 'fanout', status: 'done' },

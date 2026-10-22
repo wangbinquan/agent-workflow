@@ -7,14 +7,11 @@
 
 // Shared persistence for durable maintenance watermarks on either database.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { maintenanceState } from '@/db/schema'
-
-export async function readMaintenanceValue(
-  db: ProviderNeutralDatabase,
-  key: string,
-): Promise<string | null> {
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+export async function readMaintenanceValue(db: PersistenceDb, key: string): Promise<string | null> {
+  const { maintenanceState } = tablesOf(db)
   const rows = await db
     .select({ value: maintenanceState.value })
     .from(maintenanceState)
@@ -24,7 +21,7 @@ export async function readMaintenanceValue(
 }
 
 export async function readMaintenanceNumber(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   key: string,
 ): Promise<number | null> {
   const raw = await readMaintenanceValue(db, key)
@@ -34,11 +31,12 @@ export async function readMaintenanceNumber(
 }
 
 export async function writeMaintenanceValue(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   key: string,
   value: string,
   now: number = Date.now(),
 ): Promise<void> {
+  const { maintenanceState } = tablesOf(db)
   await db
     .insert(maintenanceState)
     .values({ key, value, updatedAt: now })

@@ -6,7 +6,7 @@
 // 动作发射」类测试继续以最小噪声表达意图；真实文件系统/子进程面归
 // rfc310-pr4-* 专项测试与 journey。
 
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ReconcilerPorts,
   WorkspaceValidationPort,
@@ -14,7 +14,7 @@ import type {
 import { createActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/configResourceStore'
 
 export interface FakeAgentPortsOptions {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly launches?: string[]
   readonly overrides?: Partial<ReconcilerPorts>
 }

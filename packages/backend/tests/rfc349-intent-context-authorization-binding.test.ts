@@ -2,13 +2,14 @@
 // Catalog's transaction-bound authorization participant. Preflight catalog
 // summaries are useful UX, but they cannot authorize a later write.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { users } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
 import type {
@@ -73,9 +74,10 @@ function authorization(): IntentContextResourceAuthorization {
   })
 }
 
-async function seedOwner(__db: ProviderNeutralDatabase) {
+async function seedOwner(__db: PersistenceDb) {
   const db = __db
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: SESSION.ownerUserId,
     username: SESSION.ownerUserId,
     displayName: 'Intent Context Owner',
@@ -189,7 +191,7 @@ describeEachProvider('RFC-349 Intent transaction-bound context authorization', (
       .join('\n')
     expect(runnerCode).not.toMatch(
       // 注意：这里是**判据里的正则字面量**，不是类型标注——`DbClient` 三个字必须原样留着。
-      // 2026-09-11 的 AC-6 机械迁移曾把它一起改成 `ProviderNeutralDatabase`，判据当场反转成
+      // 2026-09-11 的 AC-6 机械迁移曾把它一起改成 `PersistenceDb`，判据当场反转成
       // 「不许出现中立类型」，两个引擎一起红。
       /as unknown|DbClient|PostgresqlDatabaseClient|dbTxSync/,
     )

@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { UploadPlan, UploadResult } from '@/platform/content/local/workspaceUploads'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
 import type { WorkspaceUploadResult } from '../application/ports/workspaceUploads'
@@ -13,7 +13,7 @@ import type { TaskInputFiles } from '../application/ports/taskInputFiles'
 /** Preserve the original upload writer and record its complete packed-path receipt
  * before admission. A resumed launch must not turn the same upload into "file (1)". */
 export async function applyTaskWorkspaceUploads(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   plan: UploadPlan
   workspaceUploads?: WorkspaceUploadContentFactory

@@ -14,11 +14,12 @@
 //
 // 所以这里不重复 T14/T15 的语义细分，只锁**跨引擎一致性**这一件事：占用名集合（大小写归一）
 // 与 copy-only 目标（含拒绝理由）在两个引擎上给出同一个答案。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, plugins, skills } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/aclReadRepository'
 import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -27,9 +28,10 @@ const NOW = 1_788_278_400_000
 const MINE = 'u-mine'
 const THEIRS = 'u-theirs'
 
-async function seedAgent(db: ProviderNeutralDatabase, name: string, owner: string) {
+async function seedAgent(db: PersistenceDb, name: string, owner: string) {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: '',
@@ -42,9 +44,10 @@ async function seedAgent(db: ProviderNeutralDatabase, name: string, owner: strin
   return id
 }
 
-async function seedSkill(db: ProviderNeutralDatabase, name: string, owner: string) {
+async function seedSkill(db: PersistenceDb, name: string, owner: string) {
   const id = ulid()
-  await db.insert(skills).values({
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
     id,
     name,
     description: '',
@@ -57,9 +60,10 @@ async function seedSkill(db: ProviderNeutralDatabase, name: string, owner: strin
   return id
 }
 
-async function seedPlugin(db: ProviderNeutralDatabase, name: string, owner: string) {
+async function seedPlugin(db: PersistenceDb, name: string, owner: string) {
   const id = ulid()
-  await db.insert(plugins).values({
+  const { plugins } = tablesOf(db)
+  await insertOne(db, plugins, {
     id,
     name,
     description: '',

@@ -8,7 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
@@ -82,7 +82,7 @@ describe('collectPluginIdsFromClosure', () => {
 })
 
 describeEachProvider('loadPluginsByIds', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let binding: PluginServiceBinding
   let query: PluginClosureQuery
   beforeEach(async () => {

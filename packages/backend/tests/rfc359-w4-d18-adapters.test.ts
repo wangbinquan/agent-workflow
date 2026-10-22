@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D18 —— resource-catalog 的 Workgroup 聚合：异步仓库成为唯一实现（`sqliteWorkgroupRepository` /
 // `postgresqlWorkgroupRepository` 退役），agent 引用可用性判定只剩一份（`referenceUsability.ts`），目录装配一份。
@@ -11,8 +13,7 @@ import { CreateAgentSchema, CreateWorkgroupSchema } from '@agent-workflow/shared
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { workgroupRepositoryDependencies } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
@@ -24,11 +25,12 @@ import { describeEachProvider } from './helpers/eachProvider'
 const T0 = 1_700_000_000_000
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ id: string; authority: DirectAuthenticatedAuthority }> {
   const id = ulid()
   const username = `u-${id.slice(-8).toLowerCase()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -45,9 +47,12 @@ async function seedUser(
   return { id, authority }
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values(
+  const { agents } = tablesOf(db)
+  await insertOne(
+    db,
+    agents,
     createAgentPersistenceValues({
       id,
       agent: CreateAgentSchema.parse({ name: `agent-${id.slice(-6).toLowerCase()}` }),
@@ -79,7 +84,7 @@ async function codeOf(fn: () => Promise<unknown>): Promise<string> {
   }
 }
 
-function repositoryFor(db: ProviderNeutralDatabase) {
+function repositoryFor(db: PersistenceDb) {
   return createWorkgroupRepository(db, workgroupRepositoryDependencies({ db, now: () => T0 + 10 }))
 }
 
@@ -255,7 +260,8 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       initialAcl: initialAcl(owner.id),
       now: T0,
     })
-    await harness.db.insert(resourceGrants).values({
+    const { resourceGrants } = tablesOf(harness.db)
+    await insertOne(harness.db, resourceGrants, {
       resourceType: 'workgroup',
       resourceId: created.id,
       userId: viewer.id,

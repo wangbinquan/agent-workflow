@@ -14,6 +14,8 @@
 // If this reds, RFC-170 §10 migration is broken — everything in batch B builds
 // on these columns being present + correctly backfilled.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -23,8 +25,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { skillOperations } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function cols(db: DbClient, table: string): string[] {
@@ -89,20 +89,25 @@ describe('migration 0090 (RFC-170 skills storage/ACL) — schema + constraints',
 
   test('skill_operations partial-unique: two ACTIVE ops for one skill rejected, but active+inactive OK', () => {
     const skillId = ulid()
-    db.insert(skillOperations)
-      .values({ opId: ulid(), skillId, kind: 'delete', phase: 'intent' })
-      .run()
+    const { skillOperations } = tablesOf(db)
+    insertOne(db, skillOperations, { opId: ulid(), skillId, kind: 'delete', phase: 'intent' })
     // Second active op on the same skill → violates uq_skill_operations_active.
-    expect(() =>
-      db
-        .insert(skillOperations)
-        .values({ opId: ulid(), skillId, kind: 'version-write', phase: 'intent' })
-        .run(),
-    ).toThrow()
+    expect(() => {
+      return insertOne(db, skillOperations, {
+        opId: ulid(),
+        skillId,
+        kind: 'version-write',
+        phase: 'intent',
+      })
+    }).toThrow()
     // An INACTIVE (active=0) row for the same skill is allowed (retry_index style).
-    db.insert(skillOperations)
-      .values({ opId: ulid(), skillId, kind: 'version-write', phase: 'done', active: 0 })
-      .run()
+    insertOne(db, skillOperations, {
+      opId: ulid(),
+      skillId,
+      kind: 'version-write',
+      phase: 'done',
+      active: 0,
+    })
     const rows = db.$client
       .query('SELECT COUNT(*) AS n FROM skill_operations WHERE skill_id = ?')
       .get(skillId) as { n: number }

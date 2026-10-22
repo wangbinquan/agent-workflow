@@ -9,18 +9,19 @@
 // boundary (errorHandler doesn't double-wrap / smother / mistype the
 // response).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { Hono } from 'hono'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { ConcurrentNodeRunTransition, transitionNodeRunStatus } from '../src/services/lifecycle'
 import { errorHandler } from '../src/util/errors'
 
 async function seedNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status:
     | 'pending'
     | 'running'
@@ -31,9 +32,10 @@ async function seedNodeRun(
     | 'canceled'
     | 'interrupted',
 ): Promise<{ nodeRunId: string }> {
-  await db.insert(workflows).values({ id: 'w', name: 'w', definition: '{}' })
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'w', name: 'w', definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: 'w',
@@ -47,7 +49,7 @@ async function seedNodeRun(
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'n',

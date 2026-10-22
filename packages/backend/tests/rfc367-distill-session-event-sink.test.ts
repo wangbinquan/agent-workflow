@@ -13,19 +13,21 @@
 //     marker row, otherwise AC-9's failure has no trace on the detail page at
 //     all (getJobSessionView derives the whole attempt from these rows).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMemoryDistillSessionEventSink } from '../src/modules/memory/infrastructure/memoryDistillSessionEventSink'
 import { DISTILL_CAPTURE_FAILED_KIND } from '../src/modules/runtime-management/public/types'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedJob(db: ProviderNeutralDatabase): Promise<string> {
+async function seedJob(db: PersistenceDb): Promise<string> {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'task-x:feedback',
     sourceKind: 'feedback',
@@ -55,17 +57,19 @@ const textEvent = (ts: number, payload: string, sessionId: string | null = null)
 })
 
 describeEachProvider('RFC-367 distill session event sink', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
 
-  const rowsFor = async (jobId: string) =>
-    await db
+  const rowsFor = async (jobId: string) => {
+    const { memoryDistillEvents } = tablesOf(db)
+    return await db
       .select()
       .from(memoryDistillEvents)
       .where(eq(memoryDistillEvents.distillJobId, jobId))
       .orderBy(asc(memoryDistillEvents.id))
+  }
 
   test('events seen before the session id is known are buffered, then flushed with it', async () => {
     const jobId = await seedJob(db)
@@ -149,7 +153,8 @@ describeEachProvider('RFC-367 distill session event sink', (harness) => {
       insert: () => ({
         values: () => Promise.reject(new Error('disk on fire')),
       }),
-    } as unknown as ProviderNeutralDatabase
+    } as unknown as PersistenceDb
+    inheritDatabaseHandle(brokenDb, db)
     const sink = createMemoryDistillSessionEventSink(brokenDb)({
       distillJobId: jobId,
       attemptIndex: 0,
@@ -171,13 +176,14 @@ describeEachProvider('RFC-367 distill session event sink', (harness) => {
 describeEachProvider(
   'RFC-367 session view seeds the user turn from the stored prompt',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
 
     test('getJobSessionView renders user_prompt_md as the first turn', async () => {
       const jobId = await seedJob(db)
+      const { memoryDistillJobs } = tablesOf(db)
       await db
         .update(memoryDistillJobs)
         .set({ userPromptMd: '# Source events to distill\nTask: t-1' })

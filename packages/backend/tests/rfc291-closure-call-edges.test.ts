@@ -10,17 +10,18 @@
 // 各自内部自洽、下游无从发现。RFC-291 把裁决收进 `pickCallTarget` 单点，这里用
 // **同一份 DB 夹具**对拍两侧结果。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
-import { agents, users, workflows, workgroups, workgroupMembers } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { freezeCallClosure, parseCallClosure } from '../src/services/execution/closure'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const OWNER = 'user_owner_rfc291d_000000'
@@ -53,14 +54,15 @@ const callWorkgroupNode = (nodeId: string, workgroupName: string) => ({
 })
 const defOf = (nodes: unknown[]) => ({ $schema_version: 4, inputs: [], nodes, edges: [] })
 
-async function createFixture<TDb extends ProviderNeutralDatabase>(
+async function createFixture<TDb extends PersistenceDb>(
   createDatabase: () => TDb,
   onHome?: (appHome: string) => void,
 ) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-d-'))
   onHome?.(appHome)
   const db = createDatabase()
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER,
     username: 'owner',
     displayName: 'Owner',
@@ -68,12 +70,13 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 
   async function seedAgent(name: string): Promise<string> {
     const id = ulid()
     const now = Date.now()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id,
       name,
       description: name,
@@ -82,7 +85,7 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as typeof agents.$inferInsert)
+    } as PersistenceTables['agents']['$inferInsert'])
     return id
   }
 
@@ -93,7 +96,8 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
   ): Promise<string> {
     const id = forcedId ?? ulid()
     const now = Date.now()
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id,
       name,
       description: '',
@@ -103,14 +107,15 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as typeof workflows.$inferInsert)
+    } as PersistenceTables['workflows']['$inferInsert'])
     return id
   }
 
   async function seedWorkgroup(name: string, agentId: string): Promise<string> {
     const id = ulid()
     const now = Date.now()
-    await db.insert(workgroups).values({
+    const { workgroups, workgroupMembers } = tablesOf(db)
+    await insertOne(db, workgroups, {
       id,
       name,
       description: '',
@@ -121,8 +126,8 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as typeof workgroups.$inferInsert)
-    await db.insert(workgroupMembers).values({
+    } as PersistenceTables['workgroups']['$inferInsert'])
+    await insertOne(db, workgroupMembers, {
       id: ulid(),
       workgroupId: id,
       memberType: 'agent',
@@ -131,7 +136,7 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
       roleDesc: '',
       position: 0,
       createdAt: now,
-    } as typeof workgroupMembers.$inferInsert)
+    } as PersistenceTables['workgroupMembers']['$inferInsert'])
     return id
   }
 
@@ -141,7 +146,7 @@ async function createFixture<TDb extends ProviderNeutralDatabase>(
   return { db, appHome, seedAgent, seedWorkflow, seedWorkgroup, dumpMounting }
 }
 
-type Fixture<TDb extends ProviderNeutralDatabase> = Awaited<ReturnType<typeof createFixture<TDb>>>
+type Fixture<TDb extends PersistenceDb> = Awaited<ReturnType<typeof createFixture<TDb>>>
 
 // RFC-359 AC-6：`registerNativeCases` 与它那组模块级可变夹具槽随本波删除——最后两个用户
 // （freeze / dump 同解）已上双引擎，剩下的「复杂度与收口」是纯源码文本断言、一行库都不读。
@@ -149,11 +154,11 @@ type Fixture<TDb extends ProviderNeutralDatabase> = Awaited<ReturnType<typeof cr
 
 function registerProviderCases(
   name: string,
-  register: (useFixture: () => Fixture<ProviderNeutralDatabase>) => void,
+  register: (useFixture: () => Fixture<PersistenceDb>) => void,
 ): void {
   describeEachProvider(name, (harness) => {
     describe('fixture lifetime', () => {
-      let fixture: Fixture<ProviderNeutralDatabase> | undefined
+      let fixture: Fixture<PersistenceDb> | undefined
       const homes: string[] = []
       beforeEach(async () => {
         fixture = await createFixture(
@@ -174,10 +179,10 @@ function registerProviderCases(
 }
 
 registerProviderCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', (useFixture) => {
-  let seedAgent: Fixture<ProviderNeutralDatabase>['seedAgent']
-  let seedWorkflow: Fixture<ProviderNeutralDatabase>['seedWorkflow']
-  let seedWorkgroup: Fixture<ProviderNeutralDatabase>['seedWorkgroup']
-  let dumpMounting: Fixture<ProviderNeutralDatabase>['dumpMounting']
+  let seedAgent: Fixture<PersistenceDb>['seedAgent']
+  let seedWorkflow: Fixture<PersistenceDb>['seedWorkflow']
+  let seedWorkgroup: Fixture<PersistenceDb>['seedWorkgroup']
+  let dumpMounting: Fixture<PersistenceDb>['dumpMounting']
   beforeEach(() => {
     ;({ seedAgent, seedWorkflow, seedWorkgroup, dumpMounting } = useFixture())
   })
@@ -300,9 +305,9 @@ registerProviderCases('freeze / dump 同解（AC-14，同一份 DB 夹具对拍�
 })
 
 registerProviderCases('复杂度与收口（AC-16 / 设计门 P2-c）', (useFixture) => {
-  let db: Fixture<ProviderNeutralDatabase>['db']
-  let appHome: Fixture<ProviderNeutralDatabase>['appHome']
-  let seedWorkflow: Fixture<ProviderNeutralDatabase>['seedWorkflow']
+  let db: Fixture<PersistenceDb>['db']
+  let appHome: Fixture<PersistenceDb>['appHome']
+  let seedWorkflow: Fixture<PersistenceDb>['seedWorkflow']
   beforeEach(() => {
     ;({ db, appHome, seedWorkflow } = useFixture())
   })

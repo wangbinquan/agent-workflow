@@ -1,5 +1,8 @@
 // RFC-370: selected content must drive real Intent apply and recovery without
 // replacing AW's resource transaction, durable journal or old-format replay.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -9,16 +12,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import {
-  intentApplyJournal,
-  intentDrafts,
-  intentSessions,
-  intentTurns,
-  plugins,
-  skills,
-  skillVersions,
-  users,
-} from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentArtifactContentPort } from '@/modules/intent/application/ports/intentArtifactContent'
@@ -68,7 +61,9 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     const directory = mkdtempSync(join(tmpdir(), 'aw-intent-content-'))
     directories.push(directory)
     const appHome = join(directory, 'absent-home')
-    await harness.db.insert(users).values({ ...actor.user, createdAt: 1, updatedAt: 1 })
+    const { users, skills, skillVersions, intentSessions, intentDrafts, intentApplyJournal } =
+      tablesOf(harness.db)
+    await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const authority = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
       { userId: ownerId, source: 'session' },
       'http',
@@ -77,7 +72,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       draftId = ulid(),
       existingSkillId = ulid()
     if (update) {
-      await harness.db.insert(skills).values({
+      await insertOne(harness.db, skills, {
         id: existingSkillId,
         name: 'intent-storage',
         description: '',
@@ -91,7 +86,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         createdAt: 1,
         updatedAt: 1,
       })
-      await harness.db.insert(skillVersions).values({
+      await insertOne(harness.db, skillVersions, {
         id: ulid(),
         skillId: existingSkillId,
         versionIndex: 1,
@@ -102,7 +97,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         createdAt: 1,
       })
     }
-    await harness.db.insert(intentSessions).values({
+    await insertOne(harness.db, intentSessions, {
       id: sessionId,
       ownerUserId: ownerId,
       title: 'Selected storage',
@@ -160,7 +155,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     if (!parsed.ok) throw new Error(parsed.errors.join('; '))
     const canonical = canonicalIntentJson(parsed.changeset)
     const draftHash = `sha256:${createHash('sha256').update(canonical).digest('hex')}`
-    await harness.db.insert(intentDrafts).values({
+    await insertOne(harness.db, intentDrafts, {
       id: draftId,
       sessionId,
       revision: 1,
@@ -182,11 +177,12 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       decisions: [],
     }
     const journal = async () => {
-      const row = await harness.db
-        .select()
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.sessionId, sessionId))
-        .get()
+      const row = await first(
+        harness.db
+          .select()
+          .from(intentApplyJournal)
+          .where(eq(intentApplyJournal.sessionId, sessionId)),
+      )
       if (row === undefined) throw new Error('Intent journal not created')
       return row
     }
@@ -362,6 +358,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
             throw new Error('stage not reached')
           }),
         ])
+        const { skills, plugins } = tablesOf(harness.db)
         expect(await harness.db.select().from(kind === 'skill' ? skills : plugins)).toHaveLength(0)
         expect(settled).toBe(false)
         stage.release()
@@ -427,6 +424,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     })
     const receipt = await operations.apply(f.request)
     expect(receipt.applied).toMatchObject([{ resourceId: f.existingSkillId, action: 'update' }])
+    const { skills, skillVersions } = tablesOf(harness.db)
     expect(
       await harness.db
         .select({
@@ -514,6 +512,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       contentRelease.release()
       expect(await pending).toBe(error)
       expect((await f.journal()).state).toBe('failed')
+      const { skills } = tablesOf(harness.db)
       expect(await harness.db.select().from(skills)).toHaveLength(0)
       expect(existsSync(f.appHome)).toBe(false)
     } finally {
@@ -588,6 +587,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         error: null,
       })
       expect(publications).toBe(2)
+      const { skills } = tablesOf(harness.db)
       expect(await harness.db.select().from(skills)).toHaveLength(1)
       expect(existsSync(f.appHome)).toBe(false)
     } finally {
@@ -614,10 +614,11 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         },
       }),
     })
+    const { skillVersions, skills } = tablesOf(harness.db)
     await harness.db.delete(skillVersions)
     expect(await lifecycle.rollForward([artifact], log)).toBe(false)
     expect(publications).toEqual([])
-    await harness.db.insert(skillVersions).values({
+    await insertOne(harness.db, skillVersions, {
       id: ulid(),
       skillId: f.existingSkillId,
       versionIndex: 1,
@@ -663,7 +664,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         noop: null,
       },
     }))
-    await harness.db.insert(intentApplyJournal).values({
+    const { intentApplyJournal } = tablesOf(harness.db)
+    await insertOne(harness.db, intentApplyJournal, {
       id: 'legacy-committed',
       sessionId: f.sessionId,
       clientMutationId: 'legacy-committed',
@@ -730,11 +732,11 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       ])
       expect(settled).toBe(false)
       expect(calls).toEqual(['unmark:first', 'unmark:second', 'publish:first'])
-      expect((await harness.db.select().from(intentApplyJournal).get())?.error).toBe('retryable')
+      expect((await first(harness.db.select().from(intentApplyJournal)))?.error).toBe('retryable')
       release.release()
       expect(await pending).toEqual({ failed: 0, rolledForward: 1 })
       expect(calls).toEqual(['unmark:first', 'unmark:second', 'publish:first', 'publish:second'])
-      expect((await harness.db.select().from(intentApplyJournal).get())?.error).toBeNull()
+      expect((await first(harness.db.select().from(intentApplyJournal)))?.error).toBeNull()
       expect(existsSync(f.appHome)).toBe(false)
     } finally {
       release.release()
@@ -763,7 +765,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       ['legacy', encodeIntentJournalArtifacts([legacy])],
       ['active', JSON.stringify([native])],
     ] as const) {
-      await harness.db.insert(intentApplyJournal).values({
+      const { intentApplyJournal } = tablesOf(harness.db)
+      await insertOne(harness.db, intentApplyJournal, {
         id,
         sessionId: f.sessionId,
         clientMutationId: id,
@@ -821,6 +824,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         }),
       ])
       expect(settled).toBe(false)
+      const { intentApplyJournal } = tablesOf(harness.db)
       expect(
         (await harness.db.select().from(intentApplyJournal)).every(
           (row) => row.state === 'prepared',
@@ -831,11 +835,9 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       expect([...calls].sort()).toEqual(['legacy', 'native'])
       expect(
         (
-          await harness.db
-            .select()
-            .from(intentApplyJournal)
-            .where(eq(intentApplyJournal.id, 'active'))
-            .get()
+          await first(
+            harness.db.select().from(intentApplyJournal).where(eq(intentApplyJournal.id, 'active')),
+          )
         )?.state,
       ).toBe('prepared')
       expect(existsSync(f.appHome)).toBe(false)
@@ -857,7 +859,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       [3, 'running', 'running', 1],
       [4, 'recent', 'error', 10_001],
     ] as const) {
-      await harness.db.insert(intentTurns).values({
+      const { intentTurns } = tablesOf(harness.db)
+      await insertOne(harness.db, intentTurns, {
         id,
         sessionId: f.sessionId,
         seq,
@@ -902,11 +905,13 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         },
       },
     })
-    const retained = async () =>
-      await harness.db
+    const retained = async () => {
+      const { intentTurns } = tablesOf(harness.db)
+      return await harness.db
         .select({ id: intentTurns.id, retained: intentTurns.scratchRetained })
         .from(intentTurns)
         .orderBy(intentTurns.id)
+    }
     let settled = false
     const pending = maintenance.scratch
       .sweep({ retentionHours: 1, now: 3_610_000 })

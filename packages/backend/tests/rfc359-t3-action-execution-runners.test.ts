@@ -6,6 +6,8 @@
 // provider 只提供「在借用工作区上启动 / 取消宿主任务」两件私有能力（`actionExecutionEnvironment.ts`）。
 // 这里用一个可观测的假环境把执行器在两个引擎上各跑一遍（宿主工作流播种、脚本定义读取走真库），
 // 再用源码锁钉住 PG daemon 的接线与两个 composer 的「薄」形态。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { requirementBundlePath } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -15,8 +17,7 @@ import { join, resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
@@ -45,7 +46,7 @@ interface FakeEnvironment {
 }
 
 function fakeEnvironment(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   over: {
     readonly agent?: { id: string; name: string; outputs: readonly string[] } | null
     readonly launch?: (input: ActionHostTaskLaunch) => Promise<string>
@@ -61,6 +62,7 @@ function fakeEnvironment(
     outcomes: {
       // 终态任务的结果读模型：只给最小的空产出，让 fetchOutcome 走到 exited 分支。
       find: async (taskId) => {
+        const { tasks } = tablesOf(db)
         const row = (
           await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
         )[0]
@@ -86,6 +88,7 @@ function fakeEnvironment(
     },
     statusProjection: {
       find: async (taskId) => {
+        const { tasks } = tablesOf(db)
         const row = (
           await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
         )[0]
@@ -120,7 +123,8 @@ describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harnes
     const identityAccess = createIdentityAccessRuntime({ db })
     try {
       const userId = ulid()
-      await db.insert(users).values({
+      const { users, tasks } = tablesOf(db)
+      await insertOne(db, users, {
         id: userId,
         username: `borrowed-${userId}`,
         displayName: 'Borrowed Workspace Fixture',
@@ -157,7 +161,7 @@ describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harnes
       const prepared = await participant.prepare(request)
       // Persist the real lease metadata consumed by the PG root insert. This
       // local diagnostic does not replace the hosted real-root execution cases.
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: prepared.taskId,
         name: request.task.name,
         workflowId,
@@ -203,9 +207,10 @@ describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harnes
 
 const RESULT_AGENT = { id: 'agent-de', name: 'de-impl', outputs: [DIGITAL_EMPLOYEE_RESULT_PORT] }
 
-async function seedTask(db: ProviderNeutralDatabase, status: 'running' | 'done'): Promise<string> {
+async function seedTask(db: PersistenceDb, status: 'running' | 'done'): Promise<string> {
   const id = `t3_${ulid()}`
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
@@ -302,6 +307,7 @@ describeEachProvider('RFC-359 T3 —— agent 动作执行器（F-H2-2）', (har
       expect(launch.workspacePath).toBe(workspace)
       expect(launch.baselineSha).toBe(BASELINE)
       expect(JSON.stringify(launch.snapshot)).toContain(RESULT_AGENT.id)
+      const { workflows } = tablesOf(db)
       // 宿主工作流行在本引擎上存在（两个引擎同一段 drizzle 播种）。
       const host = (
         await db
@@ -451,11 +457,12 @@ describeEachProvider('RFC-359 T3 —— script 动作执行器（F-H2-2）', (ha
 })
 
 async function seedTaskWithId(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   status: 'running' | 'done',
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
@@ -472,7 +479,7 @@ async function seedTaskWithId(
 }
 
 async function seedScriptWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   scriptNodes: number,
 ): Promise<{ workflowId: string; ref: string }> {
   const workflowId = `wf_${ulid()}`
@@ -490,7 +497,8 @@ async function seedScriptWorkflow(
     nodes,
     edges: [],
   })
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',

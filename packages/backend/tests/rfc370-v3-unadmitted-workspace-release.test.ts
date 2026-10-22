@@ -12,9 +12,9 @@
 // without a parent receipt. The compensation now abandons the registration:
 // the close intent is durable, a close never waits for a quota slot, and a
 // create the platform refused leaves nothing to release.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedTaskWorkspaces,
   HostedTaskImageUnvalidatedError,
@@ -112,13 +112,15 @@ describeEachProvider('RFC-370 the parent of a never-admitted launch is released'
       },
       readyTimeoutMs: 300_000,
     })
-    const row = async (owner: string) =>
-      (
+    const row = async (owner: string) => {
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      return (
         await harness.db
           .select()
           .from(hostedTaskWorkspaces)
           .where(eq(hostedTaskWorkspaces.taskId, owner))
       )[0]
+    }
     const release = (id: string) =>
       parents.set(id, { ...parents.get(id)!, state: 'closed', resourceState: 'released' })
     return {

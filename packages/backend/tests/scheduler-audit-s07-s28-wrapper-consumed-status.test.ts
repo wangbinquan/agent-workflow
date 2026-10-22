@@ -26,6 +26,9 @@
 // 集成 harness 仿 scheduler-clarify-dispatch.test.ts（createInMemoryDb +
 // 真实临时 git worktree + fixtures/mock-opencode.ts）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -34,7 +37,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { isDispatchable } from '../src/services/dispatchFrontier'
 import { isNodeRunFresh } from '../src/services/freshness'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
@@ -48,7 +50,7 @@ const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 // ---------------------------------------------------------------------------
 // 纯函数层 — 谓词侧对照组（S-7 修复后两个用例都是"机制前提"锁）。
@@ -140,7 +142,8 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -162,14 +165,15 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -212,7 +216,8 @@ function captureWsDbPairs(
   const pairs: Array<{ ws: string; db: string }> = []
   const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (msg) => {
     if (msg.type !== 'node.status' || msg.nodeId !== nodeId) return
-    const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, msg.nodeRunId)).all()[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const row = queryRows(h.db.select().from(nodeRuns).where(eq(nodeRuns.id, msg.nodeRunId)))[0]
     pairs.push({ ws: msg.status, db: row?.status ?? 'absent' })
   })
   return { pairs, unsub }
@@ -259,6 +264,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
     )
     unsub()
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -313,6 +319,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
     )
     unsub()
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -369,6 +376,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
     })
     unsub()
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 

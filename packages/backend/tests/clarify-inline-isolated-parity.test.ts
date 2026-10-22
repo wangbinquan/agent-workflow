@@ -8,6 +8,8 @@
 // happened. If this goes red, RFC-026 has accidentally bled inline behavior
 // into the default isolated path — investigate before relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -17,7 +19,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import { clarifyRounds, agents, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
@@ -79,7 +80,8 @@ async function setup(
   sessionMode: 'isolated' | undefined,
 ) {
   const agentId = ulid()
-  await h.db.insert(agents).values({
+  const { agents, workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, agents, {
     id: agentId,
     name: 'designer',
     description: 't',
@@ -119,10 +121,8 @@ async function setup(
   }
   const taskId = ulid()
   const workflowId = ulid()
-  await h.db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -191,6 +191,7 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
             sessionRestartBudget: 0,
           }),
       )
+      const { clarifyRounds } = tablesOf(h.db)
       const sessionRow = (
         await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       )[0]

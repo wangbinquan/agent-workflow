@@ -1,13 +1,14 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, lt } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskSourceTerminationEffectInput } from '../application/applySourceTerminationEffect'
 
 export async function listSourceTerminationTargets(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: TaskSourceTerminationEffectInput,
 ): Promise<readonly { readonly id: string }[]> {
+  const { tasks } = tablesOf(db)
   return await db
     .select({ id: tasks.id })
     .from(tasks)

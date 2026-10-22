@@ -18,6 +18,7 @@ import { schemaContribution as contribution15 } from '@/modules/runtime-manageme
 import { schemaContribution as contribution16 } from '@/modules/source-control/composition/schema'
 import { schemaContribution as contribution17 } from '@/modules/system-operations/composition/schema'
 import { schemaContribution as contribution18 } from '@/modules/task-execution/composition/schema'
+import { materializeTableSets } from '@/platform/persistence/schema/nativeTables'
 import { createSchemaRegistry } from '@/platform/persistence/schema/registry'
 import { compileContract } from '@/platform/persistence/schema/contract'
 import { projectLegacyV2 } from '@/platform/persistence/migration/legacy/v2Contract'
@@ -43,6 +44,7 @@ export const persistenceSchema = createSchemaRegistry([
   contribution17,
   contribution18,
 ])
+export const nativeTableSets = materializeTableSets(persistenceSchema)
 export const explicitSchemaContract = compileContract(persistenceSchema)
 let epoch1Contract: ReturnType<typeof projectLegacyV2> | undefined
 export function buildLogicalSchemaContract() {

@@ -22,15 +22,16 @@
 //  (e) CLAUDE_PLATFORM_OWNED_FLAGS covers every flag literal the spawn module
 //      itself emits — the reserved set cannot silently fall behind the argv.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createRuntime,
   getRuntime,
@@ -49,17 +50,18 @@ import {
   CLAUDE_PLATFORM_OWNED_FLAGS,
 } from '../src/services/runtime/claudeCode/spawn'
 
-async function seedRun(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRun(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -73,7 +75,7 @@ async function seedRun(db: ProviderNeutralDatabase): Promise<string> {
     startedAt: Date.now(),
   })
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 

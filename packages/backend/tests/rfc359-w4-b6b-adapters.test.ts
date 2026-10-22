@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   eventContentDigest,
   eventTypeContentDigest,
@@ -57,7 +57,7 @@ function fixtures(tag: string) {
 
 describeEachProvider('RFC-359 W4-B6b —— 事件存储', (harness) => {
   test('登记 / 订阅 / 观察记录 / 投递认领与结算围栏 / 分页读模型 / 取消订阅', async () => {
-    const db: ProviderNeutralDatabase = harness.db
+    const db: PersistenceDb = harness.db
     const store = createEventStore(db)
     const tag = ulid().toLowerCase()
     const { source, eventType, observation } = fixtures(tag)
@@ -208,7 +208,7 @@ describeEachProvider('RFC-359 W4-B6b —— 事件存储', (harness) => {
   })
 
   test('观察者激活：认领到期扫描（从未扫过的排最前）、结算写游标、nudge 提前唤醒', async () => {
-    const db: ProviderNeutralDatabase = harness.db
+    const db: PersistenceDb = harness.db
     const store = createEventStore(db)
     const tag = ulid().toLowerCase()
     const { source, eventType, observation } = fixtures(tag)

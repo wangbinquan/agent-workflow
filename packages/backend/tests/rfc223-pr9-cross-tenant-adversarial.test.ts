@@ -10,6 +10,9 @@
 //
 // Existing strong coverage is intentionally not duplicated:
 //   - portable import 0/1/N + stale mapping: rfc223-import-refs.test.ts
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 //   - five-type transfer collision + workflow exception:
@@ -32,7 +35,6 @@ import {
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { docVersions, mcps, memories, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
 import { createAgent, renameAgent } from '../src/services/agent'
 import {
@@ -106,7 +108,8 @@ const ADMIN_ACTOR: Actor = {
 }
 
 async function seedUser(db: DbClient, id: string): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -152,11 +155,10 @@ async function checkedGit(cwd: string, args: string[]): Promise<void> {
 async function waitForTaskTerminal(db: DbClient, taskId: string): Promise<string> {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    const row = await db
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get()
+    const { tasks } = tablesOf(db)
+    const row = await first(
+      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)),
+    )
     if (row !== undefined && ['done', 'failed', 'canceled', 'interrupted'].includes(row.status)) {
       return row.status
     }
@@ -195,20 +197,19 @@ process.exit(1)
 
 function approvedGlobalMemory(db: DbClient, title: string): string {
   const id = ulid()
-  db.insert(memories)
-    .values({
-      id,
-      scopeType: 'global',
-      scopeId: null,
-      title,
-      bodyMd: `body of ${title}`,
-      tags: '[]',
-      status: 'approved',
-      sourceKind: 'manual',
-      createdAt: Date.now(),
-      version: 1,
-    })
-    .run()
+  const { memories } = tablesOf(db)
+  insertOne(db, memories, {
+    id,
+    scopeType: 'global',
+    scopeId: null,
+    title,
+    bodyMd: `body of ${title}`,
+    tags: '[]',
+    status: 'approved',
+    sourceKind: 'manual',
+    createdAt: Date.now(),
+    version: 1,
+  })
   return id
 }
 
@@ -285,13 +286,14 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         outputs: [],
       }
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, tasks } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'frozen-id',
         definition: JSON.stringify(definition),
       })
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'frozen-id',
         workflowId,
@@ -319,8 +321,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       process.env.MOCK_OPENCODE_OUTPUTS = JSON.stringify({ out: 'done' })
       process.env.MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO = capturePath
       await createResumeEngine(db, {
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         runConfig: {
           db,
           appHome,
@@ -428,6 +429,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           changelog: 'A only',
         }),
       )
+      const { tasks, memories } = tablesOf(db)
       await db
         .update(tasks)
         .set({ status: 'done', finishedAt: Date.now() })
@@ -454,14 +456,15 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         'TENANT_B_SKILL',
       )
       expect(
-        await db
-          .select({
-            status: memories.status,
-            skillId: memories.fusedIntoSkillId,
-          })
-          .from(memories)
-          .where(eq(memories.id, memoryId))
-          .get(),
+        await first(
+          db
+            .select({
+              status: memories.status,
+              skillId: memories.fusedIntoSkillId,
+            })
+            .from(memories)
+            .where(eq(memories.id, memoryId)),
+        ),
       ).toEqual({ status: 'fused', skillId: skillA.id })
 
       await restoreSkillVersion(
@@ -474,14 +477,15 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         'PR-9 restore',
       )
       expect(
-        await db
-          .select({
-            status: memories.status,
-            skillId: memories.fusedIntoSkillId,
-          })
-          .from(memories)
-          .where(eq(memories.id, memoryId))
-          .get(),
+        await first(
+          db
+            .select({
+              status: memories.status,
+              skillId: memories.fusedIntoSkillId,
+            })
+            .from(memories)
+            .where(eq(memories.id, memoryId)),
+        ),
       ).toEqual({ status: 'approved', skillId: null })
       expect((await getSkillVersionContent(db, fsOpts, skillB.id, 1)).content.bodyMd).toContain(
         'TENANT_B_SKILL',
@@ -497,14 +501,15 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     await seedUser(db, 'owner-b')
     const mcpA = ulid()
     const mcpB = ulid()
-    await db.insert(mcps).values({
+    const { mcps } = tablesOf(db)
+    await insertOne(db, mcps, {
       id: mcpA,
       name: 'shared-mcp',
       ownerUserId: 'owner-a',
       type: 'local',
       config: JSON.stringify({ command: ['tenant-a-command'] }),
     })
-    await db.insert(mcps).values({
+    await insertOne(db, mcps, {
       id: mcpB,
       name: 'shared-mcp',
       ownerUserId: 'owner-b',
@@ -513,7 +518,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     })
     const app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: TOKEN,
@@ -599,13 +604,14 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       outputs: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'review-id-isolation',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'review-id-isolation',
       workflowId,
@@ -619,7 +625,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       startedAt: Date.now(),
     })
     const reviewNodeRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewNodeRunId,
       taskId,
       nodeId: 'review-proposal',
@@ -629,7 +635,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       reviewIteration: 0,
       startedAt: Date.now(),
     })
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: ulid(),
       taskId,
       reviewNodeId: 'review-proposal',
@@ -684,13 +690,14 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       outputs: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'borrow-id-isolation',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'borrow-id-isolation',
       workflowId,
@@ -703,7 +710,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'home',

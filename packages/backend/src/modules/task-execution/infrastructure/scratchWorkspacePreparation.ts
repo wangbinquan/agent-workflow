@@ -1,8 +1,8 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { preparedArtifactLane } from './workspaceLaunchLane'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -16,11 +16,12 @@ export function scratchAdmissionPrefix(appHome: string): string {
 }
 
 async function assertUnbound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   states: readonly WorkspacePreparationState[],
 ) {
   const plan = await createWorkspacePreparationJournal(db).read(taskId)
+  const { tasks } = tablesOf(db)
   if (
     plan === null ||
     plan.operationRef !== null ||
@@ -38,7 +39,7 @@ async function assertUnbound(
 }
 
 export async function compensateScratchWorkspace(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   taskId: string
 }) {
@@ -95,7 +96,7 @@ export async function compensateScratchWorkspace(input: {
 
 /** A scratch artifact has no repository source or SC repository operation. */
 export async function prepareScratchWorkspace(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   appHome: string
   taskId: string
@@ -151,7 +152,7 @@ export async function prepareScratchWorkspace(input: {
     })
     return {
       space,
-      async admit(tx: ProviderNeutralDatabase) {
+      async admit(tx: PersistenceDb) {
         const current = await assertUnbound(tx, input.taskId, ['prepared'])
         if (
           (await createWorkspacePreparationJournal(tx).advance({

@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect } from 'bun:test'
 import { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { webhookDeliveries } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeCrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
 import {
   CREWSTATION_CODE_HOST_EVENTS,
@@ -19,7 +19,7 @@ import type {
  * itself still requires separate deployment acceptance. No Case or Reaction
  * rows are seeded here. The caller continues through the ordinary OS worker. */
 export async function receiveCrewStationSystemMockIssue(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   payload: Record<string, unknown>
   observe: (observation: EventObservationInput) => Promise<EventObservationReceipt>
 }): Promise<{ deliveryId: string; status: 'received' }> {
@@ -83,6 +83,7 @@ export async function receiveCrewStationSystemMockIssue(input: {
       body: JSON.stringify({ ...delivery, attempt }),
     })
   expect((await deliver(1)).status).toBe(204)
+  const { webhookDeliveries } = tablesOf(input.db)
   // ACK is durable intake, not business execution. A reconstructed worker must
   // route it without relying on the receiving process's memory.
   expect(await input.db.select().from(webhookDeliveries)).toHaveLength(0)

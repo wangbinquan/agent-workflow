@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-303 runtime ownership locks: a durable terminal fact must stop the exact
 // attached driver, wait for its finally/reap receipt, and reject forged effect
@@ -5,7 +8,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import { nodeRuns, tasks, webhookMrLaunchGuards, webhookMrStreamStates } from '@/db/schema'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { InMemoryWebhookLaunchSupervisor } from '@/modules/integration/infrastructure/inMemoryWebhookLaunchSupervisor'
 import { createMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
@@ -175,7 +177,8 @@ describe('RFC-303 source termination capability', () => {
       // later cancellation callback correctly lost the owner fence, so the row
       // stayed `running` forever even though the task and process were canceled.
       const db = harness.db
-      await db.insert(tasks).values({
+      const { tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, tasks, {
         id: 'task-source-node-projection',
         executionLineageId: 'task-source-node-projection',
         lineageSlotPathJson:
@@ -233,19 +236,19 @@ describe('RFC-303 source termination capability', () => {
           .select({ id: nodeRuns.id, status: nodeRuns.status })
           .from(nodeRuns)
           .where(eq(nodeRuns.taskId, 'task-source-node-projection'))
-          .orderBy(nodeRuns.id)
-          .all(),
+          .orderBy(nodeRuns.id),
       ).toEqual([
         { id: 'run-source-done', status: 'done' },
         { id: 'run-source-live', status: 'canceled' },
       ])
       expect(
         (
-          await db
-            .select({ status: tasks.status })
-            .from(tasks)
-            .where(eq(tasks.id, 'task-source-node-projection'))
-            .get()
+          await first(
+            db
+              .select({ status: tasks.status })
+              .from(tasks)
+              .where(eq(tasks.id, 'task-source-node-projection')),
+          )
         )?.status,
       ).toBe('canceled')
     })
@@ -255,7 +258,8 @@ describe('RFC-303 source termination capability', () => {
 describeEachProvider('RFC-303 protected launch guard', (harness) => {
   test('terminal revision revokes the pre-task owner and both admission gates fail closed', async () => {
     const db = harness.db
-    await db.insert(webhookMrStreamStates).values({
+    const { webhookMrStreamStates, webhookMrLaunchGuards } = tablesOf(db)
+    await insertOne(db, webhookMrStreamStates, {
       endpointId: 'endpoint-1',
       streamKey: 'gitlab:77:9',
       projectId: '77',
@@ -309,7 +313,8 @@ describeEachProvider('RFC-303 protected launch guard', (harness) => {
 
   test('reservation after a terminal fact is rejected before an owner is registered', async () => {
     const db = harness.db
-    await db.insert(webhookMrStreamStates).values({
+    const { webhookMrStreamStates } = tablesOf(db)
+    await insertOne(db, webhookMrStreamStates, {
       endpointId: 'endpoint-1',
       streamKey: 'gitlab:77:9',
       projectId: '77',

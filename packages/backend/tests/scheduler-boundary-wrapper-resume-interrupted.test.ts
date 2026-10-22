@@ -1,4 +1,6 @@
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // Regression: resuming a wrapper node from 'interrupted' (post daemon restart)
 // throws ConflictError -> runTask rejects -> task stuck status='running'.
@@ -34,9 +36,8 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -45,7 +46,7 @@ import {
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -65,12 +66,13 @@ function buildHarness(provider: ProviderHarness): Harness {
   }
 }
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -90,14 +92,15 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -145,7 +148,8 @@ async function seedInterruptedWrapperRun(
 ): Promise<string> {
   const wrapperRunId = ulid()
   const now = Date.now()
-  await h.db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(h.db)
+  await insertOne(h.db, nodeRuns, {
     id: wrapperRunId,
     taskId,
     nodeId: wrapperNodeId,
@@ -218,6 +222,7 @@ function registerCases(provider: ProviderHarness) {
       threw = true
     })
 
+    const { tasks } = tablesOf(h.db)
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(finalTask?.status).not.toBe('running')
     expect(threw).toBe(false)
@@ -250,6 +255,7 @@ function registerCases(provider: ProviderHarness) {
       threw = true
     })
 
+    const { tasks } = tablesOf(h.db)
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(finalTask?.status).not.toBe('running')
     expect(threw).toBe(false)
@@ -305,6 +311,7 @@ function registerCases(provider: ProviderHarness) {
       threw = true
     })
 
+    const { tasks } = tablesOf(h.db)
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(finalTask?.status).not.toBe('running')
     expect(threw).toBe(false)

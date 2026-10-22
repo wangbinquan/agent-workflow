@@ -1,9 +1,9 @@
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { taskExecutionIntents } from '../../src/db/schema'
 import {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
@@ -31,7 +31,7 @@ export type ProviderTaskExecutionTestRunOptions = Omit<
   | 'repositoryPublicationTransport'
   | 'executionContext'
   | 'signal'
-> & { readonly db: ProviderNeutralDatabase }
+> & { readonly db: PersistenceDb }
 
 export interface ProviderTaskExecutionTestTopology {
   runTask(options: ProviderTaskExecutionTestRunOptions): Promise<void>
@@ -75,6 +75,7 @@ export async function createProviderTaskExecutionTestTopology(
         const { db, taskId, ...runConfig } = options
         if (db !== binding.db) throw new Error('task fixture database mismatch')
         const provider = selected.selected
+        const { taskExecutionIntents } = tablesOf(binding.db)
         // A task launched through the production kernel with a recording coordinator
         // still holds its pending launch intent; drive that one, as the real
         // coordinator would, instead of submitting a conflicting continuation.

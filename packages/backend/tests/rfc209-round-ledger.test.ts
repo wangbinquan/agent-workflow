@@ -17,6 +17,7 @@
 //      硬编码 `round: 0`，且所有 `insert(workgroupMessages)` 都经构造器。
 
 import { describe, expect, test } from 'bun:test'
+import ts from 'typescript'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 // RFC-359 W4-D19c-tail：判据改指生产那份——回合账本的推法住在中立的房间投影里，
@@ -349,13 +350,54 @@ describe('RFC-209 §1.3 — 路由层不再硬编码 round: 0', () => {
       ),
       'utf8',
     )
-    const inserts = COMMANDS.split('insert(workgroupMessages)').length - 1
-    expect(inserts).toBeGreaterThanOrEqual(4)
-    // round 只有两个合法来源：房间账本解析出来的当前回合，或派单卡自己的那一轮。
-    const fromLedger = COMMANDS.split('round: await messageRound(').length - 1
-    const fromAssignment = COMMANDS.split('round: assignment.round').length - 1
-    const fromResolvedLocal = COMMANDS.split('\n          round,\n').length - 1
-    expect(fromLedger + fromAssignment + fromResolvedLocal).toBe(inserts)
+    const source = ts.createSourceFile('commands.ts', COMMANDS, ts.ScriptTarget.Latest, true)
+    const rounds: string[] = []
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        let values: ts.Expression | undefined
+        if (
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === 'insertOne' &&
+          node.arguments[1]?.getText(source) === 'workgroupMessages'
+        )
+          values = node.arguments[2]
+        else if (
+          ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === 'values'
+        ) {
+          const receiver = node.expression.expression
+          if (
+            ts.isCallExpression(receiver) &&
+            ts.isPropertyAccessExpression(receiver.expression) &&
+            receiver.expression.name.text === 'insert' &&
+            receiver.arguments[0]?.getText(source) === 'workgroupMessages'
+          )
+            values = node.arguments[0]
+        }
+        if (values) {
+          if (!ts.isObjectLiteralExpression(values))
+            throw new Error('message values must declare their round')
+          const round = values.properties.find(
+            (property) => property.name?.getText(source) === 'round',
+          )
+          rounds.push(
+            round && ts.isPropertyAssignment(round)
+              ? round.initializer.getText(source)
+              : round && ts.isShorthandPropertyAssignment(round)
+                ? round.name.text
+                : '<missing>',
+          )
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+    expect(rounds).toHaveLength(5)
+    for (const round of rounds)
+      expect(round).toMatch(
+        /^(?:round|assignment\.round|await messageRound\(participant, input\.taskId, loaded\.config\.mode\))$/,
+      )
+    expect(COMMANDS).toContain('const round = await messageRound(')
     expect(COMMANDS.split('round: 0').length - 1).toBe(0)
   })
 })

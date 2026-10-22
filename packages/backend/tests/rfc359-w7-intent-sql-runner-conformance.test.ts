@@ -13,10 +13,11 @@
 //     （SQLite 的原生 `db.get(SQLWrapper)` 回的是位置元组，所以中立实现取 `all(query)[0]`）;
 //   · `mutation` 的受影响行数，以及事务体抛错时整笔回滚。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { users } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { IntentContextResourceAuthorityPair } from '@/modules/intent/application/ports/intentPersistence'
 import {
@@ -106,7 +107,8 @@ function recordingFactory(
 }
 
 async function seedUser(harness: ProviderHarness, id: string): Promise<void> {
-  await harness.db.insert(users).values({
+  const { users } = tablesOf(harness.db)
+  await insertOne(harness.db, users, {
     id,
     username: id,
     displayName: id,
@@ -117,14 +119,19 @@ async function seedUser(harness: ProviderHarness, id: string): Promise<void> {
   })
 }
 
-function* readUser(id: string): IntentSqlProgram<{ readonly displayName: string } | null> {
+function* readUser(
+  db: object,
+  id: string,
+): IntentSqlProgram<{ readonly displayName: string } | null> {
+  const { users } = tablesOf(db)
   return yield* firstRow<{ readonly displayName: string }>(sql`
     SELECT ${users.displayName} AS "displayName" FROM ${users}
     WHERE ${users.id} = ${id} LIMIT 1
   `)
 }
 
-function* renameUser(id: string, displayName: string): IntentSqlProgram<number> {
+function* renameUser(db: object, id: string, displayName: string): IntentSqlProgram<number> {
+  const { users } = tablesOf(db)
   return yield* mutation(sql`
     UPDATE ${users} SET ${sql.identifier(users.displayName.name)} = ${displayName}
     WHERE ${users.id} = ${id}
@@ -136,12 +143,12 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
     await seedUser(harness, 'runner-read-hit')
     const runner = new PlainIntentSqlProgramRunner(harness.db)
 
-    await expect(runner.read(() => readUser('runner-read-hit'))).resolves.toEqual({
+    await expect(runner.read(() => readUser(runner.db, 'runner-read-hit'))).resolves.toEqual({
       displayName: 'runner-read-hit',
     })
     // SQLite 的原生 get(SQLWrapper) 会回 ["runner-read-hit"]；命中这一条就说明中立实现
     // 用错了取行方式，Intent 的每个具名字段都会变成 undefined。
-    await expect(runner.read(() => readUser('runner-read-miss'))).resolves.toBeNull()
+    await expect(runner.read(() => readUser(runner.db, 'runner-read-miss'))).resolves.toBeNull()
   })
 
   test('allRows 与 mutation：读到全部行、写回受影响行数', async () => {
@@ -150,6 +157,7 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
     const runner = new PlainIntentSqlProgramRunner(harness.db)
 
     const ids = await runner.read(function* () {
+      const { users } = tablesOf(runner.db)
       const rows = yield* allRows<{ readonly id: string }>(sql`
         SELECT ${users.id} AS "id" FROM ${users}
         WHERE ${users.id} LIKE ${'runner-rows-%'} ORDER BY ${users.id}
@@ -160,15 +168,15 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
 
     await expect(
       runner.transaction(function* () {
-        return yield* renameUser('runner-rows-a', 'renamed')
+        return yield* renameUser(runner.db, 'runner-rows-a', 'renamed')
       }),
     ).resolves.toBe(1)
-    await expect(runner.read(() => readUser('runner-rows-a'))).resolves.toEqual({
+    await expect(runner.read(() => readUser(runner.db, 'runner-rows-a'))).resolves.toEqual({
       displayName: 'renamed',
     })
     await expect(
       runner.transaction(function* () {
-        return yield* renameUser('runner-rows-missing', 'renamed')
+        return yield* renameUser(runner.db, 'runner-rows-missing', 'renamed')
       }),
     ).resolves.toBe(0)
   })
@@ -179,12 +187,12 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
 
     await expect(
       runner.transaction(function* () {
-        yield* renameUser('runner-rollback', 'half-written')
+        yield* renameUser(runner.db, 'runner-rollback', 'half-written')
         throw new Error('program failed after its write')
       }),
     ).rejects.toThrow('program failed after its write')
 
-    await expect(runner.read(() => readUser('runner-rollback'))).resolves.toEqual({
+    await expect(runner.read(() => readUser(runner.db, 'runner-rollback'))).resolves.toEqual({
       displayName: 'runner-rollback',
     })
   })
@@ -231,13 +239,13 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
           resourceType: 'skill',
           resourceId: 'skill-visible',
         })
-        return yield* renameUser('runner-lazy', 'authorized')
+        return yield* renameUser(runner.db, 'runner-lazy', 'authorized')
       }),
     ).resolves.toBe(1)
     expect(factory.calls()).toEqual({ factory: 1, loads: 2 })
 
     await runner.transaction(function* () {
-      return yield* readUser('runner-lazy')
+      return yield* readUser(runner.db, 'runner-lazy')
     })
     expect(factory.calls(), '没有授权语句的事务不该铸会话').toEqual({ factory: 1, loads: 2 })
   })
@@ -270,7 +278,7 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
     await expect(
       runner.transaction(function* () {
         yield* authorizeIntentContextResource(authorization(authorityPair()), REFERENCE)
-        yield* renameUser('runner-mixed', 'mixed')
+        yield* renameUser(runner.db, 'runner-mixed', 'mixed')
         // 第二个 pair 是**另一个对象**：换 authority 就换了鉴权主体，同一笔事务不认。
         return yield* authorizeIntentContextResource(authorization(authorityPair()), REFERENCE)
       }),
@@ -278,7 +286,7 @@ describeEachProvider('RFC-359 W7 Intent SQL runner', (harness) => {
 
     expect(factory.calls().factory, '第二个 authority 不该再铸一个会话').toBe(1)
     await expect(
-      new PlainIntentSqlProgramRunner(harness.db).read(() => readUser('runner-mixed')),
+      new PlainIntentSqlProgramRunner(harness.db).read(() => readUser(runner.db, 'runner-mixed')),
     ).resolves.toEqual({ displayName: 'runner-mixed' })
   })
 })

@@ -12,13 +12,14 @@
 //          不丢已 seal 的 scope（P2-2/P2-3）。旧「一次性 seal == legacy 整轮 submit 逐字一致」
 //          对比锁随 legacy immediate 路径一起删除（RFC-132 §8——有意行为变更，非回归）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { listTaskQuestions } from '../src/services/taskQuestions'
@@ -83,13 +84,11 @@ function crossDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  def: WorkflowDefinition,
-): Promise<{ taskId: string }> {
+async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -97,7 +96,7 @@ async function seedTask(
     version: 1,
     schemaVersion: def.$schema_version,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,
@@ -119,12 +118,13 @@ async function seedTask(
 
 /** Seed a self clarify round with the given questions; returns its origin node-run id. */
 async function seedSelfRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
   const sourceRunId = `nr_src_${Math.random().toString(36).slice(2, 8)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -149,11 +149,12 @@ async function seedSelfRound(
 
 /** Seed a cross clarify round; returns its origin node-run id. */
 async function seedCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
   const questionerRunId = `nr_q_${Math.random().toString(36).slice(2, 8)}`
+  const { nodeRuns } = tablesOf(db)
   await db.insert(nodeRuns).values([
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     {
@@ -179,7 +180,8 @@ async function seedCrossRound(
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
-function roundOf(db: ProviderNeutralDatabase, taskId: string) {
+function roundOf(db: PersistenceDb, taskId: string) {
+  const { clarifyRounds } = tablesOf(db)
   return db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
 }
 
@@ -259,6 +261,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const [round] = await roundOf(db, taskId)
       expect(round?.status).toBe('answered')
       expect(round?.answeredAt).not.toBeNull()
+      const { clarifyRounds } = tablesOf(db)
       // dual-write: legacy clarify_sessions 同步翻 answered + 同一 answers_json。
       const [legacy] = await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round!.id))
       expect(legacy?.status).toBe('answered')
@@ -373,6 +376,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
     test('seal 失败（terminal round）整体回滚——answers_json 不被部分写入', async () => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
+      const { clarifyRounds } = tablesOf(db)
       // Force the round terminal so the in-tx guard throws AFTER nothing has committed.
       await db
         .update(clarifyRounds)

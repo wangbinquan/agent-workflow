@@ -7,11 +7,12 @@
 //     subjectClaim mismatch rolls back BOTH (no identity-less active users,
 //     no half-activated invites).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { userIdentities, users } from '../src/db/schema'
 import {
   bindInvitedUserWithIdentity as bindInvitedUserWithIdentityService,
   createIdentity as createIdentityService,
@@ -81,7 +82,8 @@ async function seedUser(
   email: string | null = null,
   gitName: string = displayName,
 ) {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id}`,
     email,
@@ -100,6 +102,7 @@ async function seedUser(
 }
 
 async function emailOf(db: DbClient, userId: string): Promise<string | null> {
+  const { users } = tablesOf(db)
   const rows = await db
     .select({ email: users.email })
     .from(users)
@@ -109,16 +112,19 @@ async function emailOf(db: DbClient, userId: string): Promise<string | null> {
 }
 
 async function displayNameOf(db: DbClient, userId: string): Promise<string> {
+  const { users } = tablesOf(db)
   const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1)
   return rows[0]!.displayName
 }
 
 async function gitNameOf(db: DbClient, userId: string): Promise<string> {
+  const { users } = tablesOf(db)
   const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1)
   return rows[0]!.gitName
 }
 
 async function snapshotOf(db: DbClient, providerId: string, subject: string) {
+  const { userIdentities } = tablesOf(db)
   const rows = await db
     .select()
     .from(userIdentities)
@@ -155,6 +161,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
 
   test('unchanged IdP values still replace later in-app edits', async () => {
     await seedIdentity('zhang hello')
+    const { users } = tablesOf(db)
     await db
       .update(users)
       .set({ displayName: 'My Custom Name', gitName: 'My Git Name' })
@@ -182,6 +189,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
     expect(await displayNameOf(db, 'u1')).toBe('zhang 新签名')
     expect(await gitNameOf(db, 'u1')).toBe('Zhang Wei')
     expect((await snapshotOf(db, providerId, 's1'))!.preferredSnapshot).toBe('zhang 新签名')
+    const { users } = tablesOf(db)
     // the users.updatedAt stamp moved with it (same transaction)
     const row = await db.select().from(users).where(eq(users.id, 'u1')).limit(1)
     expect(row[0]!.updatedAt).toBeGreaterThan(0)
@@ -203,6 +211,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
 
   test('identical values are idempotent and avoid an account update', async () => {
     await seedIdentity('zhang hello')
+    const { users } = tablesOf(db)
     await db
       .update(users)
       .set({ displayName: 'zhang hello', gitName: 'Zhang Git', updatedAt: 11 })
@@ -371,7 +380,8 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
     })
     expect(await emailOf(db, 'linked')).toBe('linked@example.test')
 
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'invited',
       username: 'invited',
       email: null,
@@ -441,6 +451,7 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
 
   test('createUserWithIdentity is atomic: a config mismatch leaves NO user row behind', async () => {
     const provider = await makeProvider(db, 'id')
+    const { users } = tablesOf(db)
     const before = (await db.select().from(users)).length
     const auditsBefore = db.$client.query('SELECT COUNT(*) AS n FROM user_access_audit').get() as {
       n: number
@@ -470,7 +481,8 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
 
   test('bindInvitedUserWithIdentity is atomic: mismatch keeps the invite intact', async () => {
     const provider = await makeProvider(db, 'id')
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'inv1',
       username: 'invited',
       email: 'inv@corp.test',

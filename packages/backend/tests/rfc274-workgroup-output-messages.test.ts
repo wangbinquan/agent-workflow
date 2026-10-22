@@ -1,3 +1,4 @@
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -54,14 +55,18 @@ describe('RFC-274 workgroup output contract', () => {
   // 「SQLite 迁移链有没有把这两列建成期望的样子」，换成双引擎等于换了一个问题。
   test('migration adds the resource contract and nullable message metadata', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const workgroupColumns = db.all<{ name: string; dflt_value: string | null; notnull: number }>(
+    const workgroupColumns = rawRows<{ name: string; dflt_value: string | null; notnull: number }>(
+      db,
       sql`SELECT name, dflt_value, "notnull" FROM pragma_table_info('workgroups')`,
+      { notnull: 'int' },
     )
     const output = workgroupColumns.find((column) => column.name === 'output_contract')
     expect(output).toMatchObject({ dflt_value: "'files'", notnull: 1 })
 
-    const messageColumns = db.all<{ name: string; notnull: number }>(
+    const messageColumns = rawRows<{ name: string; notnull: number }>(
+      db,
       sql`SELECT name, "notnull" FROM pragma_table_info('workgroup_messages')`,
+      { notnull: 'int' },
     )
     expect(messageColumns.find((column) => column.name === 'template_key')?.notnull).toBe(0)
     expect(messageColumns.find((column) => column.name === 'template_params_json')?.notnull).toBe(0)

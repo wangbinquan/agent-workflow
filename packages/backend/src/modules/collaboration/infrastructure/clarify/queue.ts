@@ -16,10 +16,10 @@
 // PR-1 lands it UNWIRED (no caller): the two legacy injectors are untouched. PR-2 (T3) drops it in
 // and deletes the fork.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRuns, taskQuestions } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isTargetNodeConsumed } from './rerunLedger'
 import { createLogger } from '@/util/log'
 import {
@@ -35,7 +35,7 @@ import { runIdsWithOutput } from '../nodeRunOutputPresence'
 const log = createLogger('clarify-queue')
 
 export interface SelectAgentQueueArgs {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   /** The running agent node. Its "agent queue" = task_questions projected to it by
    *  effectiveTarget (override_target_node_id ?? default_target_node_id). */
@@ -110,6 +110,7 @@ export interface AgentQueueEntry {
 export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<AgentQueueEntry[]> {
   const { db, taskId, consumerNodeId, dispatchedRunId, shardKey, currentRunOnly = false } = args
 
+  const { taskQuestions, nodeRuns, clarifyRounds } = tablesOf(db)
   // 1. All DISPATCHED entries whose EFFECTIVE TARGET (override ?? default) is this node — every role
   //    in one query. RFC-131 T4 去借壳: select by the target the rerun is minted on (a reassign
   //    moves the run to the target node), not the origin home — reading the origin would miss a
@@ -275,11 +276,12 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
  * actually bound.
  */
 export async function bindTriggerRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   entryIds: string[],
   dispatchedRunId: string,
 ): Promise<string[]> {
   if (entryIds.length === 0) return []
+  const { taskQuestions } = tablesOf(db)
   const toBind = await db
     .select({ id: taskQuestions.id })
     .from(taskQuestions)
@@ -323,7 +325,7 @@ export interface ClarifyQueueContext {
 }
 
 export interface BuildClarifyQueueContextArgs {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /** Reserved (design §2 contract) — selection needs no definition; kept for forward-compat. */
   definition: WorkflowDefinition
   taskId: string

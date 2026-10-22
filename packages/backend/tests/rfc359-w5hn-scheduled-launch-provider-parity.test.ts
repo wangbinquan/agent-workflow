@@ -15,12 +15,12 @@
 //
 // 判据形状照抄前两条：**拒绝清单**（把逐次必然不同的那几格摘掉、其余整行都比）
 // + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { tasks } from '@/db/schema'
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -221,6 +221,7 @@ describeEachProviderHttpApplication(
       expect(task['workflowId'], '工作流定时必须挂在被选中的工作流上').toBe(workflow.id)
 
       const comparable = comparableTask(task)
+      const { tasks } = tablesOf(scope.harness.db)
       const row = (
         await scope.harness.db
           .select()
@@ -273,6 +274,7 @@ describeEachProviderHttpApplication(
       expect(task['sourceAgentId'], '单代理定时必须记下发起它的 agent').toBe(agent.id)
 
       const comparable = comparableTask(task)
+      const { tasks } = tablesOf(scope.harness.db)
       const row = (
         await scope.harness.db
           .select()
@@ -347,6 +349,7 @@ describeEachProviderHttpApplication(
         (comparable['workflowSnapshot'] as { edgeCount: number }).edgeCount,
         '宿主边扫成 0 ⇒ 比较面失效',
       ).toBeGreaterThan(0)
+      const { tasks } = tablesOf(scope.harness.db)
       const row = (
         await scope.harness.db
           .select()

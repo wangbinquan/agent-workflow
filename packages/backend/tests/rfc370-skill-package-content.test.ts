@@ -1,9 +1,9 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { skills } from '@/db/schema'
 import type { SkillContentReference } from '@/modules/resource-catalog/application/skills/contentReader'
 import type { SkillPackageContentReader } from '@/modules/resource-catalog/application/skills/packageContentReader'
 import { composeResourcePackageProvider } from '@/modules/resource-catalog/composition/resourcePackageProvider'
@@ -75,6 +75,7 @@ describeEachProvider('RFC-370 skill package content', (harness) => {
         }),
       ])
       expect(references).toEqual([{ id: skillId, name: 'package-content', contentVersion: 1 }])
+      const { skills } = tablesOf(harness.db)
       await harness.db
         .update(skills)
         .set({ name: 'renamed-package', contentVersion: 2 })
@@ -110,6 +111,7 @@ describeEachProvider('RFC-370 skill package content', (harness) => {
     await expect(provider.readSkillTree('missing-skill')).rejects.toMatchObject({
       code: 'package-invalid',
     })
+    const { skills } = tablesOf(harness.db)
     await harness.db
       .update(skills)
       .set({ reservationState: 'reserving' })

@@ -8,6 +8,8 @@
 //   在跑的旧 round：由旧路径启动、从没 admission 过、也没有派发行。inspect 照常（TE 放宽核对，
 //        见 rfc368-reaction-execution-adapter），失败重试时补建派发行。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
@@ -21,7 +23,6 @@ import {
   scriptedPort,
   seedReaction,
 } from './helpers/rfc368ReactionFixture'
-import { employeeOsOutbox } from '@/db/schema'
 import type { ReactionDiagnosticsRef } from '@/modules/digital-employee/composition/required-ports'
 import { sanitizeReactionText } from '@/modules/digital-employee/domain/reactionArtifacts'
 import { createReactionArtifactPersistence } from '@/modules/digital-employee/infrastructure/reactionArtifactStore'
@@ -39,26 +40,24 @@ describe('RFC-368 刀 3 —— 切换期存量', () => {
       readonly state: 'pending' | 'claimed'
       readonly previousError: string | null
     }): Promise<void> {
-      await harness.db
-        .insert(employeeOsOutbox)
-        .values({
-          id: input.id,
-          caseId: REACTION_CASE,
-          kind: 'execution-launch',
-          payloadJson: JSON.stringify({
-            roundId: input.roundId,
-            plan: JSON.parse(reactionPlanJson({ maxTotalTokens: 500 })) as unknown,
-            attempt: { ordinal: 1, mode: 'same-scene', previousError: input.previousError },
-          }),
-          dedupeKey: `execution-launch:${input.roundId}:1`,
-          state: input.state,
-          attemptCount: 1,
-          nextAttemptAt: 0,
-          lastError: 'previous dispatch error',
-          createdAt: 1,
-          updatedAt: 1,
-        })
-        .run()
+      const { employeeOsOutbox } = tablesOf(harness.db)
+      await insertOne(harness.db, employeeOsOutbox, {
+        id: input.id,
+        caseId: REACTION_CASE,
+        kind: 'execution-launch',
+        payloadJson: JSON.stringify({
+          roundId: input.roundId,
+          plan: JSON.parse(reactionPlanJson({ maxTotalTokens: 500 })) as unknown,
+          attempt: { ordinal: 1, mode: 'same-scene', previousError: input.previousError },
+        }),
+        dedupeKey: `execution-launch:${input.roundId}:1`,
+        state: input.state,
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        lastError: 'previous dispatch error',
+        createdAt: 1,
+        updatedAt: 1,
+      })
     }
 
     test('T5b：在途行搬成派发行、反馈与预算不丢，旧 outbox 臂不碰它', async () => {
@@ -100,12 +99,12 @@ describe('RFC-368 刀 3 —— 切换期存量', () => {
       expect(JSON.parse(rows.round.planJson).maxTotalTokens).toBe(500)
       // 领取时尝试次数在平移来的 1 之上 +1。
       expect(rows.dispatch).toMatchObject({ dispatchAttempts: 2 })
+      const { employeeOsOutbox } = tablesOf(harness.db)
       expect(
         await harness.db
           .select()
           .from(employeeOsOutbox)
-          .where(eq(employeeOsOutbox.id, 'legacy-launch'))
-          .all(),
+          .where(eq(employeeOsOutbox.id, 'legacy-launch')),
       ).toEqual([])
     })
 
@@ -128,7 +127,8 @@ describe('RFC-368 刀 3 —— 切换期存量', () => {
         'idle',
       )
       expect(port.launches).toEqual([])
-      expect(await harness.db.select().from(employeeOsOutbox).all()).toEqual([])
+      const { employeeOsOutbox } = tablesOf(harness.db)
+      expect(await harness.db.select().from(employeeOsOutbox)).toEqual([])
     })
 
     test('旧路径启动的在跑 round：照常 inspect，失败重试时补建派发行', async () => {

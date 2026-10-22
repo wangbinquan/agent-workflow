@@ -10,30 +10,23 @@
 //
 // 对应 design.md §2.1 / §4 与 proposal.md 的 AC-3 / AC-4 / AC-7 / AC-8 / AC-14。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  collaborationGateOperations,
-  nodeRunEvents,
-  nodeRuns,
-  recoveryEvents,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskIdleTimeoutPersistence } from '../src/modules/task-execution/composition/taskIdleTimeout'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const HOUR = 3_600_000
 const NOW = 1_788_278_400_000
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 async function seedBase(db: Db): Promise<void> {
-  await db.insert(users).values({
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -41,7 +34,7 @@ async function seedBase(db: Db): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 interface TaskSeed {
@@ -63,7 +56,8 @@ interface TaskSeed {
 }
 
 async function addTask(db: Db, seed: TaskSeed): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -85,7 +79,7 @@ async function addTask(db: Db, seed: TaskSeed): Promise<void> {
     ...(seed.deletedAt === undefined ? {} : { deletedAt: seed.deletedAt }),
     ...(seed.errorSummary === undefined ? {} : { errorSummary: seed.errorSummary }),
   })
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -105,7 +99,8 @@ async function addRun(
     eventTs?: readonly number[]
   },
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: input.id,
     taskId: input.taskId,
     nodeId: 'n1',
@@ -116,7 +111,7 @@ async function addRun(
     spawnLaunchNonce: 'nonce',
   })
   for (const ts of input.eventTs ?? []) {
-    await db.insert(nodeRunEvents).values({ nodeRunId: input.id, ts, kind: 'text', payload: 'x' })
+    await insertOne(db, nodeRunEvents, { nodeRunId: input.id, ts, kind: 'text', payload: 'x' })
   }
 }
 
@@ -124,7 +119,8 @@ async function addGateDecision(
   db: Db,
   input: { taskId: string; committedAt: number | null; operationKind?: 'decide' | 'open' },
 ): Promise<void> {
-  await db.insert(collaborationGateOperations).values({
+  const { collaborationGateOperations } = tablesOf(db)
+  await insertOne(db, collaborationGateOperations, {
     id: `gate-${input.taskId}-${input.committedAt ?? 'null'}-${input.operationKind ?? 'decide'}`,
     taskId: input.taskId,
     gateKind: 'review',
@@ -351,6 +347,7 @@ describeEachProvider('RFC-350 收割写入', (harness) => {
     }
     // 返回值就是「这一行是不是被本次收割认领了」——审计只在 true 时才写。
     expect(claimed).toEqual({ ours: true, theirs: false, running: false })
+    const { tasks } = tablesOf(db)
     const rows = await db.select({ id: tasks.id, errorSummary: tasks.errorSummary }).from(tasks)
     const byId = new Map(rows.map((r) => [r.id, r.errorSummary]))
     expect(byId.get('ours')).toBe('task-idle-timeout')
@@ -371,6 +368,7 @@ describeEachProvider('RFC-350 收割写入', (harness) => {
       killOutcomes: { 'window-expired': 2 },
       now: NOW,
     })
+    const { recoveryEvents } = tablesOf(db)
     const rows = await db.select().from(recoveryEvents).where(eq(recoveryEvents.taskId, 't'))
     expect(rows).toHaveLength(1)
     expect(rows[0]?.kind).toBe('idle-timeout-reap')

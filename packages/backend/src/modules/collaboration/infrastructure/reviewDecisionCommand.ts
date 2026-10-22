@@ -13,14 +13,14 @@ import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifact
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskActorRole } from '@agent-workflow/shared'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { ReviewDecisionCommandPort } from '@/modules/collaboration/application/ports/reviewDecisionCommand'
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createReviewDecisionCommand(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly reviewArtifacts?: ReviewArtifactSelection
   readonly rollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   readonly appHome: string

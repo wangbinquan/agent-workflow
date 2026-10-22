@@ -13,13 +13,14 @@
 //     it must never re-clone; otherwise an unreachable remote could block an
 //     upgrade for a whole clone timeout.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { cachedRepos, scheduledTasks, taskRepos, tasks, workflows } from '../src/db/schema'
 import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { ensureCredentialsSealed, unsealRepoUrl } from '../src/services/repoCredentials'
@@ -38,7 +39,7 @@ const TOKEN = 'ghp_ATRESTSECRET'
 const CRED_URL = `https://x-access-token:${TOKEN}@github.com/acme/private.git`
 
 function ensureSealed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   secretBox: Parameters<typeof ensureCredentialsSealed>[1],
   options?: Parameters<typeof ensureCredentialsSealed>[2],
 ): ReturnType<typeof ensureCredentialsSealed> {
@@ -46,13 +47,14 @@ function ensureSealed(
 }
 
 async function seedRepo(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   url: string,
   hash = hashOf(url),
 ): Promise<void> {
   const now = Date.now()
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id,
     urlHash: hash,
     urlEnc: box.seal(url),
@@ -63,15 +65,21 @@ async function seedRepo(
   })
 }
 
-async function seedTask(db: ProviderNeutralDatabase, repoUrl: string | null): Promise<string> {
+async function seedTask(db: PersistenceDb, repoUrl: string | null): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const now = Date.now()
-  await db
-    .insert(workflows)
-    .values({ id: wfId, name: 'wf', definition: '{}', version: 1, createdAt: now, updatedAt: now })
+  const { workflows, tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: '{}',
+    version: 1,
+    createdAt: now,
+    updatedAt: now,
+  })
 
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -86,7 +94,7 @@ async function seedTask(db: ProviderNeutralDatabase, repoUrl: string | null): Pr
     startedAt: now,
   })
 
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId,
     repoIndex: 0,
     repoPath: '/tmp/wt',
@@ -100,7 +108,7 @@ async function seedTask(db: ProviderNeutralDatabase, repoUrl: string | null): Pr
 }
 
 describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -110,6 +118,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
     const r = await ensureSealed(db, box)
     expect(r.sealed).toBe(0)
 
+    const { cachedRepos } = tablesOf(db)
     const row = (await db.select().from(cachedRepos))[0]!
     expect(row.urlEnc).not.toBeNull()
     expect(row.urlRedacted).toBe('https://***@github.com/acme/private.git')
@@ -124,6 +133,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
     await seedTask(db, CRED_URL)
     await ensureSealed(db, box)
 
+    const { cachedRepos, tasks, taskRepos } = tablesOf(db)
     const dump = JSON.stringify([
       await db.select().from(cachedRepos),
       await db.select().from(tasks),
@@ -136,6 +146,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
     await seedRepo(db, 'cr-1', CRED_URL)
     const first = await ensureSealed(db, box)
     expect(first.sealed).toBe(0)
+    const { cachedRepos } = tablesOf(db)
     const before = JSON.stringify(await db.select().from(cachedRepos))
 
     const second = await ensureSealed(db, box)
@@ -146,6 +157,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
   test('links task rows to their mirror by hash', async () => {
     await seedRepo(db, 'cr-1', CRED_URL)
     const taskId = await seedTask(db, CRED_URL)
+    const { tasks, taskRepos } = tablesOf(db)
     // precondition: unlinked
     expect((await db.select().from(tasks))[0]?.cachedRepoId).toBeNull()
 
@@ -165,6 +177,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
 
     await ensureSealed(db, box)
 
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks))[0]?.cachedRepoId).toBe('cr-q')
     // and the token is gone from the task column afterwards
     const dump = JSON.stringify(await db.select().from(tasks))
@@ -177,6 +190,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
     await seedRepo(db, 'cr-gone', CRED_URL)
     const r = await ensureSealed(db, box)
     expect(r.sealed).toBe(0)
+    const { cachedRepos } = tablesOf(db)
     expect((await db.select().from(cachedRepos))[0]?.urlEnc).not.toBeNull()
   })
 
@@ -184,6 +198,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
     await seedRepo(db, 'cr-1', CRED_URL)
     const r = await ensureSealed(db, undefined)
     expect(r.sealed).toBe(0)
+    const { cachedRepos } = tablesOf(db)
     const row = (await db.select().from(cachedRepos))[0]!
     expect(row.urlEnc).not.toBeNull()
     expect(unsealRepoUrl(row, undefined)).toBeNull()
@@ -192,6 +207,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
   test('a sealed row read without the key fails closed rather than guessing', async () => {
     await seedRepo(db, 'cr-1', CRED_URL)
     await ensureSealed(db, box)
+    const { cachedRepos } = tablesOf(db)
     const row = (await db.select().from(cachedRepos))[0]!
     expect(unsealRepoUrl(row, undefined)).toBeNull()
     // wrong key → also null, never a partial/garbage URL
@@ -202,7 +218,7 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
 describeEachProvider(
   'RFC-204 T5 — scheduled launch payloads hold no credential',
   async (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })
@@ -210,7 +226,8 @@ describeEachProvider(
     async function seedSchedule(payload: unknown): Promise<string> {
       const id = ulid()
       const now = Date.now()
-      await db.insert(scheduledTasks).values({
+      const { scheduledTasks } = tablesOf(db)
+      await insertOne(db, scheduledTasks, {
         id,
         name: 'nightly',
         ownerUserId: '__system__',
@@ -232,6 +249,7 @@ describeEachProvider(
 
       await ensureSealed(db, box)
 
+      const { scheduledTasks } = tablesOf(db)
       const row = (await db.select().from(scheduledTasks)).find((r) => r.id === id)!
       expect(row.launchPayload).not.toContain(TOKEN)
       const after = JSON.parse(row.launchPayload) as Record<string, unknown>
@@ -251,6 +269,7 @@ describeEachProvider(
 
       await ensureSealed(db, box)
 
+      const { scheduledTasks } = tablesOf(db)
       const row = (await db.select().from(scheduledTasks)).find((r) => r.id === id)!
       expect(row.launchPayload).not.toContain(TOKEN)
       const repos = (JSON.parse(row.launchPayload) as { repos: Array<Record<string, unknown>> })
@@ -264,6 +283,7 @@ describeEachProvider(
       // strip it. The read-side mapper is what keeps it off the wire.
       const id = await seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
       await ensureSealed(db, box)
+      const { scheduledTasks } = tablesOf(db)
       const row = (await db.select().from(scheduledTasks)).find((r) => r.id === id)!
       expect(JSON.parse(row.launchPayload)['repoUrl']).toBe(CRED_URL)
     })
@@ -271,7 +291,7 @@ describeEachProvider(
 )
 
 describeEachProvider('RFC-204 — the delete guard sees schedule references', async (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -283,7 +303,8 @@ describeEachProvider('RFC-204 — the delete guard sees schedule references', as
     // cached-repo-not-found.
     await seedRepo(db, 'cr-1', CRED_URL)
     const now = Date.now()
-    await db.insert(scheduledTasks).values({
+    const { scheduledTasks } = tablesOf(db)
+    await insertOne(db, scheduledTasks, {
       id: ulid(),
       name: 'nightly',
       ownerUserId: '__system__',
@@ -306,9 +327,10 @@ describeEachProvider(
   async (harness) => {
     test('startup seals but does NOT block; backup context throws (token would ship)', async () => {
       const db = harness.db
+      const { cachedRepos } = tablesOf(db)
       // Historical row onboarded from a ?access_token= URL — the token is slugged
       // into local_path, which VACUUM INTO copies verbatim into the backup.
-      await db.insert(cachedRepos).values({
+      await insertOne(db, cachedRepos, {
         id: ulid(),
         urlHash: 'h1',
         urlEnc: box.seal('https://h/r.git?access_token=TOPSECRET'),
@@ -335,7 +357,8 @@ describeEachProvider(
 
     test('a credential-free cached repo never blocks a backup', async () => {
       const db = harness.db
-      await db.insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id: ulid(),
         urlHash: 'h2',
         urlEnc: box.seal('https://h/clean.git'),
@@ -354,9 +377,10 @@ describeEachProvider(
 describeEachProvider(
   'RFC-204 impl-gate P0-3 — backup refuses a scheduled plaintext credentialed repoUrl',
   async (harness) => {
-    async function insertSchedule(db: ProviderNeutralDatabase, payload: object): Promise<void> {
+    async function insertSchedule(db: PersistenceDb, payload: object): Promise<void> {
       const now = Date.now()
-      await db.insert(scheduledTasks).values({
+      const { scheduledTasks } = tablesOf(db)
+      await insertOne(db, scheduledTasks, {
         id: ulid(),
         name: 'nightly',
         ownerUserId: '__system__',

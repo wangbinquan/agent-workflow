@@ -1,10 +1,10 @@
 // RFC-349 T5/T6 — maintenance admission/lease transitions are Promise ports
 // and PostgreSQL writes share the live-generation transaction fence.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import {
@@ -51,12 +51,12 @@ function fixture(fenceAccepted = true) {
     }
     throw new Error(`unexpected PostgreSQL maintenance query: ${query}`)
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -89,8 +89,6 @@ function fixture(fenceAccepted = true) {
     },
   }
 }
-
-afterEach(() => selectDatabaseSchemaProvider('sqlite'))
 
 describe('RFC-349 PostgreSQL maintenance persistence', () => {
   test('worker bootstrap carries a secret-free PostgreSQL provider descriptor', () => {
@@ -208,10 +206,10 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
       }
       throw new Error(`unexpected PostgreSQL retention query: ${query}`)
     }
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe: execute,
       release() {},
-    }
+    })
     const pool: PostgresqlPool = {
       async reserve() {
         return connection
@@ -289,10 +287,10 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
       }
       throw new Error(`unexpected PostgreSQL event-archive query: ${query}`)
     }
-    const connection: PostgresqlReservedConnection = {
+    const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe: execute,
       release() {},
-    }
+    })
     const pool: PostgresqlPool = {
       async reserve() {
         return connection

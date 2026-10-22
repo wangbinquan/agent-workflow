@@ -8,6 +8,8 @@
 //   3. ref-not-found rewrap: a missing ref produces ValidationError
 //      `repo-ref-not-found` whose details carry availableRefs[] + redacted URL.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import {
   beforeAll,
   afterEach,
@@ -24,7 +26,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
@@ -173,8 +174,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: stubOpencode,
         awaitScheduler: true,
@@ -184,8 +184,9 @@ describe('launchTestTask URL mode (RFC-024)', () => {
     expect(task.repoPath.startsWith(join(appHome, 'repos'))).toBe(true)
     // Worktree is under appHome/worktrees and was created from the cache.
     expect(task.worktreePath.startsWith(join(appHome, 'worktrees'))).toBe(true)
+    const { cachedRepos } = tablesOf(db)
     // cached_repos got exactly one row (recent_repos retired by RFC-165).
-    expect(db.select().from(cachedRepos).all().length).toBe(1)
+    expect(queryRows(db.select().from(cachedRepos)).length).toBe(1)
   })
 
   // RFC-175 §2c: the immediate-submit workflow-version OCC guard for relaunch.
@@ -205,12 +206,12 @@ describe('launchTestTask URL mode (RFC-024)', () => {
         },
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,
         },
       ),
     ).rejects.toMatchObject({ code: 'workflow-version-mismatch' })
+    const { cachedRepos } = tablesOf(db)
     // No task row, no cached clone (guard short-circuited before repo work).
     expect((await db.select().from(cachedRepos)).length).toBe(0)
   })
@@ -221,8 +222,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: stubOpencode,
         awaitScheduler: true,
@@ -232,15 +232,15 @@ describe('launchTestTask URL mode (RFC-024)', () => {
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: stubOpencode,
         awaitScheduler: true,
       },
     )
     expect(t1.repoPath).toBe(t2.repoPath)
-    expect(db.select().from(cachedRepos).all().length).toBe(1)
+    const { cachedRepos } = tablesOf(db)
+    expect(queryRows(db.select().from(cachedRepos)).length).toBe(1)
   })
 
   test('unknown ref → ValidationError repo-ref-not-found with available refs', async () => {
@@ -257,8 +257,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
         },
         {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,
           binaryOverride: stubOpencode,
           awaitScheduler: true,

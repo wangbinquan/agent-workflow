@@ -5,7 +5,7 @@ import type {
   UpdateResourceAclBody,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DbTxSync } from '@/db/txSync'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -36,7 +36,7 @@ import { loadGrantLevelInTx } from '../infrastructure/sqliteResourceGrantReposit
 // RFC-383: bootstrap route persistence consumes the same audience projection through composition.
 export { resourceAclAudienceAuthority }
 
-function buildAclApplications(db: ProviderNeutralDatabase): AclApplications {
+function buildAclApplications(db: PersistenceDb): AclApplications {
   const authorization = createResourceAuthorizationApplication(createResourceGrantReadPort(db))
   return Object.freeze({
     authorization,
@@ -53,9 +53,9 @@ interface AclApplications {
   readonly acl: ReturnType<typeof createResourceAclApplication<AclResourceType>>
 }
 
-const aclApplications = new WeakMap<ProviderNeutralDatabase, AclApplications>()
+const aclApplications = new WeakMap<PersistenceDb, AclApplications>()
 
-function applicationsFor(db: ProviderNeutralDatabase): AclApplications {
+function applicationsFor(db: PersistenceDb): AclApplications {
   const current = aclApplications.get(db)
   if (current !== undefined) return current
   const created = buildAclApplications(db)
@@ -64,7 +64,7 @@ function applicationsFor(db: ProviderNeutralDatabase): AclApplications {
 }
 
 export function discloseRefs(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   rows: ReadonlyArray<AclRow & { readonly name: string }>,
@@ -73,7 +73,7 @@ export function discloseRefs(
 }
 
 export function filterVisibleRows<T extends AclRow>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   rows: readonly T[],
@@ -82,7 +82,7 @@ export function filterVisibleRows<T extends AclRow>(
 }
 
 export function projectVisibleRowsWithAccess<T extends AclRow>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   rows: readonly T[],
@@ -91,7 +91,7 @@ export function projectVisibleRowsWithAccess<T extends AclRow>(
 }
 
 export function resolveResourceAccessFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -117,7 +117,7 @@ export function resolveResourceAccessForInTx(
 }
 
 export function canViewResource(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -135,7 +135,7 @@ export function canViewResourceInTx(
 }
 
 export function canEditResource(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -148,7 +148,7 @@ export function canGovernResource(actor: Actor, row: AclRow): boolean {
 }
 
 export function requireResourceView(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -157,7 +157,7 @@ export function requireResourceView(
 }
 
 export function requireResourceGovern(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -166,7 +166,7 @@ export function requireResourceGovern(
 }
 
 export function requireResourceEdit(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -175,7 +175,7 @@ export function requireResourceEdit(
 }
 
 export function getResourceAcl(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -184,7 +184,7 @@ export function getResourceAcl(
 }
 
 export interface ResourceAclWriteEffects {
-  readonly afterCommit?: (db: ProviderNeutralDatabase) => void
+  readonly afterCommit?: (db: PersistenceDb) => void
   readonly updatedAt?: number
 }
 
@@ -198,7 +198,7 @@ export interface ResourceAclWriteEffects {
  * 分叉与它背后的 334 行 SQLite 专属 ACL 仓库一并退役。
  */
 export function updateResourceAcl(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -221,7 +221,7 @@ export function updateResourceAcl(
 }
 
 export interface ResourceAclOperationCompositionDependencies<Row extends AclRow> {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly type: AclResourceType
   load(id: string): Promise<Row | null>
   readonly linearizer?: ResourceAclOperationLinearizer<Row>
@@ -295,7 +295,7 @@ export function composeResourceAclOperationApplication<Context extends Actor, Ro
  * 每次写完在提交后唤醒实时订阅（与目录自有类型的 `updateResourceAcl` 同一处）。
  */
 export function composeForeignResourceAclFor(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly identity: ResourceAclIdentityPersistence
 }) {
   const authorization = createResourceAuthorizationApplication(

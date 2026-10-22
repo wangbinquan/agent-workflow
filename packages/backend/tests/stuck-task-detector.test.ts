@@ -8,6 +8,8 @@
 // call `runStuckTaskDetector` and assert on `openAlerts` filtered to the
 // rule under test.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -17,18 +19,9 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import {
-  clarifyRounds,
-  docVersions,
-  lifecycleAlerts,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const MIN_MS = 60_000
@@ -37,13 +30,13 @@ const T0 = Date.UTC(2026, 0, 1, 12, 0, 0) // fixed clock for reproducibility
 type TaskStatus = 'pending' | 'running' | 'awaiting_review' | 'awaiting_human'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
 
 async function buildHarness(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: TaskStatus,
   startedAt: number,
   nodes: WorkflowNode[] = [],
@@ -53,9 +46,10 @@ async function buildHarness(
 
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [] }
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -72,7 +66,7 @@ async function buildHarness(
 }
 
 async function insertRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     nodeId: string
@@ -91,7 +85,8 @@ async function insertRun(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId,
@@ -105,12 +100,9 @@ async function insertRun(
   return id
 }
 
-async function insertEvent(
-  db: ProviderNeutralDatabase,
-  nodeRunId: string,
-  ts: number,
-): Promise<void> {
-  await db.insert(nodeRunEvents).values({
+async function insertEvent(db: PersistenceDb, nodeRunId: string, ts: number): Promise<void> {
+  const { nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRunEvents, {
     nodeRunId,
     ts,
     kind: 'text',
@@ -150,11 +142,12 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
   // 里带 childBudget 提示；顶层任务维持 5min（上面两条用例锁定不变）。
   async function markAsChild(hh: Harness): Promise<void> {
     const parentId = ulid()
+    const { tasks } = tablesOf(hh.db)
     const [childRow] = await hh.db
       .select({ workflowId: tasks.workflowId, workflowSnapshot: tasks.workflowSnapshot })
       .from(tasks)
       .where(eq(tasks.id, hh.taskId))
-    await hh.db.insert(tasks).values({
+    await insertOne(hh.db, tasks, {
       id: parentId,
       name: 'parent',
       workflowId: childRow!.workflowId,
@@ -214,7 +207,8 @@ describeEachProvider('RFC-053 PR-E — S1 (awaiting_review without pending dv)',
   test('not stuck: has a pending dv → no S1 alert', async () => {
     h = await buildHarness(harness.db, 'awaiting_review', T0 - 60 * MIN_MS)
     const run = await insertRun(h.db, h.taskId, { nodeId: 'rev', status: 'awaiting_review' })
-    await h.db.insert(docVersions).values({
+    const { docVersions } = tablesOf(h.db)
+    await insertOne(h.db, docVersions, {
       id: ulid(),
       taskId: h.taskId,
       reviewNodeId: 'rev',
@@ -264,9 +258,10 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const srcRun = await insertRun(h.db, h.taskId, { nodeId: 'src', status: 'done' })
       const run = await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
+      const { clarifyRounds } = tablesOf(h.db)
       // RFC-108 T8 (AR-16): the detector now reads the unified clarify_rounds
       // (self-clarify dual-writes it, RFC-058). Insert an OPEN self round.
-      await h.db.insert(clarifyRounds).values({
+      await insertOne(h.db, clarifyRounds, {
         id: ulid(),
         taskId: h.taskId,
         kind: 'self',
@@ -300,9 +295,10 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const srcRun = await insertRun(h.db, h.taskId, { nodeId: 'src', status: 'done' })
       const run = await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
+      const { clarifyRounds } = tablesOf(h.db)
       // RFC-108 T8 (AR-16): an ANSWERED round in the unified clarify_rounds is not
       // "open" — S2 must still fire (the task is parked with nothing live to answer).
-      await h.db.insert(clarifyRounds).values({
+      await insertOne(h.db, clarifyRounds, {
         id: ulid(),
         taskId: h.taskId,
         kind: 'self',
@@ -341,7 +337,8 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const askingRun = await insertRun(h.db, h.taskId, { nodeId: 'questioner', status: 'done' })
       const crossRun = await insertRun(h.db, h.taskId, { nodeId: 'xclr', status: 'awaiting_human' })
-      await h.db.insert(clarifyRounds).values({
+      const { clarifyRounds } = tablesOf(h.db)
+      await insertOne(h.db, clarifyRounds, {
         id: ulid(),
         taskId: h.taskId,
         kind: 'cross',
@@ -425,6 +422,7 @@ describeEachProvider('RFC-098 WP-8 — S5 (running, active runs, events stalled)
   test('stuck: active run + zero events ever → S5 with per-run {nodeRunId,nodeId,pid,lastEventTs}', async () => {
     h = await buildHarness(harness.db, 'running', T0 - 60 * MIN_MS)
     const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
+    const { nodeRuns } = tablesOf(h.db)
     await h.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, runId))
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
@@ -505,6 +503,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
       now: () => T0 + MIN_MS,
     })
     expect(r2.newAlerts).toBe(0)
+    const { lifecycleAlerts } = tablesOf(h.db)
     const rows = await h.db
       .select()
       .from(lifecycleAlerts)
@@ -518,6 +517,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
       operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       now: () => T0,
     })
+    const { tasks } = tablesOf(h.db)
     // Promote task out of pending.
     await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
     // Give it an active run so S3 doesn't immediately fire.
@@ -544,7 +544,8 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
   test('ownedRules guard: stuck detector does not resolve invariant rows', async () => {
     // Seed a fake R1 row to simulate PR-D having found a violation.
     h = await buildHarness(harness.db, 'pending', T0 - 10 * MIN_MS)
-    await h.db.insert(lifecycleAlerts).values({
+    const { lifecycleAlerts } = tablesOf(h.db)
+    await insertOne(h.db, lifecycleAlerts, {
       id: ulid(),
       taskId: h.taskId,
       rule: 'R1',

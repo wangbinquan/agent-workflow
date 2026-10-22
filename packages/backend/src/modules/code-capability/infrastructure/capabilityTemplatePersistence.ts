@@ -1,9 +1,10 @@
 // RFC-359 W4-B5 —— 能力模板持久化：一份实现，两个 provider 共用。名字撞库经引擎能力矩阵归类。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { capabilityTemplates } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { ConflictError } from '@/util/errors'
 import type {
@@ -11,12 +12,14 @@ import type {
   CapabilityTemplateRecord,
 } from '../application/ports/capabilityTemplatePersistence'
 
-function record(row: typeof capabilityTemplates.$inferSelect): CapabilityTemplateRecord {
+function record(
+  row: PersistenceTables['capabilityTemplates']['$inferSelect'],
+): CapabilityTemplateRecord {
   return row
 }
 
 export function createCapabilityTemplatePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): CapabilityTemplatePersistence {
   const uniqueGuard = (error: unknown, name: string): never => {
     if (engineOf(db).classifyError(error) === 'unique-violation') {
@@ -29,9 +32,11 @@ export function createCapabilityTemplatePersistence(
   }
   return {
     async list() {
+      const { capabilityTemplates } = tablesOf(db)
       return (await db.select().from(capabilityTemplates)).map(record)
     },
     async load(id) {
+      const { capabilityTemplates } = tablesOf(db)
       const rows = await db
         .select()
         .from(capabilityTemplates)
@@ -40,6 +45,7 @@ export function createCapabilityTemplatePersistence(
       return rows[0] === undefined ? null : record(rows[0])
     },
     async ownerNameExists(input) {
+      const { capabilityTemplates } = tablesOf(db)
       const rows = await db
         .select({ id: capabilityTemplates.id, ownerUserId: capabilityTemplates.ownerUserId })
         .from(capabilityTemplates)
@@ -48,19 +54,22 @@ export function createCapabilityTemplatePersistence(
     },
     async insert(row) {
       try {
-        await db.insert(capabilityTemplates).values(row)
+        const { capabilityTemplates } = tablesOf(db)
+        await insertOne(db, capabilityTemplates, row)
       } catch (error) {
         uniqueGuard(error, row.name)
       }
     },
     async replace(row) {
       try {
+        const { capabilityTemplates } = tablesOf(db)
         await db.update(capabilityTemplates).set(row).where(eq(capabilityTemplates.id, row.id))
       } catch (error) {
         uniqueGuard(error, row.name)
       }
     },
     async delete(id) {
+      const { capabilityTemplates } = tablesOf(db)
       await db.delete(capabilityTemplates).where(eq(capabilityTemplates.id, id))
     },
   }

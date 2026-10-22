@@ -19,14 +19,16 @@
 // column. The `__clarify_iteration__` prompt PLACEHOLDER is a public agent
 // protocol token, unrelated to the node_runs column, and is also allowed.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { isFresherNodeRun } from '../src/services/scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -36,7 +38,7 @@ const SRC_ROOTS = [
   resolve(import.meta.dir, '..', '..', 'frontend', 'src'),
 ]
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 function row(id: string): Row {
   return { id } as unknown as Row
 }
@@ -97,7 +99,7 @@ describe('RFC-074 PR-C — isFresherNodeRun pure-id ordering (C1-C4)', () => {
 describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9)', () => {
   test('C9: the dropped column is absent from the live schema', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const cols = (await db.all(sql`PRAGMA table_info(node_runs)`)) as Array<{ name: string }>
+    const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as Array<{ name: string }>
     const names = cols.map((c) => c.name)
     expect(names).not.toContain('clarify_iteration')
     // Provenance + other columns survive the rebuild.
@@ -110,15 +112,16 @@ describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9)
 describeEachProvider(
   'RFC-074 PR-C — node_run round-trips without the cci column (C10)',
   (harness) => {
-    async function seedWorkflowTask(db: ProviderNeutralDatabase): Promise<string> {
-      await db.insert(workflows).values({
+    async function seedWorkflowTask(db: PersistenceDb): Promise<string> {
+      const { workflows, tasks } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: 'wf1',
         name: 'w',
         description: '',
         definition: '{}',
         version: 1,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: 'task1',
         name: 't',
         workflowId: 'wf1',
@@ -137,7 +140,8 @@ describeEachProvider(
     test('C10: a node_run round-trips insert/select without the cci column', async () => {
       const db = harness.db
       const taskId = await seedWorkflowTask(db)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: '01ROW',
         taskId,
         nodeId: 'n',

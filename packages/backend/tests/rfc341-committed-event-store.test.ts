@@ -1,15 +1,11 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import {
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   appendCommittedEvent,
   changeCommittedEventCutover,
@@ -31,6 +27,7 @@ const CONSUMER = { id: 'event-center.fixture', deliveryClass: 'critical' as cons
 
 async function createLegacyStoreDb(): Promise<ReturnType<typeof createInMemoryDb>> {
   const db = createInMemoryDb(MIGRATIONS)
+  const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
     .set({ mode: 'legacy', epoch: 1, changedAt: NOW, changeRef: 'test:legacy-baseline' })
@@ -86,10 +83,9 @@ async function sqliteCutover(
   )
 }
 
-async function createProviderLegacyStoreDb(
-  harness: ProviderHarness,
-): Promise<ProviderNeutralDatabase> {
+async function createProviderLegacyStoreDb(harness: ProviderHarness): Promise<PersistenceDb> {
   const db = harness.db
+  const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
     .set({ mode: 'legacy', epoch: 1, changedAt: NOW, changeRef: 'test:legacy-baseline' })
@@ -181,6 +177,7 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
       async (tx) => await appendCommittedEvent(tx, eventInput({ operation: 'legacy' })),
     )
     expect(legacy.eventRef).toBeNull()
+    const { committedEvents } = tablesOf(db)
     expect(await db.select().from(committedEvents)).toEqual([])
 
     await cutoverForProvider(harness, 'legacy', 1, 'shadow')
@@ -280,6 +277,7 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
       now: () => NOW + 100,
     })
     expect(await dispatcher.runOne()).toBe('dead-letter')
+    const { committedEventDeliveries } = tablesOf(db)
     const dead = (await (
       await db
         .select()

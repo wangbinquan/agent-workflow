@@ -23,26 +23,28 @@
 // 的 `cancelTask` 注入口）。这是 plan §5ac 记的「legacy 契约上的 SQLite 绑定」，
 // 随 legacy 那条线解开，不在本次迁移范围内。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { setTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let workflowId: string
 // PostgreSQL 的迁移只投影 DDL，不带 `rfc328_tasks_lineage_after_insert` 那条 SQLite 触发器，
 // 所以直插 `tasks` 的夹具要自己写 lineage；双引擎下两侧都显式写，两个引擎的起点才相同。
 let seedTaskLineage = false
 
-async function seedFixture(database: ProviderNeutralDatabase, lineage: boolean): Promise<void> {
+async function seedFixture(database: PersistenceDb, lineage: boolean): Promise<void> {
   db = database
   seedTaskLineage = lineage
   workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -51,10 +53,11 @@ async function seedFixture(database: ProviderNeutralDatabase, lineage: boolean):
 
 async function seed(
   status: string,
-  extra: Partial<typeof tasks.$inferInsert> = {},
+  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const taskId = ulid()
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc207',
     workflowId,
@@ -80,6 +83,7 @@ async function seed(
 }
 
 async function acct(taskId: string): Promise<{ runningMs: number; runningSince: number | null }> {
+  const { tasks } = tablesOf(db)
   const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
   return { runningMs: row.runningMs, runningSince: row.runningSince }
 }
@@ -256,7 +260,7 @@ describeEachProvider('RFC-207 运行时长记账（双引擎）', (harness: Prov
 // 就是 `cancelTask`，而 `cancelTask` 的前置读此前是同步 `.all()[0]`——在 PG 上返回 Promise、
 // `[0]` 恒 undefined，于是**每一次取消都报 `task-not-found`**，`r.canceled` 就会是空的。
 describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (harness: ProviderHarness) => {
-  let legacyDb: ProviderNeutralDatabase
+  let legacyDb: PersistenceDb
 
   beforeEach(async () => {
     legacyDb = harness.db
@@ -276,6 +280,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     // 12s of running elapsed (> the 10s cap).
     const r = await enforceLimits(legacyDb, T0 + 12_000)
     expect(r.canceled).toContain(id)
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks).where(eq(tasks.id, id)))[0]!.status).toBe('canceled')
   })
 
@@ -314,6 +319,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     const r = await enforceLimits(legacyDb, unpark + 2_000)
     expect(r.scanned).toBeGreaterThanOrEqual(1) // it WAS examined
     expect(r.canceled).not.toContain(id)
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks).where(eq(tasks.id, id)))[0]!.status).toBe('running')
   })
 })

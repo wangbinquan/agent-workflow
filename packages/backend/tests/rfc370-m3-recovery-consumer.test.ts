@@ -4,9 +4,9 @@
 // operation → AW's ORDINARY resume command once the container runs again.
 // Every path ends in a terminal journal state (succeeded / failed / rejected);
 // nothing is reserved, deferred indefinitely or replayed from a stale claim.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { buildActor, type Actor } from '@/auth/actor'
-import { hostedRecoveryRequests } from '@/db/schema'
 import {
   CrewStationApiError,
   type CrewStationPlatformApi,
@@ -132,7 +132,10 @@ describeEachProvider('RFC-370 hosted recovery consumer', (harness) => {
       log: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
       ...(options.now === undefined ? {} : { now: options.now }),
     })
-    const row = async () => (await harness.db.select().from(hostedRecoveryRequests))[0]
+    const row = async () => {
+      const { hostedRecoveryRequests } = tablesOf(harness.db)
+      return (await harness.db.select().from(hostedRecoveryRequests))[0]
+    }
     return {
       request,
       platform,
@@ -267,6 +270,7 @@ describeEachProvider('RFC-370 hosted recovery consumer', (harness) => {
       ['done', 'resume-task', 'recovery-task-not-resumable: done'],
       [null, 'rebuild-workspace', 'recovery-task-not-found'],
     ] as const) {
+      const { hostedRecoveryRequests } = tablesOf(harness.db)
       await harness.db.delete(hostedRecoveryRequests)
       const f = setup({ action })
       f.business.status = status

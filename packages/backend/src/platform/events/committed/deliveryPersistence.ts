@@ -34,19 +34,11 @@
 // 事务体重读每一个字段并保留最终的认领 CAS，所以预检不承担任何正确性。
 // 源码形状锁在 `tests/rfc341-collaboration-source-locks.test.ts`。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, count, desc, eq, inArray, lt, lte, ne, or, sql, type SQL } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-} from '@/db/schema'
-import {
-  affectedRows,
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { assertNonNegativeInteger, assertPositiveInteger, storedEventFromRow } from './appendShared'
 import type {
   CommittedEventDeliveryPageInput,
@@ -67,7 +59,8 @@ import type {
 const PRODUCER_PUBLICATION_PREFIX = 'event-center.'
 
 /** `stage` 的 SQL 判据：按字节比前缀，避开两个引擎相反的 LIKE 大小写语义。 */
-function producerPublicationPrefixExpr(): SQL<string> {
+function producerPublicationPrefixExpr(db: object): SQL<string> {
+  const { committedEventDeliveries } = tablesOf(db)
   return sql<string>`substr(${committedEventDeliveries.consumerId}, 1, ${PRODUCER_PUBLICATION_PREFIX.length})`
 }
 
@@ -79,7 +72,8 @@ function stageOf(consumerId: string): 'producer-publication' | 'consumer-deliver
 }
 
 /** 可派发（家族在当前 epoch 上 dispatchable）且已到期（pending，或 claimed 但租约过期）。 */
-function duePredicate(at: number): SQL<unknown> {
+function duePredicate(db: object, at: number): SQL<unknown> {
+  const { committedEvents, committedEventFamilyCutovers, committedEventDeliveries } = tablesOf(db)
   return and(
     eq(committedEvents.deliveryMode, 'dispatchable'),
     eq(committedEventFamilyCutovers.mode, 'dispatchable'),
@@ -96,7 +90,8 @@ function duePredicate(at: number): SQL<unknown> {
 }
 
 /** 只读预检（不占写者）：这一刻有没有值得认领的投递。判据与事务体完全相同。 */
-async function hasDueDelivery(db: ProviderNeutralDatabase, at: number): Promise<boolean> {
+async function hasDueDelivery(db: PersistenceDb, at: number): Promise<boolean> {
+  const { committedEventDeliveries, committedEvents, committedEventFamilyCutovers } = tablesOf(db)
   const rows = await db
     .select({ eventId: committedEventDeliveries.eventId })
     .from(committedEventDeliveries)
@@ -108,9 +103,8 @@ async function hasDueDelivery(db: ProviderNeutralDatabase, at: number): Promise<
         eq(committedEventFamilyCutovers.family, committedEvents.family),
       ),
     )
-    .where(duePredicate(at))
+    .where(duePredicate(db, at))
     .limit(1)
-    .all()
   return rows.length > 0
 }
 
@@ -119,7 +113,7 @@ async function hasDueDelivery(db: ProviderNeutralDatabase, at: number): Promise<
  * 还有没有**同一个消费者**尚未 accepted 的投递。有就先别认领它。
  */
 async function priorDeliveryBlocks(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   candidate: Readonly<{
     producer: CommittedEventProducer
     family: CommittedEventFamily
@@ -130,6 +124,7 @@ async function priorDeliveryBlocks(
     consumerId: string
   }>,
 ): Promise<boolean> {
+  const { committedEvents, committedEventDeliveries } = tablesOf(tx)
   const priorIds = (
     await tx
       .select({ id: committedEvents.id })
@@ -145,7 +140,6 @@ async function priorDeliveryBlocks(
           lt(committedEvents.aggregateSeq, candidate.aggregateSeq),
         ),
       )
-      .all()
   ).map((row) => row.id)
   if (priorIds.length === 0) return false
   const blockers = await tx
@@ -159,17 +153,17 @@ async function priorDeliveryBlocks(
       ),
     )
     .limit(1)
-    .all()
   return blockers.length > 0
 }
 
-function pageConditions(input: CommittedEventDeliveryPageInput): SQL[] {
+function pageConditions(db: object, input: CommittedEventDeliveryPageInput): SQL[] {
   const conditions: SQL[] = []
   if (input.stage === 'producer-publication') {
-    conditions.push(eq(producerPublicationPrefixExpr(), PRODUCER_PUBLICATION_PREFIX))
+    conditions.push(eq(producerPublicationPrefixExpr(db), PRODUCER_PUBLICATION_PREFIX))
   } else if (input.stage === 'consumer-delivery') {
-    conditions.push(ne(producerPublicationPrefixExpr(), PRODUCER_PUBLICATION_PREFIX))
+    conditions.push(ne(producerPublicationPrefixExpr(db), PRODUCER_PUBLICATION_PREFIX))
   }
+  const { committedEventDeliveries, committedEvents } = tablesOf(db)
   if (input.state != null) conditions.push(eq(committedEventDeliveries.state, input.state))
   if (input.producer != null) conditions.push(eq(committedEvents.producer, input.producer))
   if (input.family != null) conditions.push(eq(committedEvents.family, input.family))
@@ -187,18 +181,18 @@ function leaseLost(eventId: string, consumerId: string): Error {
 }
 
 export function createCommittedEventDeliveryPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): CommittedEventDeliveryPersistencePort {
   const session = databaseSessionFor(db)
   return {
     async getStored(eventIds) {
       if (eventIds.length === 0) return []
+      const { committedEvents } = tablesOf(db)
       const rows = await db
         .select()
         .from(committedEvents)
         .where(inArray(committedEvents.id, [...eventIds]))
         .orderBy(asc(committedEvents.eventGroupId), asc(committedEvents.eventGroupOrdinal))
-        .all()
       return rows.map(storedEventFromRow)
     },
 
@@ -214,6 +208,8 @@ export function createCommittedEventDeliveryPersistence(
       if (!(await hasDueDelivery(db, at))) return null
 
       return await session.transaction(async (tx) => {
+        const { committedEvents, committedEventDeliveries, committedEventFamilyCutovers } =
+          tablesOf(tx)
         const candidates = await tx
           .select({
             event: committedEvents,
@@ -232,14 +228,13 @@ export function createCommittedEventDeliveryPersistence(
               eq(committedEventFamilyCutovers.family, committedEvents.family),
             ),
           )
-          .where(duePredicate(at))
+          .where(duePredicate(tx, at))
           .orderBy(
             asc(committedEvents.createdAt),
             asc(committedEvents.eventGroupOrdinal),
             asc(committedEventDeliveries.consumerId),
           )
           .limit(scanLimit)
-          .all()
 
         for (const candidate of candidates) {
           if (
@@ -274,7 +269,6 @@ export function createCommittedEventDeliveryPersistence(
                 eq(committedEventDeliveries.leaseEpoch, candidate.leaseEpoch),
               ),
             )
-            .run()
           // 认领 CAS 输了（另一个 worker 抢先改了 state / leaseEpoch）⇒ 换下一个候选。
           if (affectedRows(claimed) !== 1) continue
           return {
@@ -294,6 +288,7 @@ export function createCommittedEventDeliveryPersistence(
     async accept(input) {
       const eventId = input.claim.event.envelope.eventId
       await session.transaction(async (tx) => {
+        const { committedEventDeliveries } = tablesOf(tx)
         const result = await tx
           .update(committedEventDeliveries)
           .set({
@@ -315,7 +310,6 @@ export function createCommittedEventDeliveryPersistence(
               eq(committedEventDeliveries.leaseEpoch, input.claim.leaseEpoch),
             ),
           )
-          .run()
         if (affectedRows(result) !== 1) throw leaseLost(eventId, input.claim.consumerId)
       })
     },
@@ -325,6 +319,7 @@ export function createCommittedEventDeliveryPersistence(
       const eventId = input.claim.event.envelope.eventId
       const terminal = input.claim.attemptCount >= input.maxAttempts
       await session.transaction(async (tx) => {
+        const { committedEventDeliveries } = tablesOf(tx)
         const result = await tx
           .update(committedEventDeliveries)
           .set({
@@ -349,7 +344,6 @@ export function createCommittedEventDeliveryPersistence(
               eq(committedEventDeliveries.leaseEpoch, input.claim.leaseEpoch),
             ),
           )
-          .run()
         if (affectedRows(result) !== 1) throw leaseLost(eventId, input.claim.consumerId)
       })
       return terminal ? 'dead-letter' : 'retried'
@@ -360,6 +354,7 @@ export function createCommittedEventDeliveryPersistence(
       assertNonNegativeInteger(input.observedUpdatedAt, 'observedUpdatedAt')
       const at = input.now ?? Date.now()
       return await session.transaction(async (tx) => {
+        const { committedEventDeliveries } = tablesOf(tx)
         const result = await tx
           .update(committedEventDeliveries)
           .set({
@@ -382,7 +377,6 @@ export function createCommittedEventDeliveryPersistence(
               eq(committedEventDeliveries.updatedAt, input.observedUpdatedAt),
             ),
           )
-          .run()
         if (affectedRows(result) !== 1) {
           throw new Error(
             `committed event delivery retry lost CAS: ${input.eventId}/${input.consumerId}`,
@@ -401,7 +395,6 @@ export function createCommittedEventDeliveryPersistence(
               eq(committedEventDeliveries.consumerId, input.consumerId),
             ),
           )
-          .all()
         const row = rows[0]
         if (row === undefined) {
           throw new Error(
@@ -421,14 +414,14 @@ export function createCommittedEventDeliveryPersistence(
     async deliveryPage(input): Promise<CommittedEventDeliveryPage> {
       assertPositiveInteger(input.page, 'page')
       assertPositiveInteger(input.limit, 'limit')
-      const conditions = pageConditions(input)
+      const conditions = pageConditions(db, input)
       const where = conditions.length === 0 ? undefined : and(...conditions)
+      const { committedEventDeliveries, committedEvents } = tablesOf(db)
       const countRows = await db
         .select({ count: count() })
         .from(committedEventDeliveries)
         .innerJoin(committedEvents, eq(committedEvents.id, committedEventDeliveries.eventId))
         .where(where)
-        .all()
       const total = Number(countRows[0]?.count ?? 0)
       const rows = await db
         .select({ event: committedEvents, delivery: committedEventDeliveries })
@@ -438,7 +431,6 @@ export function createCommittedEventDeliveryPersistence(
         .orderBy(desc(committedEventDeliveries.updatedAt), desc(committedEvents.id))
         .limit(input.limit)
         .offset((input.page - 1) * input.limit)
-        .all()
       return {
         items: rows.map(({ event, delivery }) => ({
           eventId: event.id,
@@ -470,6 +462,7 @@ export function createCommittedEventDeliveryPersistence(
     },
 
     async health() {
+      const { committedEventDeliveries } = tablesOf(db)
       const rows = await db
         .select({
           state: committedEventDeliveries.state,
@@ -478,7 +471,6 @@ export function createCommittedEventDeliveryPersistence(
           lastErrorSummary: committedEventDeliveries.lastErrorSummary,
         })
         .from(committedEventDeliveries)
-        .all()
       const pendingRows = rows.filter((row) => row.state === 'pending')
       const lastError = [...rows]
         .filter((row) => row.lastErrorSummary !== null)

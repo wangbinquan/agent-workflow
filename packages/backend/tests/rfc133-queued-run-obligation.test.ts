@@ -17,15 +17,15 @@
 // These are pure unit tests on the exported oracle; the gate integration (dispatchTaskQuestions /
 // quick-finalize) is covered in rfc133-dispatch-queued-deadlock.test.ts.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
 
-import type { nodeRuns, taskQuestions } from '../src/db/schema'
 import { causeClassForEntry, isDispatchedEntryConsumed } from '../src/services/clarifyRerunLedger'
 import type { RunLineageView } from '@agent-workflow/shared'
 
-type NodeRunRow = typeof nodeRuns.$inferSelect
-type TaskQuestionRow = typeof taskQuestions.$inferSelect
+type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
 
 const TARGET = 'agent_target'
 

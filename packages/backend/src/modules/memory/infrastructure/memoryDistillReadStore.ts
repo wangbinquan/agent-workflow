@@ -1,16 +1,9 @@
 // RFC-359 W4-B4 —— 记忆蒸馏读存储：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  docVersions,
-  memories,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  taskFeedback,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MemoryDistillReadStore } from '../application/ports/distillReadStore'
 
 /**
@@ -20,7 +13,8 @@ import type { MemoryDistillReadStore } from '../application/ports/distillReadSto
  * `listJobs` 方法。它是「蒸馏队列现在有什么」的唯一投影，两份实现意味着两条入口可能在
  * 排序或状态过滤上漂。
  */
-export async function listMemoryDistillJobs(db: ProviderNeutralDatabase, status?: string) {
+export async function listMemoryDistillJobs(db: PersistenceDb, status?: string) {
+  const { memoryDistillJobs } = tablesOf(db)
   const query = db.select().from(memoryDistillJobs)
   return status === undefined
     ? await query.orderBy(asc(memoryDistillJobs.createdAt))
@@ -30,9 +24,10 @@ export async function listMemoryDistillJobs(db: ProviderNeutralDatabase, status?
 }
 
 export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async findJob(jobId: string) {
+    const { memoryDistillJobs } = tablesOf(this.db)
     const rows = await this.db
       .select()
       .from(memoryDistillJobs)
@@ -42,6 +37,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
   }
 
   async listSiblingJobs(debounceKey: string) {
+    const { memoryDistillJobs } = tablesOf(this.db)
     return await this.db
       .select()
       .from(memoryDistillJobs)
@@ -50,6 +46,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
   }
 
   async listEvents(jobId: string) {
+    const { memoryDistillEvents } = tablesOf(this.db)
     return await this.db
       .select({
         id: memoryDistillEvents.id,
@@ -71,6 +68,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
 
   async listClarifySources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { clarifyRounds } = tablesOf(this.db)
     return await this.db
       .select({
         id: clarifyRounds.id,
@@ -83,6 +81,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
 
   async listReviewSources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { docVersions } = tablesOf(this.db)
     return await this.db
       .select({
         id: docVersions.id,
@@ -96,6 +95,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
 
   async listFeedbackSources(ids: readonly string[]) {
     if (ids.length === 0) return []
+    const { taskFeedback } = tablesOf(this.db)
     return await this.db
       .select({ id: taskFeedback.id, taskId: taskFeedback.taskId, bodyMd: taskFeedback.bodyMd })
       .from(taskFeedback)
@@ -103,6 +103,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
   }
 
   async listCandidates(jobId: string) {
+    const { memories } = tablesOf(this.db)
     return await this.db
       .select({
         id: memories.id,

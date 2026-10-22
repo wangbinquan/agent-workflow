@@ -17,6 +17,8 @@
 //
 // Counting uses scenario-opencode's trace.jsonl (one line per real spawn).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -25,7 +27,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
@@ -60,7 +61,8 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -79,12 +81,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc354-closure-task',
     id: taskId,
     workflowId,
@@ -224,6 +227,7 @@ describe('RFC-354 — closure / local edges across nested loop frames', () => {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // The nested topology ran to the outer loop's exhaustion.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
@@ -235,11 +239,12 @@ describe('RFC-354 — closure / local edges across nested loop frames', () => {
     expect(trace.filter((l) => l.agent === 'worker').length).toBe(4)
     expect(trace.filter((l) => l.agent === 'checker').length).toBe(4)
 
-    const rowsOf = (nodeId: string) =>
-      h.db
+    const rowsOf = (nodeId: string) => {
+      return h.db
         .select()
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+    }
     const seedRuns = await rowsOf('seed')
     expect(seedRuns.length).toBe(1)
     const seedRun = seedRuns[0]!

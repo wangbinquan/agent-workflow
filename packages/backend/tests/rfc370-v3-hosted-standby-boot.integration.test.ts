@@ -17,6 +17,7 @@
 // every prepare step runs (in canonical order) before the lease, no
 // execution-recovery step runs on standby, and after activation the
 // execution-recovery steps (including the hosted targeted resume) run in order.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -27,8 +28,6 @@ import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { DAEMON_BOOT_STEPS } from '@/bootstrap/daemonLifecycleProgram'
 import { migrateForDeployment } from '@/bootstrap/deployment'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { hostedExecutionControl } from '@/db/schema'
 import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
@@ -51,9 +50,7 @@ if (providers.includes('postgresql')) {
   const home = mkdtempSync(join(tmpdir(), 'aw-rfc370-standby-'))
   // The in-process Job and verify select the PostgreSQL schema provider
   // process-wide; restore it for the files that run after this one.
-  const previousSchemaProvider = currentDatabaseSchemaProvider()
   afterAll(() => {
-    selectDatabaseSchemaProvider(previousSchemaProvider)
     rmSync(home, { recursive: true, force: true })
   })
 
@@ -229,6 +226,7 @@ if (providers.includes('postgresql')) {
       expect(await status('/live')).toBe(200)
       expect(await status('/ready')).toBe(200)
       const db = (await serving).openBootstrapClient()
+      const { hostedExecutionControl } = tablesOf(db)
       const before = await db
         .select()
         .from(hostedExecutionControl)

@@ -1,4 +1,6 @@
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-264 — human-readable (Chinese) workflow / workgroup names, server side.
 //
@@ -19,7 +21,6 @@ import {
 } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { users } from '../src/db/schema'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { previewWorkflowYaml } from '../src/services/workflow.yaml'
 import { createWorkgroup, getWorkgroupById, renameWorkgroup } from '../src/services/workgroups'
@@ -39,23 +40,21 @@ function actor(id: string): Actor {
   })
 }
 
-function seedUserWrite(db: ProviderNeutralDatabase, id: string) {
+function seedUserWrite(db: PersistenceDb, id: string) {
   const now = Date.now()
-  return db
-    .insert(users)
-    .values({
-      id,
-      username: id,
-      displayName: id,
-      role: 'user' as const,
-      status: 'active' as const,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { users } = tablesOf(db)
+  return insertOne(db, users, {
+    id,
+    username: id,
+    displayName: id,
+    role: 'user' as const,
+    status: 'active' as const,
+    createdAt: now,
+    updatedAt: now,
+  })
 }
 
-async function seedProviderUsers(db: ProviderNeutralDatabase): Promise<void> {
+async function seedProviderUsers(db: PersistenceDb): Promise<void> {
   await seedUserWrite(db, 'alice')
   await seedUserWrite(db, 'bob')
 }

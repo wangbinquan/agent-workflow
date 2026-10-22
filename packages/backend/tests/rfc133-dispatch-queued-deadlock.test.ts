@@ -18,6 +18,8 @@
 //      seals the answer and PARKS the dispatch — dispatchDeferredReason — instead of the
 //      legacy pre-seal reject).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -25,10 +27,9 @@ import { fileURLToPath } from 'node:url'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { ConflictError } from '../src/util/errors'
@@ -114,9 +115,10 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc133',
     description: '',
@@ -124,7 +126,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -144,13 +146,14 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -160,7 +163,7 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -176,13 +179,10 @@ interface EntrySeed {
   stagedAt?: number | null
 }
 
-async function insertEntry(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  e: EntrySeed,
-): Promise<string> {
+async function insertEntry(db: PersistenceDb, taskId: string, e: EntrySeed): Promise<string> {
   const id = ulid()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -206,10 +206,14 @@ async function insertEntry(
   return id
 }
 
-const entryRow = (db: ProviderNeutralDatabase, id: string) =>
-  db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
-const taskRuns = (db: ProviderNeutralDatabase, taskId: string) =>
-  db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+const entryRow = (db: PersistenceDb, id: string) => {
+  const { taskQuestions } = tablesOf(db)
+  return db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
+}
+const taskRuns = (db: PersistenceDb, taskId: string) => {
+  const { nodeRuns } = tablesOf(db)
+  return db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+}
 
 beforeEach(() => resetBroadcastersForTests())
 

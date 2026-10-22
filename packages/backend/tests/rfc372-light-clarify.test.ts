@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
@@ -19,7 +21,6 @@ import {
   type ClarifyFollowup,
   type ClarifyQuestion,
 } from '@agent-workflow/shared'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '@/db/schema'
 import { createClarifyRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import {
@@ -134,13 +135,14 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  await h.db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'light',
     definition: JSON.stringify(definition),
     schemaVersion: 7,
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'light',
     executionLineageId: taskId,
@@ -157,9 +159,13 @@ async function seed(
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await h.db
-    .insert(nodeRuns)
-    .values({ id: askingNodeRunId, taskId, nodeId: 'asking', status: 'done', iteration: 0 })
+  await insertOne(h.db, nodeRuns, {
+    id: askingNodeRunId,
+    taskId,
+    nodeId: 'asking',
+    status: 'done',
+    iteration: 0,
+  })
   const questions = [q('a'), q('b', 'a')]
   const common = {
     db: h.db,
@@ -174,13 +180,14 @@ async function seed(
       ? { ...common, kind, askingShardKey: null, iteration: 0 }
       : { ...common, kind, targetConsumerNodeId: 'designer', loopIter: 0 },
   )
-  const read = async () =>
-    (
+  const read = async () => {
+    return (
       await h.db
         .select()
         .from(clarifyRounds)
         .where(eq(clarifyRounds.intermediaryNodeRunId, round.intermediaryNodeRunId))
     )[0]!
+  }
   return { taskId, nodeRunId: round.intermediaryNodeRunId, questions, read }
 }
 
@@ -191,6 +198,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         categories: ['Scope', ['Performance', 'Database', 'SQL']],
         instructions: '',
       })
+      const { workflows } = tablesOf(h.db)
       // Editing the reusable workflow must not silently change an already running task.
       await h.db.update(workflows).set({ definition: JSON.stringify({ nodes: [] }) })
       const store = createClarifyFollowupStore(h.db, events)
@@ -296,6 +304,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         instruction: 'Deeper',
         basis: clarifyContentKey(clarifyFollowupContext(snap.questions, snap.drafts, 'b')),
       }
+      const { nodeRuns } = tablesOf(h.db)
       const beforeRuns = await h.db
         .select()
         .from(nodeRuns)

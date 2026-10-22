@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
@@ -7,7 +9,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
-import { cachedRepos, repoGroups } from '@/db/schema'
 import { admitDaemonIdentity } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type {
@@ -70,7 +71,8 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
       lastFetchedAt: 1,
       createdAt: 1,
     }
-    await harness.db.insert(cachedRepos).values(row)
+    const { cachedRepos } = tablesOf(harness.db)
+    await insertOne(harness.db, cachedRepos, row)
     const stored = (
       await harness.db.select().from(cachedRepos).where(eq(cachedRepos.id, row.id))
     )[0]!
@@ -101,7 +103,8 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
     await expect(
       f.contract.withSnapshot(async (snapshot, tx) => {
         escaped = snapshot
-        await tx.insert(cachedRepos).values({ ...f.row, id, urlHash: ulid() })
+        const { cachedRepos } = tablesOf(tx)
+        await insertOne(tx, cachedRepos, { ...f.row, id, urlHash: ulid() })
         const current = (await tx.select().from(cachedRepos).where(eq(cachedRepos.id, id)))[0]!
         captured = await snapshot.resolveAuthorized(f.identity.authority, {
           kind: 'repository',
@@ -112,6 +115,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
         throw new Error('admission-rollback')
       }),
     ).rejects.toThrow('admission-rollback')
+    const { cachedRepos } = tablesOf(harness.db)
     expect(await harness.db.select().from(cachedRepos).where(eq(cachedRepos.id, id))).toEqual([])
     await expect(escaped!.resolveAuthorized(f.identity.authority, f.source)).rejects.toThrow(
       'snapshot-scope-ended',
@@ -132,6 +136,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
       ).rejects.toThrow('repository-effect-inside-snapshot-transaction')
       return ref
     })
+    const { cachedRepos } = tablesOf(harness.db)
     await harness.db
       .update(cachedRepos)
       .set({ localPath: join(f.root, 'not-a-repository') })
@@ -256,6 +261,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
     }
     const ref = await f.contract.seal.seal(context, source)
     expect(await f.contract.seal.seal(context, source)).toBe(ref)
+    const { cachedRepos, repoGroups } = tablesOf(harness.db)
     expect((await harness.db.select().from(cachedRepos)).length).toBe(2)
     expect(existsSync(f.options.appHome)).toBe(false)
     await f.contract.withSnapshot((snapshot) =>
@@ -274,9 +280,13 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
       ),
     ).rejects.toThrow('seal-replay-unavailable')
     const groupId = ulid()
-    await harness.db
-      .insert(repoGroups)
-      .values({ id: groupId, name: groupId, version: 2, createdAt: 1, updatedAt: 1 })
+    await insertOne(harness.db, repoGroups, {
+      id: groupId,
+      name: groupId,
+      version: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    })
     await expect(
       f.contract.withSnapshot((snapshot) =>
         snapshot.resolveAuthorized(f.identity.authority, {

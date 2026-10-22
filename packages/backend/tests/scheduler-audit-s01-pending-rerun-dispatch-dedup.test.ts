@@ -22,12 +22,12 @@
 // 纯函数直测 deriveFrontier（已导出）；row()/def() 帮手复刻自 derive-frontier.test.ts
 // （那里是 file-local，不改既有文件）。
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

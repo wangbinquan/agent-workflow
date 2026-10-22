@@ -13,15 +13,16 @@
 // 覆盖验收条款：AC-K1（自己的 skill/plugin 可原地更新）/ AC-K2（他人的仍强制 copy）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { plugins, skills } from '../src/db/schema'
 import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight'
 import { createResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/aclReadRepository'
 
@@ -82,7 +83,7 @@ const entry = (handle: string, resourceType: string, resourceId: string) =>
   ({ handle, resourceType, resourceId }) as never
 
 async function copyOnlyTargetsFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   manifest: Parameters<typeof resolveIntentApplyResourcePreflight>[2],
   changeset: Parameters<typeof resolveIntentApplyResourcePreflight>[3],
@@ -97,45 +98,41 @@ async function copyOnlyTargetsFor(
   ).copyOnlyTargets
 }
 
-async function seedSkill(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedSkill(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  await db
-    .insert(skills)
-    .values({
-      id,
-      name: `skill-${id.slice(-6)}`,
-      description: '',
-      sourceKind: 'managed',
-      ownerUserId,
-      visibility: 'public',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    } as never)
-    .run()
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, {
+    id,
+    name: `skill-${id.slice(-6)}`,
+    description: '',
+    sourceKind: 'managed',
+    ownerUserId,
+    visibility: 'public',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as never)
   return id
 }
 
-async function seedPlugin(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedPlugin(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  await db
-    .insert(plugins)
-    .values({
-      id,
-      name: `plugin-${id.slice(-6)}`,
-      description: '',
-      spec: 'left-pad@1.0.0',
-      optionsJson: '{}',
-      enabled: true,
-      sourceKind: 'npm',
-      cachedPath: '/tmp/x',
-      resolvedVersion: '1.0.0',
-      ownerUserId,
-      visibility: 'public',
-      installedAt: Date.now(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    } as never)
-    .run()
+  const { plugins } = tablesOf(db)
+  await insertOne(db, plugins, {
+    id,
+    name: `plugin-${id.slice(-6)}`,
+    description: '',
+    spec: 'left-pad@1.0.0',
+    optionsJson: '{}',
+    enabled: true,
+    sourceKind: 'npm',
+    cachedPath: '/tmp/x',
+    resolvedVersion: '1.0.0',
+    ownerUserId,
+    visibility: 'public',
+    installedAt: Date.now(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  } as never)
   return id
 }
 

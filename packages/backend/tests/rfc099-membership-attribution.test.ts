@@ -10,6 +10,8 @@
 //     kept where values match, submitter takes over changed answers) and
 //     records the submitter's role; drafts reject non-awaiting rounds.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
@@ -18,17 +20,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskCollaborators,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { createUser } from './helpers/userFixture'
@@ -43,7 +35,7 @@ interface Users {
   admin: { id: string; token: string }
 }
 
-async function seedUsers(db: ProviderNeutralDatabase): Promise<Users> {
+async function seedUsers(db: PersistenceDb): Promise<Users> {
   async function mk(username: string, role: 'admin' | 'user') {
     const u = await createUser(db, {
       username,
@@ -75,11 +67,12 @@ async function req(
 }
 
 async function addMembership(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   ownerId: string,
   collaboratorId: string,
 ): Promise<void> {
+  const { taskCollaborators } = tablesOf(db)
   await db.insert(taskCollaborators).values([
     { taskId, userId: ownerId, role: 'owner', addedBy: ownerId, addedAt: Date.now() },
     { taskId, userId: collaboratorId, role: 'collaborator', addedBy: ownerId, addedAt: Date.now() },
@@ -100,7 +93,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-membership-attr-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let users: Users
     let taskId = ''
@@ -130,11 +123,14 @@ describeEachProviderHttpApplication(
         edges: [],
       }
       const workflowId = ulid()
-      await db
-        .insert(workflows)
-        .values({ id: workflowId, name: 'wf', definition: JSON.stringify(definition) })
+      const { workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+      await insertOne(db, workflows, {
+        id: workflowId,
+        name: 'wf',
+        definition: JSON.stringify(definition),
+      })
       taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         name: 't',
         id: taskId,
         workflowId,
@@ -151,7 +147,7 @@ describeEachProviderHttpApplication(
       await addMembership(db, taskId, users.alice.id, users.carol.id)
 
       const agentRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: agentRunId,
         taskId,
         nodeId: 'doc',
@@ -161,11 +157,13 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 1000,
         finishedAt: Date.now() - 900,
       })
-      await db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: agentRunId, portName: 'docpath', content: '# body inline' })
+      await insertOne(db, nodeRunOutputs, {
+        nodeRunId: agentRunId,
+        portName: 'docpath',
+        content: '# body inline',
+      })
       reviewRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: reviewRunId,
         taskId,
         nodeId: 'rev_1',
@@ -177,7 +175,7 @@ describeEachProviderHttpApplication(
       })
       mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
       writeFileSync(join(appHome, 'doc_versions/v1.md'), '# body inline')
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: ulid(),
         taskId,
         reviewNodeId: 'rev_1',
@@ -229,6 +227,7 @@ describeEachProviderHttpApplication(
       const commentBody = (await comment.json()) as { author: string; authorRole: string }
       expect(commentBody.author).toBe(users.carol.id)
       expect(commentBody.authorRole).toBe('user')
+      const { reviewComments, docVersions, nodeRunOutputs } = tablesOf(db)
       const commentRow = (await db.select().from(reviewComments))[0]!
       expect(commentRow.author).toBe(users.carol.id)
       expect(commentRow.authorRole).toBe('user')
@@ -257,6 +256,7 @@ describeEachProviderHttpApplication(
         body: JSON.stringify({ decision: 'rejected', rejectReason: 'redo', reviewIteration: 0 }),
       })
       expect(decision.status).toBe(200)
+      const { docVersions } = tablesOf(db)
       const dv = (await db.select().from(docVersions))[0]!
       expect(dv.decidedBy).toBe(users.admin.id)
       expect(dv.decidedByRole).toBe('admin')
@@ -320,7 +320,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-membership-attr-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let users: Users
     let taskId = ''
@@ -344,7 +344,8 @@ describeEachProviderHttpApplication(
         outputs: [],
       }
       const workflowId = `wf_${taskId}`
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'wf',
         description: '',
@@ -352,7 +353,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 3,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         name: 'fixture-task',
         id: taskId,
         workflowId,
@@ -368,7 +369,7 @@ describeEachProviderHttpApplication(
       })
       await addMembership(db, taskId, users.alice.id, users.carol.id)
       const sourceRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: sourceRunId,
         taskId,
         nodeId: 'designer',
@@ -484,6 +485,7 @@ describeEachProviderHttpApplication(
         }),
       })
       expect(submit.status).toBe(200)
+      const { clarifyRounds } = tablesOf(db)
       const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)))[0]!
       expect(row.status).toBe('answered')
       expect(row.answeredBy).toBe(users.carol.id)

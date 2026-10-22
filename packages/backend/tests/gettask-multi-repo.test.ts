@@ -7,6 +7,8 @@
 // today) return a length-1 array mirroring the tasks.* columns; multi-repo
 // tasks return N entries in launch order.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -17,7 +19,6 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { getTask } from '@/services/task'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { basename } from 'node:path'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -49,7 +50,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
   }
 
   const db = createInMemoryDb(MIGRATIONS)
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf-gt',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),

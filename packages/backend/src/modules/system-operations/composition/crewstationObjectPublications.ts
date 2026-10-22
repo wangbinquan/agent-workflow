@@ -1,7 +1,7 @@
 // RFC-370 v3 V6 — assemble the neutral hosted object publication journal.
 // Every hosted root (serving slot and maintenance Worker) composes the same
 // journal; owners receive only its public participant.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import type {
@@ -12,7 +12,7 @@ import { createHostedBackupReleaseHorizon } from '../infrastructure/crewstation/
 import { createHostedObjectPublications } from '../infrastructure/crewstation/objectPublications'
 
 export function composeCrewStationObjectPublications(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly objects: CrewStationStreamObjectStorage
   readonly sealer?: { seal(plaintext: string): string; unseal(packed: string): string }

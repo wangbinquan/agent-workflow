@@ -33,6 +33,7 @@
 // `priorCompletedTopLevelRun` block + the validate-before-insert ordering
 // in runner.ts.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -44,7 +45,6 @@ import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
@@ -245,13 +245,14 @@ async function buildHarness(): Promise<Harness> {
     },
     {
       db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
       binaryOverride: stubOpencode,
       awaitScheduler: true,
     },
   )
 
+  const { clarifyRounds, nodeRuns } = tablesOf(db)
   // RFC-100: the designer has a clarify channel, so its FIRST reply is a
   // mandatory `<workflow-clarify>` (stub call 1) → awaiting_human. Answer with
   // stop → the rerun (stub call 2) produces output v1 → designer `done`, rev_1
@@ -259,7 +260,6 @@ async function buildHarness(): Promise<Harness> {
   // consumed_by_consumer_run_id = the v1 output run (RFC-070, runner.ts mark
   // gate) — exactly the state this test needs (a prior ANSWERED, CONSUMED clarify
   // round), now via the real flow instead of retroactive staging + manual stamp.
-  const { clarifyRounds } = await import('../src/db/schema')
   const sessionRows = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, task.id))
   const clarifyNodeRunId = sessionRows[0]?.intermediaryNodeRunId
   if (clarifyNodeRunId === undefined) throw new Error('clarify session not created on first run')
@@ -355,6 +355,7 @@ describe('review-iterate rerun drops prior clarify Q&A from the prompt', () => {
     })
     expect(result.resumeRequired).toBe(true)
 
+    const { nodeRuns } = tablesOf(h.db)
     // The post-clarify done row should now be a canceled superseded row.
     const supersededRow = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.designerDoneRunId))

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D17 —— resource-catalog 的 Plugin 聚合：异步仓库成为唯一实现（`sqlitePluginRepository` /
 // `postgresqlPluginRepository` 退役），目录装配与代际清扫装配各一份。同一段断言在两个引擎上各跑一遍：创建 / 读 / 列表、
@@ -11,8 +13,7 @@ import { CreateAgentSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PluginCreateRecord } from '@/modules/resource-catalog/application/plugins/ports'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { pluginConfigHash } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
@@ -22,9 +23,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = ulid()
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id.slice(-8).toLowerCase()}`,
     displayName: id,
@@ -161,7 +163,10 @@ describeEachProvider('RFC-359 W4-D17 —— Plugin 仓库', (harness) => {
       record(owner, `plugin-${ulid().slice(-6).toLowerCase()}`),
     )
     const agentId = ulid()
-    await harness.db.insert(agents).values(
+    const { agents } = tablesOf(harness.db)
+    await insertOne(
+      harness.db,
+      agents,
       createAgentPersistenceValues({
         id: agentId,
         agent: CreateAgentSchema.parse({

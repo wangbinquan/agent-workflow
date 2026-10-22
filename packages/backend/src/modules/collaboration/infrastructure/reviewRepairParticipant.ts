@@ -28,10 +28,10 @@
 // 合一只消掉了这份零调用方的重复，**没有**消掉错位本身：下一步应让 `options-R1.ts` 改为消费本端口，
 // 否则 SQLite 侧会永远保留第二份实现。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import { docVersions, nodeRunOutputs } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   ReviewRepairInspection,
@@ -41,9 +41,10 @@ import type {
 type ReviewIdentity = Parameters<ReviewRepairParticipant['inspect']>[0]
 
 async function loadInspection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: ReviewIdentity,
 ): Promise<ReviewRepairInspection | null> {
+  const { docVersions, nodeRunOutputs } = tablesOf(db)
   const row = (
     await db
       .select({
@@ -80,9 +81,7 @@ function approvedDocContent(input: ReviewIdentity, sourceFilePath: string | null
     : `__rfc057_manual_repair__:doc_version=${input.docVersionId}`
 }
 
-export function createReviewRepairParticipant(
-  db: ProviderNeutralDatabase,
-): ReviewRepairParticipant {
+export function createReviewRepairParticipant(db: PersistenceDb): ReviewRepairParticipant {
   return Object.freeze({
     async inspect(input: Parameters<ReviewRepairParticipant['inspect']>[0]) {
       return await loadInspection(db, input)
@@ -99,6 +98,7 @@ export function createReviewRepairParticipant(
           reviewIteration: state.reviewIteration,
           versionIndex: state.versionIndex,
         })
+        const { nodeRunOutputs } = tablesOf(transaction)
         await transaction
           .insert(nodeRunOutputs)
           .values({ nodeRunId: input.nodeRunId, portName: 'approved_doc', content })
@@ -117,6 +117,7 @@ export function createReviewRepairParticipant(
       })
     },
     async unapprove(input: Parameters<ReviewRepairParticipant['unapprove']>[0]) {
+      const { docVersions } = tablesOf(db)
       const changed = await db
         .update(docVersions)
         .set({ decision: 'pending', decidedAt: null, decidedBy: null })

@@ -1,11 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentAdapterDefinitionRevisions,
-  developmentAdapterDefinitions,
-  resourceGrants,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DevelopmentAdapterIdentityRow } from '../application/developmentAdapterCommands'
 import { toIdentityRow } from './developmentAdapterStore'
 
@@ -35,10 +31,11 @@ interface DevelopmentToolConnectionStore {
  * 而同步那半只在一个引擎上成立。
  */
 export function createDevelopmentToolConnectionStore(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DevelopmentToolConnectionStore {
   return {
     async identity(id) {
+      const { developmentAdapterDefinitions } = tablesOf(db)
       const rows = await db
         .select()
         .from(developmentAdapterDefinitions)
@@ -48,9 +45,11 @@ export function createDevelopmentToolConnectionStore(
       return row === undefined ? null : toIdentityRow(row)
     },
     async identities() {
+      const { developmentAdapterDefinitions } = tablesOf(db)
       return (await db.select().from(developmentAdapterDefinitions)).map(toIdentityRow)
     },
     async revision(id, revision) {
+      const { developmentAdapterDefinitionRevisions } = tablesOf(db)
       const rows = await db
         .select({
           contentJson: developmentAdapterDefinitionRevisions.contentJson,
@@ -67,6 +66,7 @@ export function createDevelopmentToolConnectionStore(
       return rows[0] ?? null
     },
     async grantedUserIds(id) {
+      const { resourceGrants } = tablesOf(db)
       const rows = await db
         .select({ userId: resourceGrants.userId })
         .from(resourceGrants)

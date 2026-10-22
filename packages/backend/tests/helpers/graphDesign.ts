@@ -1,5 +1,5 @@
 import type { GraphDesignDocument, GraphViewProposal } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createGraphDesignStore } from '@/modules/development-automation/infrastructure/graph-development/designStore'
 import { createGraphDesignCommands } from '@/modules/development-automation/application/graph-development/designCommands'
 import { createGraphDesignQueries } from '@/modules/development-automation/application/graph-development/designQueries'
@@ -138,7 +138,7 @@ export function memoryGraphArtifacts(): GraphDesignArtifacts {
   }
 }
 export async function graphFixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   baseline = bookingDesign().repositoryBaseline,
 ) {
   const store = createGraphDesignStore(db),

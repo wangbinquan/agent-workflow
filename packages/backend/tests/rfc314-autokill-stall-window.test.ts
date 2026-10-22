@@ -14,14 +14,15 @@
 // 另加两条结构判据（形状退化在小库上永远看不出来）：语句数不随事件量增长；EXPLAIN 不许
 // 出现 SCAN 或 TEMP B-TREE。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { findStalledRunningChildren } from '../src/services/autoKill'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
@@ -34,14 +35,15 @@ const STALL_MS = 60_000
 const WINDOW = 200
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { startedAt: number; events: Array<{ ts: number }> },
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc314-fixture',
     workflowId,
@@ -59,7 +61,7 @@ async function seedRun(
     inputs: '{}',
     startedAt: opts.startedAt,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'n1',
@@ -68,15 +70,15 @@ async function seedRun(
     startedAt: opts.startedAt,
   })
   // 顺序切批保留事件行与自增 id 的顺序；recordStatements 仍在所有 seed 之后开始。
-  const eventRows = opts.events.map((e): typeof nodeRunEvents.$inferInsert => ({
+  const eventRows = opts.events.map((e): PersistenceTables['nodeRunEvents']['$inferInsert'] => ({
     nodeRunId,
     ts: e.ts,
     kind: 'text',
     payload: '{}',
   }))
-  await insertInBatches(db, nodeRunEvents, eventRows, (batch) =>
-    db.insert(nodeRunEvents).values([...batch]),
-  )
+  await insertInBatches(db, nodeRunEvents, eventRows, (batch) => {
+    return db.insert(nodeRunEvents).values([...batch])
+  })
   return nodeRunId
 }
 
@@ -163,7 +165,7 @@ async function capture(
   database?: ProviderDatabaseHarness,
 ): Promise<{
   statements: RecordedStatement[]
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
 }> {
   const db = database?.db ?? createInMemoryDb(MIGRATIONS)
   for (let i = 0; i < 3; i += 1) {

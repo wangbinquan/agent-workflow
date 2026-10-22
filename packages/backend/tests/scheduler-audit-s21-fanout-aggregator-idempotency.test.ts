@@ -23,6 +23,8 @@
 //   fail-all + 同代原地重跑挡住了"非 done 行进聚合"的确定性集成构造，这一半
 //   仍按调研分工指引保留为源码文本断言（改写成正向形态）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -31,9 +33,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -57,7 +58,7 @@ const WRAPPER_MECHANICS_SRC = resolve(
   'wrapperMechanics.ts',
 )
 
-interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
   db: TDatabase
   postgresql: boolean
   appHome: string
@@ -82,12 +83,13 @@ function buildHarness(provider?: ProviderHarness): Harness {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -109,14 +111,15 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -247,7 +250,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     //     prior-child 分支会原样复用，不再 spawn）；
     //   - 上一代 aggregator 子行被 reap 成 'interrupted' 残留。
     const wrapperRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: wrapperRunId,
       taskId,
       nodeId: 'fan',
@@ -264,7 +268,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       [doneShardA, 'a.md', 'A-out'],
       [doneShardB, 'b.md', 'B-out'],
     ] as const) {
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id,
         taskId,
         nodeId: 'inner',
@@ -276,10 +280,10 @@ function registerProviderCases1(provider: ProviderHarness) {
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await h.db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content })
+      await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content })
     }
     const staleAggId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: staleAggId,
       taskId,
       nodeId: 'aggNode',

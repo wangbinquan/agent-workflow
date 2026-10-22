@@ -1,6 +1,9 @@
 // RFC-310 OS: locks one durable Case scene from uploaded repository placement
 // through fresh-scene rollback, ChangeCandidate, platform commit/CAS push and MR ensure.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { afterAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -8,16 +11,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import {
-  cachedRepos,
-  employeeCaseWorkspaces,
-  employeeCases,
-  employeeChangeCandidates,
-  employeeReactionRounds,
-  employeeRoundWorkspaceStates,
-} from '@/db/schema'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { developmentEmployeeRuntimeCodec } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
@@ -48,7 +43,7 @@ const root = mkdtempSync(join(tmpdir(), 'rfc310-os-delivery-'))
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 /**
  * 每个用例自己的文件系统场景根。**双引擎下必须逐例新开**：同一段 body 在 sqlite / postgresql
  * 上各跑一遍，而 baseline / remote 仓、appHome 下的 Case 工作区都是按固定名落在盘上的——共用
@@ -145,7 +140,14 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     )
     const baselineSha = git(baseline, 'rev-parse', 'HEAD')
     git(remote, 'init', '-q', '--bare')
-    await db.insert(cachedRepos).values({
+    const {
+      cachedRepos,
+      employeeCases,
+      employeeCaseWorkspaces,
+      employeeReactionRounds,
+      employeeChangeCandidates,
+    } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: 'repo-1',
       urlHash: 'selected-de',
       localPath: baseline,
@@ -153,7 +155,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       lastFetchedAt: 1,
       createdAt: 1,
     })
-    await db.insert(employeeCases).values({
+    await insertOne(db, employeeCases, {
       id: 'case-selected',
       employeeId: 'employee-1',
       employeeRevision: 1,
@@ -182,7 +184,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       baselineSha,
     })
     writeFileSync(join(workspace.workspacePath, 'selected.txt'), 'selected DE candidate\n')
-    await db.insert(employeeCaseWorkspaces).values({
+    await insertOne(db, employeeCaseWorkspaces, {
       caseId: 'case-selected',
       repositoryId: 'repo-1',
       cachedRepoId: 'repo-1',
@@ -225,7 +227,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       contexts: [issue],
       allowedEffectKinds: ['source-control.candidate'],
     })
-    await db.insert(employeeReactionRounds).values({
+    await insertOne(db, employeeReactionRounds, {
       id: preparePlan.roundRef,
       caseId: 'case-selected',
       caseRevision: 1,
@@ -479,41 +481,43 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     const baselineSha = git(baselineRepo, 'rev-parse', 'HEAD')
     mkdirSync(remoteRepo, { recursive: true })
     git(remoteRepo, 'init', '-q', '--bare')
-    await db
-      .insert(cachedRepos)
-      .values({
-        id: 'repo-1',
-        urlHash: 'deadbeef',
-        urlEnc: null,
-        urlRedacted: remoteRepo,
-        localPath: baselineRepo,
-        defaultBranch: 'main',
-        lastFetchedAt: 1,
-        createdAt: 1,
-      })
-      .run()
-    await db
-      .insert(employeeCases)
-      .values({
-        id: 'case-1',
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        typeId: 'development',
-        typeRevision: 1,
-        primaryContextId: 'issue-context',
-        executionPolicyRevision: 1,
-        state: 'active',
-        terminalKind: null,
-        blockReason: null,
-        currentWorkItemRef: 'analyze-implement',
-        activeRoundId: 'round-analyze',
-        revision: 1,
-        writerGeneration: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        terminalAt: null,
-      })
-      .run()
+    const {
+      cachedRepos,
+      employeeCases,
+      employeeReactionRounds,
+      employeeRoundWorkspaceStates,
+      employeeChangeCandidates,
+      employeeCaseWorkspaces,
+    } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
+      id: 'repo-1',
+      urlHash: 'deadbeef',
+      urlEnc: null,
+      urlRedacted: remoteRepo,
+      localPath: baselineRepo,
+      defaultBranch: 'main',
+      lastFetchedAt: 1,
+      createdAt: 1,
+    })
+    await insertOne(db, employeeCases, {
+      id: 'case-1',
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      typeId: 'development',
+      typeRevision: 1,
+      primaryContextId: 'issue-context',
+      executionPolicyRevision: 1,
+      state: 'active',
+      terminalKind: null,
+      blockReason: null,
+      currentWorkItemRef: 'analyze-implement',
+      activeRoundId: 'round-analyze',
+      revision: 1,
+      writerGeneration: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      terminalAt: null,
+    })
 
     const contentAddressed = createEmployeeInputArtifactStore(
       join(appHome, 'artifacts', 'employee-inputs'),
@@ -596,33 +600,30 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       contexts: [issueContext],
       workspacePolicy: writePolicy,
     })
-    await db
-      .insert(employeeReactionRounds)
-      .values({
-        id: 'round-analyze',
-        caseId: 'case-1',
-        caseRevision: 1,
-        inboxId: null,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        ruleId: 'continue-analyze',
-        workItemRef: 'analyze-implement',
-        workContractId: 'development.analyze-implement',
-        workContractVersion: 1,
-        toolId: null,
-        toolRevision: null,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        planJson: JSON.stringify(analyzePlan),
-        state: 'running',
-        executionRef: 'task-1',
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: 2,
-        updatedAt: 2,
-        settledAt: null,
-      })
-      .run()
+    await insertOne(db, employeeReactionRounds, {
+      id: 'round-analyze',
+      caseId: 'case-1',
+      caseRevision: 1,
+      inboxId: null,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'continue-analyze',
+      workItemRef: 'analyze-implement',
+      workContractId: 'development.analyze-implement',
+      workContractVersion: 1,
+      toolId: null,
+      toolRevision: null,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(analyzePlan),
+      state: 'running',
+      executionRef: 'task-1',
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 2,
+      updatedAt: 2,
+      settledAt: null,
+    })
 
     // RFC-370: selected object materialization must complete before the Case
     // workspace is committed; retain the real Git/file delivery assertions below.
@@ -676,7 +677,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       ])
       expect(firstSettled).toBe(false)
       expect(copiedBlobs).toEqual([artifact.blobRef])
-      expect(await db.select().from(employeeCaseWorkspaces).all()).toEqual([])
+      expect(await db.select().from(employeeCaseWorkspaces)).toEqual([])
       copyRelease.resolve()
       await Promise.race([
         checkpointEffects.copyEntered.promise,
@@ -686,7 +687,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
         }),
       ])
       expect(firstSettled).toBe(false)
-      expect(await db.select().from(employeeRoundWorkspaceStates).all()).toEqual([])
+      expect(await db.select().from(employeeRoundWorkspaceStates)).toEqual([])
       checkpointEffects.copyRelease.resolve()
       await Promise.race([
         checkpointEffects.closeEntered.promise,
@@ -696,7 +697,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
         }),
       ])
       expect(firstSettled).toBe(false)
-      expect(await db.select().from(employeeRoundWorkspaceStates).all()).toEqual([])
+      expect(await db.select().from(employeeRoundWorkspaceStates)).toEqual([])
     } finally {
       copyRelease.resolve()
       checkpointEffects.copyRelease.resolve()
@@ -789,7 +790,6 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       .update(employeeReactionRounds)
       .set({ planJson: JSON.stringify(inheritedAnalyzePlan), updatedAt: 11 })
       .where(eq(employeeReactionRounds.id, 'round-analyze'))
-      .run()
 
     const fresh = await workspace.prepare({
       planJson: JSON.stringify(inheritedAnalyzePlan),
@@ -839,14 +839,11 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       join(fresh.workspacePath, inheritedMaterialRef),
       '# Inherited issue 8 acceptance\n',
     )
-    await db
-      .update(employeeReactionRounds)
-      .set({
-        state: 'completed',
-        outputJson: JSON.stringify({ status: 'ok', summary: 'Implement feature' }),
-        settledAt: 20,
-      })
-      .run()
+    await db.update(employeeReactionRounds).set({
+      state: 'completed',
+      outputJson: JSON.stringify({ status: 'ok', summary: 'Implement feature' }),
+      settledAt: 20,
+    })
 
     writeFileSync(join(fresh.workspacePath, 'src', 'feature.ts'), 'export const feature = 999\n')
 
@@ -861,33 +858,30 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       contexts: [inheritedIssueContext],
       workspacePolicy: writePolicy,
     })
-    await db
-      .insert(employeeReactionRounds)
-      .values({
-        id: 'round-analyze-recovery',
-        caseId: 'case-1',
-        caseRevision: 2,
-        inboxId: null,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        ruleId: 'continue-analyze-recovery',
-        workItemRef: 'analyze-implement',
-        workContractId: 'development.analyze-implement',
-        workContractVersion: 1,
-        toolId: null,
-        toolRevision: null,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        planJson: JSON.stringify(recoveryPlan),
-        state: 'running',
-        executionRef: 'task-recovery',
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: 21,
-        updatedAt: 21,
-        settledAt: null,
-      })
-      .run()
+    await insertOne(db, employeeReactionRounds, {
+      id: 'round-analyze-recovery',
+      caseId: 'case-1',
+      caseRevision: 2,
+      inboxId: null,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'continue-analyze-recovery',
+      workItemRef: 'analyze-implement',
+      workContractId: 'development.analyze-implement',
+      workContractVersion: 1,
+      toolId: null,
+      toolRevision: null,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(recoveryPlan),
+      state: 'running',
+      executionRef: 'task-recovery',
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 21,
+      updatedAt: 21,
+      settledAt: null,
+    })
     expect(
       await workspace.prepare({
         planJson: JSON.stringify(recoveryPlan),
@@ -909,31 +903,28 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       .update(employeeReactionRounds)
       .set({ state: 'failed', settledAt: 22, updatedAt: 22 })
       .where(eq(employeeReactionRounds.id, 'round-analyze-recovery'))
-      .run()
     writeFileSync(join(fresh.workspacePath, 'src', 'feature.ts'), 'export const feature = 2\n')
     const exactRecoveryPlan = {
       ...recoveryPlan,
       roundRef: 'round-analyze-recovery-exact',
     }
-    const failedRecoveryRound = (await db
-      .select()
-      .from(employeeReactionRounds)
-      .where(eq(employeeReactionRounds.id, 'round-analyze-recovery'))
-      .get())!
-    await db
-      .insert(employeeReactionRounds)
-      .values({
-        ...failedRecoveryRound,
-        id: exactRecoveryPlan.roundRef,
-        planJson: JSON.stringify(exactRecoveryPlan),
-        state: 'running',
-        executionRef: 'task-recovery-exact',
-        outputJson: null,
-        createdAt: 23,
-        updatedAt: 23,
-        settledAt: null,
-      })
-      .run()
+    const failedRecoveryRound = (await firstRow(
+      db
+        .select()
+        .from(employeeReactionRounds)
+        .where(eq(employeeReactionRounds.id, 'round-analyze-recovery')),
+    ))!
+    await insertOne(db, employeeReactionRounds, {
+      ...failedRecoveryRound,
+      id: exactRecoveryPlan.roundRef,
+      planJson: JSON.stringify(exactRecoveryPlan),
+      state: 'running',
+      executionRef: 'task-recovery-exact',
+      outputJson: null,
+      createdAt: 23,
+      updatedAt: 23,
+      settledAt: null,
+    })
     expect(
       await workspace.prepare({
         planJson: JSON.stringify(exactRecoveryPlan),
@@ -949,11 +940,12 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     ).toEqual({ ok: true })
     expect(
       JSON.parse(
-        (await db
-          .select({ validationJson: employeeRoundWorkspaceStates.validationJson })
-          .from(employeeRoundWorkspaceStates)
-          .where(eq(employeeRoundWorkspaceStates.roundId, exactRecoveryPlan.roundRef))
-          .get())!.validationJson!,
+        (await firstRow(
+          db
+            .select({ validationJson: employeeRoundWorkspaceStates.validationJson })
+            .from(employeeRoundWorkspaceStates)
+            .where(eq(employeeRoundWorkspaceStates.roundId, exactRecoveryPlan.roundRef)),
+        ))!.validationJson!,
       ),
     ).toEqual({
       ok: true,
@@ -969,7 +961,6 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
         settledAt: 24,
       })
       .where(eq(employeeReactionRounds.id, exactRecoveryPlan.roundRef))
-      .run()
     const deliveryIssueContext = {
       ...inheritedIssueContext,
       revision: 3,
@@ -992,33 +983,30 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       contexts: [deliveryIssueContext],
       allowedEffectKinds: ['source-control.candidate'],
     })
-    await db
-      .insert(employeeReactionRounds)
-      .values({
-        id: 'round-prepare',
-        caseId: 'case-1',
-        caseRevision: 2,
-        inboxId: null,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        ruleId: 'continue-prepare',
-        workItemRef: 'prepare-change',
-        workContractId: 'development.prepare-change',
-        workContractVersion: 1,
-        toolId: null,
-        toolRevision: null,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        planJson: JSON.stringify(preparePlan),
-        state: 'planned',
-        executionRef: null,
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: 30,
-        updatedAt: 30,
-        settledAt: null,
-      })
-      .run()
+    await insertOne(db, employeeReactionRounds, {
+      id: 'round-prepare',
+      caseId: 'case-1',
+      caseRevision: 2,
+      inboxId: null,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'continue-prepare',
+      workItemRef: 'prepare-change',
+      workContractId: 'development.prepare-change',
+      workContractVersion: 1,
+      toolId: null,
+      toolRevision: null,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(preparePlan),
+      state: 'planned',
+      executionRef: null,
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 30,
+      updatedAt: 30,
+      settledAt: null,
+    })
     let ensureCalls = 0
     let replyCalls = 0
     let approvalSubmits = 0
@@ -1276,10 +1264,11 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     )
     expect(candidateState.changedPaths).not.toContain('config/already.txt')
     const candidateReceipt = JSON.parse(
-      (await db
-        .select({ receiptJson: employeeChangeCandidates.receiptJson })
-        .from(employeeChangeCandidates)
-        .get())!.receiptJson,
+      (await firstRow(
+        db
+          .select({ receiptJson: employeeChangeCandidates.receiptJson })
+          .from(employeeChangeCandidates),
+      ))!.receiptJson,
     ) as {
       uploadPlan: {
         entries: Array<{ targetPath: string; disposition: string; fileMode: string }>
@@ -1307,7 +1296,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
         fileMode: 'regular',
       }),
     ])
-    await db.update(employeeReactionRounds).set({ state: 'completed', settledAt: 34 }).run()
+    await db.update(employeeReactionRounds).set({ state: 'completed', settledAt: 34 })
 
     const candidateContext = {
       id: 'candidate-context',
@@ -1326,33 +1315,30 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
         'code-host.merge-request.ensure',
       ],
     })
-    await db
-      .insert(employeeReactionRounds)
-      .values({
-        id: 'round-publish',
-        caseId: 'case-1',
-        caseRevision: 3,
-        inboxId: null,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        ruleId: 'continue-publish',
-        workItemRef: 'publish-mr',
-        workContractId: 'development.publish-mr',
-        workContractVersion: 1,
-        toolId: null,
-        toolRevision: null,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        planJson: JSON.stringify(publishPlan),
-        state: 'planned',
-        executionRef: null,
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: 35,
-        updatedAt: 35,
-        settledAt: null,
-      })
-      .run()
+    await insertOne(db, employeeReactionRounds, {
+      id: 'round-publish',
+      caseId: 'case-1',
+      caseRevision: 3,
+      inboxId: null,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'continue-publish',
+      workItemRef: 'publish-mr',
+      workContractId: 'development.publish-mr',
+      workContractVersion: 1,
+      toolId: null,
+      toolRevision: null,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(publishPlan),
+      state: 'planned',
+      executionRef: null,
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 35,
+      updatedAt: 35,
+      settledAt: null,
+    })
     const published = JSON.parse(await platform.execute(publishPlan)) as {
       status: string
       contextPatches: Array<{ contextTypeId: string; stateJson: string }>
@@ -1362,7 +1348,6 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       .update(employeeReactionRounds)
       .set({ state: 'completed', settledAt: 45 })
       .where(eq(employeeReactionRounds.id, 'round-publish'))
-      .run()
     expect(ensureCalls).toBe(1)
     const mrPatch = published.contextPatches.find(
       (patch) => patch.contextTypeId === 'development.merge-request',
@@ -1748,33 +1733,30 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       contexts: [deliveryIssueContext, conflictMrContext],
       workspacePolicy: writePolicy,
     })
-    await db
-      .insert(employeeReactionRounds)
-      .values({
-        id: 'round-repair-conflict',
-        caseId: 'case-1',
-        caseRevision: 4,
-        inboxId: null,
-        employeeId: 'employee-1',
-        employeeRevision: 1,
-        ruleId: 'handle-conflict',
-        workItemRef: 'repair-conflict',
-        workContractId: 'development.repair-conflict',
-        workContractVersion: 1,
-        toolId: null,
-        toolRevision: null,
-        executionPolicyRevision: 1,
-        inputContextRefsJson: '[]',
-        planJson: JSON.stringify(repairConflictPlan),
-        state: 'running',
-        executionRef: 'task-conflict',
-        outputJson: null,
-        attemptOrdinal: 0,
-        createdAt: 50,
-        updatedAt: 50,
-        settledAt: null,
-      })
-      .run()
+    await insertOne(db, employeeReactionRounds, {
+      id: 'round-repair-conflict',
+      caseId: 'case-1',
+      caseRevision: 4,
+      inboxId: null,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'handle-conflict',
+      workItemRef: 'repair-conflict',
+      workContractId: 'development.repair-conflict',
+      workContractVersion: 1,
+      toolId: null,
+      toolRevision: null,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(repairConflictPlan),
+      state: 'running',
+      executionRef: 'task-conflict',
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 50,
+      updatedAt: 50,
+      settledAt: null,
+    })
     const conflictScene = await workspace.prepare({
       planJson: JSON.stringify(repairConflictPlan),
       attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null }),
@@ -1878,7 +1860,6 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       .update(employeeReactionRounds)
       .set({ state: 'completed', settledAt: 60 })
       .where(eq(employeeReactionRounds.id, 'round-repair-conflict'))
-      .run()
 
     const publishConflictPlan = plan({
       roundRef: 'round-publish-conflict',
@@ -2059,14 +2040,15 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     expect(existsSync(join(caseWorkspace, 'src', 'stale-local.ts'))).toBe(false)
     expect(readFileSync(retainedEvidence, 'utf8')).toBe('keep this platform evidence\n')
     expect(
-      await db
-        .select({
-          baselineSha: employeeCaseWorkspaces.baselineSha,
-          remoteHeadSha: employeeCaseWorkspaces.remoteHeadSha,
-        })
-        .from(employeeCaseWorkspaces)
-        .where(eq(employeeCaseWorkspaces.caseId, 'case-1'))
-        .get(),
+      await firstRow(
+        db
+          .select({
+            baselineSha: employeeCaseWorkspaces.baselineSha,
+            remoteHeadSha: employeeCaseWorkspaces.remoteHeadSha,
+          })
+          .from(employeeCaseWorkspaces)
+          .where(eq(employeeCaseWorkspaces.caseId, 'case-1')),
+      ),
     ).toEqual({ baselineSha: externalSha, remoteHeadSha: externalSha })
 
     const observedMrPatch = observedOutput.contextPatches.find(

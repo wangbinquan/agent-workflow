@@ -10,10 +10,10 @@
 //   phase ≥ db-committed → rollforward: 'ready' was set → ensure it (idempotent)
 //     and finish. The skill is a complete, published skill.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rmSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
-import { skills } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { SkillOperationRow } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import type {
   OpRecoveryHandler,
@@ -39,15 +39,13 @@ export const reserveRecoveryHandler: OpRecoveryHandler = {
         : legacySkillRootAbs(fsOpts.appHome, identity.legacyName)
     rmSync(root, { recursive: true, force: true })
   },
-  recoverDb: async (
-    tx: DatabaseTransaction,
-    op: SkillOperationRow,
-    dir: 'rollback' | 'rollforward',
-  ) => {
+  recoverDb: async (tx: PersistenceTx, op: SkillOperationRow, dir: 'rollback' | 'rollforward') => {
     if (dir === 'rollback') {
+      const { skills } = tablesOf(tx)
       // Drop the reserving row (the create never completed).
       await tx.delete(skills).where(eq(skills.id, op.skillId))
     } else {
+      const { skills } = tablesOf(tx)
       // 'ready' should already be set in the db-committed tx; make sure of it.
       await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, op.skillId))
     }

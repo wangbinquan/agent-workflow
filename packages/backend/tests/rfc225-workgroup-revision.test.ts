@@ -1,4 +1,5 @@
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-225 T1-T3 — workgroup saves are exact version-fenced document writes.
 
@@ -12,7 +13,6 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { workgroups } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   createWorkgroup,
@@ -37,10 +37,7 @@ function actorPrincipal(id: string): WorkgroupWritePrincipal {
   }
 }
 
-async function createFixture(
-  db: ProviderNeutralDatabase,
-  name = 'revision-team',
-): Promise<WorkgroupDetail> {
+async function createFixture(db: PersistenceDb, name = 'revision-team'): Promise<WorkgroupDetail> {
   const agent = await createAgent(db, {
     name: 'revision-agent',
     description: '',
@@ -80,7 +77,7 @@ async function createFixture(
 }
 
 async function createEmptyFixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   ownerUserId: string,
 ): Promise<WorkgroupDetail> {
@@ -98,7 +95,7 @@ async function createEmptyFixture(
 }
 
 function save(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   current: WorkgroupDetail,
   snapshot: WorkgroupDraftSnapshot,
   opts: { expectedVersion?: number; mutationId?: string } = {},
@@ -270,6 +267,7 @@ describeEachProvider('RFC-225 workgroup revision fencing', (harness) => {
   test('RFC-223 revalidates the current owner before an ordinary save', async () => {
     const db = harness.db
     const group = await createEmptyFixture(db, 'owner-fence', 'owner-a')
+    const { workgroups } = tablesOf(db)
     await db
       .update(workgroups)
       .set({ ownerUserId: 'owner-b', visibility: 'public' })

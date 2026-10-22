@@ -1,5 +1,5 @@
 import { composeCapabilityTemplateOperations } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-304 §11.6 (T64) — the four states, and the base that makes them knowable.
 //
@@ -318,7 +318,7 @@ describeEachProvider('RFC-304 T64 — copying records the origin', (harness) => 
 })
 
 // RFC-375: writes use the live operation API; persistence reads inspect stored receipts.
-function templateOperations(db: ProviderNeutralDatabase, now?: number) {
+function templateOperations(db: PersistenceDb, now?: number) {
   return composeCapabilityTemplateOperations({
     db,
     ...(now === undefined ? {} : { now: () => now }),
@@ -331,22 +331,17 @@ function templateOperations(db: ProviderNeutralDatabase, now?: number) {
     },
   })
 }
-async function storedTemplate(db: ProviderNeutralDatabase, id: string) {
+async function storedTemplate(db: PersistenceDb, id: string) {
   const row = await createCapabilityTemplatePersistence(db).load(id)
   if (row === null) throw new Error(`missing template ${id}`)
   return row
 }
-async function createTemplate(
-  db: ProviderNeutralDatabase,
-  raw: unknown,
-  actor: Actor,
-  now?: number,
-) {
+async function createTemplate(db: PersistenceDb, raw: unknown, actor: Actor, now?: number) {
   const result = await templateOperations(db, now).create(actor, raw)
   return storedTemplate(db, result.id)
 }
 async function copyTemplate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   source: { readonly id: string },
   actor: Actor,
   name?: string,

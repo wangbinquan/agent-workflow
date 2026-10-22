@@ -13,15 +13,15 @@
 // `expectedOwnerUserId` — tracked in IMPLEMENTATION §7. Below: the funnel guard is
 // exercised directly, then the combined-save wiring at the service boundary.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { skills } from '../src/db/schema'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -38,7 +38,7 @@ import { ConflictError } from '../src/util/errors'
 describeEachProvider(
   'RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let fsOpts: { appHome: string }
     let skillId: string
@@ -63,6 +63,7 @@ describeEachProvider(
         writeFileSync(join(staging, 'SKILL.md'), `---\nname: foo\ndescription: d\n---\n${next}`)
 
     test('owner transferred since authorization (expectedOwnerUserId drift) → 409', async () => {
+      const { skills } = tablesOf(db)
       // Owner transferred A → B out-of-band (a transfer landing in the save's await gap).
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
       await expect(
@@ -84,6 +85,7 @@ describeEachProvider(
     })
 
     test('an IDENTICAL-content no-op with a drifted owner is fenced too (not a silent no-op)', async () => {
+      const { skills } = tablesOf(db)
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
       // Same body as v1 ⇒ the write is a no-op; the owner-drift guard must still 409
       // (the no-op short-circuit shares the same fence helper).
@@ -97,6 +99,7 @@ describeEachProvider(
     })
 
     test('no expectedOwnerUserId → funnel stays unfenced (backward compatible)', async () => {
+      const { skills } = tablesOf(db)
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
       // A legacy / system caller that does not opt into the owner fence still commits.
       const v = await commitSkillVersion(db, fsOpts, skillId, editBody('b2'), {
@@ -115,7 +118,7 @@ describeEachProvider(
 describeEachProvider(
   'RFC-170 (4th-review [high]) — combined-save owner-fence wiring',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let fsOpts: { appHome: string }
     let skillId: string
@@ -136,6 +139,7 @@ describeEachProvider(
 
     test('owner transferred after authorization → combined-save 409s (demoted ex-owner cannot write)', async () => {
       const read = await readSkillContent(db, fsOpts, skillId)
+      const { skills } = tablesOf(db)
       // The route authorized actor A against owner A; owner then transfers A → B in
       // the save's await window (token is unaffected — owner is orthogonal to it).
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
@@ -168,7 +172,7 @@ describeEachProvider(
 describeEachProvider(
   'RFC-170 (4th-review [high]) — secondary-writer owner-fence wiring (file / restore)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let fsOpts: { appHome: string }
     let skillId: string
@@ -190,6 +194,7 @@ describeEachProvider(
     afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
     test('writeSkillFile: owner transferred after authorization → 409', async () => {
+      const { skills } = tablesOf(db)
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
       await expect(
         writeSkillFile(db, fsOpts, skillId, 'templates/b.txt', 'bbb', 'A', 'A'),
@@ -197,6 +202,7 @@ describeEachProvider(
     })
 
     test('deleteSkillFile: owner transferred after authorization → 409', async () => {
+      const { skills } = tablesOf(db)
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
       await expect(
         deleteSkillFile(db, fsOpts, skillId, 'templates/a.txt', 'A', 'A'),
@@ -204,6 +210,7 @@ describeEachProvider(
     })
 
     test('restoreSkillVersion: owner transferred after authorization → 409', async () => {
+      const { skills } = tablesOf(db)
       await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
       await expect(
         restoreSkillVersion(

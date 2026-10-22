@@ -17,15 +17,16 @@
 //   E. golden-lock — zero manual rows ⇒ the cross-clarify injection block is byte-identical
 //      (no `Manual instruction` contamination).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { buildClarifyQueueContext } from '@/modules/collaboration/infrastructure/clarify/queue'
@@ -94,13 +95,11 @@ function mkQ(id: string, title: string): ClarifyQuestion {
 
 /** Seed a deferred task + workflow snapshot + a prior `done` run on FIXER (so a frontier
  *  dispatch to it is not rejected as never-run). No clarify round needed for manual. */
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  _opts: { deferred?: boolean } = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, _opts: { deferred?: boolean } = {}): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc120-manual',
     description: '',
@@ -108,7 +107,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -127,7 +126,7 @@ async function seedTask(
     startedAt: Date.now(),
   })
   // FIXER prior run (ULID id so freshness/lineage windows order before later mints).
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: FIXER,
@@ -139,7 +138,7 @@ async function seedTask(
   return taskId
 }
 
-async function listOne(db: ProviderNeutralDatabase, taskId: string) {
+async function listOne(db: PersistenceDb, taskId: string) {
   const all = await listTaskQuestions(db, taskId)
   return all.find((e) => e.sourceKind === 'manual')
 }
@@ -155,8 +154,9 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('create(target=DESIGNER) → reassign(FIXER) → dispatch → inject manual_body+bind → done → confirm', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
+      const { nodeRuns, taskQuestions, nodeRunOutputs } = tablesOf(db)
       // DESIGNER needs a prior run too (the §15 re-gate requires the manual handler to have run).
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -222,7 +222,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
 
       // run finishes done+output → 已处理待确认.
       await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-      await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
+      await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'result', content: 'x' })
       expect((await listOne(db, taskId))?.phase).toBe('awaiting_confirm')
 
       // confirm → 完成.
@@ -268,6 +268,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
       )
       expect(a.id).not.toBe(b.id)
+      const { taskQuestions } = tablesOf(db)
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(2)
       // distinct synthetic origins keep the full uniq_task_questions_identity collision-free.
@@ -332,8 +333,9 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('two manual rows assigned to DIFFERENT nodes dispatch together (synthetic origins ⇒ no round-multi-target)', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
+      const { nodeRuns } = tablesOf(db)
       // DESIGNER also needs a prior run to be a valid frontier mint target.
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -378,6 +380,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
+      const { taskQuestions } = tablesOf(db)
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(0)
     })
@@ -413,6 +416,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('manual-question-target-required')
+      const { taskQuestions } = tablesOf(db)
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(0) // nothing inserted
     })
@@ -444,6 +448,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         { title: 'T', body: 'B', targetNodeId: FIXER },
         secretActor,
       )
+      const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
       expect(row?.manualCreatedBy).toBe('SECRET-AUTHOR-ID') // recorded for audit
       const result = await dispatchTaskQuestions(db, taskId, [id], actor)
@@ -497,6 +502,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const scopeIds = new Set(scopeNodes.map((n) => n.id))
       const NONE: ReadonlySet<string> = new Set()
 
+      const { nodeRuns } = tablesOf(db)
       // BEFORE dispatch: FIXER is undispatched → deriveFrontier must NOT complete it (the
       // scheduler keeps the task awaiting_human so it can't finish past the manual question).
       const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -558,6 +564,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
       )
       expect(id).toBeTruthy()
+      const { taskQuestions } = tablesOf(db)
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(1) // now inserted (flag 停读)
     })
@@ -584,6 +591,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       test(`create on a ${status} deferred task → rejected task-terminal; nothing inserted`, async () => {
         const db = harness.db
         const taskId = await seedTask(db)
+        const { tasks, taskQuestions } = tablesOf(db)
         await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
         let threw: unknown = null
         try {
@@ -611,6 +619,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
         )
+        const { nodeRuns, tasks, taskQuestions } = tablesOf(db)
         const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
           .length
         await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
@@ -633,6 +642,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('control: create + dispatch on a FAILED (resumable) deferred task → allowed (not terminal)', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
+      const { tasks } = tablesOf(db)
       await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
       // failed is resumable (resumeTask resumes it), so manual create + dispatch are allowed.
       const { id } = await createManualTaskQuestion(
@@ -656,7 +666,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       // Seed a cross-clarify round + answer (deferred) so the designer has a per-node queue.
       const qRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, taskQuestions } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: qRunId,
         taskId,
         nodeId: QUESTIONER,
@@ -664,7 +675,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         retryIndex: 0,
         iteration: 0,
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -752,8 +763,9 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('H1: reassign a manual question to a never-run node → rejected; to a run node → allowed', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
+      const { nodeRuns } = tablesOf(db)
       // DESIGNER gets a run so it is a valid (runnable) re-target; QUESTIONER stays never-run.
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -786,11 +798,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     // which for BOTH create (taskNodeHasRun) and dispatch (assertSafeFrontierTarget) is the last
     // async read BEFORE the write tx. So the pre-check sees a live task, the status flips, and
     // the in-tx CAS re-read must catch it. Mirrors the dispatch/reassign-race test's Proxy.
-    function flipStatusOnFirstNodeRunsRead(
-      db: ProviderNeutralDatabase,
-      taskId: string,
-      status: string,
-    ) {
+    function flipStatusOnFirstNodeRunsRead(db: PersistenceDb, taskId: string, status: string) {
       let fired = false
       return new Proxy(db, {
         get(target, prop, receiver) {
@@ -804,15 +812,17 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
             const origFrom = (builder.from as (t: unknown) => Record<string, unknown>).bind(builder)
             builder.from = (tbl: unknown) => {
               const q = origFrom(tbl)
+              const { nodeRuns, tasks } = tablesOf(db)
               if (tbl === nodeRuns && !fired) {
                 fired = true
                 const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
-                q.then = (onF: unknown, onR: unknown) =>
-                  db
+                q.then = (onF: unknown, onR: unknown) => {
+                  return db
                     .update(tasks)
                     .set({ status: status as never })
                     .where(eq(tasks.id, taskId))
                     .then(() => origThen(onF, onR), onR as never)
+                }
               }
               return q
             }
@@ -838,6 +848,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('task-terminal')
+      const { taskQuestions } = tablesOf(db)
       // in-tx CAS rolled back → NO row inserted.
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(0)
@@ -852,6 +863,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
       )
+      const { nodeRuns, taskQuestions } = tablesOf(db)
       const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
         .length
       const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'canceled')

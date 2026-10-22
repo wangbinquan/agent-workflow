@@ -18,6 +18,8 @@
 //
 // 所以这条判据两台机器各问一遍，且**把门打开**问——门关着时判据恒真、零预言力。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -27,7 +29,6 @@ import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { users } from '@/db/schema'
 import { createManagedSkillWithFiles } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkillById, listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import {
@@ -63,7 +64,8 @@ describeEachProvider('RFC-359 —— 导入的技能当场可见（启动复核�
     readonly sourceSkillId: string
   }> {
     const db = harness.db
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: OWNER,
       username: OWNER,
       displayName: 'Skill Owner',

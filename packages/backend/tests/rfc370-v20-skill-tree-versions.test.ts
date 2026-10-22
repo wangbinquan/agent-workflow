@@ -12,19 +12,13 @@
 // fallback), candidate capture/read/discard, and the journaled stage →
 // tx-bound commit (`before` ahead of the composite fence, `after` in the same
 // transaction) → publish / abort ladder.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import {
-  skillContentEntries,
-  skillOperationLocks,
-  skillOperations,
-  skills,
-  skillVersions,
-} from '@/db/schema'
 import type { SkillTreeVersionFile } from '@/modules/resource-catalog/public/participants'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { selectSkillContentDependencies } from '@/modules/resource-catalog/composition/skillContentBinding'
@@ -75,6 +69,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       return { appHome, opts, skill, trees }
     }
     async function state(skillId: string) {
+      const { skills, skillOperations, skillOperationLocks } = tablesOf(harness.db)
       const skill = (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]!
       const operations = await harness.db
         .select()
@@ -105,6 +100,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
         )
         rmSync(join(appHome, 'skills', skill.id, 'versions'), { recursive: true, force: true })
       } else {
+        const { skillContentEntries } = tablesOf(harness.db)
         await harness.db
           .delete(skillContentEntries)
           .where(
@@ -173,6 +169,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       expect(order).toEqual(['before', 'after:2'])
       await trees.publish(staged)
       expect(await state(skill.id)).toEqual({ contentVersion: 2, activeOperations: 0, locks: 0 })
+      const { skillVersions } = tablesOf(harness.db)
       const row = (
         await harness.db
           .select()
@@ -243,8 +240,11 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
         )
         await trees.publish(staged)
       }
-      const description = async () =>
-        (await harness.db.select().from(skills).where(eq(skills.id, skill.id)))[0]!.description
+      const description = async () => {
+        const { skills } = tablesOf(harness.db)
+        return (await harness.db.select().from(skills).where(eq(skills.id, skill.id)))[0]!
+          .description
+      }
       const restore = (version: number) =>
         restoreSkillVersion(harness.db, opts, skill.id, version, null, {
           unfuseForRestore: async () => [],

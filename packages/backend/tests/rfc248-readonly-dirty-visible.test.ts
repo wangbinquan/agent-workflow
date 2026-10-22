@@ -14,11 +14,13 @@
 //   0    = 检查过且干净
 //   N>0  = 丢弃了 N 处
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -30,8 +32,10 @@ describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
   })
 
   test('列存在且默认 NULL（存量行不被回填成 0）', () => {
-    const cols = db.all<{ name: string; notnull: number; dflt_value: string | null }>(
+    const cols = rawRows<{ name: string; notnull: number; dflt_value: string | null }>(
+      db,
       sql`PRAGMA table_info(task_repos)`,
+      { notnull: 'int' },
     )
     const col = cols.find((c) => c.name === 'readonly_dirty_count')
     expect(col).toBeDefined()
@@ -45,30 +49,28 @@ describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
 describeEachProvider('migration 0133 —— task_repos.readonly_dirty_count', (harness) => {
   test('三态都能写入并读回', async () => {
     const db = harness.db
+    const { workflows, tasks, taskRepos } = tablesOf(db)
     // 外键链：task_repos.task_id → tasks.id → workflows.id，两级都得先落行。
-    await db.insert(workflows).values({ id: 'wf', name: 'w', definition: '{}' }).run()
-    await db
-      .insert(tasks)
-      .values({
-        id: 't1',
-        // Preserve the values observed from the original SQLite task-row trigger.
-        executionLineageId: 't1',
-        lineageSlotPathJson: JSON.stringify([
-          { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
-        ]),
-        name: 'n',
-        workflowId: 'wf',
-        workflowSnapshot: '{}',
-        repoPath: '/tmp/a',
-        worktreePath: '/tmp/wt',
-        baseBranch: 'main',
-        branch: 'b',
-        inputs: '{}',
-        status: 'pending',
-        startedAt: Date.now(),
-        repoCount: 3,
-      })
-      .run()
+    await insertOne(db, workflows, { id: 'wf', name: 'w', definition: '{}' })
+    await insertOne(db, tasks, {
+      id: 't1',
+      // Preserve the values observed from the original SQLite task-row trigger.
+      executionLineageId: 't1',
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+      ]),
+      name: 'n',
+      workflowId: 'wf',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/a',
+      worktreePath: '/tmp/wt',
+      baseBranch: 'main',
+      branch: 'b',
+      inputs: '{}',
+      status: 'pending',
+      startedAt: Date.now(),
+      repoCount: 3,
+    })
     const base = {
       taskId: 't1',
       repoPath: '/tmp/a',
@@ -80,15 +82,12 @@ describeEachProvider('migration 0133 —— task_repos.readonly_dirty_count', (h
       subdir: '',
       readonly: true,
     }
-    await db
-      .insert(taskRepos)
-      .values([
-        { ...base, repoIndex: 0 },
-        { ...base, repoIndex: 1, mountPath: 'clean', readonlyDirtyCount: 0 },
-        { ...base, repoIndex: 2, mountPath: 'dirty', readonlyDirtyCount: 7 },
-      ])
-      .run()
-    const rows = await db.select().from(taskRepos).orderBy(taskRepos.repoIndex).all()
+    await db.insert(taskRepos).values([
+      { ...base, repoIndex: 0 },
+      { ...base, repoIndex: 1, mountPath: 'clean', readonlyDirtyCount: 0 },
+      { ...base, repoIndex: 2, mountPath: 'dirty', readonlyDirtyCount: 7 },
+    ])
+    const rows = await db.select().from(taskRepos).orderBy(taskRepos.repoIndex)
     expect(rows.map((r) => r.readonlyDirtyCount)).toEqual([null, 0, 7])
   })
 })

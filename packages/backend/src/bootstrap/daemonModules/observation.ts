@@ -1,4 +1,4 @@
-import { type ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { type McpCatalogModule } from '@/modules/resource-catalog/public/operations'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
@@ -13,7 +13,7 @@ import { type DaemonModuleAdapters } from './adapters'
 import { type DaemonProviderCore } from './providerCore'
 
 export interface DaemonObservationInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly configuration: ApplicationConfigurationQueries
   readonly notificationKey: Parameters<typeof composeRuntimeProbeConfigFence>[0]

@@ -1,9 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { Agent, AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { agents, mcps, plugins, skills } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
@@ -24,7 +26,7 @@ import {
 } from './resourceCatalogTransaction'
 import { assertBranchPortsDeclared, assertRuntimeReference } from './agentBranchPorts'
 
-type AgentRow = typeof agents.$inferSelect
+type AgentRow = PersistenceTables['agents']['$inferSelect']
 
 function occupied(id: string): ConflictError {
   return new ConflictError(
@@ -69,13 +71,10 @@ async function assertAgentResourceRows(input: {
 }): Promise<void> {
   const mcpIds = unique(input.mcpIds)
   if (mcpIds.length > 0) {
+    const { mcps } = tablesOf(input.transaction)
     const known = new Set(
       (
-        await input.transaction
-          .select({ id: mcps.id })
-          .from(mcps)
-          .where(inArray(mcps.id, mcpIds))
-          .all()
+        await input.transaction.select({ id: mcps.id }).from(mcps).where(inArray(mcps.id, mcpIds))
       ).map((row) => row.id),
     )
     const missing = mcpIds.filter((id) => !known.has(id))
@@ -90,11 +89,11 @@ async function assertAgentResourceRows(input: {
 
   const pluginIds = unique(input.pluginIds)
   if (pluginIds.length > 0) {
+    const { plugins } = tablesOf(input.transaction)
     const rows = await input.transaction
       .select({ id: plugins.id, enabled: plugins.enabled })
       .from(plugins)
       .where(inArray(plugins.id, pluginIds))
-      .all()
     const byId = new Map(rows.map((row) => [row.id, row.enabled]))
     const missing = pluginIds.filter((id) => !byId.has(id))
     if (missing.length > 0) {
@@ -118,13 +117,13 @@ async function assertAgentResourceRows(input: {
     input.skillRefs.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
   )
   if (skillIds.length > 0) {
+    const { skills } = tablesOf(input.transaction)
     const known = new Set(
       (
         await input.transaction
           .select({ id: skills.id })
           .from(skills)
           .where(and(inArray(skills.id, skillIds), eq(skills.reservationState, 'ready')))
-          .all()
       ).map((row) => row.id),
     )
     const missing = skillIds.filter((id) => !known.has(id))
@@ -159,11 +158,10 @@ async function assertAgentDependencyGraph(
     }
     if (visited.has(id)) return
     visiting.add(id)
-    const row = await transaction
-      .select({ dependsOn: agents.dependsOn })
-      .from(agents)
-      .where(eq(agents.id, id))
-      .get()
+    const { agents } = tablesOf(transaction)
+    const row = await first(
+      transaction.select({ dependsOn: agents.dependsOn }).from(agents).where(eq(agents.id, id)),
+    )
     if (row === undefined) {
       throw new ValidationError(
         'agent-dependency-not-found',
@@ -205,7 +203,7 @@ async function assertAgentDefinition(input: {
 
 /** Native PostgreSQL writer for system-owned Digital Employee Agent templates. */
 export function createDigitalEmployeeAgentTemplateRepository(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DigitalEmployeeAgentTemplateRepository {
   // 驱动错误的形状是唯一容身 provider 差异的地方，经能力矩阵映射回本模块的闭合错误合同：
   // PG 给约束名（`agents_owner_name_unique` / `agents_pkey`），SQLite 给 `UNIQUE constraint failed:`
@@ -220,7 +218,8 @@ export function createDigitalEmployeeAgentTemplateRepository(
     return target !== undefined && /agents[._](?:pkey|id)\b/i.test(target)
   }
   async function get(id: string): Promise<Agent | null> {
-    const row = await db.select().from(agents).where(eq(agents.id, id)).get()
+    const { agents } = tablesOf(db)
+    const row = await first(db.select().from(agents).where(eq(agents.id, id)))
     return row === undefined ? null : agentFromPersistenceRow(row)
   }
 
@@ -232,19 +231,19 @@ export function createDigitalEmployeeAgentTemplateRepository(
     ): Promise<void> {
       try {
         await runResourceCatalogTransaction(db, async (transaction) => {
-          const existing = await transaction
-            .select({ id: agents.id })
-            .from(agents)
-            .where(eq(agents.id, input.id))
-            .get()
+          const { agents } = tablesOf(transaction)
+          const existing = await first(
+            transaction.select({ id: agents.id }).from(agents).where(eq(agents.id, input.id)),
+          )
           if (existing !== undefined) throw occupied(input.id)
-          const collision = await transaction
-            .select({ id: agents.id })
-            .from(agents)
-            .where(
-              and(eq(agents.ownerUserId, SYSTEM_USER_ID), eq(agents.name, input.definition.name)),
-            )
-            .get()
+          const collision = await first(
+            transaction
+              .select({ id: agents.id })
+              .from(agents)
+              .where(
+                and(eq(agents.ownerUserId, SYSTEM_USER_ID), eq(agents.name, input.definition.name)),
+              ),
+          )
           if (collision !== undefined) throw nameConflict(input.definition.name)
           await assertAgentDefinition({
             transaction,
@@ -257,10 +256,7 @@ export function createDigitalEmployeeAgentTemplateRepository(
             ownerUserId: SYSTEM_USER_ID,
             now: Date.now(),
           })
-          await transaction
-            .insert(agents)
-            .values({ ...values, visibility: 'public', builtin: true })
-            .run()
+          await insertOne(transaction, agents, { ...values, visibility: 'public', builtin: true })
         })
       } catch (error) {
         if (isOwnerNameConflict(error)) {
@@ -276,35 +272,38 @@ export function createDigitalEmployeeAgentTemplateRepository(
     ): Promise<void> {
       try {
         await runResourceCatalogTransaction(db, async (transaction) => {
-          const row = await transaction.select().from(agents).where(eq(agents.id, input.id)).get()
+          const { agents } = tablesOf(transaction)
+          const row = await first(transaction.select().from(agents).where(eq(agents.id, input.id)))
           const current = requireSystemBuiltin(input.id, row, input)
           if (current.name === input.newName) return
-          const collision = await transaction
-            .select({ id: agents.id })
-            .from(agents)
-            .where(
-              and(
-                eq(agents.ownerUserId, SYSTEM_USER_ID),
-                eq(agents.name, input.newName),
-                ne(agents.id, input.id),
+          const collision = await first(
+            transaction
+              .select({ id: agents.id })
+              .from(agents)
+              .where(
+                and(
+                  eq(agents.ownerUserId, SYSTEM_USER_ID),
+                  eq(agents.name, input.newName),
+                  ne(agents.id, input.id),
+                ),
               ),
-            )
-            .get()
+          )
           if (collision !== undefined) throw nameConflict(input.newName)
-          const changed = await transaction
-            .update(agents)
-            .set({ name: input.newName, updatedAt: monotonicNow(current.updatedAt) })
-            .where(
-              and(
-                eq(agents.id, input.id),
-                eq(agents.ownerUserId, SYSTEM_USER_ID),
-                eq(agents.builtin, true),
-                eq(agents.updatedAt, input.expectedUpdatedAt),
-                eq(agents.aclRevision, input.expectedAclRevision),
-              ),
-            )
-            .returning({ id: agents.id })
-            .get()
+          const changed = await first(
+            transaction
+              .update(agents)
+              .set({ name: input.newName, updatedAt: monotonicNow(current.updatedAt) })
+              .where(
+                and(
+                  eq(agents.id, input.id),
+                  eq(agents.ownerUserId, SYSTEM_USER_ID),
+                  eq(agents.builtin, true),
+                  eq(agents.updatedAt, input.expectedUpdatedAt),
+                  eq(agents.aclRevision, input.expectedAclRevision),
+                ),
+              )
+              .returning({ id: agents.id }),
+          )
           if (changed === undefined) throw stale(input.id)
         })
       } catch (error) {
@@ -319,7 +318,8 @@ export function createDigitalEmployeeAgentTemplateRepository(
       input: Parameters<DigitalEmployeeAgentTemplateRepository['updateBuiltin']>[0],
     ): Promise<void> {
       await runResourceCatalogTransaction(db, async (transaction) => {
-        const row = await transaction.select().from(agents).where(eq(agents.id, input.id)).get()
+        const { agents } = tablesOf(transaction)
+        const row = await first(transaction.select().from(agents).where(eq(agents.id, input.id)))
         const current = requireSystemBuiltin(input.id, row, input)
         const runtime =
           input.patch.runtime === null ? undefined : (input.patch.runtime ?? current.runtime)
@@ -337,20 +337,23 @@ export function createDigitalEmployeeAgentTemplateRepository(
           },
           ...(current.runtime === undefined ? {} : { previousRuntime: current.runtime }),
         })
-        const changed = await transaction
-          .update(agents)
-          .set(updateAgentPersistenceValues(current, input.patch, monotonicNow(current.updatedAt)))
-          .where(
-            and(
-              eq(agents.id, input.id),
-              eq(agents.ownerUserId, SYSTEM_USER_ID),
-              eq(agents.builtin, true),
-              eq(agents.updatedAt, input.expectedUpdatedAt),
-              eq(agents.aclRevision, input.expectedAclRevision),
-            ),
-          )
-          .returning({ id: agents.id })
-          .get()
+        const changed = await first(
+          transaction
+            .update(agents)
+            .set(
+              updateAgentPersistenceValues(current, input.patch, monotonicNow(current.updatedAt)),
+            )
+            .where(
+              and(
+                eq(agents.id, input.id),
+                eq(agents.ownerUserId, SYSTEM_USER_ID),
+                eq(agents.builtin, true),
+                eq(agents.updatedAt, input.expectedUpdatedAt),
+                eq(agents.aclRevision, input.expectedAclRevision),
+              ),
+            )
+            .returning({ id: agents.id }),
+        )
         if (changed === undefined) throw stale(input.id)
       })
     },

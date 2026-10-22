@@ -4,6 +4,9 @@
 // code-host-call. The HTTP peer is local, but no launch/scheduler seam is
 // mocked. If trigger context ever returns to a post-launch UPDATE, the node's
 // one-time task snapshot sees NULL and this test fails before sending a request.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -22,16 +25,6 @@ import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { buildActor } from '../src/auth/actor'
 import { createSecretBox } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  intentDrafts,
-  intentSessions,
-  nodeRuns,
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookTriggers,
-  workflows,
-} from '../src/db/schema'
 import { createCodeHostConnectionsService } from '../src/services/codeHost/connections'
 import {
   composeRepositoryTransportCredentials,
@@ -98,22 +91,23 @@ function installIntentDraft(
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  db.insert(intentDrafts)
-    .values({
-      id: draftId,
-      sessionId,
-      revision: 1,
-      changesetJson: canonical,
-      validationJson: '{"errors":[],"credentialFindings":[]}',
-      draftHash,
-      contextRevision: 0,
-      createdAt: Date.now(),
-    })
-    .run()
-  db.update(intentSessions)
-    .set({ currentDraftId: draftId, contextManifestJson: '[]' })
-    .where(eq(intentSessions.id, sessionId))
-    .run()
+  const { intentDrafts, intentSessions } = tablesOf(db)
+  insertOne(db, intentDrafts, {
+    id: draftId,
+    sessionId,
+    revision: 1,
+    changesetJson: canonical,
+    validationJson: '{"errors":[],"credentialFindings":[]}',
+    draftHash,
+    contextRevision: 0,
+    createdAt: Date.now(),
+  })
+  queryWrite(
+    db
+      .update(intentSessions)
+      .set({ currentDraftId: draftId, contextManifestJson: '[]' })
+      .where(eq(intentSessions.id, sessionId)),
+  )
   return { draftRevision: 1, draftHash }
 }
 
@@ -200,7 +194,8 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       { ownerUserId: owner.id, actor },
     )
 
-    await db.insert(webhookEndpoints).values({
+    const { webhookEndpoints, webhookTriggers, webhookDeliveries, tasks } = tablesOf(db)
+    await insertOne(db, webhookEndpoints, {
       id: 'ep-rfc269-context',
       name: 'RFC 269 context endpoint',
       provider: 'gitlab',
@@ -215,7 +210,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
         .where(eq(webhookEndpoints.id, 'ep-rfc269-context'))
         .limit(1)
     )[0]!
-    await db.insert(webhookTriggers).values({
+    await insertOne(db, webhookTriggers, {
       id: 'tr-rfc269-context',
       name: 'context call',
       endpointId: endpoint.id,
@@ -242,7 +237,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       raw: {},
     }
     const deliveryId = ulid()
-    await db.insert(webhookDeliveries).values({
+    await insertOne(db, webhookDeliveries, {
       id: deliveryId,
       endpointId: endpoint.id,
       eventUuid: event.eventUuid,
@@ -393,6 +388,8 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     )
     const workflowId = receipt.applied.find((entry) => entry.opId === 'op-2')?.resourceId
     expect(workflowId).toBeString()
+    const { workflows, webhookEndpoints, webhookTriggers, webhookDeliveries, tasks, nodeRuns } =
+      tablesOf(db)
     const workflow = (
       await db
         .select()
@@ -410,7 +407,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     )
 
     const box = createSecretBox(Paths.secretKeyFile)
-    await db.insert(webhookEndpoints).values({
+    await insertOne(db, webhookEndpoints, {
       id: 'ep-rfc292-intent-agent',
       name: 'RFC 292 Intent agent endpoint',
       provider: 'gitlab',
@@ -425,7 +422,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
         .where(eq(webhookEndpoints.id, 'ep-rfc292-intent-agent'))
         .limit(1)
     )[0]!
-    await db.insert(webhookTriggers).values({
+    await insertOne(db, webhookTriggers, {
       id: 'tr-rfc292-intent-agent',
       name: 'Intent agent context',
       endpointId: endpoint.id,
@@ -452,7 +449,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       raw: {},
     }
     const deliveryId = ulid()
-    await db.insert(webhookDeliveries).values({
+    await insertOne(db, webhookDeliveries, {
       id: deliveryId,
       endpointId: endpoint.id,
       eventUuid: event.eventUuid,

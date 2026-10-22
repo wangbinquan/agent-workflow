@@ -1,6 +1,9 @@
 // RFC-359 AC1: preserve real Workgroup create/copy/save and package writes
 // while sharing their member, leader and content-field constructors.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -16,8 +19,7 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, resourceBundleApplies, users, workgroupMembers, workgroups } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
@@ -50,11 +52,12 @@ const B = 'workgroup-agent-b'
 const T0 = 1_700_000_000_000
 const initial = { ownerUserId: OWNER, visibility: 'private' as const, aclRevision: 0 as const }
 
-async function seed(db: ProviderNeutralDatabase) {
+async function seed(db: PersistenceDb) {
   const actor = buildActor({
     user: { id: OWNER, username: OWNER, displayName: OWNER, role: 'admin', status: 'active' },
     source: 'daemon',
   })
+  const { users, agents } = tablesOf(db)
   await db.insert(users).values([
     { ...actor.user, createdAt: T0, updatedAt: T0 },
     { id: HUMAN, username: HUMAN, displayName: 'Human', createdAt: T0, updatedAt: T0 },
@@ -63,7 +66,9 @@ async function seed(db: ProviderNeutralDatabase) {
     [A, 'original-agent-a'],
     [B, 'original-agent-b'],
   ] as const) {
-    await db.insert(agents).values(
+    await insertOne(
+      db,
+      agents,
       createAgentPersistenceValues({
         id,
         agent: CreateAgentSchema.parse({ name }),
@@ -98,15 +103,15 @@ function document(mode: WorkgroupDraftSnapshot['mode'] = 'leader_worker') {
   })
 }
 
-async function physical(db: ProviderNeutralDatabase, id: string) {
+async function physical(db: PersistenceDb, id: string) {
+  const { workgroups, workgroupMembers } = tablesOf(db)
   return {
-    row: await db.select().from(workgroups).where(eq(workgroups.id, id)).get(),
+    row: await first(db.select().from(workgroups).where(eq(workgroups.id, id))),
     members: await db
       .select()
       .from(workgroupMembers)
       .where(eq(workgroupMembers.workgroupId, id))
-      .orderBy(workgroupMembers.sortOrder)
-      .all(),
+      .orderBy(workgroupMembers.sortOrder),
   }
 }
 
@@ -244,6 +249,7 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       )
       expect(f.calls()).toEqual({ ids: input.members.length, clocks: 0 })
 
+      const { agents } = tablesOf(harness.db)
       await harness.db.update(agents).set({ name: 'renamed-agent-a' }).where(eq(agents.id, A))
       const copied = await f.repository.copy({
         authority,
@@ -511,6 +517,7 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
     expect(new Set(before.members.map((member) => member.id)).size).toBe(2)
     expect(await apply(bytes, prepared.previewToken, decision, compose())).toEqual(receipt)
     expect(await physical(harness.db, id)).toEqual(before)
+    const { agents, resourceBundleApplies } = tablesOf(harness.db)
     await harness.db.update(agents).set({ name: 'renamed-agent-a' }).where(eq(agents.id, A))
     const updateBytes = packageBytes(2)
     const updatePreview = await preview(updateBytes)

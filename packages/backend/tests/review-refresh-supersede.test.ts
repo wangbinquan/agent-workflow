@@ -6,31 +6,23 @@
 // anchored comments, mint a v(n+1) on the new body, and re-stamp the review
 // row's consumed provenance to the new source run. This locks that transaction.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import {
-  agents as agentsTable,
-  collaborationGateOperations,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider(
   'RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+1) (B14-B15)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let worktree: string
 
@@ -49,11 +41,12 @@ describeEachProvider(
 
     async function seed(status: 'running' | 'awaiting_review' = 'awaiting_review'): Promise<{
       taskId: string
-      task: typeof tasks.$inferSelect
+      task: PersistenceTables['tasks']['$inferSelect']
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     }> {
-      await db.insert(agentsTable).values({
+      const { agents, workflows, tasks } = tablesOf(db)
+      await insertOne(db, agents, {
         id: ulid(),
         name: 'doc',
         description: '',
@@ -77,7 +70,7 @@ describeEachProvider(
         edges: [],
       }
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -85,7 +78,7 @@ describeEachProvider(
         version: 1,
       })
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -108,7 +101,8 @@ describeEachProvider(
     }
 
     async function seedSrc(taskId: string, id: string, cci: number, body: string): Promise<void> {
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id,
         taskId,
         nodeId: 'src',
@@ -118,7 +112,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'docpath', content: body })
+      await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'docpath', content: body })
     }
 
     test('awaiting review + fresher upstream → v1 superseded, comments dropped, v2 minted, consumed restamped', async () => {
@@ -129,7 +123,8 @@ describeEachProvider(
 
       // The awaiting review row consumed the OLD source.
       const reviewRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions, reviewComments } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: reviewRunId,
         taskId,
         nodeId: 'rev_1',
@@ -142,7 +137,7 @@ describeEachProvider(
       })
       // A pending v1 doc_version with an anchored comment (mid-review state).
       const v1Id = ulid()
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: v1Id,
         taskId,
         reviewNodeId: 'rev_1',
@@ -155,7 +150,7 @@ describeEachProvider(
         decision: 'pending',
         createdAt: Date.now(),
       })
-      await db.insert(reviewComments).values({
+      await insertOne(db, reviewComments, {
         id: ulid(),
         docVersionId: v1Id,
         anchorSectionPath: 'p0',
@@ -222,6 +217,7 @@ describeEachProvider(
         iteration: 0,
       })
       expect(opened.kind).toBe('awaiting_review')
+      const { nodeRuns, docVersions, tasks, collaborationGateOperations } = tablesOf(db)
       const firstRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1')))[0]!
       const firstVersion = (
         await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, firstRun.id))
@@ -279,7 +275,8 @@ describeEachProvider(
       await seedSrc(taskId, '01A_OLD', 0, '# old body')
       await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
       const reviewRunId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions, reviewComments, collaborationGateOperations } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: reviewRunId,
         taskId,
         nodeId: 'rev_1',
@@ -291,7 +288,7 @@ describeEachProvider(
         startedAt: Date.now(),
       })
       const v1Id = ulid()
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: v1Id,
         taskId,
         reviewNodeId: 'rev_1',
@@ -305,7 +302,7 @@ describeEachProvider(
         createdAt: Date.now(),
       })
       const commentId = ulid()
-      await db.insert(reviewComments).values({
+      await insertOne(db, reviewComments, {
         id: commentId,
         docVersionId: v1Id,
         anchorSectionPath: 'p0',

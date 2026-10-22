@@ -39,7 +39,6 @@ import {
   type DaemonProviderBootstrap,
 } from './daemonProviderBootstrap'
 import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeFileRuntimeLegacyConfiguration } from '@/modules/runtime-management/composition/runtimeRegistry'
 import {
   selectDaemonHostLifecycle,
@@ -505,12 +504,6 @@ export async function startCommand(
         },
       },
       createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
-      // RFC-349 —— 表投影是**进程级**的：`createPostgresqlDatabaseClient` 一构造就把
-      // 它改指到 PostgreSQL。割接失败时 current 会退回源 session，但投影不会自己退
-      // 回来，于是整个 daemon 的每一条 SQLite 查询都会以
-      // `no such table: agent_workflow.*` 收场。把选择权钉在**真正在服务的**那份
-      // composition 上，成功与失败两条路径都对。
-      onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
     })
     await initial.session.resume(lifecycle)
     await serveDaemon({

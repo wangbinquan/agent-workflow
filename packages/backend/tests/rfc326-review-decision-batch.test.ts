@@ -23,6 +23,8 @@
 // 夹具只在那个库上种行；REST 那一组走 `describeEachProviderHttpApplication`——`AppDeps.db`
 // 只收 SQLite 句柄，PostgreSQL 侧的应用必须由各自的组合根装配。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,19 +35,7 @@ import { ulid } from 'ulid'
 import { joinMarkdownDocs } from '@agent-workflow/shared'
 import type { ReviewCommentAnchor, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents as agentsTable,
-  docVersions,
-  memoryDistillJobs,
-  nodeRunOutputs,
-  nodeRuns,
-  reviewComments,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   addReviewComment,
   buildReviewPromptContext,
@@ -75,7 +65,8 @@ interface Snapshot {
   memoryDistillJobs: unknown[]
 }
 
-async function snapshot(db: ProviderNeutralDatabase): Promise<Snapshot> {
+async function snapshot(db: PersistenceDb): Promise<Snapshot> {
+  const { nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } = tablesOf(db)
   const runs = await db.select().from(nodeRuns).orderBy(asc(nodeRuns.id))
   return {
     docVersions: await db.select().from(docVersions).orderBy(asc(docVersions.id)),
@@ -144,14 +135,14 @@ const SINGLE_BODY = [
 ].join('\n')
 
 /** harness 现建的库；每个用例前由 `seedFixture` 指过来。 */
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 function seedFixture(providerHarness: ProviderHarness): void {
   db = providerHarness.db
 }
 
 interface SingleFixture {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   taskId: string
   reviewRunId: string
@@ -174,6 +165,16 @@ async function buildSingle(
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
 
   const [ownerId, memberId, strangerId] = ['owner', 'member', 'stranger'].map(() => ulid())
+  const {
+    users,
+    agents,
+    workflows,
+    tasks,
+    taskCollaborators,
+    nodeRuns,
+    nodeRunOutputs,
+    docVersions,
+  } = tablesOf(db)
   await db.insert(users).values(
     [ownerId!, memberId!, strangerId!].map((id, i) => ({
       id,
@@ -185,7 +186,7 @@ async function buildSingle(
       updatedAt: NOW,
     })),
   )
-  await db.insert(agentsTable).values({
+  await insertOne(db, agents, {
     id: ulid(),
     name: 'doc',
     description: '',
@@ -209,11 +210,13 @@ async function buildSingle(
     edges: [],
   }
   const workflowId = ulid()
-  await db
-    .insert(workflows)
-    .values({ id: workflowId, name: 'wf', definition: JSON.stringify(definition) })
+  await insertOne(db, workflows, {
+    id: workflowId,
+    name: 'wf',
+    definition: JSON.stringify(definition),
+  })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -238,7 +241,7 @@ async function buildSingle(
     { taskId, userId: memberId!, role: 'collaborator', addedBy: ownerId!, addedAt: NOW },
   ])
   const docRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: docRunId,
     taskId,
     nodeId: 'doc',
@@ -248,11 +251,13 @@ async function buildSingle(
     startedAt: NOW - 1000,
     finishedAt: NOW - 900,
   })
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId: docRunId, portName: 'docpath', content: SINGLE_BODY })
+  await insertOne(db, nodeRunOutputs, {
+    nodeRunId: docRunId,
+    portName: 'docpath',
+    content: SINGLE_BODY,
+  })
   const reviewRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -265,7 +270,7 @@ async function buildSingle(
   const dvId = ulid()
   const bodyPath = `doc_versions/${dvId}.md`
   writeFileSync(join(appHome, bodyPath), SINGLE_BODY)
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: dvId,
     taskId,
     reviewNodeId: 'rev_1',
@@ -299,13 +304,13 @@ const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
 const bodyFor = (p: string): string => `# Case ${p}\n\nsteps for ${p}\n`
 
 interface MultiFixture {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktree: string
   taskId: string
   reviewRunId: string
   /** Pending members in item order (a, b, c). */
-  docs: (typeof docVersions.$inferSelect)[]
+  docs: PersistenceTables['docVersions']['$inferSelect'][]
   cleanup: () => void
 }
 
@@ -323,7 +328,8 @@ async function buildMulti(
   mkdirSync(worktree, { recursive: true })
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
   const caseGenId = ulid()
-  await db.insert(agentsTable).values({
+  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+  await insertOne(db, agents, {
     id: caseGenId,
     name: 'caseGen',
     description: '',
@@ -353,7 +359,7 @@ async function buildMulti(
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     description: '',
@@ -361,7 +367,7 @@ async function buildMulti(
     version: 1,
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'multidoc',
     workflowId,
@@ -380,7 +386,7 @@ async function buildMulti(
     ]),
   })
   const srcRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: srcRunId,
     taskId,
     nodeId: 'src',
@@ -393,7 +399,7 @@ async function buildMulti(
   })
   const content =
     kind === 'list<path<md>>' ? PATHS.join('\n') : joinMarkdownDocs(PATHS.map(bodyFor))
-  await db.insert(nodeRunOutputs).values({ nodeRunId: srcRunId, portName: 'cases', content })
+  await insertOne(db, nodeRunOutputs, { nodeRunId: srcRunId, portName: 'cases', content })
   for (const p of PATHS) {
     const abs = join(worktree, p)
     mkdirSync(dirname(abs), { recursive: true })
@@ -498,6 +504,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       expect(result.reviewIteration).toBe(1)
       expect(result.resumeRequired).toBe(true)
 
+      const { docVersions, reviewComments, nodeRuns } = tablesOf(f.db)
       const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
       expect(dv.decision).toBe('iterated')
       const archived = JSON.parse(dv.commentsJson) as Array<{
@@ -557,6 +564,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         commentsSkippedAsDuplicate: 1,
         selectionsApplied: 0,
       })
+      const { docVersions } = tablesOf(f.db)
       const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
       expect((JSON.parse(dv.commentsJson) as unknown[]).length).toBe(1)
     })
@@ -591,9 +599,9 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       events = countTaskEvents(m.taskId)
       expect(m.docs.map((d) => d.selection)).toEqual(['unselected', 'unselected', 'unselected'])
       const [a, b, c] = m.docs as [
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
       ]
 
       const result = await submitReviewDecision({
@@ -614,6 +622,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         selectionsApplied: 3,
       })
 
+      const { nodeRunOutputs, docVersions, nodeRuns } = tablesOf(m.db)
       const outs = await m.db
         .select()
         .from(nodeRunOutputs)
@@ -649,9 +658,9 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
     test('list<markdown>: the accepted bodies are joined in item order', async () => {
       m = await buildMulti('list<markdown>')
       const [a, b, c] = m.docs as [
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
       ]
       await submitReviewDecision({
         db: m.db,
@@ -665,6 +674,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
           { docVersionId: b.id, selection: 'accepted' },
         ],
       })
+      const { nodeRunOutputs } = tablesOf(m.db)
       const outs = await m.db
         .select()
         .from(nodeRunOutputs)
@@ -683,10 +693,11 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
     test('a stale inherited selection re-judged in the batch is no longer stale', async () => {
       m = await buildMulti('list<path<md>>')
       const [a, b, c] = m.docs as [
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
       ]
+      const { docVersions, nodeRunOutputs } = tablesOf(m.db)
       await m.db
         .update(docVersions)
         .set({ selection: 'accepted', selectionStale: true })
@@ -727,7 +738,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
     })
 
     async function expectZeroWrites(
-      db: ProviderNeutralDatabase,
+      db: PersistenceDb,
       ev: ReturnType<typeof countTaskEvents>,
       run: () => Promise<unknown>,
     ): Promise<Refusal> {
@@ -836,6 +847,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       expect(stranger.code).toBe('not-task-member')
       expect(stranger.status).toBe(403)
 
+      const { tasks } = tablesOf(f.db)
       await f.db
         .update(tasks)
         .set({ sourceTerminationFence: 'closed' })
@@ -864,9 +876,9 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       m = await buildMulti('list<path<md>>')
       events = countTaskEvents(m.taskId)
       const [a, b, c] = m.docs as [
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
       ]
       const base: SubmitReviewDecisionArgs = {
         db: m.db,
@@ -980,9 +992,9 @@ describeEachProviderHttpApplication(
       m = await buildMulti('list<path<md>>', 'running', application.appHome)
       events = countTaskEvents(m.taskId)
       const [a, b, c] = m.docs as [
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
-        typeof docVersions.$inferSelect,
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
+        PersistenceTables['docVersions']['$inferSelect'],
       ]
       const { status, json } = await post(
         application.app,
@@ -1017,6 +1029,7 @@ describeEachProviderHttpApplication(
       })
       expect(json.resume).toBeUndefined()
       expect(json.resumeRequired).toBeUndefined()
+      const { nodeRunOutputs, docVersions } = tablesOf(m.db)
       const accepted = (
         await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
       ).find((o) => o.portName === 'accepted')!

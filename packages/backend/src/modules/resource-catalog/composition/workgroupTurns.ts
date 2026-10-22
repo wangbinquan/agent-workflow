@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'
 import type { WorkgroupClarifyAllowedPort } from '../application/workgroups/workgroupTurnsDriver'
 import {
@@ -11,7 +11,7 @@ import {
  * 跨上下文的装配持有 TaskExecution 的宿主账本工厂，Resource Catalog 的适配器负责预留并共享事务。
  */
 export function composeWorkgroupTurnsOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   hostLedgerFactory: WorkgroupHostLedgerParticipantFactory,
   clarifyAskGate: WorkgroupClarifyAllowedPort,
 ): WorkgroupTurnsOperations {

@@ -4,11 +4,13 @@
 // 显式收窄、非法值直接抛；② harness 给每个用例的库是干净的、session 在两个引擎上语义一致。
 // 这条文件本身就是「新增功能天然要验证到两种数据库」的最小样板：同一段断言，两个引擎各跑一遍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { committedEventFamilyCutovers, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
 
 describe('RFC-359 —— describeEachProvider 的引擎解析', () => {
@@ -34,8 +36,9 @@ describe('RFC-359 —— describeEachProvider 的引擎解析', () => {
   })
 })
 
-async function seedWorkflow(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(workflows).values({
+async function seedWorkflow(db: PersistenceDb): Promise<void> {
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf_harness',
     name: 'harness',
     description: '',
@@ -63,9 +66,10 @@ function taskRow(id: string) {
 
 describeEachProvider('RFC-359 —— 双引擎 harness 自检', (harness) => {
   test('每个用例从干净库开始：写入只在本用例可见', async () => {
+    const { tasks } = tablesOf(harness.db)
     expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
     await seedWorkflow(harness.db)
-    await harness.db.insert(tasks).values(taskRow('t_visible'))
+    await insertOne(harness.db, tasks, taskRow('t_visible'))
     expect(
       (await harness.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, 't_visible'))).map(
         (row) => row.id,
@@ -74,6 +78,7 @@ describeEachProvider('RFC-359 —— 双引擎 harness 自检', (harness) => {
   })
 
   test('上一个用例的写入已被清掉（顺序无关：任何用例开头都应为空）', async () => {
+    const { tasks, workflows } = tablesOf(harness.db)
     expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
     expect(await harness.db.select({ id: workflows.id }).from(workflows)).toEqual([])
   })
@@ -82,22 +87,26 @@ describeEachProvider('RFC-359 —— 双引擎 harness 自检', (harness) => {
     await seedWorkflow(harness.db)
     await expect(
       harness.session.transaction(async (tx) => {
-        await tx.insert(tasks).values(taskRow('t_rolled_back'))
+        const { tasks } = tablesOf(tx)
+        await insertOne(tx, tasks, taskRow('t_rolled_back'))
         await new Promise((resolve) => setTimeout(resolve, 2))
-        await tx.insert(tasks).values(taskRow('t_rolled_back_2'))
+        await insertOne(tx, tasks, taskRow('t_rolled_back_2'))
         throw new Error('boom')
       }),
     ).rejects.toThrow('boom')
+    const { tasks } = tablesOf(harness.db)
     expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
   })
 
   test('session.transaction 正常返回 ⇒ 提交', async () => {
     await seedWorkflow(harness.db)
     const inserted = await harness.session.transaction(async (tx) => {
-      await tx.insert(tasks).values(taskRow('t_committed'))
+      const { tasks } = tablesOf(tx)
+      await insertOne(tx, tasks, taskRow('t_committed'))
       return (await tx.select({ id: tasks.id }).from(tasks)).map((row) => row.id)
     })
     expect(inserted).toEqual(['t_committed'])
+    const { tasks } = tablesOf(harness.db)
     expect((await harness.db.select({ id: tasks.id }).from(tasks)).map((row) => row.id)).toEqual([
       't_committed',
     ])
@@ -128,24 +137,30 @@ describeEachProvider(
       expect(primary.session).not.toBe(secondary.session)
       expect(primary.capabilities).toEqual(secondary.capabilities)
       for (const database of [primary, secondary]) await seedWorkflow(database.db)
-      await primary.db.insert(tasks).values({ ...taskRow('same-key'), name: 'primary' })
-      await secondary.db.insert(tasks).values({ ...taskRow('same-key'), name: 'secondary' })
+      await insertOne(primary.db, tablesOf(primary.db).tasks, {
+        ...taskRow('same-key'),
+        name: 'primary',
+      })
+      await insertOne(secondary.db, tablesOf(secondary.db).tasks, {
+        ...taskRow('same-key'),
+        name: 'secondary',
+      })
 
       const primaryRecording = harness.recordStatements()
       const secondaryRecording = secondary.recordStatements()
       try {
         expect(
           await primary.db
-            .select({ name: tasks.name })
-            .from(tasks)
-            .where(eq(tasks.name, 'primary')),
+            .select({ name: tablesOf(primary.db).tasks.name })
+            .from(tablesOf(primary.db).tasks)
+            .where(eq(tablesOf(primary.db).tasks.name, 'primary')),
         ).toEqual([{ name: 'primary' }])
         expect(secondaryRecording.selects()).toEqual([])
         expect(
           await secondary.db
-            .select({ name: tasks.name })
-            .from(tasks)
-            .where(eq(tasks.name, 'secondary')),
+            .select({ name: tablesOf(secondary.db).tasks.name })
+            .from(tablesOf(secondary.db).tasks)
+            .where(eq(tablesOf(secondary.db).tasks.name, 'secondary')),
         ).toEqual([{ name: 'secondary' }])
         expect(primaryRecording.selects()).toHaveLength(1)
         expect(secondaryRecording.selects()).toHaveLength(1)
@@ -166,18 +181,28 @@ describeEachProvider(
         const committed = harness.database(1 - rollbackIndex)
         const id = `rollback-${rollbackIndex}`
         await committed.session.transaction(async (tx) => {
-          await tx.insert(tasks).values({ ...taskRow(id), name: 'committed elsewhere' })
+          const { tasks } = tablesOf(tx)
+          await insertOne(tx, tasks, { ...taskRow(id), name: 'committed elsewhere' })
         })
         const error = new Error(`rollback database ${rollbackIndex}`)
         await expect(
           rolledBack.session.transaction(async (tx) => {
-            await tx.insert(tasks).values({ ...taskRow(id), name: 'rolled back here' })
+            const { tasks } = tablesOf(tx)
+            await insertOne(tx, tasks, { ...taskRow(id), name: 'rolled back here' })
             throw error
           }),
         ).rejects.toBe(error)
-        expect(await rolledBack.db.select().from(tasks).where(eq(tasks.id, id))).toEqual([])
         expect(
-          await committed.db.select({ name: tasks.name }).from(tasks).where(eq(tasks.id, id)),
+          await rolledBack.db
+            .select()
+            .from(tablesOf(rolledBack.db).tasks)
+            .where(eq(tablesOf(rolledBack.db).tasks.id, id)),
+        ).toEqual([])
+        expect(
+          await committed.db
+            .select({ name: tablesOf(committed.db).tasks.name })
+            .from(tablesOf(committed.db).tasks)
+            .where(eq(tablesOf(committed.db).tasks.id, id)),
         ).toEqual([{ name: 'committed elsewhere' }])
       }
     })
@@ -195,11 +220,15 @@ describeEachProvider(
             'create table harness_plan_witness (marker text primary key)',
           ),
         ).rejects.toThrow()
-        await secondary.db.run(sql`insert into harness_plan_witness (marker) values (${'child'})`)
+        await rawExec(
+          secondary.db,
+          sql`insert into harness_plan_witness (marker) values (${'child'})`,
+        )
         const recording = secondary.recordStatements()
         try {
           expect(
-            await secondary.db.all<{ marker: string }>(
+            await rawRows<{ marker: string }>(
+              secondary.db,
               sql`select marker from harness_plan_witness where marker = ${'child'}`,
             ),
           ).toEqual([{ marker: 'child' }])
@@ -228,11 +257,14 @@ describeEachProvider(
       }
     })
 
-    let migrationSeeds: (typeof committedEventFamilyCutovers.$inferSelect)[] | undefined
+    let migrationSeeds:
+      | PersistenceTables['committedEventFamilyCutovers']['$inferSelect'][]
+      | undefined
     for (const round of [1, 2]) {
       test(`每用例各自恢复迁移种子、清空业务写入（见证 ${round}）`, async () => {
         for (const index of [0, 1]) {
           const { db } = harness.database(index)
+          const { tasks, workflows, committedEventFamilyCutovers } = tablesOf(db)
           expect(await db.select().from(tasks)).toEqual([])
           expect(await db.select().from(workflows)).toEqual([])
           const seeds = await db
@@ -245,7 +277,7 @@ describeEachProvider(
           // 每次都污染两库；任意测试顺序下，后一个见证仍必须从原迁移快照开始。
           await db.delete(committedEventFamilyCutovers)
           await seedWorkflow(db)
-          await db.insert(tasks).values(taskRow('same-key'))
+          await insertOne(db, tasks, taskRow('same-key'))
         }
       })
     }

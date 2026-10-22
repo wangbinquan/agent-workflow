@@ -43,15 +43,13 @@
 // their next poll / reconnect. The workflow-style audience-context fast-path
 // for cold connections is a documented follow-up.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
 import {
   eq,
   inArray,
   sql,
-  taskCollaborators,
-  taskFeedback,
-  taskRepos,
-  tasks,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
@@ -98,6 +96,7 @@ export async function deleteTask(
   options: Readonly<{ activity: ActiveTaskExecutionParticipant; effects?: TaskDeletionEffects }>,
 ): Promise<DeleteTaskResult> {
   const effects = selectedTaskDeletionEffects(options.effects)
+  const { tasks, taskRepos } = tablesOf(db)
   const rows = await db
     .select({
       id: tasks.id,
@@ -268,6 +267,7 @@ export async function deleteTask(
         claim: claimBeforeDelete,
         expectedState: 'io-complete',
       })
+      const { tasks, taskCollaborators, taskFeedback } = tablesOf(tx)
       const fresh = (
         await tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
       )[0]
@@ -286,7 +286,9 @@ export async function deleteTask(
       // RFC-244: freeze the complete FK-cascade audience inside the deletion
       // transaction. Once the root delete commits neither rows nor memberships
       // remain available to the tasks-list frame gate.
-      const cascadeRows = (await tx.all(sql`
+      const cascadeRows = (await rawRows(
+        tx,
+        sql`
         WITH RECURSIVE cascade(id) AS (
           SELECT id FROM tasks WHERE id = ${taskId}
           UNION
@@ -297,7 +299,8 @@ export async function deleteTask(
         SELECT t.id, t.owner_user_id
         FROM tasks t
         JOIN cascade c ON c.id = t.id
-      `)) as Array<{ id: string; owner_user_id: string | null }>
+      `,
+      )) as Array<{ id: string; owner_user_id: string | null }>
       const cascadeIds = cascadeRows.map((item) => item.id)
       const claimedIds = maintenanceMembers.map((member) => member.taskId).sort()
       if (JSON.stringify([...cascadeIds].sort()) !== JSON.stringify(claimedIds)) {
@@ -323,8 +326,8 @@ export async function deleteTask(
       })
       // Explicit task-scoped deletes; committed lifecycle facts intentionally
       // survive task deletion as Event Center audit records.
-      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
-      await tx.delete(tasks).where(eq(tasks.id, taskId)).run()
+      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds))
+      await tx.delete(tasks).where(eq(tasks.id, taskId))
 
       // RFC-311 实现门 P1-6/P2-3:`branch_started_at` 是「子树 max(started_at)」的
       // 物化值,此前只有铸行点向上推进(单调 MAX),删掉一个子任务后父行会**永久**
@@ -360,11 +363,7 @@ export async function deleteTask(
             .limit(1)
         )[0]
         const recomputed = Math.max(parent.startedAt ?? 0, childMax?.v ?? 0)
-        await tx
-          .update(tasks)
-          .set({ branchStartedAt: recomputed })
-          .where(eq(tasks.id, parent.id))
-          .run()
+        await tx.update(tasks).set({ branchStartedAt: recomputed }).where(eq(tasks.id, parent.id))
         cursor = parent.parentTaskId
       }
       return await transitionTerminalMaintenanceClaimTx(tx, {
@@ -415,6 +414,7 @@ async function findNonTerminalDescendant(
   const visited = new Set<string>([rootId])
   let frontier = [rootId]
   while (frontier.length > 0) {
+    const { tasks } = tablesOf(db)
     const children = await db
       .select({ id: tasks.id, status: tasks.status, parentTaskId: tasks.parentTaskId })
       .from(tasks)

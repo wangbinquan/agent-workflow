@@ -15,30 +15,32 @@
 // 引擎上各跑一遍，用实测差异代替纸面对账。这份文件是合一的判据基线：它现在锁住的每一条，
 // 合一之后必须继续成立。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { maintenanceRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MaintenanceRunStore } from '@/platform/background/maintenanceRunStorePort'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { describeEachProvider } from './helpers/eachProvider'
 
 // 合一之后两个引擎装配的是**同一个工厂**。合一之前这里按 `$provider` 分派到两个旧实现，
 // 40 条判据在两个真引擎上各跑一遍全绿——这份文件因此既是合一的前置取证，也是合一后的回归锁。
-function storeFor(db: ProviderNeutralDatabase): MaintenanceRunStore {
+function storeFor(db: PersistenceDb): MaintenanceRunStore {
   return createMaintenanceRunStore(db)
 }
 
 /** 直接读表——端口自己的读面不参与判据时用它，避免「用被测对象证明被测对象」。 */
 async function rowOf(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   runId: string,
-): Promise<typeof maintenanceRuns.$inferSelect | undefined> {
+): Promise<PersistenceTables['maintenanceRuns']['$inferSelect'] | undefined> {
+  const { maintenanceRuns } = tablesOf(db)
   return (await db.select().from(maintenanceRuns).where(eq(maintenanceRuns.id, runId)).limit(1))[0]
 }
 
-async function countQueued(db: ProviderNeutralDatabase, jobKey: string): Promise<number> {
+async function countQueued(db: PersistenceDb, jobKey: string): Promise<number> {
+  const { maintenanceRuns } = tablesOf(db)
   return (
     await db
       .select({ id: maintenanceRuns.id })
@@ -590,6 +592,7 @@ describeEachProvider('RFC-359 W8 —— 边界与拒绝分支', (harness) => {
       scheduledAt: 0,
       now: 0,
     })
+    const { maintenanceRuns } = tablesOf(harness.db)
     // 绕开 store 直接插第二条排队行：只有部分唯一索引才拦得住它。
     const direct = harness.db.insert(maintenanceRuns).values({
       id: 'queued-2',
@@ -681,6 +684,7 @@ describeEachProvider('RFC-359 W8 —— 状态投影与读面', (harness) => {
     // PostgreSQL NULL 最前），所以这条判据锁的是「合一后的实现必须按 SQLite 语义显式写 NULL 落位」——
     // 写成裸 `desc(...)` 会让 PostgreSQL 把 NULL 那行选成 active / last。
     const store = storeFor(harness.db)
+    const { maintenanceRuns } = tablesOf(harness.db)
     await harness.db.insert(maintenanceRuns).values([
       {
         id: 'running-null-start',

@@ -1,11 +1,12 @@
 // Real repository-group launch fixture shared by the 9956ce39d checkpoint
 // regression and the 2026-10-21 single non-root workspace discriminator fix.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect } from 'bun:test'
 import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { agents, cachedRepos, users, workflows } from '@/db/schema'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
@@ -40,7 +41,8 @@ export async function singleMemberWorkspaceFixture(
   const userId = ulid(),
     agentId = ulid(),
     workflowId = ulid()
-  await db.insert(users).values({
+  const { users, agents, workflows, cachedRepos } = tablesOf(db)
+  await insertOne(db, users, {
     id: userId,
     username: userId,
     displayName: userId,
@@ -51,14 +53,14 @@ export async function singleMemberWorkspaceFixture(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(agents).values({ id: agentId, name: agentId, outputs: '["summary"]' })
+  await insertOne(db, agents, { id: agentId, name: agentId, outputs: '["summary"]' })
   const definition: WorkflowDefinition = {
     $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: [{ id: 'A', kind: 'agent-single', agentId, agentName: agentId }],
     edges: [],
   }
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     definition: JSON.stringify(definition),
@@ -85,7 +87,7 @@ export async function singleMemberWorkspaceFixture(
     ])
     const id = ulid(),
       url = remoteUrlFor(repoPath)
-    await db.insert(cachedRepos).values({
+    await insertOne(db, cachedRepos, {
       id,
       urlHash: id,
       urlRedacted: url,

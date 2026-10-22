@@ -3,14 +3,15 @@
 // 现在同走 `ownedTaskExecution.ts` 的统一写事务 + 围栏）与不活跃超时持久化（两个具名工厂退为别名）。
 // 围栏规则两引擎同一：显式上下文 > 环境上下文 > 无主围栏（仅 `claimed` 的活 owner 拒绝无主写入）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionOwners, taskRepos, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
   createTaskExecutionContext,
@@ -39,10 +40,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -50,7 +52,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -68,11 +70,12 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 
 /** 直接落一行 `claimed` 的 owner，并铸出与之匹配的 token（epoch 1 / revision 1）。 */
 async function seedClaimedOwner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<{ token: OwnershipToken; context: TaskExecutionContextRef }> {
   const identity = createWorkerIdentity({ ownerId: `owner_${ulid()}`, daemonGeneration: 'gen-a' })
-  await db.insert(taskExecutionOwners).values({
+  const { taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: identity.ownerId,
     daemonGeneration: identity.daemonGeneration,
@@ -99,7 +102,8 @@ async function seedClaimedOwner(
   return { token, context }
 }
 
-async function ownerRevision(db: ProviderNeutralDatabase, taskId: string): Promise<number | null> {
+async function ownerRevision(db: PersistenceDb, taskId: string): Promise<number | null> {
+  const { taskExecutionOwners } = tablesOf(db)
   const rows = await db
     .select({ revision: taskExecutionOwners.revision })
     .from(taskExecutionOwners)
@@ -108,12 +112,13 @@ async function ownerRevision(db: ProviderNeutralDatabase, taskId: string): Promi
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  over: Partial<typeof nodeRuns.$inferInsert> = {},
+  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n',
@@ -142,6 +147,7 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 统一写事务 + owner 围栏
     await expect(
       withTaskExecutionWrite(db, (tx) => assertTaskOwnerTx(tx, stranger, 6)),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
+    const { taskExecutionOwners } = tablesOf(db)
     await db
       .update(taskExecutionOwners)
       .set({ state: 'released' })
@@ -161,6 +167,7 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 统一写事务 + owner 围栏
     await expect(
       withTaskExecutionWrite(db, (tx) => assertTaskOwnerlessTx(tx, taskId)),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
+    const { taskExecutionOwners } = tablesOf(db)
     await db
       .update(taskExecutionOwners)
       .set({ state: 'released' })
@@ -173,7 +180,8 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 调度器收尾读写', (harne
   test('recordReadonlyDirty：显式上下文按 token 围栏；无上下文且 owner claimed ⇒ 拒绝', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    await db.insert(taskRepos).values({
+    const { taskRepos } = tablesOf(db)
+    await insertOne(db, taskRepos, {
       taskId,
       repoIndex: 0,
       repoPath: '/tmp/repo',
@@ -312,6 +320,7 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— wrapper run 持久化', (harne
       code: 'task-execution-stale-owner',
     })
     await persistence.clearReuseDisabled({ nodeRunId: running, executionContext: context })
+    const { nodeRuns } = tablesOf(db)
     const rows = await db
       .select({ progress: nodeRuns.wrapperProgressJson })
       .from(nodeRuns)

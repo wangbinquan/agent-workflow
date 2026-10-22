@@ -20,7 +20,9 @@ import { describe, expect, test } from 'bun:test'
 import { is } from 'drizzle-orm'
 import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
-import * as schema from '../../src/db/schema'
+import { schemaFixtureDb } from '../helpers/schemaFixture'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+const schema = tablesOf(schemaFixtureDb())
 import { ACL_TABLES } from '../../src/modules/resource-catalog/infrastructure/aclRegistry'
 import type { ForeignResourceAclType } from '../../src/modules/resource-catalog/application/ports/resourceAclPersistence'
 
@@ -61,9 +63,13 @@ const OWNER_INJECTED_ACL_TABLES = {
   employee_job_template: schema.employeeJobTemplates,
 } satisfies Record<ForeignResourceAclType, SQLiteTable>
 const ACL_TABLE_NAMES = new Set(
-  [...Object.values(ACL_TABLES), ...Object.values(OWNER_INJECTED_ACL_TABLES)].map(
-    (table) => getTableConfig(table).name,
-  ),
+  [
+    ...Object.values(ACL_TABLES(schemaFixtureDb())),
+    ...Object.values(OWNER_INJECTED_ACL_TABLES),
+  ].map((table) => {
+    if (!is(table, SQLiteTable)) throw new Error('schema fixture must expose native SQLite tables')
+    return getTableConfig(table).name
+  }),
 )
 const hasAclColumns = (table: TableFacts): boolean =>
   ACL_COLUMNS.every((column) => table.columns.has(column))

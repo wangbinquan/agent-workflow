@@ -9,11 +9,12 @@
 //     producing job had a language; toSummary discards the value
 //   - empty inputs path doesn't hit SQLite (smoke)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { memories, memoryDistillJobs } from '../src/db/schema'
 import {
   composeMemoryCatalogOperations,
   type MemoryCatalogTestHooks,
@@ -21,7 +22,7 @@ import {
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 
-function memoryCatalogOf(db: ProviderNeutralDatabase, testHooks?: MemoryCatalogTestHooks) {
+function memoryCatalogOf(db: PersistenceDb, testHooks?: MemoryCatalogTestHooks) {
   return composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
@@ -30,9 +31,10 @@ function memoryCatalogOf(db: ProviderNeutralDatabase, testHooks?: MemoryCatalogT
   })
 }
 
-async function seedJob(db: ProviderNeutralDatabase, outputLang: string | null): Promise<string> {
+async function seedJob(db: PersistenceDb, outputLang: string | null): Promise<string> {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'k-' + id.slice(-6),
     sourceKind: 'feedback',
@@ -49,7 +51,7 @@ async function seedJob(db: ProviderNeutralDatabase, outputLang: string | null): 
 }
 
 async function seedMemory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     status: 'candidate' | 'approved'
     distillJobId: string | null
@@ -57,7 +59,8 @@ async function seedMemory(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id,
     scopeType: 'global',
     scopeId: null,
@@ -83,7 +86,7 @@ async function seedMemory(
 describeEachProvider(
   'RFC-050 listMemories — populates outputLang on candidate summaries',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = harness.db
     })

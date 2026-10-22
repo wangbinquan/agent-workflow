@@ -1,3 +1,4 @@
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -6,7 +7,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
 import { createTaskWorkspaceMaterializer } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
@@ -168,7 +168,10 @@ function postgresqlFixture(trace: string[]) {
           : 0,
     })
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -196,12 +199,10 @@ function postgresqlFixture(trace: string[]) {
 
 afterEach(() => {
   registerAfterCommitEventPump(null)
-  selectDatabaseSchemaProvider('sqlite')
 })
 
 describe('RFC-349 PostgreSQL repository preparation', () => {
   test('commits pending status and continuation before background drive; preparation belongs to that drive', async () => {
-    selectDatabaseSchemaProvider('postgresql')
     const trace: string[] = []
     const fixture = postgresqlFixture(trace)
     const appHome = await mkdtemp(join(tmpdir(), 'rfc349-repo-prep-pg-'))

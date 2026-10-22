@@ -1,12 +1,13 @@
 // RFC-359 AC11: full HTTP run 34196371681 showed 100,000 correlated alert
 // lookups and a whole-task scan for a 51-root family. Keep the complete
 // catalog-filtered page, cursor and facet contract while changing that SQL.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { TaskOperationsPage } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   createDatabaseTaskListPage,
@@ -47,8 +48,9 @@ const ROWS: readonly SeedTask[] = [
   },
 ]
 
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
     displayName: 'Admin',
@@ -56,12 +58,12 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({ id: 'wf', name: '雪 workflow', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf', name: '雪 workflow', definition: '{}' })
   const backfill = computeForestBackfill(
     ROWS.map((row) => ({ ...row, parentTaskId: row.parent ?? null })),
   )
   for (const row of ROWS) {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: `task ${row.id}`,
       workflowId: 'wf',
@@ -87,14 +89,15 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
   }
 }
 
-async function addAlerts(db: ProviderNeutralDatabase): Promise<void> {
+async function addAlerts(db: PersistenceDb): Promise<void> {
   for (const [taskId, open, resolved] of [
     ['a-leaf', 3, 1],
     ['a-mid', 0, 2],
     ['b', 1, 0],
   ] as const) {
     for (let index = 0; index < open + resolved; index += 1) {
-      await db.insert(lifecycleAlerts).values({
+      const { lifecycleAlerts } = tablesOf(db)
+      await insertOne(db, lifecycleAlerts, {
         id: `alert-${taskId}-${index}`,
         taskId,
         rule: 'stuck',
@@ -107,7 +110,7 @@ async function addAlerts(db: ProviderNeutralDatabase): Promise<void> {
   }
 }
 
-function catalog(db: ProviderNeutralDatabase) {
+function catalog(db: PersistenceDb) {
   const page = createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db))
   const viewer = taskListViewerOf(
     buildActor({

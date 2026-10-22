@@ -1,10 +1,11 @@
 // RFC-359 AC1: one database store for the shared node-event archive mechanism.
 // The driver may return raw aggregate numbers as strings. Convert at this
 // persistence edge; the archive cursor and JSONL always contain numbers.
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunEvents, nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { readMaintenanceValue, writeMaintenanceValue } from './maintenanceState'
 import type {
   EventsArchiveRow,
@@ -34,29 +35,35 @@ function eventRow(row: {
   }
 }
 
-export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArchiveStore {
+export function createEventsArchiveStore(db: PersistenceDb): EventsArchiveStore {
   const store: EventsArchiveStore = {
     readState: (key) => readMaintenanceValue(db, key),
     writeState: (key, value, now) => writeMaintenanceValue(db, key, value, now),
     async averageRecentPayloadBytes(limit) {
-      const rows = await db.all<{ avg: unknown }>(sql`
+      const { nodeRunEvents } = tablesOf(db)
+      const rows = await rawRows<{ avg: unknown }>(
+        db,
+        sql`
         SELECT AVG(LENGTH(payload)) AS avg FROM (
           SELECT ${nodeRunEvents.payload} AS payload
           FROM ${nodeRunEvents}
           ORDER BY ${nodeRunEvents.id} DESC
           LIMIT ${limit}
         ) sampled
-      `)
+      `,
+      )
       const value = rows[0]?.avg
       return value === null || value === undefined ? null : numberValue(value)
     },
     async maxEventId() {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select({ value: sql<unknown>`max(${nodeRunEvents.id})` })
         .from(nodeRunEvents)
       return numberValue(rows[0]?.value)
     },
     async countEventIds(input) {
+      const { nodeRunEvents } = tablesOf(db)
       const conditions = [
         gt(nodeRunEvents.id, input.afterId),
         lte(nodeRunEvents.id, input.throughId),
@@ -71,6 +78,7 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return numberValue(rows[0]?.value)
     },
     async listDistinctNodeRunIds(input) {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .selectDistinct({ nodeRunId: nodeRunEvents.nodeRunId })
         .from(nodeRunEvents)
@@ -78,6 +86,7 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return rows.map((row) => row.nodeRunId)
     },
     async countEventsByNodeRunIds(nodeRunIds) {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select({ nodeRunId: nodeRunEvents.nodeRunId, value: count(nodeRunEvents.id) })
         .from(nodeRunEvents)
@@ -86,10 +95,12 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return rows.map((row) => ({ nodeRunId: row.nodeRunId, count: numberValue(row.value) }))
     },
     async countAllEvents() {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db.select({ value: count(nodeRunEvents.id) }).from(nodeRunEvents)
       return numberValue(rows[0]?.value)
     },
     async oldestEvent() {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select({ id: nodeRunEvents.id, nodeRunId: nodeRunEvents.nodeRunId })
         .from(nodeRunEvents)
@@ -99,6 +110,7 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return row === undefined ? null : { id: numberValue(row.id), nodeRunId: row.nodeRunId }
     },
     async countEventsForNodeRun(nodeRunId) {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select({ value: count(nodeRunEvents.id) })
         .from(nodeRunEvents)
@@ -106,6 +118,7 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return numberValue(rows[0]?.value)
     },
     async findTaskIdForNodeRun(nodeRunId) {
+      const { nodeRuns } = tablesOf(db)
       const rows = await db
         .select({ taskId: nodeRuns.taskId })
         .from(nodeRuns)
@@ -114,6 +127,7 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return rows[0]?.taskId ?? null
     },
     async listOldestEvents(nodeRunId, limit) {
+      const { nodeRunEvents } = tablesOf(db)
       const rows = await db
         .select({
           id: nodeRunEvents.id,
@@ -130,11 +144,13 @@ export function createEventsArchiveStore(db: ProviderNeutralDatabase): EventsArc
       return rows.map(eventRow)
     },
     async deleteNodeRunEventsThrough(nodeRunId, lastId) {
+      const { nodeRunEvents } = tablesOf(db)
       await db
         .delete(nodeRunEvents)
         .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), lte(nodeRunEvents.id, lastId)))
     },
     async deleteNodeRunEventsRange(input) {
+      const { nodeRunEvents } = tablesOf(db)
       await db
         .delete(nodeRunEvents)
         .where(

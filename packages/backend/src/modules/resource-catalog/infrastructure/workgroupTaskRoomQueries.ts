@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import { workgroupAssignments, workgroupMessages, workgroupTaskState } from '@/db/schema'
 import {
   deriveBudgetUsed,
   deriveMemberCurrentRuns,
@@ -25,6 +25,7 @@ export function createWorkgroupTaskRoomQueries(
     return withTransaction(async (transaction, participant) => {
       const tasks = await participant.listVisibleActive(authority)
       const taskIds = tasks.map((task) => task.id)
+      const { workgroupTaskState, workgroupAssignments } = tablesOf(transaction)
       const states =
         taskIds.length === 0
           ? []
@@ -99,6 +100,7 @@ export function createWorkgroupTaskRoomQueries(
     async room(authority, input) {
       return withTransaction(async (transaction, participant) => {
         const loaded = await loadVisibleTask(transaction, participant, authority, input.taskId)
+        const { workgroupMessages, workgroupAssignments } = tablesOf(transaction)
         const [messages, assignments, hostRuns, clarify] = await Promise.all([
           transaction
             .select()

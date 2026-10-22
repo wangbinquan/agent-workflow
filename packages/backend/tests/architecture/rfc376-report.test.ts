@@ -8,6 +8,7 @@ import { sourceUnit, importEdges, type SourceUnit } from './census'
 import {
   readReportSource,
   buildArchitectureReport,
+  buildNodeRunInsertSites,
   renderReportStatus,
   renderGateBaselines,
   stableJson,
@@ -290,6 +291,18 @@ describe('RFC-376 C7 report-only consumers', () => {
   })
 })
 describe('RFC-376 committed report contract', () => {
+  test('node-run inventory recognizes native single-row inserts and keeps the canonical owner', () => {
+    for (const write of ['tx.insert(nodeRuns).values(row)', 'insertOne(tx, nodeRuns, row)']) {
+      const sites = buildNodeRunInsertSites([
+        sourceUnit(
+          PREFIX + 'modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
+          'export function mint(tx: Tx) { return ' + write + ' }',
+        ),
+      ])
+      expect(sites).toHaveLength(1)
+      expect(sites[0]!.status).toBe('canonical-writer')
+    }
+  })
   test('two reads of the same committed source produce byte-identical reports despite working-tree changes', () => {
     const first = buildArchitectureReport(SOURCE)
     const second = buildArchitectureReport(readReportSource(ROOT, SOURCE.sourceSha))

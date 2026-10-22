@@ -20,21 +20,15 @@
 //   - rfc127-self-questioner-borrow.test.ts P2-2 按 message 锁了两账本 reject；本网补
 //     error CODE 锁（P5-D 三账本重做会破 code 锁）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import {
-  clarifyRounds,
-  nodeRuns,
-  nodeRunOutputs,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -100,13 +94,10 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  _deferred = false,
-): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string, _deferred = false): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -114,7 +105,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -130,13 +121,14 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; iteration?: number; hasOutput?: boolean } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -145,7 +137,7 @@ async function seedRun(
     iteration: over.iteration ?? 0,
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -153,7 +145,7 @@ async function seedRun(
 /** Insert an answered clarify round (self or cross) with the given questions/answers + the
  *  consumed stamps. Returns the round + its asking/intermediary run ids. */
 async function seedAnsweredRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     kind: 'self' | 'cross'
@@ -169,7 +161,8 @@ async function seedAnsweredRound(
     status: 'awaiting_human',
   })
   const roundId = ulid()
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: roundId,
     taskId,
     kind: opts.kind,
@@ -234,7 +227,8 @@ describeEachProvider(
         loopIter: 0,
         questions: [mkQ('dq', 't')],
       })
-      await db.insert(taskQuestions).values({
+      const { taskQuestions } = tablesOf(db)
+      await insertOne(db, taskQuestions, {
         id: ulid(),
         taskId,
         originNodeRunId: cross.intermediaryNodeRunId,
@@ -257,7 +251,7 @@ describeEachProvider(
         askingNodeId: P,
         questions: [mkQ('q1', 't')],
       })
-      await db.insert(taskQuestions).values({
+      await insertOne(db, taskQuestions, {
         id: ulid(),
         taskId,
         originNodeRunId: self.intermediaryNodeRunId,

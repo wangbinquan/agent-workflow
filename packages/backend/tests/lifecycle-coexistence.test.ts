@@ -7,6 +7,8 @@
 // open rows. These cases lock that contract + the multi-task / deleted
 // / terminal skip paths that are easy to break with a one-line SQL edit.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { and, eq, isNull } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -16,11 +18,10 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { docVersions, lifecycleAlerts, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const MIN_MS = 60_000
@@ -31,7 +32,7 @@ interface SeededTask {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status:
     | 'pending'
     | 'running'
@@ -54,9 +55,10 @@ async function seedTask(
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -73,9 +75,7 @@ async function seedTask(
   return { taskId }
 }
 
-async function freshDb(
-  db: ProviderNeutralDatabase,
-): Promise<{ db: ProviderNeutralDatabase; cleanup: () => void }> {
+async function freshDb(db: PersistenceDb): Promise<{ db: PersistenceDb; cleanup: () => void }> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-coexist-'))
   mkdirSync(tmp, { recursive: true })
 
@@ -96,7 +96,8 @@ describeEachProvider(
       })
       // Plant an R1 violation (stuck review approved-but-not-done).
       const runId = ulid()
-      await env.db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions, lifecycleAlerts } = tablesOf(env.db)
+      await insertOne(env.db, nodeRuns, {
         id: runId,
         taskId: t1.taskId,
         nodeId: 'rev',
@@ -106,7 +107,7 @@ describeEachProvider(
         status: 'awaiting_review',
         startedAt: T0,
       })
-      await env.db.insert(docVersions).values({
+      await insertOne(env.db, docVersions, {
         id: ulid(),
         taskId: t1.taskId,
         reviewNodeId: 'rev',
@@ -124,7 +125,7 @@ describeEachProvider(
       // already covers the symptom — so plant a synthetic stuck row directly via
       // the stuck detector by elapsing time. But to keep the test focused, just
       // INSERT a fake S1 row to simulate "stuck detector already found one".
-      await env.db.insert(lifecycleAlerts).values({
+      await insertOne(env.db, lifecycleAlerts, {
         id: ulid(),
         taskId: t1.taskId,
         rule: 'S1',
@@ -154,8 +155,9 @@ describeEachProvider(
       const env = await freshDb(harness.db)
       cleanup = env.cleanup
       const t1 = await seedTask(env.db, 'pending', { startedAt: T0 - 10 * MIN_MS })
+      const { lifecycleAlerts } = tablesOf(env.db)
       // Seed an open R1 row that the stuck detector should leave untouched.
-      await env.db.insert(lifecycleAlerts).values({
+      await insertOne(env.db, lifecycleAlerts, {
         id: ulid(),
         taskId: t1.taskId,
         rule: 'R1',
@@ -200,8 +202,9 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
     const tB = await seedTask(env.db, 'awaiting_review', { nodes: [reviewNode] })
     const tC = await seedTask(env.db, 'awaiting_review', { nodes: [reviewNode] })
 
+    const { lifecycleAlerts, nodeRuns, docVersions } = tablesOf(env.db)
     // Seed an OPEN R1 row for tA (will be resolved this pass).
-    await env.db.insert(lifecycleAlerts).values({
+    await insertOne(env.db, lifecycleAlerts, {
       id: ulid(),
       taskId: tA.taskId,
       rule: 'R1',
@@ -213,7 +216,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
 
     // Set up tB's broken shape.
     const tBRun = ulid()
-    await env.db.insert(nodeRuns).values({
+    await insertOne(env.db, nodeRuns, {
       id: tBRun,
       taskId: tB.taskId,
       nodeId: 'rev',
@@ -223,7 +226,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
       status: 'awaiting_review', // ← bug
       startedAt: T0,
     })
-    await env.db.insert(docVersions).values({
+    await insertOne(env.db, docVersions, {
       id: ulid(),
       taskId: tB.taskId,
       reviewNodeId: 'rev',
@@ -238,7 +241,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
     })
 
     // Seed an OPEN R1 row for tB too (still violating, will stay open).
-    await env.db.insert(lifecycleAlerts).values({
+    await insertOne(env.db, lifecycleAlerts, {
       id: ulid(),
       taskId: tB.taskId,
       rule: 'R1',
@@ -250,7 +253,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
 
     // Set up tC: broken, NO open row → should insert.
     const tCRun = ulid()
-    await env.db.insert(nodeRuns).values({
+    await insertOne(env.db, nodeRuns, {
       id: tCRun,
       taskId: tC.taskId,
       nodeId: 'rev',
@@ -260,7 +263,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
       status: 'awaiting_review',
       startedAt: T0,
     })
-    await env.db.insert(docVersions).values({
+    await insertOne(env.db, docVersions, {
       id: ulid(),
       taskId: tC.taskId,
       reviewNodeId: 'rev',
@@ -320,7 +323,8 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     })
     // Plant a violation; deleted task should still be skipped.
     const runId = ulid()
-    await env.db.insert(nodeRuns).values({
+    const { nodeRuns, docVersions } = tablesOf(env.db)
+    await insertOne(env.db, nodeRuns, {
       id: runId,
       taskId: t.taskId,
       nodeId: 'rev',
@@ -330,7 +334,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
       status: 'awaiting_review',
       startedAt: T0,
     })
-    await env.db.insert(docVersions).values({
+    await insertOne(env.db, docVersions, {
       id: ulid(),
       taskId: t.taskId,
       reviewNodeId: 'rev',

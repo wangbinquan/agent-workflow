@@ -11,24 +11,11 @@
 // 教训写在这里而不是删掉：**文件头写「已经只有一份」不构成证据**，判据要么是函数同一性断言，
 // 要么是一条能红的守卫。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, GrantResourceType, ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq, inArray, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  actionTemplates,
-  agents,
-  automationPolicies,
-  capabilityTemplates,
-  digitalEmployees,
-  mcps,
-  plugins,
-  resourceGrants,
-  skills,
-  verificationProfiles,
-  workflows,
-  workgroups,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ResourceCatalogGrantReadPort,
   ResourceCatalogOwnedAclType,
@@ -40,29 +27,46 @@ import {
 } from '../domain/resourceAccess'
 
 /** RFC-345 D4 —— canonical ACL roster 的表注册（两个 provider 共用同一张逻辑表清单）。 */
-export const ACL_TABLES = {
-  agent: agents,
-  skill: skills,
-  mcp: mcps,
-  plugin: plugins,
-  workflow: workflows,
-  workgroup: workgroups,
-  capability_template: capabilityTemplates,
-  action_template: actionTemplates,
-  verification_profile: verificationProfiles,
-  digital_employee: digitalEmployees,
-  automation_policy: automationPolicies,
-} as const satisfies Readonly<Record<ResourceCatalogOwnedAclType, object>>
+export const ACL_TABLES = (db: object) => {
+  const {
+    agents,
+    skills,
+    mcps,
+    plugins,
+    workflows,
+    workgroups,
+    capabilityTemplates,
+    actionTemplates,
+    verificationProfiles,
+    digitalEmployees,
+    automationPolicies,
+  } = tablesOf(db)
+  return {
+    agent: agents,
+    skill: skills,
+    mcp: mcps,
+    plugin: plugins,
+    workflow: workflows,
+    workgroup: workgroups,
+    capability_template: capabilityTemplates,
+    action_template: actionTemplates,
+    verification_profile: verificationProfiles,
+    digital_employee: digitalEmployees,
+    automation_policy: automationPolicies,
+  } as const satisfies Readonly<Record<ResourceCatalogOwnedAclType, object>>
+}
 
-export type AclTableFor<K extends ResourceCatalogOwnedAclType> = (typeof ACL_TABLES)[K]
+export type AclTableFor<K extends ResourceCatalogOwnedAclType> = ReturnType<typeof ACL_TABLES>[K]
 
 /** The canonical grant-set predicate, shared by async and in-transaction reads. */
-export function grantsOfUserWhere(type: GrantResourceType, userId: string) {
+export function grantsOfUserWhere(db: object, type: GrantResourceType, userId: string) {
+  const { resourceGrants } = tablesOf(db)
   return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, userId))
 }
 
 /** The canonical by-resource predicate, shared by audience and ACL reads. */
-export function grantsOfResourceWhere(type: GrantResourceType, resourceId: string) {
+export function grantsOfResourceWhere(db: object, type: GrantResourceType, resourceId: string) {
+  const { resourceGrants } = tablesOf(db)
   return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, resourceId))
 }
 
@@ -75,7 +79,7 @@ export interface AclColumnRef {
 
 /** SQL twin of the domain visibility ladder for count-only surfaces. */
 export function visibleRowsCondition(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ResourceAclActorProjection,
   type: AclResourceType,
   cols: AclColumnRef,
@@ -83,12 +87,13 @@ export function visibleRowsCondition(
   if (hasResourceAclBypass(actor)) return undefined
   const isPublic = sql`COALESCE(${cols.visibility}, 'public') = 'public'`
   if (!hasPrivateResourceAccess(actor)) return isPublic
+  const { resourceGrants } = tablesOf(db)
   const granted = inArray(
     cols.id,
     db
       .select({ resourceId: resourceGrants.resourceId })
       .from(resourceGrants)
-      .where(grantsOfUserWhere(type, actor.user.id)),
+      .where(grantsOfUserWhere(db, type, actor.user.id)),
   )
   return or(isPublic, sql`${cols.ownerUserId} = ${actor.user.id}`, granted)!
 }
@@ -99,7 +104,7 @@ export function visibleRowsCondition(
  * 本文件头（W4-B2 写的）当时就宣称「可见性阶梯 SQL 这里是唯一的一份」，但那句话只对
  * `visibleRowsCondition` 成立：下面这三个读法在 `sqliteResourceGrantRepository.ts` 里
  * **另有一份逐字相同的拷贝**（只差参数写成 `DbClient`——而 `DbClient` 本来就是
- * `ProviderNeutralDatabase` 的一个实例），并且两份**在同一个 SQLite 进程里同时活着**：
+ * `PersistenceDb` 的一个实例），并且两份**在同一个 SQLite 进程里同时活着**：
  * 中立那份喂 `createResourceAuthorizationApplication`（两个引擎共用），拷贝那份被
  * `infrastructure/legacy/agent.ts` / `legacy/resourceRefs.ts` / task-execution 的
  * `legacyCallClosure.ts` 直接调用。同一个问题（「这个用户被授权了哪些资源 / 什么档位」）
@@ -111,14 +116,15 @@ export function visibleRowsCondition(
  * `toBe` 立刻红。
  */
 export async function listGrantedResourceIds(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ResourceAclActorProjection,
   type: GrantResourceType,
 ): Promise<Set<string>> {
+  const { resourceGrants } = tablesOf(db)
   const rows = await db
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
-    .where(grantsOfUserWhere(type, actor.user.id))
+    .where(grantsOfUserWhere(db, type, actor.user.id))
   return new Set(rows.map((row) => row.resourceId))
 }
 
@@ -140,15 +146,16 @@ export async function grantedResourceIdsFor(
 }
 
 export async function loadGrantLevel(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: GrantResourceType,
   resourceId: string,
   userId: string,
 ): Promise<ResourceGrantLevel | null> {
+  const { resourceGrants } = tablesOf(db)
   const rows = await db
     .select({ level: resourceGrants.level })
     .from(resourceGrants)
-    .where(and(grantsOfResourceWhere(type, resourceId), eq(resourceGrants.userId, userId)))
+    .where(and(grantsOfResourceWhere(db, type, resourceId), eq(resourceGrants.userId, userId)))
     .limit(1)
   return rows[0]?.level ?? null
 }
@@ -159,7 +166,7 @@ export async function loadGrantLevel(
  * 否则「同一份列表页在两个引擎上徽章不一样」只会在大目录上出现。
  */
 export async function loadGrantLevelsForUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: GrantResourceType,
   resourceIds: readonly string[],
   userId: string,
@@ -167,19 +174,18 @@ export async function loadGrantLevelsForUser(
   const out = new Map<string, ResourceGrantLevel>()
   for (let index = 0; index < resourceIds.length; index += 500) {
     const chunk = resourceIds.slice(index, index + 500)
+    const { resourceGrants } = tablesOf(db)
     const rows = await db
       .select({ resourceId: resourceGrants.resourceId, level: resourceGrants.level })
       .from(resourceGrants)
-      .where(and(grantsOfUserWhere(type, userId), inArray(resourceGrants.resourceId, chunk)))
+      .where(and(grantsOfUserWhere(db, type, userId), inArray(resourceGrants.resourceId, chunk)))
     for (const row of rows) out.set(row.resourceId, row.level)
   }
   return out
 }
 
 /** Promise-shaped grant reads used by the composition root on both providers. */
-export function createResourceGrantReadPort(
-  db: ProviderNeutralDatabase,
-): ResourceCatalogGrantReadPort {
+export function createResourceGrantReadPort(db: PersistenceDb): ResourceCatalogGrantReadPort {
   const port: ResourceCatalogGrantReadPort = {
     listGrantedResourceIds: (actor, type) => listGrantedResourceIds(db, actor, type),
     loadGrantLevel: (type, resourceId, userId) => loadGrantLevel(db, type, resourceId, userId),

@@ -10,6 +10,8 @@
 // after its OWN iso worktree (cwd basename = node-run id). We then assert the
 // wrapper's git_diff port contains the INNER node's file but NOT the sibling's.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -18,7 +20,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
@@ -77,7 +78,8 @@ process.exit(0)
 }
 
 async function seedWriter(db: DbClient, name: string): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -108,14 +110,15 @@ async function seedTask(h: Harness, d: WorkflowDefinition): Promise<string> {
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, d)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'wpc',
     workflowId,
@@ -149,6 +152,7 @@ describe('RFC-130 T11 — wrapper-private canonical (AC-10)', () => {
       binaryOverride: ['bun', 'run', shim],
       maxConcurrentNodes: 4,
     })
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 

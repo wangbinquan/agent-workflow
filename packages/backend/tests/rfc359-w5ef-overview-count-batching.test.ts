@@ -23,11 +23,12 @@
 // ② **条数真的降下来了**——只锁数值不锁条数，有人把它改回逐表循环、数值照样对，
 //    而这条判据存在的唯一理由（AC-11 那 1ms）就悄悄没了。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import { agents, users, workflows } from '@/db/schema'
 import { createResourceCatalogOverviewCountPort } from '@/modules/resource-catalog/infrastructure/resourceCatalogOverview'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/domain/resourceKinds'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -56,7 +57,8 @@ const actor = buildActor({
 
 async function seed(harness: ProviderHarness): Promise<void> {
   const now = Date.now()
-  await harness.db.insert(users).values({
+  const { users, agents, workflows } = tablesOf(harness.db)
+  await insertOne(harness.db, users, {
     id: OWNER,
     username: 'w5ef-owner',
     displayName: 'W5EF owner',
@@ -65,13 +67,13 @@ async function seed(harness: ProviderHarness): Promise<void> {
     passwordHash: null,
     createdAt: now,
     updatedAt: now,
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
   // 两个 agent：一个 built-in（该被 excludeBuiltin 排掉）、一个自有。
   for (const [name, builtin] of [
     ['w5ef-builtin', true],
     ['w5ef-mine', false],
   ] as const) {
-    await harness.db.insert(agents).values({
+    await insertOne(harness.db, agents, {
       id: ulid(),
       name,
       description: '',
@@ -81,9 +83,9 @@ async function seed(harness: ProviderHarness): Promise<void> {
       builtin,
       createdAt: now,
       updatedAt: now,
-    } as typeof agents.$inferInsert)
+    } as PersistenceTables['agents']['$inferInsert'])
   }
-  await harness.db.insert(workflows).values({
+  await insertOne(harness.db, workflows, {
     id: ulid(),
     name: 'w5ef-flow',
     description: '',
@@ -94,7 +96,7 @@ async function seed(harness: ProviderHarness): Promise<void> {
     builtin: false,
     createdAt: now,
     updatedAt: now,
-  } as typeof workflows.$inferInsert)
+  } as PersistenceTables['workflows']['$inferInsert'])
 }
 
 describeEachProvider('RFC-359 §5ef 概览计数批量化（双引擎）', (harness) => {

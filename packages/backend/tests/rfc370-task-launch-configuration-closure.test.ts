@@ -1,5 +1,7 @@
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import {
   createFileFusionWorkspaceEffects,
@@ -19,7 +21,6 @@ import { resolveTaskStartLaunchConfiguration } from '@/modules/task-execution/ap
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
 import { type TaskContinuationDependencies } from '@/services/task'
-import { tasks, workflows, taskExecutionIntents } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { submitTaskContinuation } from '@/modules/task-execution/application/submitTaskContinuation'
@@ -261,6 +262,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       expect(settled).toBe(false)
       expect(existsSync(join(worktreePath, 'owned.txt'))).toBe(true)
       expect(drives).toBe(0)
+      const { tasks } = tablesOf(harness.db)
       expect(await harness.db.select().from(tasks)).toEqual([])
       cleanupRelease.resolve()
       expect(await pending).toMatchObject({ code: 'workflow-not-found' })
@@ -411,10 +413,13 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       taskId = ulid(),
       intentId = ulid()
     const snapshot = JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] })
-    await harness.db
-      .insert(workflows)
-      .values({ id: workflowId, name: 'continuation config', definition: snapshot })
-    await harness.db.insert(tasks).values({
+    const { workflows, tasks, taskExecutionIntents } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, {
+      id: workflowId,
+      name: 'continuation config',
+      definition: snapshot,
+    })
+    await insertOne(harness.db, tasks, {
       id: taskId,
       name: 'continuation config',
       workflowId,

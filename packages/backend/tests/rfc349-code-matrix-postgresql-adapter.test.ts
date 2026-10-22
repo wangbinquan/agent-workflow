@@ -1,11 +1,11 @@
 // RFC-349 — the repository capability matrix reads provider-owned facts while
 // application code remains the only owner of readiness and repair derivation.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 
 import { buildActor } from '@/auth/actor'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeMatrixQuery } from '@/modules/code-capability/application/codeMatrixQuery'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { createCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/capabilityMatrixRead'
@@ -36,7 +36,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -89,7 +92,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
   resetRouteMetaRegistry()
 })
 

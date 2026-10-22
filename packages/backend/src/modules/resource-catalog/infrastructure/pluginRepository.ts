@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Plugin } from '@agent-workflow/shared'
 import { and, eq, isNull, like, ne } from 'drizzle-orm'
-import { agents, plugins } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type {
@@ -29,15 +29,24 @@ export interface PluginRepositoryBundle {
   readonly projection: PluginProjection
 }
 
-const referenceSelect = {
-  id: agents.id,
-  name: agents.name,
-  raw: agents.plugins,
-  ownerUserId: agents.ownerUserId,
-  visibility: agents.visibility,
+const referenceSelect = (db: object) => {
+  const { agents } = tablesOf(db)
+  return {
+    id: agents.id,
+    name: agents.name,
+    raw: agents.plugins,
+    ownerUserId: agents.ownerUserId,
+    visibility: agents.visibility,
+  }
 }
 
-function ownerScopedNameWhere(ownerUserId: string | null, name: string, excludeId?: string) {
+function ownerScopedNameWhere(
+  db: object,
+  ownerUserId: string | null,
+  name: string,
+  excludeId?: string,
+) {
+  const { plugins } = tablesOf(db)
   const owner =
     ownerUserId === null ? isNull(plugins.ownerUserId) : eq(plugins.ownerUserId, ownerUserId)
   const identity = and(owner, eq(plugins.name, name))
@@ -69,6 +78,7 @@ async function selectPluginRowById(
   transaction: ResourceCatalogTransaction,
   id: string,
 ): Promise<PluginPersistenceRow | null> {
+  const { plugins } = tablesOf(transaction)
   return (await transaction.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0] ?? null
 }
 
@@ -76,9 +86,10 @@ async function findAgentReferencesInTransaction(
   transaction: ResourceCatalogTransaction,
   pluginId: string,
 ): Promise<PluginAgentReference[]> {
+  const { agents } = tablesOf(transaction)
   return collectPluginAgentReferences(
     await transaction
-      .select(referenceSelect)
+      .select(referenceSelect(transaction))
       .from(agents)
       .where(like(agents.plugins, `%"${pluginId}"%`)),
     pluginId,
@@ -100,7 +111,7 @@ function requireChangedRow(
  * `uniqueViolationTarget` 映射回 `plugin-name-in-use`。
  */
 export function createPluginRepository(deps: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
 }): PluginRepositoryBundle {
   const db = deps.db
   const engine = databaseSessionFor(db).engine
@@ -109,21 +120,24 @@ export function createPluginRepository(deps: {
     return target !== undefined && /plugins[._](?:owner|name)/i.test(target)
   }
   async function get(id: string): Promise<Plugin | null> {
+    const { plugins } = tablesOf(db)
     const row = (await db.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0]
     return row === undefined ? null : pluginFromPersistenceRow(row)
   }
 
   const repository: PluginRepository = {
     async list(): Promise<Plugin[]> {
+      const { plugins } = tablesOf(db)
       return (await db.select().from(plugins)).map(pluginFromPersistenceRow)
     },
     get,
     async assertNameAvailable(input): Promise<void> {
+      const { plugins } = tablesOf(db)
       const collision = (
         await db
           .select({ id: plugins.id })
           .from(plugins)
-          .where(ownerScopedNameWhere(input.ownerUserId, input.name, input.excludeId))
+          .where(ownerScopedNameWhere(db, input.ownerUserId, input.name, input.excludeId))
           .limit(1)
       )[0]
       if (collision !== undefined) throw nameConflict(input.name, input.purpose)
@@ -170,12 +184,18 @@ export function createPluginRepository(deps: {
             throw new NotFoundError('plugin-not-found', `plugin '${renaming.id}' not found`)
           }
           const plugin = assertExpectedHash(row, renaming.expectedConfigHash, 'rename')
+          const { plugins } = tablesOf(transaction)
           const collision = (
             await transaction
               .select({ id: plugins.id })
               .from(plugins)
               .where(
-                ownerScopedNameWhere(plugin.ownerUserId ?? null, renaming.newName, renaming.id),
+                ownerScopedNameWhere(
+                  transaction,
+                  plugin.ownerUserId ?? null,
+                  renaming.newName,
+                  renaming.id,
+                ),
               )
               .limit(1)
           )[0]
@@ -183,7 +203,7 @@ export function createPluginRepository(deps: {
           const updated = await transaction
             .update(plugins)
             .set({ name: renaming.newName, updatedAt: renaming.updatedAt })
-            .where(fullPluginRowWhere(row))
+            .where(fullPluginRowWhere(transaction, row))
             .returning()
           requireChangedRow(updated, renaming.id, 'rename')
           return pluginFromPersistenceRow(updated[0]!)
@@ -194,9 +214,10 @@ export function createPluginRepository(deps: {
       }
     },
     async findAgentReferences(id): Promise<readonly PluginAgentReference[]> {
+      const { agents } = tablesOf(db)
       return collectPluginAgentReferences(
         await db
-          .select(referenceSelect)
+          .select(referenceSelect(db))
           .from(agents)
           .where(like(agents.plugins, `%"${id}"%`)),
         id,
@@ -211,9 +232,10 @@ export function createPluginRepository(deps: {
         assertExpectedHash(row, deletion.expectedConfigHash, 'delete')
         const references = await findAgentReferencesInTransaction(transaction, deletion.id)
         if (references.length > 0) return references
+        const { plugins } = tablesOf(transaction)
         const deleted = await transaction
           .delete(plugins)
-          .where(fullPluginRowWhere(row))
+          .where(fullPluginRowWhere(transaction, row))
           .returning({ id: plugins.id })
         requireChangedRow(deleted, deletion.id, 'delete')
         return []

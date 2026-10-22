@@ -1,11 +1,13 @@
 // RFC-359 W18: the original count queries keep their rows and statement
 // boundaries when the two additive covering indexes are present. This tiny
 // fixture proves results and plans; the original full HTTP gate owns latency.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
-import { scheduledTasks, taskRepos, tasks, users, workflows } from '@/db/schema'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
@@ -28,7 +30,8 @@ const actor = buildActor({
 
 async function seed(harness: ProviderHarness) {
   const db = harness.db
-  await db.insert(users).values({
+  const { users, workflows, tasks, taskRepos, scheduledTasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'w18-user',
     username: 'w18',
     displayName: 'w18',
@@ -38,7 +41,7 @@ async function seed(harness: ProviderHarness) {
     createdAt: since,
     updatedAt: since,
   })
-  await db.insert(workflows).values({ id: 'w18-wf', name: 'w18', definition: '{}' })
+  await insertOne(db, workflows, { id: 'w18-wf', name: 'w18', definition: '{}' })
   const seeds = [
     { id: 'a', status: 'running', cachedRepoId: repoIds[0] },
     { id: 'b', status: 'running', cachedRepoId: repoIds[0] },
@@ -55,7 +58,7 @@ async function seed(harness: ProviderHarness) {
   ] as const
   // Parent a must exist before its child c on both providers.
   for (const item of seeds) {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       workflowId: 'w18-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -87,7 +90,7 @@ async function seed(harness: ProviderHarness) {
       worktreePath: `/fixture/${taskId}`,
     })),
   )
-  await db.insert(scheduledTasks).values({
+  await insertOne(db, scheduledTasks, {
     id: 'w18-schedule',
     name: 'w18',
     ownerUserId: 'w18-user',
@@ -189,14 +192,18 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
   test('actual provider catalogs contain both exact column sequences', async () => {
     for (const index of indexes) {
       if (harness.capabilities.provider === 'sqlite') {
-        const columns = await harness.db.all<{ name: string }>(
+        const columns = await rawRows<{ name: string }>(
+          harness.db,
           sql.raw(`PRAGMA index_info('${index.name}')`),
         )
         expect(columns.map((column) => column.name)).toEqual(index.columns)
       } else {
-        const rows = await harness.db.all<{ indexdef: string }>(sql`
+        const rows = await rawRows<{ indexdef: string }>(
+          harness.db,
+          sql`
           SELECT indexdef FROM pg_indexes WHERE schemaname = 'agent_workflow' AND indexname = ${index.name}
-        `)
+        `,
+        )
         expect(rows).toHaveLength(1)
         expect(rows[0]!.indexdef).toContain(`(${index.columns.join(', ')})`)
         expect(rows[0]!.indexdef).not.toContain(' WHERE ')
@@ -212,6 +219,7 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       failed7d: 0,
     })
     await seed(harness)
+    const { tasks } = tablesOf(harness.db)
     const beforeRows = await harness.db.select().from(tasks).orderBy(tasks.id)
     const withIndexes = await counts(harness)
     expect(withIndexes.overview).toEqual({ running: 3, awaiting: 2, done7d: 1, failed7d: 1 })
@@ -260,6 +268,7 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
     const interruption = new Error('count mutation rollback')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { tasks } = tablesOf(tx)
         await tx.update(tasks).set({ status: 'done', finishedAt: since }).where(eq(tasks.id, 'a'))
         expect(await createTaskOverviewQuery(tx).load({ actor, since })).toEqual({
           running: 2,

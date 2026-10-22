@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 // RFC-359 AC-1（plan §5hh）—— **启动内核在两个引擎上都要能真启动一次**。
 //
@@ -22,7 +24,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { agents, tasks, users, workflows } from '@/db/schema'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -47,7 +48,8 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
       const agentId = ulid()
       const workflowId = ulid()
       const now = Date.now()
-      await harness.db.insert(users).values({
+      const { users, agents, workflows, tasks } = tablesOf(harness.db)
+      await insertOne(harness.db, users, {
         id: userId,
         username: `kernel-${userId}`,
         displayName: 'Kernel Launch Fixture',
@@ -58,7 +60,7 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
         createdAt: now,
         updatedAt: now,
       })
-      await harness.db.insert(agents).values({
+      await insertOne(harness.db, agents, {
         id: agentId,
         name: 'kernel-launch-agent',
         description: 'Kernel launch fixture',
@@ -95,7 +97,7 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
           },
         ],
       }
-      await harness.db.insert(workflows).values({
+      await insertOne(harness.db, workflows, {
         id: workflowId,
         name: 'Kernel launch',
         definition: JSON.stringify(definition),

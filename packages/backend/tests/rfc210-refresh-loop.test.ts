@@ -17,10 +17,11 @@
 // 循环本身遵循仓里既定样板（eventsArchive / gc）：{stop} 句柄、重入保护、
 // 每 tick 读一次 config、错误只记日志不抛——后台刷新绝不能把 daemon 拖挂。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { cachedRepos } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   DEFAULT_ONLY_RECENT_DAYS,
@@ -35,16 +36,20 @@ const NOW = 1_800_000_000_000
 const DAY = 24 * 60 * 60 * 1000
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   rows: Array<{ id: string; fetchedAt: number; autoRefreshAt: number | null }>,
 ): Promise<void> {
   for (const r of rows) {
-    await db.run(sql`
+    const { cachedRepos } = tablesOf(db)
+    await rawExec(
+      db,
+      sql`
       INSERT INTO ${cachedRepos} (id, url_hash, url_redacted, local_path,
         last_fetched_at, created_at, last_auto_refresh_at)
       VALUES (${r.id}, ${r.id}, ${'https://x/' + r.id}, ${'/tmp/' + r.id},
         ${r.fetchedAt}, 0, ${r.autoRefreshAt})
-    `)
+    `,
+    )
   }
 }
 
@@ -105,7 +110,9 @@ describeEachProvider('RFC-210 background refresh — tick behaviour', (harness) 
       submoduleAutoRefresh: { enabled: false },
     })
     expect(res).toEqual({ refreshed: 0, failed: 0 })
-    const row = (await db.all(
+    const { cachedRepos } = tablesOf(db)
+    const row = (await rawRows(
+      db,
       sql`SELECT last_auto_refresh_at AS a FROM ${cachedRepos} WHERE id='r'`,
     )) as Array<{ a: number | null }>
     expect(row[0]?.a).toBeNull()
@@ -121,8 +128,10 @@ describeEachProvider('RFC-210 background refresh — tick behaviour', (harness) 
     })
     expect(res.failed).toBe(1)
     expect(res.refreshed).toBe(0)
+    const { cachedRepos } = tablesOf(db)
     // Still stamped, so a permanently broken repo cannot spin every tick.
-    const row = (await db.all(
+    const row = (await rawRows(
+      db,
       sql`SELECT last_auto_refresh_at AS a FROM ${cachedRepos} WHERE id='gone'`,
     )) as Array<{ a: number | null }>
     expect(row[0]?.a).not.toBeNull()

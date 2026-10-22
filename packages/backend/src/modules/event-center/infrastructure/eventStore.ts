@@ -1,26 +1,16 @@
 // RFC-359 W4-B6 —— 事件中心事件存储：一份实现，两个 provider 共用。
 // 四笔多语句写走统一事务原语；观察者认领扫描按 SQLite 的 NULL 落位（从未扫过的排最前）经能力矩阵表达。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite, first } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { TriggerContextSchema } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { chunkedAll } from '@/util/sqlChunk'
-import {
-  eventDeliveries,
-  eventObserverRuns,
-  eventRecords,
-  eventSources,
-  eventSubscriptions,
-  eventTypeCatalog,
-  observerActivations,
-} from '@/db/schema'
 import type { EventStorePort, ObservationStoreReceipt } from '../application/ports/eventStore'
 import {
   eventSourceDescriptorSchema,
@@ -37,11 +27,13 @@ import {
   type ObserverActivationRecord,
 } from '../domain/model'
 
-function sourceWhere(ref: EventExactRef) {
+function sourceWhere(db: object, ref: EventExactRef) {
+  const { eventSources } = tablesOf(db)
   return and(eq(eventSources.sourceId, ref.id), eq(eventSources.revision, ref.revision))
 }
 
-function typeWhere(ref: EventExactRef) {
+function typeWhere(db: object, ref: EventExactRef) {
+  const { eventTypeCatalog } = tablesOf(db)
   return and(eq(eventTypeCatalog.eventTypeId, ref.id), eq(eventTypeCatalog.revision, ref.revision))
 }
 
@@ -60,11 +52,12 @@ function typeWhere(ref: EventExactRef) {
  *     逐字相同（下游的投递扇出会因此撞唯一键，那是改批之前就有的收场，不在这里偷偷改掉）。
  */
 async function materializeFilteredSubscriptions(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   subject: EventSubject,
   matches: readonly MatchedFilteredEventSubscription[],
-): Promise<Array<typeof eventSubscriptions.$inferSelect>> {
+): Promise<Array<PersistenceTables['eventSubscriptions']['$inferSelect']>> {
   if (matches.length === 0) return []
+  const { eventSubscriptions } = tablesOf(tx)
   await insertInBatches(
     tx,
     eventSubscriptions,
@@ -94,19 +87,21 @@ async function materializeFilteredSubscriptions(
         cancelledAt: null,
       }
     }),
-    (batch) =>
-      tx
-        .insert(eventSubscriptions)
-        .values([...batch])
-        .onConflictDoNothing()
-        .run(),
+    (batch) => {
+      return queryWrite(
+        tx
+          .insert(eventSubscriptions)
+          .values([...batch])
+          .onConflictDoNothing(),
+      )
+    },
   )
   const ids = [...new Set(matches.map((match) => match.materializedSubscriptionId))]
-  const stored = await chunkedAll(ids, (chunk) =>
-    tx.select().from(eventSubscriptions).where(inArray(eventSubscriptions.id, chunk)),
-  )
+  const stored = await chunkedAll(ids, (chunk) => {
+    return tx.select().from(eventSubscriptions).where(inArray(eventSubscriptions.id, chunk))
+  })
   const byId = new Map(stored.map((row) => [row.id, row]))
-  const out: Array<typeof eventSubscriptions.$inferSelect> = []
+  const out: Array<PersistenceTables['eventSubscriptions']['$inferSelect']> = []
   for (const match of matches) {
     const row = byId.get(match.materializedSubscriptionId)
     if (row !== undefined) out.push(row)
@@ -114,7 +109,9 @@ async function materializeFilteredSubscriptions(
   return out
 }
 
-function subscriptionRecord(row: typeof eventSubscriptions.$inferSelect): EventSubscriptionRecord {
+function subscriptionRecord(
+  row: PersistenceTables['eventSubscriptions']['$inferSelect'],
+): EventSubscriptionRecord {
   const origin =
     row.originKind === null || row.originRef === null || row.definitionRevision === null
       ? null
@@ -175,33 +172,35 @@ function eventDocument(summaryJson: string): {
 }
 
 async function loadDeliveryRecord(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   deliveryId: string,
 ): Promise<EventDeliveryRecord | null> {
-  const row = await db
-    .select({
-      deliveryId: eventDeliveries.id,
-      eventId: eventDeliveries.eventId,
-      subscriptionId: eventDeliveries.subscriptionId,
-      subscriberKind: eventDeliveries.subscriberKind,
-      subscriberRef: eventDeliveries.subscriberRef,
-      eventTypeId: eventRecords.eventTypeId,
-      eventTypeRevision: eventRecords.eventTypeRevision,
-      sourceId: eventRecords.sourceId,
-      sourceRevision: eventRecords.sourceRevision,
-      subjectType: eventRecords.subjectType,
-      subjectRef: eventRecords.subjectRef,
-      deliveryClass: eventDeliveries.deliveryClass,
-      occurredAt: eventRecords.occurredAt,
-      summaryJson: eventRecords.summaryJson,
-      payloadArtifactRef: eventRecords.payloadArtifactRef,
-      attemptCount: eventDeliveries.attemptCount,
-      createdAt: eventDeliveries.createdAt,
-    })
-    .from(eventDeliveries)
-    .innerJoin(eventRecords, eq(eventRecords.id, eventDeliveries.eventId))
-    .where(eq(eventDeliveries.id, deliveryId))
-    .get()
+  const { eventDeliveries, eventRecords } = tablesOf(db)
+  const row = await first(
+    db
+      .select({
+        deliveryId: eventDeliveries.id,
+        eventId: eventDeliveries.eventId,
+        subscriptionId: eventDeliveries.subscriptionId,
+        subscriberKind: eventDeliveries.subscriberKind,
+        subscriberRef: eventDeliveries.subscriberRef,
+        eventTypeId: eventRecords.eventTypeId,
+        eventTypeRevision: eventRecords.eventTypeRevision,
+        sourceId: eventRecords.sourceId,
+        sourceRevision: eventRecords.sourceRevision,
+        subjectType: eventRecords.subjectType,
+        subjectRef: eventRecords.subjectRef,
+        deliveryClass: eventDeliveries.deliveryClass,
+        occurredAt: eventRecords.occurredAt,
+        summaryJson: eventRecords.summaryJson,
+        payloadArtifactRef: eventRecords.payloadArtifactRef,
+        attemptCount: eventDeliveries.attemptCount,
+        createdAt: eventDeliveries.createdAt,
+      })
+      .from(eventDeliveries)
+      .innerJoin(eventRecords, eq(eventRecords.id, eventDeliveries.eventId))
+      .where(eq(eventDeliveries.id, deliveryId)),
+  )
   if (row === undefined) return null
   const document = eventDocument(row.summaryJson)
   return {
@@ -226,7 +225,9 @@ async function loadDeliveryRecord(
   }
 }
 
-function activationRecord(row: typeof observerActivations.$inferSelect): ObserverActivationRecord {
+function activationRecord(
+  row: PersistenceTables['observerActivations']['$inferSelect'],
+): ObserverActivationRecord {
   return {
     sourceRef: { id: row.sourceId, revision: row.sourceRevision },
     subscriberCount: row.subscriberCount,
@@ -273,16 +274,18 @@ function rotatingSubjectBatch(
 }
 
 export function createEventStore(
-  db: ProviderNeutralDatabase,
-  beforeObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
+  db: PersistenceDb,
+  beforeObservationWrite?: (tx: PersistenceDb) => Promise<void>,
 ): EventStorePort {
   return {
     async registerSource(descriptor, digest, now) {
-      const existing = await db
-        .select({ digest: eventSources.descriptorDigest })
-        .from(eventSources)
-        .where(sourceWhere(descriptor.sourceRef))
-        .get()
+      const { eventSources } = tablesOf(db)
+      const existing = await first(
+        db
+          .select({ digest: eventSources.descriptorDigest })
+          .from(eventSources)
+          .where(sourceWhere(db, descriptor.sourceRef)),
+      )
       if (existing !== undefined) {
         if (existing.digest !== digest) {
           throw new Error(
@@ -291,7 +294,7 @@ export function createEventStore(
         }
         return
       }
-      await db.insert(eventSources).values({
+      await insertOne(db, eventSources, {
         sourceId: descriptor.sourceRef.id,
         revision: descriptor.sourceRef.revision,
         descriptorJson: JSON.stringify(descriptor),
@@ -302,14 +305,16 @@ export function createEventStore(
     },
 
     async registerEventType(descriptor, digest, now) {
-      const existing = await db
-        .select({
-          descriptorJson: eventTypeCatalog.descriptorJson,
-          digest: eventTypeCatalog.descriptorDigest,
-        })
-        .from(eventTypeCatalog)
-        .where(typeWhere(descriptor.eventTypeRef))
-        .get()
+      const { eventTypeCatalog } = tablesOf(db)
+      const existing = await first(
+        db
+          .select({
+            descriptorJson: eventTypeCatalog.descriptorJson,
+            digest: eventTypeCatalog.descriptorDigest,
+          })
+          .from(eventTypeCatalog)
+          .where(typeWhere(db, descriptor.eventTypeRef)),
+      )
       if (existing !== undefined) {
         const existingDescriptor = eventTypeDescriptorSchema.parse(
           JSON.parse(existing.descriptorJson) as unknown,
@@ -326,10 +331,10 @@ export function createEventStore(
             descriptorDigest: digest,
             catalogVisibility: descriptor.catalogVisibility ?? 'public',
           })
-          .where(typeWhere(descriptor.eventTypeRef))
+          .where(typeWhere(db, descriptor.eventTypeRef))
         return
       }
-      await db.insert(eventTypeCatalog).values({
+      await insertOne(db, eventTypeCatalog, {
         eventTypeId: descriptor.eventTypeRef.id,
         revision: descriptor.eventTypeRef.revision,
         sourceId: descriptor.sourceRef.id,
@@ -343,14 +348,16 @@ export function createEventStore(
     },
 
     async getSource(ref) {
-      const row = await db.select().from(eventSources).where(sourceWhere(ref)).get()
+      const { eventSources } = tablesOf(db)
+      const row = await first(db.select().from(eventSources).where(sourceWhere(db, ref)))
       return row === undefined
         ? null
         : eventSourceDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown)
     },
 
     async getEventType(ref) {
-      const row = await db.select().from(eventTypeCatalog).where(typeWhere(ref)).get()
+      const { eventTypeCatalog } = tablesOf(db)
+      const row = await first(db.select().from(eventTypeCatalog).where(typeWhere(db, ref)))
       if (row === undefined) return null
       const descriptor = eventTypeDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown)
       return eventTypeDescriptorSchema.parse({
@@ -362,6 +369,7 @@ export function createEventStore(
     },
 
     async listSources() {
+      const { eventSources } = tablesOf(db)
       const rows = await db
         .select()
         .from(eventSources)
@@ -373,6 +381,7 @@ export function createEventStore(
     },
 
     async listEventTypes() {
+      const { eventTypeCatalog } = tablesOf(db)
       const rows = await db
         .select()
         .from(eventTypeCatalog)
@@ -392,11 +401,13 @@ export function createEventStore(
     },
 
     async subscribe(input) {
-      const existing = await db
-        .select()
-        .from(eventSubscriptions)
-        .where(eq(eventSubscriptions.activeIdentityKey, input.identityKey))
-        .get()
+      const { eventSubscriptions } = tablesOf(db)
+      const existing = await first(
+        db
+          .select()
+          .from(eventSubscriptions)
+          .where(eq(eventSubscriptions.activeIdentityKey, input.identityKey)),
+      )
       if (existing !== undefined) {
         return {
           record: subscriptionRecord(existing),
@@ -406,33 +417,37 @@ export function createEventStore(
       }
 
       return await databaseSessionFor(db).transaction(async (tx) => {
-        const insertedSubscription = await tx
-          .insert(eventSubscriptions)
-          .values({
-            id: input.id,
-            eventTypeId: input.eventType.eventTypeRef.id,
-            eventTypeRevision: input.eventType.eventTypeRef.revision,
-            sourceId: input.source.sourceRef.id,
-            sourceRevision: input.source.sourceRef.revision,
-            subjectType: input.subject.typeId,
-            subjectRef: input.subject.subjectRef,
-            subscriberKind: input.subscriber.kind,
-            subscriberRef: input.subscriber.subscriberRef,
-            mode: 'exact',
-            activeIdentityKey: input.identityKey,
-            state: 'active',
-            createdAt: input.now,
-            updatedAt: input.now,
-          })
-          .onConflictDoNothing()
-          .returning({ id: eventSubscriptions.id })
-          .get()
+        const { eventSubscriptions, eventRecords, eventDeliveries, observerActivations } =
+          tablesOf(tx)
+        const insertedSubscription = await first(
+          tx
+            .insert(eventSubscriptions)
+            .values({
+              id: input.id,
+              eventTypeId: input.eventType.eventTypeRef.id,
+              eventTypeRevision: input.eventType.eventTypeRef.revision,
+              sourceId: input.source.sourceRef.id,
+              sourceRevision: input.source.sourceRef.revision,
+              subjectType: input.subject.typeId,
+              subjectRef: input.subject.subjectRef,
+              subscriberKind: input.subscriber.kind,
+              subscriberRef: input.subscriber.subscriberRef,
+              mode: 'exact',
+              activeIdentityKey: input.identityKey,
+              state: 'active',
+              createdAt: input.now,
+              updatedAt: input.now,
+            })
+            .onConflictDoNothing()
+            .returning({ id: eventSubscriptions.id }),
+        )
         if (insertedSubscription === undefined) {
-          const concurrent = await tx
-            .select()
-            .from(eventSubscriptions)
-            .where(eq(eventSubscriptions.activeIdentityKey, input.identityKey))
-            .get()
+          const concurrent = await first(
+            tx
+              .select()
+              .from(eventSubscriptions)
+              .where(eq(eventSubscriptions.activeIdentityKey, input.identityKey)),
+          )
           if (concurrent === undefined) {
             throw new Error('event subscription conflict did not expose the active subscription')
           }
@@ -444,25 +459,26 @@ export function createEventStore(
         }
 
         const latestEvent = input.replayLatest
-          ? await tx
-              .select({ id: eventRecords.id })
-              .from(eventRecords)
-              .where(
-                and(
-                  eq(eventRecords.eventTypeId, input.eventType.eventTypeRef.id),
-                  eq(eventRecords.eventTypeRevision, input.eventType.eventTypeRef.revision),
-                  eq(eventRecords.sourceId, input.source.sourceRef.id),
-                  eq(eventRecords.sourceRevision, input.source.sourceRef.revision),
-                  eq(eventRecords.subjectType, input.subject.typeId),
-                  eq(eventRecords.subjectRef, input.subject.subjectRef),
+          ? await first(
+              tx
+                .select({ id: eventRecords.id })
+                .from(eventRecords)
+                .where(
+                  and(
+                    eq(eventRecords.eventTypeId, input.eventType.eventTypeRef.id),
+                    eq(eventRecords.eventTypeRevision, input.eventType.eventTypeRef.revision),
+                    eq(eventRecords.sourceId, input.source.sourceRef.id),
+                    eq(eventRecords.sourceRevision, input.source.sourceRef.revision),
+                    eq(eventRecords.subjectType, input.subject.typeId),
+                    eq(eventRecords.subjectRef, input.subject.subjectRef),
+                  ),
+                )
+                .orderBy(
+                  desc(eventRecords.occurredAt),
+                  desc(eventRecords.observedAt),
+                  desc(eventRecords.id),
                 ),
-              )
-              .orderBy(
-                desc(eventRecords.occurredAt),
-                desc(eventRecords.observedAt),
-                desc(eventRecords.id),
-              )
-              .get()
+            )
           : undefined
         if (latestEvent !== undefined) {
           await tx
@@ -484,18 +500,19 @@ export function createEventStore(
 
         let observerTransition: 'none' | 'started' = 'none'
         if (input.source.observationMode !== 'passive') {
-          const activation = await tx
-            .select()
-            .from(observerActivations)
-            .where(
-              and(
-                eq(observerActivations.sourceId, input.source.sourceRef.id),
-                eq(observerActivations.sourceRevision, input.source.sourceRef.revision),
+          const activation = await first(
+            tx
+              .select()
+              .from(observerActivations)
+              .where(
+                and(
+                  eq(observerActivations.sourceId, input.source.sourceRef.id),
+                  eq(observerActivations.sourceRevision, input.source.sourceRef.revision),
+                ),
               ),
-            )
-            .get()
+          )
           if (activation === undefined) {
-            await tx.insert(observerActivations).values({
+            await insertOne(tx, observerActivations, {
               sourceId: input.source.sourceRef.id,
               sourceRevision: input.source.sourceRef.revision,
               subscriberCount: 1,
@@ -559,20 +576,23 @@ export function createEventStore(
     },
 
     async cancelSubscription(id, now) {
-      const current = await db
-        .select()
-        .from(eventSubscriptions)
-        .where(
-          and(
-            eq(eventSubscriptions.id, id),
-            eq(eventSubscriptions.mode, 'exact'),
-            eq(eventSubscriptions.state, 'active'),
+      const { eventSubscriptions } = tablesOf(db)
+      const current = await first(
+        db
+          .select()
+          .from(eventSubscriptions)
+          .where(
+            and(
+              eq(eventSubscriptions.id, id),
+              eq(eventSubscriptions.mode, 'exact'),
+              eq(eventSubscriptions.state, 'active'),
+            ),
           ),
-        )
-        .get()
+      )
       if (current === undefined) return null
 
       return await databaseSessionFor(db).transaction(async (tx) => {
+        const { eventSubscriptions, observerActivations } = tablesOf(tx)
         await tx
           .update(eventSubscriptions)
           .set({
@@ -584,16 +604,17 @@ export function createEventStore(
           .where(and(eq(eventSubscriptions.id, id), eq(eventSubscriptions.state, 'active')))
 
         let observerTransition: 'none' | 'stopped' = 'none'
-        const activation = await tx
-          .select()
-          .from(observerActivations)
-          .where(
-            and(
-              eq(observerActivations.sourceId, current.sourceId),
-              eq(observerActivations.sourceRevision, current.sourceRevision),
+        const activation = await first(
+          tx
+            .select()
+            .from(observerActivations)
+            .where(
+              and(
+                eq(observerActivations.sourceId, current.sourceId),
+                eq(observerActivations.sourceRevision, current.sourceRevision),
+              ),
             ),
-          )
-          .get()
+        )
         if (activation !== undefined) {
           const count = Math.max(0, activation.subscriberCount - 1)
           const stopped = count === 0
@@ -630,28 +651,31 @@ export function createEventStore(
     },
 
     async nudgeObserver(sourceRef, now) {
+      const { observerActivations } = tablesOf(db)
       return (
-        (await db
-          .update(observerActivations)
-          .set({
-            wakeEpoch: sql`${observerActivations.wakeEpoch} + 1`,
-            nextScanAt: now,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(observerActivations.sourceId, sourceRef.id),
-              eq(observerActivations.sourceRevision, sourceRef.revision),
-              eq(observerActivations.state, 'active'),
-              sql`${observerActivations.subscriberCount} > 0`,
-            ),
-          )
-          .returning({ sourceId: observerActivations.sourceId })
-          .get()) !== undefined
+        (await first(
+          db
+            .update(observerActivations)
+            .set({
+              wakeEpoch: sql`${observerActivations.wakeEpoch} + 1`,
+              nextScanAt: now,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(observerActivations.sourceId, sourceRef.id),
+                eq(observerActivations.sourceRevision, sourceRef.revision),
+                eq(observerActivations.state, 'active'),
+                sql`${observerActivations.subscriberCount} > 0`,
+              ),
+            )
+            .returning({ sourceId: observerActivations.sourceId }),
+        )) !== undefined
       )
     },
 
     async listSubscriptions(subscriberRef) {
+      const { eventSubscriptions } = tablesOf(db)
       const subscriberCondition =
         subscriberRef === undefined
           ? sql`1 = 1`
@@ -665,6 +689,7 @@ export function createEventStore(
     },
 
     async listSubscriptionPage(input) {
+      const { eventSubscriptions } = tablesOf(db)
       const where = and(
         eq(eventSubscriptions.mode, 'exact'),
         ...(input.subscriberRef === undefined
@@ -672,7 +697,7 @@ export function createEventStore(
           : [eq(eventSubscriptions.subscriberRef, input.subscriberRef)]),
       )
       const total = Number(
-        (await db.select({ count: count() }).from(eventSubscriptions).where(where).get())?.count ??
+        (await first(db.select({ count: count() }).from(eventSubscriptions).where(where)))?.count ??
           0,
       )
       const items = (
@@ -688,6 +713,7 @@ export function createEventStore(
     },
 
     async activeSubscriptionCountsBySource() {
+      const { eventSubscriptions } = tablesOf(db)
       return new Map(
         (
           await db
@@ -706,17 +732,19 @@ export function createEventStore(
     },
 
     async recordObservation(input) {
-      const existing = await db
-        .select({ id: eventRecords.id })
-        .from(eventRecords)
-        .where(
-          and(
-            eq(eventRecords.sourceId, input.observation.sourceRef.id),
-            eq(eventRecords.sourceRevision, input.observation.sourceRef.revision),
-            eq(eventRecords.dedupeKey, input.observation.dedupeKey),
+      const { eventRecords, eventDeliveries } = tablesOf(db)
+      const existing = await first(
+        db
+          .select({ id: eventRecords.id })
+          .from(eventRecords)
+          .where(
+            and(
+              eq(eventRecords.sourceId, input.observation.sourceRef.id),
+              eq(eventRecords.sourceRevision, input.observation.sourceRef.revision),
+              eq(eventRecords.dedupeKey, input.observation.dedupeKey),
+            ),
           ),
-        )
-        .get()
+      )
       if (existing !== undefined) {
         const deliveries = await db
           .select({ id: eventDeliveries.id })
@@ -733,41 +761,44 @@ export function createEventStore(
       return await databaseSessionFor(db).transaction(
         async (tx): Promise<ObservationStoreReceipt> => {
           await beforeObservationWrite?.(tx)
-          const inserted = await tx
-            .insert(eventRecords)
-            .values({
-              id: input.eventId,
-              eventTypeId: input.observation.eventTypeRef.id,
-              eventTypeRevision: input.observation.eventTypeRef.revision,
-              sourceId: input.observation.sourceRef.id,
-              sourceRevision: input.observation.sourceRef.revision,
-              subjectType: input.observation.subject.typeId,
-              subjectRef: input.observation.subject.subjectRef,
-              occurredAt: input.observation.occurredAt,
-              observedAt: input.observedAt,
-              dedupeKey: input.observation.dedupeKey,
-              summaryJson: JSON.stringify({
-                summary: input.observation.summary,
-                routingFacts: input.observation.routingFacts,
-                triggerContext: input.triggerContext,
-              }),
-              payloadArtifactRef: input.observation.payloadArtifactRef,
-            })
-            .onConflictDoNothing()
-            .returning({ id: eventRecords.id })
-            .get()
+          const { eventRecords, eventSubscriptions, eventDeliveries } = tablesOf(tx)
+          const inserted = await first(
+            tx
+              .insert(eventRecords)
+              .values({
+                id: input.eventId,
+                eventTypeId: input.observation.eventTypeRef.id,
+                eventTypeRevision: input.observation.eventTypeRef.revision,
+                sourceId: input.observation.sourceRef.id,
+                sourceRevision: input.observation.sourceRef.revision,
+                subjectType: input.observation.subject.typeId,
+                subjectRef: input.observation.subject.subjectRef,
+                occurredAt: input.observation.occurredAt,
+                observedAt: input.observedAt,
+                dedupeKey: input.observation.dedupeKey,
+                summaryJson: JSON.stringify({
+                  summary: input.observation.summary,
+                  routingFacts: input.observation.routingFacts,
+                  triggerContext: input.triggerContext,
+                }),
+                payloadArtifactRef: input.observation.payloadArtifactRef,
+              })
+              .onConflictDoNothing()
+              .returning({ id: eventRecords.id }),
+          )
           if (inserted === undefined) {
-            const duplicate = await tx
-              .select({ id: eventRecords.id })
-              .from(eventRecords)
-              .where(
-                and(
-                  eq(eventRecords.sourceId, input.observation.sourceRef.id),
-                  eq(eventRecords.sourceRevision, input.observation.sourceRef.revision),
-                  eq(eventRecords.dedupeKey, input.observation.dedupeKey),
+            const duplicate = await first(
+              tx
+                .select({ id: eventRecords.id })
+                .from(eventRecords)
+                .where(
+                  and(
+                    eq(eventRecords.sourceId, input.observation.sourceRef.id),
+                    eq(eventRecords.sourceRevision, input.observation.sourceRef.revision),
+                    eq(eventRecords.dedupeKey, input.observation.dedupeKey),
+                  ),
                 ),
-              )
-              .get()
+            )
             if (duplicate === undefined) {
               throw new Error('event observation conflict did not expose the existing event')
             }
@@ -814,9 +845,9 @@ export function createEventStore(
             nextAttemptAt: input.observedAt,
             createdAt: input.observedAt,
           }))
-          await insertInBatches(tx, eventDeliveries, deliveryRows, (batch) =>
-            tx.insert(eventDeliveries).values([...batch]),
-          )
+          await insertInBatches(tx, eventDeliveries, deliveryRows, (batch) => {
+            return tx.insert(eventDeliveries).values([...batch])
+          })
           return {
             eventId: input.eventId,
             duplicate: false,
@@ -828,6 +859,7 @@ export function createEventStore(
     },
 
     async listPendingDeliveries(subscriber, limit) {
+      const { eventDeliveries, eventRecords } = tablesOf(db)
       const rows = await db
         .select({
           deliveryId: eventDeliveries.id,
@@ -885,6 +917,7 @@ export function createEventStore(
     },
 
     async listDeliveryStatusPage(input) {
+      const { eventDeliveries, eventRecords } = tablesOf(db)
       const where = and(
         ...(input.state === undefined ? [] : [eq(eventDeliveries.state, input.state)]),
         ...(input.subscriberRef === undefined
@@ -892,7 +925,7 @@ export function createEventStore(
           : [eq(eventDeliveries.subscriberRef, input.subscriberRef)]),
       )
       const total = Number(
-        (await db.select({ count: count() }).from(eventDeliveries).where(where).get())?.count ?? 0,
+        (await first(db.select({ count: count() }).from(eventDeliveries).where(where)))?.count ?? 0,
       )
       const items = (
         await db
@@ -948,24 +981,26 @@ export function createEventStore(
     },
 
     async listEventRecordPage(input) {
+      const { eventTypeCatalog, eventRecords } = tablesOf(db)
       const where = and(
         eq(eventTypeCatalog.catalogVisibility, 'public'),
         ...(input.sourceId === undefined ? [] : [eq(eventRecords.sourceId, input.sourceId)]),
       )
       const total = Number(
         (
-          await db
-            .select({ count: count() })
-            .from(eventRecords)
-            .innerJoin(
-              eventTypeCatalog,
-              and(
-                eq(eventTypeCatalog.eventTypeId, eventRecords.eventTypeId),
-                eq(eventTypeCatalog.revision, eventRecords.eventTypeRevision),
-              ),
-            )
-            .where(where)
-            .get()
+          await first(
+            db
+              .select({ count: count() })
+              .from(eventRecords)
+              .innerJoin(
+                eventTypeCatalog,
+                and(
+                  eq(eventTypeCatalog.eventTypeId, eventRecords.eventTypeId),
+                  eq(eventTypeCatalog.revision, eventRecords.eventTypeRevision),
+                ),
+              )
+              .where(where),
+          )
         )?.count ?? 0,
       )
       const items = (
@@ -1011,30 +1046,34 @@ export function createEventStore(
     },
 
     async acceptDelivery(deliveryId, now) {
-      const result = await db
-        .update(eventDeliveries)
-        .set({
-          state: 'accepted',
-          acceptedAt: now,
-          claimedBy: null,
-          claimExpiresAt: null,
-          lastError: null,
-        })
-        .where(and(eq(eventDeliveries.id, deliveryId), eq(eventDeliveries.state, 'pending')))
-        .returning({ id: eventDeliveries.id })
-        .get()
+      const { eventDeliveries } = tablesOf(db)
+      const result = await first(
+        db
+          .update(eventDeliveries)
+          .set({
+            state: 'accepted',
+            acceptedAt: now,
+            claimedBy: null,
+            claimExpiresAt: null,
+            lastError: null,
+          })
+          .where(and(eq(eventDeliveries.id, deliveryId), eq(eventDeliveries.state, 'pending')))
+          .returning({ id: eventDeliveries.id }),
+      )
       if (result !== undefined) return true
       return (
-        (await db
-          .select({ id: eventDeliveries.id })
-          .from(eventDeliveries)
-          .where(and(eq(eventDeliveries.id, deliveryId), eq(eventDeliveries.state, 'accepted')))
-          .get()) !== undefined
+        (await first(
+          db
+            .select({ id: eventDeliveries.id })
+            .from(eventDeliveries)
+            .where(and(eq(eventDeliveries.id, deliveryId), eq(eventDeliveries.state, 'accepted'))),
+        )) !== undefined
       )
     },
 
     async claimNotificationDelivery(input) {
       if (input.subscriberKinds.length === 0) return null
+      const { eventDeliveries } = tablesOf(db)
       const due = or(
         and(eq(eventDeliveries.state, 'pending'), lte(eventDeliveries.nextAttemptAt, input.now)),
         and(
@@ -1058,18 +1097,19 @@ export function createEventStore(
         .orderBy(asc(eventDeliveries.nextAttemptAt), asc(eventDeliveries.createdAt))
         .limit(input.deliveryId === undefined ? 20 : 1)
       for (const candidate of candidates) {
-        const claimed = await db
-          .update(eventDeliveries)
-          .set({
-            state: 'claimed',
-            attemptCount: sql`${eventDeliveries.attemptCount} + 1`,
-            claimedBy: input.leaseOwner,
-            claimExpiresAt: input.now + input.leaseMs,
-            lastError: null,
-          })
-          .where(and(eq(eventDeliveries.id, candidate.id), due))
-          .returning({ id: eventDeliveries.id })
-          .get()
+        const claimed = await first(
+          db
+            .update(eventDeliveries)
+            .set({
+              state: 'claimed',
+              attemptCount: sql`${eventDeliveries.attemptCount} + 1`,
+              claimedBy: input.leaseOwner,
+              claimExpiresAt: input.now + input.leaseMs,
+              lastError: null,
+            })
+            .where(and(eq(eventDeliveries.id, candidate.id), due))
+            .returning({ id: eventDeliveries.id }),
+        )
         if (claimed !== undefined) return await loadDeliveryRecord(db, candidate.id)
       }
       return null
@@ -1077,32 +1117,35 @@ export function createEventStore(
 
     async settleNotificationDelivery(input) {
       const terminal = input.state !== 'pending'
-      const result = await db
-        .update(eventDeliveries)
-        .set({
-          state: input.state,
-          nextAttemptAt: input.nextAttemptAt,
-          claimedBy: null,
-          claimExpiresAt: null,
-          lastError: input.error,
-          acceptedAt: input.state === 'accepted' ? input.now : null,
-          deadLetterAt: input.state === 'dead-letter' ? input.now : null,
-          ...(terminal ? {} : { acceptedAt: null, deadLetterAt: null }),
-        })
-        .where(
-          and(
-            eq(eventDeliveries.id, input.deliveryId),
-            eq(eventDeliveries.state, 'claimed'),
-            eq(eventDeliveries.claimedBy, input.leaseOwner),
-            eq(eventDeliveries.attemptCount, input.attemptCount),
-          ),
-        )
-        .returning({ id: eventDeliveries.id })
-        .get()
+      const { eventDeliveries } = tablesOf(db)
+      const result = await first(
+        db
+          .update(eventDeliveries)
+          .set({
+            state: input.state,
+            nextAttemptAt: input.nextAttemptAt,
+            claimedBy: null,
+            claimExpiresAt: null,
+            lastError: input.error,
+            acceptedAt: input.state === 'accepted' ? input.now : null,
+            deadLetterAt: input.state === 'dead-letter' ? input.now : null,
+            ...(terminal ? {} : { acceptedAt: null, deadLetterAt: null }),
+          })
+          .where(
+            and(
+              eq(eventDeliveries.id, input.deliveryId),
+              eq(eventDeliveries.state, 'claimed'),
+              eq(eventDeliveries.claimedBy, input.leaseOwner),
+              eq(eventDeliveries.attemptCount, input.attemptCount),
+            ),
+          )
+          .returning({ id: eventDeliveries.id }),
+      )
       return result !== undefined
     },
 
     async listObserverActivations() {
+      const { observerActivations } = tablesOf(db)
       const rows = await db
         .select()
         .from(observerActivations)
@@ -1111,6 +1154,8 @@ export function createEventStore(
     },
 
     async claimDueObserver(input) {
+      const { observerActivations, eventSources, eventSubscriptions, eventObserverRuns } =
+        tablesOf(db)
       const candidates = await db
         .select()
         .from(observerActivations)
@@ -1155,17 +1200,18 @@ export function createEventStore(
             )
           continue
         }
-        const sourceRow = await db
-          .select()
-          .from(eventSources)
-          .where(
-            and(
-              eq(eventSources.sourceId, candidate.sourceId),
-              eq(eventSources.revision, candidate.sourceRevision),
-              eq(eventSources.state, 'published'),
+        const sourceRow = await first(
+          db
+            .select()
+            .from(eventSources)
+            .where(
+              and(
+                eq(eventSources.sourceId, candidate.sourceId),
+                eq(eventSources.revision, candidate.sourceRevision),
+                eq(eventSources.state, 'published'),
+              ),
             ),
-          )
-          .get()
+        )
         if (sourceRow === undefined) continue
         const source = eventSourceDescriptorSchema.parse(
           JSON.parse(sourceRow.descriptorJson) as unknown,
@@ -1186,31 +1232,32 @@ export function createEventStore(
           )
         const subjects = uniqueSubjects(subjectRows)
         const leaseEpoch = candidate.leaseEpoch + 1
-        const claimed = await db
-          .update(observerActivations)
-          .set({
-            leaseOwner: input.leaseOwner,
-            leaseEpoch,
-            leaseExpiresAt: input.now + input.leaseMs,
-            lastScanAt: input.now,
-            updatedAt: input.now,
-          })
-          .where(
-            and(
-              eq(observerActivations.sourceId, candidate.sourceId),
-              eq(observerActivations.sourceRevision, candidate.sourceRevision),
-              eq(observerActivations.generation, candidate.generation),
-              eq(observerActivations.leaseEpoch, candidate.leaseEpoch),
-              or(
-                isNull(observerActivations.leaseExpiresAt),
-                lte(observerActivations.leaseExpiresAt, input.now),
+        const claimed = await first(
+          db
+            .update(observerActivations)
+            .set({
+              leaseOwner: input.leaseOwner,
+              leaseEpoch,
+              leaseExpiresAt: input.now + input.leaseMs,
+              lastScanAt: input.now,
+              updatedAt: input.now,
+            })
+            .where(
+              and(
+                eq(observerActivations.sourceId, candidate.sourceId),
+                eq(observerActivations.sourceRevision, candidate.sourceRevision),
+                eq(observerActivations.generation, candidate.generation),
+                eq(observerActivations.leaseEpoch, candidate.leaseEpoch),
+                or(
+                  isNull(observerActivations.leaseExpiresAt),
+                  lte(observerActivations.leaseExpiresAt, input.now),
+                ),
               ),
-            ),
-          )
-          .returning({ sourceId: observerActivations.sourceId })
-          .get()
+            )
+            .returning({ sourceId: observerActivations.sourceId }),
+        )
         if (claimed === undefined) continue
-        await db.insert(eventObserverRuns).values({
+        await insertOne(db, eventObserverRuns, {
           id: input.runId,
           sourceId: candidate.sourceId,
           sourceRevision: candidate.sourceRevision,
@@ -1237,6 +1284,13 @@ export function createEventStore(
 
     async settleObserver(input) {
       return await databaseSessionFor(db).transaction(async (tx) => {
+        const {
+          observerActivations,
+          eventRecords,
+          eventSubscriptions,
+          eventDeliveries,
+          eventObserverRuns,
+        } = tablesOf(tx)
         // 读—改—写：下面两处 `nextScanAt` 都由这次读到的 `activation.wakeEpoch` 决定，而 UPDATE 的
         // where 只围 `leaseEpoch`——`wakeEpoch` 恰恰是**不持租约**的 `nudgeObserver` 在写。不先锁住
         // 激活行，PG 的 READ COMMITTED 下一次跑到半途的 nudge 会被结算悄悄抹掉：下一次扫描被推到
@@ -1251,16 +1305,17 @@ export function createEventStore(
           observerActivations.sourceId,
           input.run.source.sourceRef.id,
         )
-        const activation = await tx
-          .select()
-          .from(observerActivations)
-          .where(
-            and(
-              eq(observerActivations.sourceId, input.run.source.sourceRef.id),
-              eq(observerActivations.sourceRevision, input.run.source.sourceRef.revision),
+        const activation = await first(
+          tx
+            .select()
+            .from(observerActivations)
+            .where(
+              and(
+                eq(observerActivations.sourceId, input.run.source.sourceRef.id),
+                eq(observerActivations.sourceRevision, input.run.source.sourceRef.revision),
+              ),
             ),
-          )
-          .get()
+        )
         const current =
           activation !== undefined &&
           activation.generation === input.run.generation &&
@@ -1309,41 +1364,43 @@ export function createEventStore(
         }
 
         for (const item of input.observations) {
-          const existing = await tx
-            .select({ id: eventRecords.id })
-            .from(eventRecords)
-            .where(
-              and(
-                eq(eventRecords.sourceId, item.observation.sourceRef.id),
-                eq(eventRecords.sourceRevision, item.observation.sourceRef.revision),
-                eq(eventRecords.dedupeKey, item.observation.dedupeKey),
+          const existing = await first(
+            tx
+              .select({ id: eventRecords.id })
+              .from(eventRecords)
+              .where(
+                and(
+                  eq(eventRecords.sourceId, item.observation.sourceRef.id),
+                  eq(eventRecords.sourceRevision, item.observation.sourceRef.revision),
+                  eq(eventRecords.dedupeKey, item.observation.dedupeKey),
+                ),
               ),
-            )
-            .get()
+          )
           if (existing !== undefined) continue
-          const inserted = await tx
-            .insert(eventRecords)
-            .values({
-              id: item.eventId,
-              eventTypeId: item.observation.eventTypeRef.id,
-              eventTypeRevision: item.observation.eventTypeRef.revision,
-              sourceId: item.observation.sourceRef.id,
-              sourceRevision: item.observation.sourceRef.revision,
-              subjectType: item.observation.subject.typeId,
-              subjectRef: item.observation.subject.subjectRef,
-              occurredAt: item.observation.occurredAt,
-              observedAt: input.now,
-              dedupeKey: item.observation.dedupeKey,
-              summaryJson: JSON.stringify({
-                summary: item.observation.summary,
-                routingFacts: item.observation.routingFacts,
-                triggerContext: item.triggerContext,
-              }),
-              payloadArtifactRef: item.observation.payloadArtifactRef,
-            })
-            .onConflictDoNothing()
-            .returning({ id: eventRecords.id })
-            .get()
+          const inserted = await first(
+            tx
+              .insert(eventRecords)
+              .values({
+                id: item.eventId,
+                eventTypeId: item.observation.eventTypeRef.id,
+                eventTypeRevision: item.observation.eventTypeRef.revision,
+                sourceId: item.observation.sourceRef.id,
+                sourceRevision: item.observation.sourceRef.revision,
+                subjectType: item.observation.subject.typeId,
+                subjectRef: item.observation.subject.subjectRef,
+                occurredAt: item.observation.occurredAt,
+                observedAt: input.now,
+                dedupeKey: item.observation.dedupeKey,
+                summaryJson: JSON.stringify({
+                  summary: item.observation.summary,
+                  routingFacts: item.observation.routingFacts,
+                  triggerContext: item.triggerContext,
+                }),
+                payloadArtifactRef: item.observation.payloadArtifactRef,
+              })
+              .onConflictDoNothing()
+              .returning({ id: eventRecords.id }),
+          )
           if (inserted === undefined) continue
           const exactSubscriptions = await tx
             .select()
@@ -1380,7 +1437,9 @@ export function createEventStore(
               nextAttemptAt: input.now,
               createdAt: input.now,
             })),
-            (batch) => tx.insert(eventDeliveries).values([...batch]),
+            (batch) => {
+              return tx.insert(eventDeliveries).values([...batch])
+            },
           )
         }
 

@@ -1,8 +1,6 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 // RFC-223 AC10 — SQLite provider adapter for ACL-aware portable import selectors.
 //
 // This is intentionally the only production service that may turn a resource
@@ -23,7 +21,6 @@ import {
 import { inArray } from 'drizzle-orm'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 
-import { users } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
   hasResourceAclBypass,
@@ -90,7 +87,7 @@ export interface ResolvedImportRefs {
 }
 
 export async function resolveAgentImportRefs(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   request: ResolveAgentImportRefsRequest,
 ): Promise<ResolveAgentImportRefsResult> {
@@ -158,7 +155,7 @@ export async function resolveAgentImportRefs(
  * rename/transfer/visibility race fails closed instead of rebinding by name.
  */
 export async function resolveImportRefs(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   selectors: readonly ImportRefSelector[],
   requestedSelections: readonly ImportRefSelection[] = [],
@@ -184,7 +181,7 @@ export async function resolveImportRefs(
  * transaction.
  */
 export async function assertImportRefsStableInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   fence: ImportRefResolutionFence,
 ): Promise<void> {
@@ -231,7 +228,7 @@ export async function assertImportRefsStableInTx(
 }
 
 async function resolveImportRefsInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   selectors: readonly ImportRefSelector[],
   requestedSelections: readonly ImportRefSelection[],
@@ -349,7 +346,7 @@ async function resolveImportRefsInTx(
 }
 
 async function assertSelectedIdsVisibleInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   entries: readonly {
     selector: ImportRefSelector
@@ -377,7 +374,7 @@ async function assertSelectedIdsVisibleInTx(
 }
 
 async function buildCandidateSnapshotsInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   selectors: readonly ImportRefSelector[],
 ): Promise<Map<string, ImportRefCandidateSnapshot[]>> {
@@ -395,6 +392,7 @@ async function buildCandidateSnapshotsInTx(
           .filter((ownerUserId): ownerUserId is string => ownerUserId !== null),
       ),
     ]
+    const { users } = tablesOf(tx)
     const ownerRows =
       ownerIds.length === 0
         ? []
@@ -402,7 +400,6 @@ async function buildCandidateSnapshotsInTx(
             .select({ id: users.id, username: users.username })
             .from(users)
             .where(inArray(users.id, ownerIds))
-            .all()
     const usernameById = new Map(ownerRows.map((row) => [row.id, row.username]))
 
     for (const selector of typeSelectors) {
@@ -438,7 +435,7 @@ async function buildCandidateSnapshotsInTx(
 /** RFC-282 D2 — the grant-set SQL lives in resourceAcl only; this shell keeps
  *  importRefs' `resource-acl:bypass` short-circuit semantics. */
 async function grantedIdsInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor,
   type: ImportRefType,
 ): Promise<ReadonlySet<string>> {

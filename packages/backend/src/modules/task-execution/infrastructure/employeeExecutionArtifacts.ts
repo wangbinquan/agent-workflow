@@ -1,14 +1,15 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, nodeRuns, nodeRunOutputs } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import type { EmployeeExecutionArtifactQueries } from '../public/types'
 
 export function createEmployeeExecutionArtifactQueries(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): EmployeeExecutionArtifactQueries {
   return {
     async read(input) {
+      const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
       const row = (
         await db
           .select({

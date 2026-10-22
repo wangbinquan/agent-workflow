@@ -16,6 +16,8 @@
 // 覆盖验收条款：AC-14b（同名多候选全部列出）/ AC-24c（token 由 preview 下发原样回传）/ AC-24d（伪造 previewToken 被拒） / AC-14（预检逐条列出类型/名字/本地匹配/可选动作）/ AC-15（覆盖仅限自己拥有的）/ AC-16（新建副本默认名不冲突且可改） / AC-2（manifest.resources 是权威清单，包内未登记文件 → 拒绝）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
@@ -23,7 +25,6 @@ import { stringify } from 'yaml'
 import type { ResourceBundle } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { mcps, users } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { collectPackageRequirements } from '../src/services/resourcePackage/requirements'
@@ -35,7 +36,7 @@ import {
   verifyPreviewToken,
 } from '../src/services/resourcePackage/preview'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const box = createSecretBoxFromKey(randomBytes(32))
@@ -256,13 +257,14 @@ describe('① 解包与防夹带', () => {
 
 describeEachProvider('② 预检：候选、可选动作、归属', (harness) => {
   const seedMcp = async (
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     owner: string,
     name: string,
     visibility: 'public' | 'private' = 'public',
   ): Promise<string> => {
     const id = ulid()
-    await db.insert(mcps).values({
+    const { mcps } = tablesOf(db)
+    await insertOne(db, mcps, {
       id,
       name,
       description: '',
@@ -480,7 +482,8 @@ describeEachProvider('③ human 成员：wire 保留 alias，签名按源用户�
 
   test('无 users:search 的普通 actor 猜中 active username 也不泄漏内部 UUID', async () => {
     const db = harness.db
-    await db.insert(users).values({
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'local-alice',
       username: 'alice',
       displayName: 'Alice',

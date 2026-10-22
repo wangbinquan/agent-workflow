@@ -26,6 +26,7 @@
 // `composeDeferredRepositoryPreparation`）。判据因此**不只看落行**，还要看完整的 G7 闭环：
 // 任务先 `pending`、第 0 步跑完转 `failed`、git 原文留在行上、并且留下一条可重试的
 // `__repo_prep__` 合成节点行——缺任何一环，AC-11 的「重试准备仓库」就是个死按钮。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { execFileSync } from 'node:child_process'
@@ -39,8 +40,6 @@ import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/g
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { and, eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
-
-import { nodeRuns, tasks } from '@/db/schema'
 
 const TOKEN = 'i'.repeat(64)
 /**
@@ -129,6 +128,7 @@ describeEachProviderHttpApplication(
     async function waitForTerminal(taskId: string): Promise<Record<string, unknown>> {
       const deadline = Date.now() + 12_000
       for (;;) {
+        const { tasks } = tablesOf(scope.harness.db)
         const rows = await scope.harness.db
           .select()
           .from(tasks)
@@ -149,6 +149,7 @@ describeEachProviderHttpApplication(
     async function waitForPrepared(taskId: string): Promise<Record<string, unknown>> {
       const deadline = Date.now() + 40_000
       for (;;) {
+        const { tasks } = tablesOf(scope.harness.db)
         const rows = await scope.harness.db
           .select()
           .from(tasks)
@@ -174,6 +175,7 @@ describeEachProviderHttpApplication(
         String(terminal['errorMessage'] ?? ''),
         '行上必须留着 git 原文——点开就知道卡在哪，而不是一句无从下手的「启动失败」',
       ).toMatch(/fatal|could not|unable|Connection refused|refused/i)
+      const { nodeRuns } = tablesOf(scope.harness.db)
       const prepRuns = await scope.harness.db
         .select({ id: nodeRuns.id, status: nodeRuns.status })
         .from(nodeRuns)
@@ -221,6 +223,7 @@ describeEachProviderHttpApplication(
       const row = await waitForPrepared(String(created['id']))
       expect(String(row['worktreePath'] ?? ''), '第 0 步必须把工作树建出来').not.toBe('')
       expect(String(row['branch'] ?? ''), '第 0 步必须把分支落定').not.toBe('')
+      const { nodeRuns } = tablesOf(scope.harness.db)
       const prepRuns = await scope.harness.db
         .select({ status: nodeRuns.status })
         .from(nodeRuns)

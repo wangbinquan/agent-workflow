@@ -1,4 +1,6 @@
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // RFC-040 — wrapper-loop / wrapper-git bubble awaiting_human / awaiting_review.
 //
@@ -34,9 +36,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { clarifyRounds, agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -51,7 +52,7 @@ const DESIGNER_AGENT_ID = '00000000000000000000000001'
 const actor = { userId: 'u1', role: 'owner' as const }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -89,11 +90,12 @@ async function buildHarness(provider: ProviderHarness, slug: string): Promise<Ha
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[] = ['design'],
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: DESIGNER_AGENT_ID,
     name,
     description: 'test',
@@ -112,12 +114,13 @@ async function seedWorkflowAndTask(
 ): Promise<{ workflowId: string; taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -246,6 +249,7 @@ function registerLoopCases(provider: ProviderHarness) {
       }),
     )
 
+    const { clarifyRounds, tasks, nodeRuns } = tablesOf(h.db)
     // The fundamental RFC-040 fix: exactly ONE clarify_session, not 3.
     const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
@@ -331,6 +335,7 @@ function registerLoopCases(provider: ProviderHarness) {
       }),
     )
 
+    const { nodeRuns, clarifyRounds, nodeRunOutputs, tasks } = tablesOf(h.db)
     const loopRunsBefore = await h.db
       .select()
       .from(nodeRuns)
@@ -515,6 +520,7 @@ function registerGitCases(provider: ProviderHarness) {
       }),
     )
 
+    const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(h.db)
     // Wrapper-git is awaiting_human, NOT done. Pre-RFC-040 this would have
     // been 'done' with a partial diff — the silent correctness bug.
     const gwRuns = await h.db
@@ -591,6 +597,7 @@ function registerGitCases(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
+    const { nodeRuns, clarifyRounds, nodeRunOutputs } = tablesOf(h.db)
     const gwRunsBefore = await h.db
       .select()
       .from(nodeRuns)
@@ -748,6 +755,7 @@ function registerNestedCases(provider: ProviderHarness) {
       }),
     )
 
+    const { nodeRuns, nodeRunOutputs, clarifyRounds } = tablesOf(h.db)
     // Inner loop wrapper parked.
     const loopRuns = await h.db
       .select()

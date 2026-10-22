@@ -10,12 +10,12 @@
 // 合并 470 行之前先把等价性钉住——这是 agent 那一刀（§5hn 批次一）验证过的次序：
 // 先有基线，换终端时才知道「行为没动」不是自我说服。
 // 判据形状照抄那条：相等面 + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { tasks } from '@/db/schema'
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -171,6 +171,7 @@ describeEachProviderHttpApplication(
         '宿主边扫成 0 ⇒ 比较面失效',
       ).toBeGreaterThan(0)
 
+      const { tasks } = tablesOf(scope.harness.db)
       const row = (
         await scope.harness.db
           .select()

@@ -8,57 +8,53 @@
 // assumption breaks (frontend parseSessionTree relies on session_id
 // being present per row, with NULL meaning "root bucket").
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function seedNodeRun(db: DbClient): string {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      name: 'fixture-task',
+  insertOne(db, tasks, {
+    name: 'fixture-task',
 
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+    id: taskId,
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   const nodeRunId = ulid()
-  db.insert(nodeRuns)
-    .values({
-      id: nodeRunId,
-      taskId,
-      nodeId: 'n1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'done',
-    })
-    .run()
+  insertOne(db, nodeRuns, {
+    id: nodeRunId,
+    taskId,
+    nodeId: 'n1',
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'done',
+  })
   return nodeRunId
 }
 
@@ -70,25 +66,22 @@ describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id
 
   test('session_id stores values and is null when omitted', () => {
     const nodeRunId = seedNodeRun(db)
-    db.insert(nodeRunEvents)
-      .values({
-        nodeRunId,
-        ts: 1,
-        kind: 'text',
-        payload: '{"part":{"type":"text","text":"hi"}}',
-        sessionId: 'root-sess',
-      })
-      .run()
-    db.insert(nodeRunEvents)
-      .values({
-        nodeRunId,
-        ts: 2,
-        kind: 'text',
-        payload: '{"part":{"type":"text","text":"legacy"}}',
-        // sessionId intentionally omitted — should land as NULL
-      })
-      .run()
-    const rows = db.select().from(nodeRunEvents).all()
+    const { nodeRunEvents } = tablesOf(db)
+    insertOne(db, nodeRunEvents, {
+      nodeRunId,
+      ts: 1,
+      kind: 'text',
+      payload: '{"part":{"type":"text","text":"hi"}}',
+      sessionId: 'root-sess',
+    })
+    insertOne(db, nodeRunEvents, {
+      nodeRunId,
+      ts: 2,
+      kind: 'text',
+      payload: '{"part":{"type":"text","text":"legacy"}}',
+      // sessionId intentionally omitted — should land as NULL
+    })
+    const rows = queryRows(db.select().from(nodeRunEvents))
     expect(rows).toHaveLength(2)
     const bySession = new Map(rows.map((r) => [r.payload, r]))
     expect(bySession.get('{"part":{"type":"text","text":"hi"}}')?.sessionId).toBe('root-sess')
@@ -97,27 +90,24 @@ describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id
 
   test('parent_session_id stores child→parent linkage and is null for root', () => {
     const nodeRunId = seedNodeRun(db)
-    db.insert(nodeRunEvents)
-      .values({
-        nodeRunId,
-        ts: 1,
-        kind: 'text',
-        payload: '{"part":{"type":"text","text":"root"}}',
-        sessionId: 'root-sess',
-        parentSessionId: null,
-      })
-      .run()
-    db.insert(nodeRunEvents)
-      .values({
-        nodeRunId,
-        ts: 2,
-        kind: 'text',
-        payload: '{"part":{"type":"text","text":"child"}}',
-        sessionId: 'child-sess',
-        parentSessionId: 'root-sess',
-      })
-      .run()
-    const rows = db.select().from(nodeRunEvents).all()
+    const { nodeRunEvents } = tablesOf(db)
+    insertOne(db, nodeRunEvents, {
+      nodeRunId,
+      ts: 1,
+      kind: 'text',
+      payload: '{"part":{"type":"text","text":"root"}}',
+      sessionId: 'root-sess',
+      parentSessionId: null,
+    })
+    insertOne(db, nodeRunEvents, {
+      nodeRunId,
+      ts: 2,
+      kind: 'text',
+      payload: '{"part":{"type":"text","text":"child"}}',
+      sessionId: 'child-sess',
+      parentSessionId: 'root-sess',
+    })
+    const rows = queryRows(db.select().from(nodeRunEvents))
     const root = rows.find((r) => r.sessionId === 'root-sess')
     const child = rows.find((r) => r.sessionId === 'child-sess')
     expect(root?.parentSessionId).toBeNull()
@@ -126,17 +116,16 @@ describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id
 
   test('subagent_capture_failed marker kind is accepted by the enum', () => {
     const nodeRunId = seedNodeRun(db)
-    db.insert(nodeRunEvents)
-      .values({
-        nodeRunId,
-        ts: 1,
-        kind: 'subagent_capture_failed',
-        payload: '{"sessionID":"child-x","reason":"opencode-db-not-found"}',
-        sessionId: 'child-x',
-        parentSessionId: 'root-sess',
-      })
-      .run()
-    const rows = db.select().from(nodeRunEvents).all()
+    const { nodeRunEvents } = tablesOf(db)
+    insertOne(db, nodeRunEvents, {
+      nodeRunId,
+      ts: 1,
+      kind: 'subagent_capture_failed',
+      payload: '{"sessionID":"child-x","reason":"opencode-db-not-found"}',
+      sessionId: 'child-x',
+      parentSessionId: 'root-sess',
+    })
+    const rows = queryRows(db.select().from(nodeRunEvents))
     expect(rows[0]?.kind).toBe('subagent_capture_failed')
   })
 
@@ -144,13 +133,14 @@ describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id
     // sqlite_master.sql carries the full CREATE INDEX statement; assert it
     // names all three columns so a refactor that drops session_id from the
     // index makes this fail loudly.
-    const row = db
-      .select({
-        sql: sql<string>`sql`,
-      })
-      .from(sql`sqlite_master`)
-      .where(sql`name = 'idx_events_session'`)
-      .all()
+    const row = queryRows(
+      db
+        .select({
+          sql: sql<string>`sql`,
+        })
+        .from(sql`sqlite_master`)
+        .where(sql`name = 'idx_events_session'`),
+    )
     expect(row).toHaveLength(1)
     const ddl = row[0]!.sql.toLowerCase()
     expect(ddl).toContain('node_run_id')

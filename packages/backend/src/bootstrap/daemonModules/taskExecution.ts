@@ -2,7 +2,7 @@ import { directOperationAuthority } from '@/routes/operationAuthority'
 // RFC-382: one passive task-execution graph and one live configuration source per session.
 import { type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createLogger } from '@/util/log'
 import { runtimeConfigOpts } from '@/services/task'
@@ -72,7 +72,7 @@ export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = Databa
   readonly processConcurrencyScope: object
 }
 export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseProvider> {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly configPath: string
   readonly secretBox?: SecretBox

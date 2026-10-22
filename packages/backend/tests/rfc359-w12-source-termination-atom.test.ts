@@ -1,5 +1,7 @@
 // RFC-359 W12: run these user-visible atom predicates against both existing
 // participants before extracting their duplicated per-target implementation.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
@@ -7,14 +9,7 @@ import { and, eq } from 'drizzle-orm'
 import { SQLiteSelectBase } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEvents,
-  nodeRuns,
-  taskExecutionIntents,
-  taskExecutionOwners,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskSourceTerminationEffectInput } from '@/modules/task-execution/application/applySourceTerminationEffect'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
@@ -146,8 +141,8 @@ async function apply(harness: ProviderHarness, input = effect()) {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
-  overrides: Partial<typeof tasks.$inferInsert> = {},
+  db: PersistenceDb,
+  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ) {
   const taskId = `atom-${ulid()}`
   const nodeRunId = `run-${taskId}`
@@ -155,7 +150,8 @@ async function seed(
   const slotPath = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ])
-  await db.insert(tasks).values({
+  const { tasks, nodeRuns, taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-atom',
@@ -177,7 +173,7 @@ async function seed(
     lineageSlotPathJson: slotPath,
     ...overrides,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'node-open',
@@ -188,7 +184,7 @@ async function seed(
     continuationSlotKey: `${taskId}:node-open`,
     operationGeneration: 0,
   })
-  await db.insert(taskExecutionIntents).values({
+  await insertOne(db, taskExecutionIntents, {
     id: intentId,
     taskId,
     kind: 'launch',
@@ -215,7 +211,7 @@ async function seed(
     leaseUntil: Date.now() + 60_000,
     ownerRevision: 1,
   })
-  await db.insert(taskExecutionOwners).values({
+  await insertOne(db, taskExecutionOwners, {
     taskId,
     ownerId: identity.ownerId,
     daemonGeneration: identity.daemonGeneration,
@@ -229,7 +225,9 @@ async function seed(
   return { taskId, nodeRunId, intentId, token }
 }
 
-async function rows(db: ProviderNeutralDatabase, taskId: string) {
+async function rows(db: PersistenceDb, taskId: string) {
+  const { tasks, nodeRuns, taskExecutionIntents, taskExecutionOwners, committedEvents } =
+    tablesOf(db)
   return {
     task: (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!,
     runs: await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)),
@@ -247,6 +245,7 @@ async function rows(db: ProviderNeutralDatabase, taskId: string) {
 describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
   test('existing lifecycle guard still runs before the CAS and keeps default event metadata', async () => {
     const { taskId } = await seed(harness.db, { errorSummary: 'previous summary' })
+    const { taskExecutionOwners } = tablesOf(harness.db)
     await harness.db.delete(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
     const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
       harness.db,
@@ -264,6 +263,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
           reason: 'atom-baseline',
         },
         async (tx) => {
+          const { tasks, nodeRuns } = tablesOf(tx)
           observedStatus = (
             await tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
           )[0]?.status
@@ -303,6 +303,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
 
   test('existing lifecycle CAS conflict rolls back its already-awaited guard writes', async () => {
     const { taskId } = await seed(harness.db)
+    const { taskExecutionOwners } = tablesOf(harness.db)
     await harness.db.delete(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
     const before = await rows(harness.db, taskId)
     const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
@@ -313,6 +314,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
       await lifecycle.trySetWithGuard(
         { taskId, to: 'failed', allowedFrom: ['running'], now: 1_000, reason: 'atom-baseline' },
         async (tx) => {
+          const { tasks, nodeRuns } = tablesOf(tx)
           await tx.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
           await tx
             .update(nodeRuns)
@@ -607,7 +609,8 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     await apply(harness)
     const first = await rows(harness.db, taskId)
     const lateRunId = `late-${taskId}`
-    await harness.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(harness.db)
+    await insertOne(harness.db, nodeRuns, {
       id: lateRunId,
       taskId,
       nodeId: 'late',
@@ -761,6 +764,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     expect(actual.task.status).toBe('canceled')
     expect(actual.owner.state).toBe('revoked')
     expect(actual.intents[0]?.state).toBe('canceled')
+    const { committedEvents } = tablesOf(harness.db)
     const events = await harness.db
       .select()
       .from(committedEvents)

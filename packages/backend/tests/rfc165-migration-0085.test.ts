@@ -14,13 +14,15 @@
 //          mark it internal — F4-r3: workgroup_id IS NOT NULL excluded)
 // The rolling-upgrade suite (upgrade-rolling.test.ts) separately locks that
 // 0085 applies cleanly on top of every frozen journal prefix.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
-import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { SKILL_FUSION_WORKFLOW_NAME } from '../src/services/systemResources'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -41,9 +43,15 @@ describe('RFC-165 T3 — migration 0085', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
     const mkWf = async (id: string, name: string, builtin: boolean) => {
-      await db
-        .insert(workflows)
-        .values({ id, name, definition: '{}', builtin, createdAt: now, updatedAt: now })
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
+        id,
+        name,
+        definition: '{}',
+        builtin,
+        createdAt: now,
+        updatedAt: now,
+      })
     }
     await mkWf('wf-plain', 'user-wf', false)
     await mkWf('wf-fusion', SKILL_FUSION_WORKFLOW_NAME, true)
@@ -59,6 +67,7 @@ describe('RFC-165 T3 — migration 0085', () => {
       inputs: '{}',
       startedAt: now,
     }
+    const { tasks, taskRepos } = tablesOf(db)
     await db.insert(tasks).values([
       {
         ...base,
@@ -112,7 +121,7 @@ describe('RFC-165 T3 — migration 0085', () => {
     ])
 
     // Simulate the pre-backfill state (ALTER's DEFAULT landed 'remote' on all).
-    await db.run(sql`UPDATE tasks SET space_kind = 'remote'`)
+    await rawExec(db, sql`UPDATE tasks SET space_kind = 'remote'`)
 
     // Replay the migration's backfill UPDATEs verbatim from the SQL file —
     // the lock is on the SHIPPED statements, not a re-implementation.
@@ -128,11 +137,12 @@ describe('RFC-165 T3 — migration 0085', () => {
       .filter((s) => s.toUpperCase().startsWith('UPDATE'))
     expect(statements.length).toBe(2)
     for (const stmt of statements) {
-      await db.run(sql.raw(stmt))
+      await rawExec(db, sql.raw(stmt))
     }
 
-    const kind = async (id: string) =>
-      (await db.select({ k: tasks.spaceKind }).from(tasks).where(eq(tasks.id, id)))[0]!.k
+    const kind = async (id: string) => {
+      return (await db.select({ k: tasks.spaceKind }).from(tasks).where(eq(tasks.id, id)))[0]!.k
+    }
     expect(await kind('T-URL')).toBe('remote')
     expect(await kind('T-PATH')).toBe('local')
     expect(await kind('T-MIXED')).toBe('local') // F20: secondary path row wins

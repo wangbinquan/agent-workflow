@@ -1,7 +1,8 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { plugins } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { pluginCachedPathQuery } from '@/modules/resource-catalog/infrastructure/pluginCachedPathQuery'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -36,48 +37,44 @@ const pluginRows = [
     resolvedVersion: null,
     enabled: true,
   },
-] satisfies Omit<typeof plugins.$inferInsert, 'installedAt'>[]
+] satisfies Omit<PersistenceTables['plugins']['$inferInsert'], 'installedAt'>[]
 
 // Exact published read expressions, including each owner's awaited get terminal.
-async function originalSqliteRead(
-  db: ProviderNeutralDatabase,
-  artifact: { readonly pluginId: string },
-) {
+async function originalSqliteRead(db: PersistenceDb, artifact: { readonly pluginId: string }) {
   const input = { db }
-  return await input.db
-    .select({ cachedPath: plugins.cachedPath })
-    .from(plugins)
-    .where(eq(plugins.id, artifact.pluginId))
-    .get()
+  const { plugins } = tablesOf(input.db)
+  return await first(
+    input.db
+      .select({ cachedPath: plugins.cachedPath })
+      .from(plugins)
+      .where(eq(plugins.id, artifact.pluginId)),
+  )
 }
 
-async function originalPostgresqlRead(
-  db: ProviderNeutralDatabase,
-  artifact: { readonly pluginId: string },
-) {
+async function originalPostgresqlRead(db: PersistenceDb, artifact: { readonly pluginId: string }) {
   const input = { db }
-  return await input.db
-    .select({ cachedPath: plugins.cachedPath })
-    .from(plugins)
-    .where(eq(plugins.id, artifact.pluginId))
-    .get()
+  const { plugins } = tablesOf(input.db)
+  return await first(
+    input.db
+      .select({ cachedPath: plugins.cachedPath })
+      .from(plugins)
+      .where(eq(plugins.id, artifact.pluginId)),
+  )
 }
 
-async function candidateReads(
-  db: ProviderNeutralDatabase,
-  artifact: { readonly pluginId: string },
-) {
+async function candidateReads(db: PersistenceDb, artifact: { readonly pluginId: string }) {
   return [
-    await pluginCachedPathQuery(db, artifact).get(),
-    await pluginCachedPathQuery(db, artifact).get(),
+    await first(pluginCachedPathQuery(db, artifact)),
+    await first(pluginCachedPathQuery(db, artifact)),
   ]
 }
 
-async function readPhysicalRows(db: ProviderNeutralDatabase) {
-  return await db.select().from(plugins).orderBy(plugins.id).all()
+async function readPhysicalRows(db: PersistenceDb) {
+  const { plugins } = tablesOf(db)
+  return await db.select().from(plugins).orderBy(plugins.id)
 }
 
-function observeConstruction(db: ProviderNeutralDatabase, events: string[]) {
+function observeConstruction(db: PersistenceDb, events: string[]) {
   return new Proxy(db, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver)
@@ -106,17 +103,15 @@ function observeConstruction(db: ProviderNeutralDatabase, events: string[]) {
 
 describeEachProvider('RFC359 W37 plugin cached path query', (harness) => {
   beforeEach(async () => {
-    await harness.db
-      .insert(plugins)
-      .values(
-        pluginRows.map((row, index) => ({
-          ...row,
-          installedAt: 1_800_000_000_000 + index,
-          createdAt: 1_800_000_000_000 + index,
-          updatedAt: 1_800_000_000_000 + index,
-        })),
-      )
-      .run()
+    const { plugins } = tablesOf(harness.db)
+    await harness.db.insert(plugins).values(
+      pluginRows.map((row, index) => ({
+        ...row,
+        installedAt: 1_800_000_000_000 + index,
+        createdAt: 1_800_000_000_000 + index,
+        updatedAt: 1_800_000_000_000 + index,
+      })),
+    )
   })
 
   test('preserves both original queries, keyed and missing results, bindings and complete rows', async () => {
@@ -140,10 +135,10 @@ describeEachProvider('RFC359 W37 plugin cached path query', (harness) => {
         expect(originalStatements).toHaveLength(2)
         expect(candidateStatements).toEqual(originalStatements)
         expect(originalStatements.map((statement) => statement.values)).toEqual([
-          [pluginId],
-          [pluginId],
+          [pluginId, 1],
+          [pluginId, 1],
         ])
-        expect(originalStatements.map((statement) => statement.params)).toEqual([1, 1])
+        expect(originalStatements.map((statement) => statement.params)).toEqual([2, 2])
       }
     } finally {
       recording.stop()
@@ -182,7 +177,7 @@ describeEachProvider('RFC359 W37 plugin cached path query', (harness) => {
       const query = pluginCachedPathQuery(observedDb, artifact)
       expect(events).toEqual(['select', 'from', 'pluginId'])
       expect(recording.statements).toHaveLength(0)
-      expect(await query.get()).toEqual({ cachedPath: '/query-fixture/零/entry.ts' })
+      expect(await first(query)).toEqual({ cachedPath: '/query-fixture/零/entry.ts' })
       expect(events).toEqual(['select', 'from', 'pluginId'])
       expect(recording.statements).toHaveLength(1)
     } finally {
@@ -195,6 +190,7 @@ describeEachProvider('RFC359 W37 plugin cached path query', (harness) => {
     const failure = new Error('rollback plugin cached path read')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { plugins } = tablesOf(tx)
         await tx
           .update(plugins)
           .set({
@@ -203,8 +199,7 @@ describeEachProvider('RFC359 W37 plugin cached path query', (harness) => {
             resolvedVersion: null,
           })
           .where(eq(plugins.id, 'plugin-unicode'))
-          .run()
-        await tx.delete(plugins).where(eq(plugins.id, 'plugin-empty')).run()
+        await tx.delete(plugins).where(eq(plugins.id, 'plugin-empty'))
         for (const pluginId of ['plugin-unicode', 'plugin-empty']) {
           const artifact = { pluginId }
           const original = [

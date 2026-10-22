@@ -1,8 +1,9 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '@/auth/actor'
-import { skills, skillVersions, users } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createDatabaseSkillArtifactOwners } from '@/modules/resource-catalog/infrastructure/crewstation/skillArtifacts'
@@ -30,7 +31,8 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
       },
       source: 'session',
     })
-    await harness.db.insert(users).values({ ...actor.user, createdAt: 1, updatedAt: 1 })
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const registry = composeIdentityAccess(harness.db)
     const admitted = await admitTestDirectAuthority(registry.directAuthority, {
       userId: 'owner',
@@ -49,8 +51,9 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
     publication: { managedPath: string; filesPath: string; contentHash: string | null },
   ) => {
     await databaseSessionFor(harness.db).transaction(async (tx) => {
+      const { skills, skillVersions } = tablesOf(tx)
       if (version === 1)
-        await tx.insert(skills).values({
+        await insertOne(tx, skills, {
           id: skillId,
           name: 'skill',
           managedPath: publication.managedPath,
@@ -59,7 +62,7 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
           ownerUserId: 'owner',
         })
       else await tx.update(skills).set({ contentVersion: version }).where(eq(skills.id, skillId))
-      await tx.insert(skillVersions).values({
+      await insertOne(tx, skillVersions, {
         id: ulid(),
         skillId,
         versionIndex: version,
@@ -219,6 +222,7 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
     expect(
       await readTree(harness.db, request.skillId, stagingTree(request.operationId)),
     ).toHaveLength(0)
+    const { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toHaveLength(0)
   })
 })

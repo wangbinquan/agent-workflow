@@ -7,7 +7,7 @@
 // 老实地 collect-repository-facts，第二轮才命中 change.implement（这正是
 // indeterminate-stop 语义的端到端形状）。
 
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -35,7 +35,7 @@ import type { ReconcileDeps } from '../../src/modules/development-automation/app
 import { launchMission } from '../../src/modules/development-automation/application/commands/launchMission'
 
 export interface Pr2Fixture {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly lookup: AdmissionLookup
@@ -46,7 +46,7 @@ export interface Pr2Fixture {
   launch(idempotencyKey: string): Promise<string>
 }
 
-function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
+function lookupOf(db: PersistenceDb): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const row = await resolveAdmissionAssignment(db, scope)
@@ -73,7 +73,7 @@ function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
   }
 }
 
-export async function buildPr2Fixture(db: ProviderNeutralDatabase): Promise<Pr2Fixture> {
+export async function buildPr2Fixture(db: PersistenceDb): Promise<Pr2Fixture> {
   const now = () => Date.now()
   const templates = createActionTemplatePersistence(db)
 

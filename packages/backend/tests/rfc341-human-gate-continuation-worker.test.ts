@@ -1,8 +1,10 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionIntents, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { startManagedWorkerDefinition } from '@/platform/events/committed/workerDefinitions'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
@@ -10,77 +12,71 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_789_488_200_000
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: taskId,
-      workflowId: 'workflow-gate',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      repoPath: '/tmp/rfc341',
-      worktreePath: '/tmp/rfc341',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: NOW,
-      executionLineageId: taskId,
-      lineageSlotPathJson: '[]',
-    })
-    .run()
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: taskId,
+    workflowId: 'workflow-gate',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    repoPath: '/tmp/rfc341',
+    worktreePath: '/tmp/rfc341',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: NOW,
+    executionLineageId: taskId,
+    lineageSlotPathJson: '[]',
+  })
 }
 
-async function seedPendingGate(db: ProviderNeutralDatabase): Promise<void> {
+async function seedPendingGate(db: PersistenceDb): Promise<void> {
   await seedTask(db, 'task-gate')
-  await db
-    .insert(taskExecutionIntents)
-    .values({
-      id: 'intent-gate',
-      taskId: 'task-gate',
-      kind: 'gate-continuation',
-      state: 'pending',
-      source: 'internal',
-      requestHash: 'a'.repeat(64),
-      payloadJson: JSON.stringify({
-        v: 1,
-        gate: { kind: 'review', ref: 'review:task-gate:0' },
-        operationId: 'operation-gate',
-        expectedNodeProjection: { digest: 'a'.repeat(64), memberCount: 0 },
-        continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
-      }),
-      executionLineageId: 'task-gate',
-      continuationSlotKey: 'task-gate:root',
-      slotPathJson: '[]',
-      operationGeneration: 0,
-      expectedTaskRevision: 1,
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
-    .run()
+  const { taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, taskExecutionIntents, {
+    id: 'intent-gate',
+    taskId: 'task-gate',
+    kind: 'gate-continuation',
+    state: 'pending',
+    source: 'internal',
+    requestHash: 'a'.repeat(64),
+    payloadJson: JSON.stringify({
+      v: 1,
+      gate: { kind: 'review', ref: 'review:task-gate:0' },
+      operationId: 'operation-gate',
+      expectedNodeProjection: { digest: 'a'.repeat(64), memberCount: 0 },
+      continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
+    }),
+    executionLineageId: 'task-gate',
+    continuationSlotKey: 'task-gate:root',
+    slotPathJson: '[]',
+    operationGeneration: 0,
+    expectedTaskRevision: 1,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
 }
 
-async function seedLegacyTaskGate(db: ProviderNeutralDatabase): Promise<void> {
+async function seedLegacyTaskGate(db: PersistenceDb): Promise<void> {
   await seedTask(db, 'task-legacy-gate')
-  await db
-    .insert(taskExecutionIntents)
-    .values({
-      id: 'intent-legacy-gate',
-      taskId: 'task-legacy-gate',
-      kind: 'gate-continuation',
-      state: 'pending',
-      source: 'internal',
-      requestHash: 'b'.repeat(64),
-      payloadJson: '{"event":"resume","v":1}',
-      executionLineageId: 'task-legacy-gate',
-      continuationSlotKey: 'task-legacy-gate:root',
-      slotPathJson: '[]',
-      operationGeneration: 0,
-      expectedTaskRevision: 1,
-      createdAt: NOW - 1,
-      updatedAt: NOW - 1,
-    })
-    .run()
+  const { taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, taskExecutionIntents, {
+    id: 'intent-legacy-gate',
+    taskId: 'task-legacy-gate',
+    kind: 'gate-continuation',
+    state: 'pending',
+    source: 'internal',
+    requestHash: 'b'.repeat(64),
+    payloadJson: '{"event":"resume","v":1}',
+    executionLineageId: 'task-legacy-gate',
+    continuationSlotKey: 'task-legacy-gate:root',
+    slotPathJson: '[]',
+    operationGeneration: 0,
+    expectedTaskRevision: 1,
+    createdAt: NOW - 1,
+    updatedAt: NOW - 1,
+  })
 }
 
 describe('RFC-341 human-gate continuation worker', () => {
@@ -94,11 +90,11 @@ describe('RFC-341 human-gate continuation worker', () => {
         listPending: () => createHumanGateContinuationRecoveryQueries(db).listPending(),
         drive: async (continuation) => {
           driven.push(continuation)
+          const { taskExecutionIntents } = tablesOf(db)
           await db
             .update(taskExecutionIntents)
             .set({ state: 'completed', completedAt: NOW + 1, updatedAt: NOW + 1 })
             .where(eq(taskExecutionIntents.id, continuation.continuationRef))
-            .run()
         },
         now: () => NOW,
       })
@@ -107,12 +103,14 @@ describe('RFC-341 human-gate continuation worker', () => {
       expect(await worker.runCycle()).toEqual({ attempted: 1, completed: 1, failed: 0 })
       expect(driven).toEqual([{ taskId: 'task-gate', continuationRef: 'intent-gate' }])
       expect(await worker.runCycle()).toEqual({ attempted: 0, completed: 0, failed: 0 })
+      const { taskExecutionIntents } = tablesOf(db)
       expect(
-        await db
-          .select({ state: taskExecutionIntents.state })
-          .from(taskExecutionIntents)
-          .where(eq(taskExecutionIntents.id, 'intent-legacy-gate'))
-          .get(),
+        await first(
+          db
+            .select({ state: taskExecutionIntents.state })
+            .from(taskExecutionIntents)
+            .where(eq(taskExecutionIntents.id, 'intent-legacy-gate')),
+        ),
       ).toEqual({ state: 'pending' })
     })
   })

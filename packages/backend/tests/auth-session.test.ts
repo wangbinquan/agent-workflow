@@ -1,5 +1,7 @@
 // RFC-036 — three-track auth middleware integration.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -9,15 +11,14 @@ import { actorOf, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { multiAuth } from '../src/auth/session'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { users } from '../src/db/schema'
 import { errorHandler } from '../src/util/errors'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-function buildApp(db: ProviderNeutralDatabase): Hono {
+function buildApp(db: PersistenceDb): Hono {
   const app = new Hono()
   app.use(
     '/api/*',
@@ -40,8 +41,9 @@ function buildApp(db: ProviderNeutralDatabase): Hono {
   return app
 }
 
-async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 'user') {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id.toLowerCase(),
     email: `${id.toLowerCase()}@example.com`,
@@ -59,7 +61,7 @@ async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' |
 }
 
 describeEachProvider('multiAuth — daemon token track', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -107,7 +109,7 @@ describeEachProvider('multiAuth — daemon token track', (harness) => {
 })
 
 describeEachProvider('multiAuth — session token track', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -151,7 +153,7 @@ describeEachProvider('multiAuth — session token track', (harness) => {
 })
 
 describeEachProvider('multiAuth — PAT track', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -210,7 +212,7 @@ describeEachProvider('multiAuth — PAT track', (harness) => {
 })
 
 describeEachProvider('multiAuth — no token / malformed header', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db

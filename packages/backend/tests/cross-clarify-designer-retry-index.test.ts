@@ -26,13 +26,15 @@
 // retry_index at the same wrapper-loop iteration. If this test goes red,
 // the freshness shield is gone — investigate before relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -48,7 +50,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // designer rerun via the SAME buildFrontierMintPlan retry_index bump this file locks. This helper
 // preserves the exact designer-rerun-mint coverage through the new path.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -122,11 +124,12 @@ function fixtureDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = fixtureDef()
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'designer-retry-index',
     description: '',
@@ -139,7 +142,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -156,14 +159,15 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
@@ -174,14 +178,15 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 // order, matching how production mints rows).
 let seedSeq = 0
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<typeof nodeRuns.$inferInsert>,
+  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']>,
 ): Promise<string> {
   seedSeq += 1
   const id = `nr_${String(seedSeq).padStart(4, '0')}_${nodeId}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -251,6 +256,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
+    const { nodeRuns } = tablesOf(db)
     const designerRows = await db
       .select()
       .from(nodeRuns)
@@ -295,6 +301,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
 
+    const { nodeRuns } = tablesOf(db)
     const designerRows = await db
       .select()
       .from(nodeRuns)
@@ -346,6 +353,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
 
+    const { nodeRuns } = tablesOf(db)
     const designerRows = await db
       .select()
       .from(nodeRuns)

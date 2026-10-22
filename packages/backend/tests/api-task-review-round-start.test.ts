@@ -8,80 +8,74 @@
 // current pending doc_version's created_at, keep its raw startedAt untouched,
 // and sort AFTER the reviewed agent run — not at the misleading early position.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
+async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return { taskId }
 }
 
 type RunStatus = 'done' | 'awaiting_review' | 'running' | 'failed'
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { id?: string; nodeId: string; status?: RunStatus; startedAt: number; finishedAt?: number },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId: opts.nodeId,
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: opts.status ?? 'done',
-      startedAt: opts.startedAt,
-      finishedAt: opts.finishedAt ?? null,
-    })
-    .run()
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
+    id,
+    taskId,
+    nodeId: opts.nodeId,
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: opts.status ?? 'done',
+    startedAt: opts.startedAt,
+    finishedAt: opts.finishedAt ?? null,
+  })
   return id
 }
 
 async function seedDocVersion(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   reviewNodeRunId: string,
   opts: {
@@ -91,27 +85,25 @@ async function seedDocVersion(
     decidedAt?: number | null
   },
 ): Promise<void> {
-  await db
-    .insert(docVersions)
-    .values({
-      id: ulid(),
-      taskId,
-      reviewNodeId: 'rev',
-      reviewNodeRunId,
-      sourceNodeId: 'agent',
-      sourcePortName: 'docpath',
-      versionIndex: opts.versionIndex,
-      reviewIteration: 0,
-      bodyPath: `reviews/rev/docpath/v${opts.versionIndex}.md`,
-      decision: opts.decision,
-      createdAt: opts.createdAt,
-      decidedAt: opts.decidedAt ?? null,
-    })
-    .run()
+  const { docVersions } = tablesOf(db)
+  await insertOne(db, docVersions, {
+    id: ulid(),
+    taskId,
+    reviewNodeId: 'rev',
+    reviewNodeRunId,
+    sourceNodeId: 'agent',
+    sourcePortName: 'docpath',
+    versionIndex: opts.versionIndex,
+    reviewIteration: 0,
+    bodyPath: `reviews/rev/docpath/v${opts.versionIndex}.md`,
+    decision: opts.decision,
+    createdAt: opts.createdAt,
+    decidedAt: opts.decidedAt ?? null,
+  })
 }
 
 describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round timing', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db
@@ -143,7 +135,7 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
       decision: 'pending',
     })
 
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     const rev = res.runs.find((r) => r.id === revId)!
     const agent = res.runs.find((r) => r.id === 'AGENT0')!
 
@@ -181,7 +173,7 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
       decidedAt: 9600,
     })
 
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     const rev = res.runs.find((r) => r.id === revId)!
     expect(rev.reviewRoundStartedAt).toBe(9000)
     expect(rev.reviewDecidedAt).toBe(9600)
@@ -192,7 +184,7 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, { id: 'A', nodeId: 'a', startedAt: 1000 })
     await seedRun(db, taskId, { id: 'B', nodeId: 'b', startedAt: 2000 })
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const res = await taskNodeRunsProjection({ db }, taskId)
     expect(res.runs.every((r) => (r.reviewRoundStartedAt ?? null) === null)).toBe(true)
     expect(res.runs.map((r) => r.id)).toEqual(['A', 'B'])
   })

@@ -7,6 +7,8 @@
 // (next_run_at / last_* / consecutive_failures) — a manual test-run never
 // advances the clock nor auto-disables. Works on a disabled schedule (manual
 // override). Route gate = same owner/admin visibility as the other routes.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 
@@ -14,9 +16,8 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
-import { scheduledTasks, workflows } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getScheduledTask, runScheduleNow } from './helpers/integrationTriggerResourceBinding'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { createUser } from './helpers/userFixture'
@@ -74,7 +75,7 @@ function actorFor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 }
 
 describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let wfId = ''
   let bobId = ''
   let identityAccess: ReturnType<typeof withIntegrationTriggerResources>
@@ -89,6 +90,7 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
     })
     bobId = bob.id
     const wf = await createWorkflow(db, { name: 'wf', description: '', definition: DEF })
+    const { workflows } = tablesOf(db)
     // This suite specifically exercises later access revocation. Preserve that
     // premise explicitly now that ordinary creates default to private.
     await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, wf.id))
@@ -159,6 +161,7 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
 
   test('surfaces launch failure (workflow access revoked) + leaves row unchanged', async () => {
     const id = await makeSchedule(true)
+    const { workflows } = tablesOf(db)
     // Revoke: make the workflow private (owned by system, not bob) → gate fails.
     await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, wfId))
     const before = await getScheduledTask(db, id)
@@ -171,6 +174,7 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
 
   test('RFC-292: run-now rechecks the live workflow and never dispatches without webhook context', async () => {
     const id = await makeSchedule(true)
+    const { workflows } = tablesOf(db)
     await db
       .update(workflows)
       .set({ definition: JSON.stringify(TRIGGER_DEF) })
@@ -191,6 +195,7 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
 
   test('corrupt launch kind is rejected before a payload is dispatched through the wrong launcher', async () => {
     const id = await makeSchedule(true)
+    const { scheduledTasks } = tablesOf(db)
     await db
       .update(scheduledTasks)
       .set({
@@ -238,7 +243,7 @@ describeEachProviderHttpApplication(
   },
   (scope) => {
     let app: Hono
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let bobToken = ''
     let carolToken = ''
     let adminToken = ''
@@ -278,7 +283,8 @@ describeEachProviderHttpApplication(
       // （owner 201 / admin 201 / 陌生人 404 / 坏载荷 422），不是「创建定时任务」那条路；
       // 用服务层去建种子只是顺手，不是判据的一部分。直接落行既中立又更贴题。
       schedId = ulid()
-      await db.insert(scheduledTasks).values({
+      const { scheduledTasks } = tablesOf(db)
+      await insertOne(db, scheduledTasks, {
         id: schedId,
         name: 'nightly',
         ownerUserId: bob.id,
@@ -314,6 +320,7 @@ describeEachProviderHttpApplication(
     })
 
     test('legacy/corrupt launch payload is a structured 422, not a raw Zod 500', async () => {
+      const { scheduledTasks } = tablesOf(db)
       await db
         .update(scheduledTasks)
         .set({ launchPayload: '{}' })

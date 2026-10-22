@@ -4,6 +4,8 @@
 // mock-opencode fixture; task/node state and output rows are never fabricated.
 // Ubuntu push-CI backend shards provide PostgreSQL through eachProvider.ts.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -12,15 +14,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import {
-  agents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -57,7 +50,9 @@ describeEachProvider(
         const agentId = ulid()
         const workflowId = ulid()
         const now = Date.now()
-        await harness.db.insert(users).values({
+        const { users, agents, workflows, tasks, nodeRuns, nodeRunOutputs, taskExecutionIntents } =
+          tablesOf(harness.db)
+        await insertOne(harness.db, users, {
           id: userId,
           username: `execution-${userId}`,
           displayName: 'Execution Chain Fixture',
@@ -68,7 +63,7 @@ describeEachProvider(
           createdAt: now,
           updatedAt: now,
         })
-        await harness.db.insert(agents).values({
+        await insertOne(harness.db, agents, {
           id: agentId,
           name: 'execution-chain-agent',
           description: 'Real subprocess fixture',
@@ -105,7 +100,7 @@ describeEachProvider(
             },
           ],
         }
-        await harness.db.insert(workflows).values({
+        await insertOne(harness.db, workflows, {
           id: workflowId,
           name: 'Execution chain',
           definition: JSON.stringify(definition),

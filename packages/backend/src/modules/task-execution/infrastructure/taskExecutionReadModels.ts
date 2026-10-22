@@ -1,22 +1,12 @@
 // RFC-359 W4-B1 —— task-execution 读模型：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { isSingleRootRepository, isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import {
-  docVersions,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskCollaborators,
-  taskRepos,
-  tasks,
-  workgroupMessages,
-  workgroupTaskState,
-} from '@/db/schema'
 import type {
   ReviewGateSubjectReadModel,
   TaskCallGraphWorkspaceReadModel,
@@ -26,11 +16,10 @@ import type {
   TaskStatusProjectionReadModel,
 } from '@/modules/task-execution/public/types'
 
-export function createTaskExecutionReadModels(
-  db: ProviderNeutralDatabase,
-): TaskExecutionReadModels {
+export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionReadModels {
   const statusProjection: TaskStatusProjectionReadModel = {
     async find(taskId) {
+      const { tasks } = tablesOf(db)
       const rows = await db
         .select({
           taskId: tasks.id,
@@ -46,6 +35,7 @@ export function createTaskExecutionReadModels(
 
   const callGraphWorkspace: TaskCallGraphWorkspaceReadModel = {
     async find(taskId) {
+      const { tasks, taskRepos } = tablesOf(db)
       const taskRows = await db
         .select({ taskId: tasks.id, worktreePath: tasks.worktreePath })
         .from(tasks)
@@ -76,6 +66,7 @@ export function createTaskExecutionReadModels(
 
   const taskReviewNodes: TaskReviewNodeCatalogReadModel = {
     async find(taskId) {
+      const { tasks } = tablesOf(db)
       const rows = await db
         .select({
           taskId: tasks.id,
@@ -113,6 +104,7 @@ export function createTaskExecutionReadModels(
 
   const reviewGateSubjects: ReviewGateSubjectReadModel = {
     async find(nodeRunId) {
+      const { docVersions, tasks } = tablesOf(db)
       const rows = await db
         .select({
           nodeRunId: docVersions.reviewNodeRunId,
@@ -130,6 +122,7 @@ export function createTaskExecutionReadModels(
 
   const startupVerification = {
     async find(taskId: string, nodeRunId: string) {
+      const { tasks, nodeRuns } = tablesOf(db)
       const task = await db
         .select({ id: tasks.id })
         .from(tasks)
@@ -150,6 +143,8 @@ export function createTaskExecutionReadModels(
 
   const executionOutcome = {
     async find(taskId: string) {
+      const { tasks, workgroupTaskState, workgroupMessages, nodeRuns, nodeRunOutputs } =
+        tablesOf(db)
       const taskRows = await db
         .select({
           id: tasks.id,
@@ -245,6 +240,7 @@ export function createTaskExecutionReadModels(
 
   const runtimeInventory = {
     async find(taskId: string, nodeRunId: string) {
+      const { tasks, nodeRuns } = tablesOf(db)
       const taskRows = await db
         .select({ workflowSnapshot: tasks.workflowSnapshot })
         .from(tasks)
@@ -282,6 +278,7 @@ export function createTaskExecutionReadModels(
       nodeRunId: string
       portName: string
     }) {
+      const { tasks, taskCollaborators, nodeRuns, nodeRunOutputs, taskRepos } = tablesOf(db)
       const taskRows = await db
         .select({
           taskId: tasks.id,
@@ -361,6 +358,7 @@ export function createTaskExecutionReadModels(
       rootPrefixCap: number
       tailCap: number
     }) {
+      const { tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
       const taskRows = await db
         .select({ workflowSnapshot: tasks.workflowSnapshot })
         .from(tasks)

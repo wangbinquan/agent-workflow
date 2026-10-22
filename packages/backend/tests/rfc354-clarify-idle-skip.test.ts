@@ -24,6 +24,8 @@
 // ask on its first turn (RFC-100 mandatory ask-back), so "ran and never asked"
 // is not a reachable idle path; "never ran" and "not wired" are.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -33,7 +35,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { buildScopeUpstreams } from '../src/modules/task-execution/composition/taskDagGraph'
 import { runGit } from '../src/util/git'
@@ -291,7 +292,8 @@ async function seedAgent(
   outputs: string[],
   branchPorts: string[] = [],
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -314,12 +316,13 @@ async function seedWorkflowAndTask(
   const canonical = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonical),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc354-clarify-idle',
     id: taskId,
     workflowId,
@@ -370,6 +373,7 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
   }
 
   async function statusByNode(taskId: string): Promise<Map<string, string[]>> {
+    const { nodeRuns } = tablesOf(h.db)
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const out = new Map<string, string[]>()
     for (const r of runs.sort((a, b) => a.id.localeCompare(b.id))) {
@@ -383,6 +387,7 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
     const taskId = await seedWorkflowAndTask(h, SELF_UNWIRED_DEF, { req: 'pick' })
     await run(taskId, { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'D' }) })
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const byNode = await statusByNode(taskId)
@@ -409,6 +414,7 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
       MOCK_OPENCODE_INACTIVE_PORTS: JSON.stringify({ judge: ['go'] }),
     })
 
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const byNode = await statusByNode(taskId)
@@ -429,6 +435,7 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
       MOCK_OPENCODE_INACTIVE_PORTS: JSON.stringify({ designer: ['design'] }),
     })
 
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const byNode = await statusByNode(taskId)

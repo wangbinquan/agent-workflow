@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSkillCatalogBootParticipant } from '../application/skills/skillCatalogBootParticipant'
 import { createSkillCatalogBootAdapter } from '../infrastructure/skillCatalogBootAdapter'
 import type { SkillVersionRecoveryContentStore } from '../application/skills/versionRecoveryContentStore'
@@ -21,7 +21,7 @@ import type { SkillCatalogBootParticipant } from '../public/participants'
  * 那道屏障（见 `legacy/skillIdentityMigration.ts` 的孤儿行查询）。
  */
 export function composeSkillCatalogBoot(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly lifecycleContent?: SkillLifecycleContentStore
   readonly snapshotInspector?: SkillSnapshotInspector

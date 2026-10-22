@@ -8,12 +8,12 @@
 // evidence + N3 per-invocation dedup (+ RFC-092 pending-anchor row-id release,
 // locked separately in scheduler-audit-s01 / rfc092-answer-race-window).
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 const NONE: ReadonlySet<string> = new Set()
 
 let seq = 0

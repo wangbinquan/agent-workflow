@@ -8,11 +8,12 @@
 // 事务用中立 `serializable`：SQLite 是 BEGIN IMMEDIATE（本来就全库独占），PG 抬到 SERIALIZABLE 并按
 // 40001 重放，与合一前两侧各自的隔离级别逐字相同。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskQuestions, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError } from '@/util/errors'
@@ -37,7 +38,7 @@ import type { HumanGateOperationJournal } from './humanGateOperationJournal'
 
 export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWriter {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly journal: HumanGateOperationJournal,
   ) {}
 
@@ -47,6 +48,7 @@ export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWrite
     const questionId = ulid(at)
     const originNodeRunId = ulid(at)
     const created = await databaseSessionFor(this.db).serializable(async (tx) => {
+      const { tasks, taskQuestions } = tablesOf(tx)
       const task = (
         await tx
           .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })
@@ -137,7 +139,7 @@ export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWrite
         now: at,
       })
       if (begun.replayed) throw new Error('fresh manual-question identity unexpectedly replayed')
-      await tx.insert(taskQuestions).values(question).run()
+      await insertOne(tx, taskQuestions, question)
       const operation = await this.journal.markPreparedTx({
         tx,
         operationId,

@@ -10,7 +10,7 @@ import type { WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -23,7 +23,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string } // regular user — resource creator
   bob: { id: string; token: string } // regular user — grantee

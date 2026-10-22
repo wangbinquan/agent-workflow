@@ -4,6 +4,7 @@
 // 详情附 source/upload/decision 摘要，trace 回 canonical guard/rule trace。
 // 不返回 host path/nonce/secret/raw 正文（§12.4）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, count, desc, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm'
 
 import {
@@ -14,15 +15,7 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  developmentDecisions,
-  developmentEffects,
-  developmentMissionSources,
-  developmentMissions,
-  developmentMrClaims,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MissionReadModelQueries } from '../application/ports/missionReadModelQueries'
 
 export interface MissionSummaryView {
@@ -51,37 +44,39 @@ export interface MissionSummaryView {
  * 于是每一行都跟着把 `readiness_json` / `block_detail` 读出来——它们只在详情页用，
  * 却让列表付溢出页的代价（性能防护网的「列表不碰重列」判据抓到）。
  */
-const SUMMARY_COLUMNS = {
-  id: developmentMissions.id,
-  revision: developmentMissions.revision,
-  status: developmentMissions.status,
-  automationMode: developmentMissions.automationMode,
-  transitionFence: developmentMissions.transitionFence,
-  repositoryId: developmentMissions.repositoryId,
-  sourceKind: developmentMissions.sourceKind,
-  externalId: developmentMissions.externalId,
-  resolvedSourceKey: developmentMissions.resolvedSourceKey,
-  deliveryKind: developmentMissions.deliveryKind,
-  employeeId: developmentMissions.employeeId,
-  employeeRevision: developmentMissions.employeeRevision,
-  policyId: developmentMissions.policyId,
-  policyRevision: developmentMissions.policyRevision,
-  blockCode: developmentMissions.blockCode,
-  terminalKind: developmentMissions.terminalKind,
-  createdAt: developmentMissions.createdAt,
-  updatedAt: developmentMissions.updatedAt,
-} as const
+const SUMMARY_COLUMNS = (db: object) => {
+  const { developmentMissions } = tablesOf(db)
+  return {
+    id: developmentMissions.id,
+    revision: developmentMissions.revision,
+    status: developmentMissions.status,
+    automationMode: developmentMissions.automationMode,
+    transitionFence: developmentMissions.transitionFence,
+    repositoryId: developmentMissions.repositoryId,
+    sourceKind: developmentMissions.sourceKind,
+    externalId: developmentMissions.externalId,
+    resolvedSourceKey: developmentMissions.resolvedSourceKey,
+    deliveryKind: developmentMissions.deliveryKind,
+    employeeId: developmentMissions.employeeId,
+    employeeRevision: developmentMissions.employeeRevision,
+    policyId: developmentMissions.policyId,
+    policyRevision: developmentMissions.policyRevision,
+    blockCode: developmentMissions.blockCode,
+    terminalKind: developmentMissions.terminalKind,
+    createdAt: developmentMissions.createdAt,
+    updatedAt: developmentMissions.updatedAt,
+  } as const
+}
 
 function summaryOf(row: MissionSummaryView): MissionSummaryView {
   return row
 }
 
-export async function listMissionSummaries(
-  db: ProviderNeutralDatabase,
-): Promise<MissionSummaryView[]> {
+export async function listMissionSummaries(db: PersistenceDb): Promise<MissionSummaryView[]> {
+  const { developmentMissions } = tablesOf(db)
   return (
     await db
-      .select(SUMMARY_COLUMNS)
+      .select(SUMMARY_COLUMNS(db))
       .from(developmentMissions)
       .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
   ).map(summaryOf)
@@ -100,13 +95,14 @@ const MAX_EMPLOYEE_OUTCOME_GROUPS = 50_000
  * Legacy-drain outcome projection for employee cards. This bounded context
  * emits raw status groups; the UI owns the stable cross-generation buckets.
  */
-export async function listMissionTerminalOutcomeGroups(db: ProviderNeutralDatabase): Promise<
+export async function listMissionTerminalOutcomeGroups(db: PersistenceDb): Promise<
   readonly {
     readonly employeeId: string
     readonly terminalKind: string
     readonly count: number
   }[]
 > {
+  const { developmentMissions } = tablesOf(db)
   const rows = await db
     .select({
       employeeId: developmentMissions.employeeId,
@@ -198,9 +194,10 @@ export function missionStatusesFor(filters: MissionPageFilters): string[] {
  * `docs/dev-gotchas.md`）；行值比较是标准 SQL，PostgreSQL 同形。
  */
 export async function listMissionSummariesPage(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { limit: number; cursor?: MissionPageCursor } & MissionPageFilters,
 ): Promise<MissionPage> {
+  const { developmentMissions } = tablesOf(db)
   const boundary =
     opts.cursor === undefined
       ? sql`1 = 1`
@@ -231,7 +228,7 @@ export async function listMissionSummariesPage(
     return { items: [], nextCursor: null, facets: await missionFacets(db), counts: {} }
   }
   const rows = await db
-    .select(SUMMARY_COLUMNS)
+    .select(SUMMARY_COLUMNS(db))
     .from(developmentMissions)
     .where(and(boundary, filters))
     .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
@@ -248,10 +245,8 @@ export async function listMissionSummariesPage(
 }
 
 /** 过滤集上按原始 mission 状态分组的计数。一条 group by，行数被枚举封顶。 */
-async function missionCounts(
-  db: ProviderNeutralDatabase,
-  where: SQL,
-): Promise<Record<string, number>> {
+async function missionCounts(db: PersistenceDb, where: SQL): Promise<Record<string, number>> {
+  const { developmentMissions } = tablesOf(db)
   const rows = await db
     .select({ status: developmentMissions.status, n: count() })
     .from(developmentMissions)
@@ -266,7 +261,8 @@ async function missionCounts(
  * 四个视图桶的计数。**一条按状态分组的语句**，不是四条 count——分组结果在内存里按
  * shared 的同一张映射表折算，避免把 view 语义复制进 SQL。
  */
-async function missionFacets(db: ProviderNeutralDatabase): Promise<MissionPage['facets']> {
+async function missionFacets(db: PersistenceDb): Promise<MissionPage['facets']> {
+  const { developmentMissions } = tablesOf(db)
   const rows = await db
     .select({ status: developmentMissions.status, n: count() })
     .from(developmentMissions)
@@ -284,12 +280,13 @@ async function missionFacets(db: ProviderNeutralDatabase): Promise<MissionPage['
 }
 
 export async function getMissionDetail(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<
   | (MissionSummaryView & { sources: unknown[]; readiness: unknown; blockDetail: string | null })
   | null
 > {
+  const { developmentMissions, developmentMissionSources } = tablesOf(db)
   const row = (
     await db.select().from(developmentMissions).where(eq(developmentMissions.id, id)).limit(1)
   )[0]
@@ -358,10 +355,11 @@ export interface MissionMergeRequestView {
  * 连同 href 拼装一并落在读模型里；路由只消费结果。无 claim ⇒ `null`（尚未建 MR）。
  */
 export async function getMissionMergeRequestView(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   missionId: string,
   repositoryId: string,
 ): Promise<MissionMergeRequestView | null> {
+  const { developmentMrClaims, cachedRepos } = tablesOf(db)
   const claim = (
     await db
       .select()
@@ -389,10 +387,8 @@ export async function getMissionMergeRequestView(
 }
 
 /** PR-5 T61 —— effect 台账投影（outbox 状态可见；intent digest 只作指纹）。 */
-export async function listMissionEffects(
-  db: ProviderNeutralDatabase,
-  missionId: string,
-): Promise<unknown[]> {
+export async function listMissionEffects(db: PersistenceDb, missionId: string): Promise<unknown[]> {
+  const { developmentEffects } = tablesOf(db)
   return (
     await db
       .select()
@@ -410,10 +406,8 @@ export async function listMissionEffects(
   }))
 }
 
-export async function getDecisionTrace(
-  db: ProviderNeutralDatabase,
-  missionId: string,
-): Promise<unknown[]> {
+export async function getDecisionTrace(db: PersistenceDb, missionId: string): Promise<unknown[]> {
+  const { developmentDecisions } = tablesOf(db)
   return (
     await db
       .select()
@@ -436,9 +430,7 @@ export async function getDecisionTrace(
   }))
 }
 
-export function createMissionReadModelQueries(
-  db: ProviderNeutralDatabase,
-): MissionReadModelQueries {
+export function createMissionReadModelQueries(db: PersistenceDb): MissionReadModelQueries {
   return {
     list: () => listMissionSummaries(db),
     listPage: (input) => listMissionSummariesPage(db, input),

@@ -1,15 +1,16 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { skillOperations } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catalog/composition/intentApply'
 import { skillOperationStateQuery } from '@/modules/resource-catalog/infrastructure/skillOperationStateQuery'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
 import { recordStatements } from './helpers/statementRecorder'
 import { MIGRATIONS } from './migration-freeze'
 
-type OperationRow = typeof skillOperations.$inferSelect
+type OperationRow = PersistenceTables['skillOperations']['$inferSelect']
 
 const operations: OperationRow[] = (
   [
@@ -50,25 +51,8 @@ const operations: OperationRow[] = (
 }))
 
 // These are the three published read expressions, including their distinct tails.
-async function originalGet(db: ProviderNeutralDatabase, opId: string) {
-  return (
-    await db
-      .select({ active: skillOperations.active, phase: skillOperations.phase })
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, opId))
-  )[0]
-}
-
-async function originalAwaitedGet(db: ProviderNeutralDatabase, opId: string) {
-  return await (
-    await db
-      .select({ active: skillOperations.active, phase: skillOperations.phase })
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, opId))
-  )[0]
-}
-
-async function originalLimited(db: ProviderNeutralDatabase, opId: string) {
+async function originalGet(db: PersistenceDb, opId: string) {
+  const { skillOperations } = tablesOf(db)
   return (
     await db
       .select({ active: skillOperations.active, phase: skillOperations.phase })
@@ -78,20 +62,44 @@ async function originalLimited(db: ProviderNeutralDatabase, opId: string) {
   )[0]
 }
 
-async function candidateTails(db: ProviderNeutralDatabase, opId: string) {
+async function originalAwaitedGet(db: PersistenceDb, opId: string) {
+  const { skillOperations } = tablesOf(db)
+  return await (
+    await db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, opId))
+      .limit(1)
+  )[0]
+}
+
+async function originalLimited(db: PersistenceDb, opId: string) {
+  const { skillOperations } = tablesOf(db)
+  return (
+    await db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, opId))
+      .limit(1)
+  )[0]
+}
+
+async function candidateTails(db: PersistenceDb, opId: string) {
   return [
-    await skillOperationStateQuery(db, opId).get(),
-    await skillOperationStateQuery(db, opId).get(),
+    await first(skillOperationStateQuery(db, opId)),
+    await first(skillOperationStateQuery(db, opId)),
     (await skillOperationStateQuery(db, opId).limit(1))[0],
   ]
 }
 
-async function readPhysicalRows(db: ProviderNeutralDatabase) {
+async function readPhysicalRows(db: PersistenceDb) {
+  const { skillOperations } = tablesOf(db)
   return await db.select().from(skillOperations).orderBy(skillOperations.opId)
 }
 
 describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
   beforeEach(async () => {
+    const { skillOperations } = tablesOf(harness.db)
     await harness.db.insert(skillOperations).values(operations)
   })
 
@@ -116,11 +124,11 @@ describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
         expect(originalStatements).toHaveLength(3)
         expect(candidateStatements).toEqual(originalStatements)
         expect(originalStatements.map((statement) => statement.values)).toEqual([
-          [opId],
-          [opId],
+          [opId, 1],
+          [opId, 1],
           [opId, 1],
         ])
-        expect(originalStatements.map((statement) => statement.params)).toEqual([1, 1, 2])
+        expect(originalStatements.map((statement) => statement.params)).toEqual([2, 2, 2])
       }
     } finally {
       recording.stop()
@@ -135,7 +143,7 @@ describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
       const getQuery = skillOperationStateQuery(harness.db, 'operation-active')
       const limitedQuery = skillOperationStateQuery(harness.db, 'operation-done').limit(1)
       expect(recording.statements).toHaveLength(0)
-      expect(await getQuery.get()).toEqual({ active: 1, phase: 'fs-staged' })
+      expect(await first(getQuery)).toEqual({ active: 1, phase: 'fs-staged' })
       expect(recording.statements).toHaveLength(1)
       expect(await limitedQuery).toEqual([{ active: 0, phase: 'done' }])
       expect(recording.statements).toHaveLength(2)
@@ -149,6 +157,7 @@ describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
     const failure = new Error('rollback operation state read')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { skillOperations } = tablesOf(tx)
         await tx
           .update(skillOperations)
           .set({ active: 0, phase: 'done' })
@@ -171,6 +180,7 @@ if (resolveTestProviders(process.env).includes('sqlite')) {
   test('native compatibility loader returns the actual row or undefined immediately', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     try {
+      const { skillOperations } = tablesOf(db)
       await db.insert(skillOperations).values(operations)
       const recording = recordStatements(db.$client)
       try {
@@ -189,7 +199,7 @@ if (resolveTestProviders(process.env).includes('sqlite')) {
           )
         }
         expect(recording.statements).toHaveLength(4)
-        expect(builder.get()).toEqual({ active: 0, phase: 'done' })
+        expect(first(builder)).toEqual({ active: 0, phase: 'done' })
         expect(recording.statements).toHaveLength(5)
       } finally {
         recording.stop()

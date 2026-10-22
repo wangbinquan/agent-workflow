@@ -5,13 +5,13 @@
 // integration owners. RFC-359 W4-D1：一份实现，两个 provider 共用——每一次 ACL 与内容读取都绑定到
 // Integration owner 交来的那一个事务句柄与那一对已准入的 authority。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import { agents, resourceGrants, workflows, workgroupMembers, workgroups } from '@/db/schema'
 import type { DigitalEmployeeIntegrationTriggerParticipant } from '@/modules/digital-employee/public/participants'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import {
   canViewAccess,
@@ -44,12 +44,13 @@ export interface IntegrationTriggerResourceSnapshotReader {
 }
 
 async function canView(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   actor: Actor,
   resourceType: 'workflow' | 'agent' | 'workgroup' | 'digital_employee',
   row: AclRow,
 ): Promise<boolean> {
   const audience = resourceAclAudienceAuthority(actor)
+  const { resourceGrants } = tablesOf(transaction)
   const grant =
     audience.bypass || !audience.private
       ? null
@@ -71,7 +72,7 @@ async function canView(
 
 export function createIntegrationTriggerResourceSnapshotReader(
   input: {
-    readonly transaction: DatabaseTransaction
+    readonly transaction: PersistenceTx
     readonly authority: ResourceRequestContext
     readonly actor: Actor
     readonly digitalEmployees: DigitalEmployeeIntegrationTriggerParticipant
@@ -89,6 +90,7 @@ export function createIntegrationTriggerResourceSnapshotReader(
   ): Promise<FrozenIntegrationTriggerResourceSnapshot> {
     const actor = actorFor(authority)
     if (request.kind === 'scheduled-workflow' || request.kind === 'webhook-workflow') {
+      const { workflows } = tablesOf(input.transaction)
       const row = (
         await input.transaction
           .select()
@@ -106,6 +108,7 @@ export function createIntegrationTriggerResourceSnapshotReader(
       })
     }
     if (request.kind === 'scheduled-agent') {
+      const { agents } = tablesOf(input.transaction)
       const row = (
         await input.transaction.select().from(agents).where(eq(agents.id, request.agentId)).limit(1)
       )[0]
@@ -119,6 +122,7 @@ export function createIntegrationTriggerResourceSnapshotReader(
       })
     }
     if (request.kind === 'scheduled-workgroup') {
+      const { workgroups, workgroupMembers } = tablesOf(input.transaction)
       const row = (
         await input.transaction
           .select()

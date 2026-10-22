@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-359 W6-T25 —— 批量写：矩阵给出 `batchInsertMax`，逐行 INSERT 的热路径改按批。
 //
@@ -19,8 +22,7 @@ import { and, asc, eq, sql } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunEvents, nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
@@ -28,8 +30,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const TASK_ID = 't_t25'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf_t25',
     name: 't25',
     description: '',
@@ -37,7 +40,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<void> {
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: TASK_ID,
     name: 't25',
     workflowId: 'wf_t25',
@@ -53,9 +56,10 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<void> {
 }
 
 let runSeq = 0
-async function seedRun(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRun(db: PersistenceDb): Promise<string> {
   const id = `nr_t25_${(runSeq += 1)}`
-  await db.insert(nodeRuns).values({ id, taskId: TASK_ID, nodeId: 'n1', status: 'running' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId: TASK_ID, nodeId: 'n1', status: 'running' })
   return id
 }
 
@@ -132,8 +136,10 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     const nodeRunId = await seedRun(h.db)
     const max = eventsBatchMax(h)
     await databaseSessionFor(h.db).transaction(async (tx) => {
+      const { nodeRunEvents } = tablesOf(tx)
       await tx.insert(nodeRunEvents).values(eventRows(nodeRunId, max))
     })
+    const { nodeRunEvents } = tablesOf(h.db)
     const stored = await h.db
       .select({ ts: nodeRunEvents.ts })
       .from(nodeRunEvents)
@@ -151,12 +157,10 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
       const rec = h.recordStatements()
       let batches = 0
       await databaseSessionFor(h.db).transaction(async (tx) => {
-        batches = await insertInBatches(tx, nodeRunEvents, eventRows(nodeRunId, n), (batch) =>
-          tx
-            .insert(nodeRunEvents)
-            .values([...batch])
-            .run(),
-        )
+        const { nodeRunEvents } = tablesOf(tx)
+        batches = await insertInBatches(tx, nodeRunEvents, eventRows(nodeRunId, n), (batch) => {
+          return queryWrite(tx.insert(nodeRunEvents).values([...batch]))
+        })
       })
       const inserts = rec.statements.filter((s) =>
         /^\s*insert\s+into\s+.*node_run_events/i.test(s.sql),
@@ -169,6 +173,7 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
       for (const statement of inserts) {
         expect(statement.params).toBeLessThanOrEqual(h.capabilities.maxBindParameters)
       }
+      const { nodeRunEvents } = tablesOf(h.db)
       const stored = await h.db
         .select({ ts: nodeRunEvents.ts, payload: nodeRunEvents.payload })
         .from(nodeRunEvents)
@@ -183,10 +188,13 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     await seedTask(h.db)
     const nodeRunId = await seedRun(h.db)
     const max = h.capabilities.batchInsertMax(6) // node_run_outputs 是 6 列
+    const { nodeRunOutputs } = tablesOf(h.db)
     // 提前占住第二批里的一个端口名：第二批插到它时撞主键，整笔必须回滚。
-    await h.db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId, portName: `p${max + 3}`, content: 'pre-existing' })
+    await insertOne(h.db, nodeRunOutputs, {
+      nodeRunId,
+      portName: `p${max + 3}`,
+      content: 'pre-existing',
+    })
 
     const rows = Array.from({ length: 2 * max }, (_, i) => ({
       nodeRunId,
@@ -195,12 +203,10 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     }))
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
-        await insertInBatches(tx, nodeRunOutputs, rows, (batch) =>
-          tx
-            .insert(nodeRunOutputs)
-            .values([...batch])
-            .run(),
-        )
+        const { nodeRunOutputs } = tablesOf(tx)
+        await insertInBatches(tx, nodeRunOutputs, rows, (batch) => {
+          return queryWrite(tx.insert(nodeRunOutputs).values([...batch]))
+        })
       }),
     ).rejects.toThrow()
 
@@ -226,11 +232,13 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     // 参考实现：一行一条 INSERT（改造前的形状）。
     const referenceRun = await seedRun(h.db)
     await databaseSessionFor(h.db).transaction(async (tx) => {
-      for (const row of eventRows(referenceRun, n)) await tx.insert(nodeRunEvents).values(row)
+      const { nodeRunEvents } = tablesOf(tx)
+      for (const row of eventRows(referenceRun, n)) await insertOne(tx, nodeRunEvents, row)
     })
 
-    const read = async (nodeRunId: string) =>
-      (
+    const read = async (nodeRunId: string) => {
+      const { nodeRunEvents } = tablesOf(h.db)
+      return (
         await h.db
           .select({
             ts: nodeRunEvents.ts,
@@ -243,11 +251,13 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
           .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
           .orderBy(asc(nodeRunEvents.id))
       ).map((row) => ({ ...row }))
+    }
 
     const batched = await read(batchedRun)
     expect(batched.length).toBe(n)
     expect(batched).toEqual(await read(referenceRun))
 
+    const { nodeRunEvents } = tablesOf(h.db)
     // id 严格单调：顺序敏感的读点（WS 回放 / stderr 拼接）依赖它。
     const ids = await h.db
       .select({ id: nodeRunEvents.id })
@@ -296,6 +306,7 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     ): Promise<void> => {
       await databaseSessionFor(h.db).transaction(async (tx) => {
         for (const output of rows) {
+          const { nodeRunOutputs } = tablesOf(tx)
           await tx
             .insert(nodeRunOutputs)
             .values({ nodeRunId, ...output })
@@ -314,8 +325,9 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     await applyRowByRow(referenceRun, seededOutputs)
     await applyRowByRow(referenceRun, outputs)
 
-    const read = async (nodeRunId: string) =>
-      (
+    const read = async (nodeRunId: string) => {
+      const { nodeRunOutputs } = tablesOf(h.db)
+      return (
         await h.db
           .select({
             portName: nodeRunOutputs.portName,
@@ -328,6 +340,7 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
           .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
           .orderBy(asc(nodeRunOutputs.portName))
       ).map((row) => ({ ...row }))
+    }
 
     const batched = await read(batchedRun)
     expect(batched).toEqual(await read(referenceRun))
@@ -379,10 +392,11 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     expect(inserts.length).toBe(Math.ceil(n / eventsBatchMax(h)))
     // 逐行写会是 1000 条量级；留一个宽松的塌方探测下界，实现退回逐行立刻红。
     expect(inserts.length).toBeLessThan(n / 10)
+    const { nodeRunEvents } = tablesOf(h.db)
     const stored = await h.db
-      .select({ n: sql<number>`count(*)` })
+      .select({ n: sql<number>`count(*)`.mapWith(Number) })
       .from(nodeRunEvents)
       .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), eq(nodeRunEvents.kind, 'text')))
-    expect(h.capabilities.numericFromRawRow(stored[0]!.n, 'count')).toBe(n)
+    expect(stored[0]!.n).toBe(n)
   }, 300_000)
 })

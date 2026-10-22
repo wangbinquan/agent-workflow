@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   createOwnershipToken,
   createWorkerIdentity,
@@ -11,14 +13,13 @@ import { runtimeSession, lifecycle } from './helpers/daemonLifecycle'
 // task that stays running and verify the survivor path.
 
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { tasks, workflows, taskExecutionOwners } from '../src/db/schema'
 import { gracefulShutdown } from '../src/services/shutdown'
 import {
   taskExecutionModule,
@@ -29,12 +30,12 @@ import {
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   cleanup: () => void
 }
 
-function buildHarness(db: ProviderNeutralDatabase): Harness {
+function buildHarness(db: PersistenceDb): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-shutdown-'))
   return {
     db,
@@ -43,17 +44,18 @@ function buildHarness(db: ProviderNeutralDatabase): Harness {
   }
 }
 
-async function seedRunning(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRunning(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -121,6 +123,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
       },
       300,
     )
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('interrupted')
     // RFC-202 T4: survivors stamp DAEMON_RESTART_ERROR_SUMMARY ('daemon-restart')
@@ -136,7 +139,8 @@ describeEachProvider('gracefulShutdown', (harness) => {
       harness.applicationBinding.provider === 'postgresql'
         ? createProviderTaskExecutionModule({ daemonGeneration: 'rfc379', persistence })
         : createTaskExecutionTestModule('rfc379')
-    await h.db.insert(taskExecutionOwners).values({
+    const { taskExecutionOwners, tasks } = tablesOf(h.db)
+    await insertOne(h.db, taskExecutionOwners, {
       taskId,
       ownerId: 'driver',
       daemonGeneration: 'rfc379',

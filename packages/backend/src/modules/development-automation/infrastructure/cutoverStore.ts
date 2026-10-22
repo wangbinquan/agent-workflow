@@ -3,18 +3,20 @@
 // 状态落 maintenance_state（key 'rfc310-cutover-state'）：该表按 RFC-311 约定存「维护性水位与一次性闸门」，
 // cutover phase 属后者；legacy link 落 legacy_code_work_item_links（migration 0177 就位的 cutover 台账表）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { legacyCodeWorkItemLinks, maintenanceState } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { parseCutoverState, type CutoverState } from '../domain/cutover'
 import type { CutoverStore } from '../application/ports/cutoverStore'
 
 export const CUTOVER_STATE_KEY = 'rfc310-cutover-state'
 
-export function createCutoverStore(db: ProviderNeutralDatabase): CutoverStore {
+export function createCutoverStore(db: PersistenceDb): CutoverStore {
   return {
     async readState(): Promise<CutoverState> {
+      const { maintenanceState } = tablesOf(db)
       const row = (
         await db
           .select({ value: maintenanceState.value })
@@ -25,6 +27,7 @@ export function createCutoverStore(db: ProviderNeutralDatabase): CutoverStore {
       return parseCutoverState(row?.value ?? null)
     },
     async writeState(state, now) {
+      const { maintenanceState } = tablesOf(db)
       await db
         .insert(maintenanceState)
         .values({ key: CUTOVER_STATE_KEY, value: JSON.stringify(state), updatedAt: now })
@@ -34,7 +37,8 @@ export function createCutoverStore(db: ProviderNeutralDatabase): CutoverStore {
         })
     },
     async insertLegacyLink(input) {
-      await db.insert(legacyCodeWorkItemLinks).values({
+      const { legacyCodeWorkItemLinks } = tablesOf(db)
+      await insertOne(db, legacyCodeWorkItemLinks, {
         id: input.id,
         missionId: input.missionId,
         legacyWorkItemId: input.legacyWorkItemId,

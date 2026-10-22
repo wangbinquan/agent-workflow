@@ -2,11 +2,12 @@
 // 此前 SQLite 侧只是 `platform/persistence/sqlite/taskLifecycle.ts` 同步内核的薄壳，PG 侧是整份实现；现在端口两侧都走
 // 统一写事务 + owner 围栏（PG READ COMMITTED：CAS 与围栏都是行级条件 UPDATE）。同步内核暂留给尚未迁移的 legacy 直接调用方。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 
-import { tasks } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import {
@@ -50,7 +51,10 @@ type TaskRuntimeLifecycleWriteInput = Omit<
   Readonly<{
     extra?: TaskRuntimeLifecycleMutation &
       Partial<
-        Pick<typeof tasks.$inferInsert, 'sourceTerminationFence' | 'sourceTerminationEffectRev'>
+        Pick<
+          PersistenceTables['tasks']['$inferInsert'],
+          'sourceTerminationFence' | 'sourceTerminationEffectRev'
+        >
       >
     onTransitionTx?: (
       ...args: Parameters<
@@ -75,7 +79,7 @@ export async function writeTaskRuntimeLifecycleInTx(
 
 export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecyclePersistence {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly workspacePresence: WorkspacePresenceQueries,
   ) {}
 
@@ -152,6 +156,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
       ) {
         const changed = await withTaskExecutionWrite(this.db, async (tx) => {
           await this.fence(tx, input)
+          const { tasks } = tablesOf(tx)
           return await tx
             .update(tasks)
             .set({ workspacePrunedAt: input.now })
@@ -168,7 +173,6 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
               ),
             )
             .returning({ id: tasks.id })
-            .all()
         })
         if (changed.length === 0) {
           throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
@@ -216,22 +220,24 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
   }
 
   private async load(taskId: string): Promise<LifecycleRow> {
-    const row = await this.db
-      .select({
-        status: tasks.status,
-        worktreePath: tasks.worktreePath,
-        spaceKind: tasks.spaceKind,
-        workspacePruningAt: tasks.workspacePruningAt,
-        workspacePruneCause: tasks.workspacePruneCause,
-        workspacePrunedAt: tasks.workspacePrunedAt,
-        sourceTerminationFence: tasks.sourceTerminationFence,
-        errorSummary: tasks.errorSummary,
-        lifecycleEventRevision: tasks.lifecycleEventRevision,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-      .get()
+    const { tasks } = tablesOf(this.db)
+    const row = await first(
+      this.db
+        .select({
+          status: tasks.status,
+          worktreePath: tasks.worktreePath,
+          spaceKind: tasks.spaceKind,
+          workspacePruningAt: tasks.workspacePruningAt,
+          workspacePruneCause: tasks.workspacePruneCause,
+          workspacePrunedAt: tasks.workspacePrunedAt,
+          sourceTerminationFence: tasks.sourceTerminationFence,
+          errorSummary: tasks.errorSummary,
+          lifecycleEventRevision: tasks.lifecycleEventRevision,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1),
+    )
     if (row === undefined) throw new NotFoundError('task-not-found', `task ${taskId} not found`)
     return { ...row, status: row.status as TaskStatus }
   }

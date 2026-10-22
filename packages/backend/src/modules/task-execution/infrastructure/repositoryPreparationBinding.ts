@@ -5,7 +5,7 @@ import type {
   GitCommitIdentity,
   StartTask,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import type {
   PublicRepositorySourceSealPort,
@@ -73,11 +73,7 @@ export interface TaskRepositoryPreparationBinding {
 
   readonly sourceSeal: PublicRepositorySourceSealPort
   sealedIdentity(reference: SealedPublicRepositorySourceRef): Promise<string>
-  snapshot(input: {
-    transaction: ProviderNeutralDatabase
-    authority: RequestAuthority
-    now: number
-  }): {
+  snapshot(input: { transaction: PersistenceDb; authority: RequestAuthority; now: number }): {
     frozenLayout(input: {
       readonly repos: readonly PlannedRepo[]
       readonly nodes: readonly PlannedDirectoryNode[]
@@ -93,7 +89,7 @@ export interface TaskRepositoryPreparationBinding {
     close(): void
   }
   nextAttempt(input: {
-    transaction: ProviderNeutralDatabase
+    transaction: PersistenceDb
     operationRef: string
     now: number
   }): Promise<string>

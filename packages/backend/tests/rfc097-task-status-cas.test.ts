@@ -25,6 +25,9 @@
 // 正是「SELECT 与 UPDATE 之间」这个位置，且两个引擎都成立。承重的判据一条没少——
 // 竞争写者先落库、CAS 的 `WHERE status = from` 必然 miss、赢家的写不被覆盖。
 
+import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -32,7 +35,6 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { tasks, workflows } from '../src/db/schema'
 import {
   ConcurrentTaskTransition,
   isTerminalTaskStatus,
@@ -41,19 +43,23 @@ import {
   trySetTaskStatus,
 } from '../src/services/lifecycle'
 import { ConflictError, NotFoundError } from '../src/util/errors'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const ulid = monotonicFactory()
 
 interface Harness {
-  db: ProviderNeutralDatabase
-  seedTask: (status: TaskStatus, extra?: Partial<typeof tasks.$inferInsert>) => Promise<string>
+  db: PersistenceDb
+  seedTask: (
+    status: TaskStatus,
+    extra?: Partial<PersistenceTables['tasks']['$inferInsert']>,
+  ) => Promise<string>
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -68,7 +74,7 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
     db,
     seedTask: async (status, extra = {}) => {
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: 'rfc097-cas',
         workflowId,
@@ -87,7 +93,8 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function statusOf(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function statusOf(db: PersistenceDb, taskId: string): Promise<string> {
+  const { tasks } = tablesOf(db)
   return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status
 }
 
@@ -141,6 +148,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         },
         reason: 'unit-extra',
       })
+      const { tasks } = tablesOf(h.db)
       const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
       expect(row.status).toBe('failed')
       expect(row.finishedAt).toBe(777)
@@ -165,6 +173,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         extra: { finishedAt: null, errorSummary: null, errorMessage: null, failedNodeId: null },
         reason: 'unit-resume-clears',
       })
+      const { tasks } = tablesOf(h.db)
       const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
       expect(row.status).toBe('pending')
       expect(row.finishedAt).toBeNull()
@@ -184,6 +193,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         extra: { finishedAt: null },
         reason: 'unit-T3-demote',
       })
+      const { tasks } = tablesOf(h.db)
       const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
       expect(row.status).toBe('interrupted')
       expect(row.finishedAt).toBeNull()
@@ -280,6 +290,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
           allowedFrom: ['running'],
           reason: 'unit-cas-loss',
           beforeCas: async () => {
+            const { tasks } = tablesOf(h.db)
             await h.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
           },
         })
@@ -330,6 +341,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         allowedFrom: ['running'],
         reason: 'unit-try-cas-loss',
         beforeCas: async () => {
+          const { tasks } = tablesOf(h.db)
           await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
         },
       })
@@ -353,7 +365,8 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         select() {
           throw new Error('db exploded')
         },
-      } as unknown as ProviderNeutralDatabase
+      } as unknown as PersistenceDb
+      inheritDatabaseHandle(exploding, h.db)
       await expect(
         trySetTaskStatus({
           db: exploding,

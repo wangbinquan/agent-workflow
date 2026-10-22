@@ -10,6 +10,8 @@
 // 它是 bootstrap 真正用的那条选择路径（providerRuntime.ts），对拍因此打在**产品装配**上，
 // 换实现不用改测试。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import {
   existsSync,
@@ -24,18 +26,7 @@ import { join } from 'node:path'
 
 import { count, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunEvents,
-  nodeRuns,
-  reviewNodeReviewers,
-  taskArchiveAudit,
-  taskExecutionMaintenanceClaims,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/providerRuntime'
 import type { TaskArchiveMaintenanceOptions } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -64,8 +55,9 @@ function options(dirs: Dirs, now: number = NOW): TaskArchiveMaintenanceOptions {
   return { ...dirs, now }
 }
 
-async function seedBase(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seedBase(db: PersistenceDb): Promise<void> {
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -73,7 +65,7 @@ async function seedBase(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 interface TaskSeed {
@@ -83,8 +75,9 @@ interface TaskSeed {
   readonly parentTaskId?: string
 }
 
-async function addTask(db: ProviderNeutralDatabase, seed: TaskSeed): Promise<void> {
-  await db.insert(tasks).values({
+async function addTask(db: PersistenceDb, seed: TaskSeed): Promise<void> {
+  const { tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -103,7 +96,7 @@ async function addTask(db: ProviderNeutralDatabase, seed: TaskSeed): Promise<voi
     parentTaskId: seed.parentTaskId ?? null,
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
   })
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -113,12 +106,13 @@ async function addTask(db: ProviderNeutralDatabase, seed: TaskSeed): Promise<voi
 }
 
 async function addRunWithEvents(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   runId: string,
   events: number,
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunEvents } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'n1',
@@ -127,7 +121,7 @@ async function addRunWithEvents(
     finishedAt: NOW - 399 * DAY,
   })
   for (let index = 0; index < events; index += 1) {
-    await db.insert(nodeRunEvents).values({
+    await insertOne(db, nodeRunEvents, {
       nodeRunId: runId,
       ts: NOW - 400 * DAY + index,
       kind: 'text',
@@ -137,8 +131,12 @@ async function addRunWithEvents(
 }
 
 async function rowCount(
-  db: ProviderNeutralDatabase,
-  table: typeof tasks | typeof nodeRuns | typeof nodeRunEvents | typeof taskArchiveAudit,
+  db: PersistenceDb,
+  table:
+    | PersistenceTables['tasks']
+    | PersistenceTables['nodeRuns']
+    | PersistenceTables['nodeRunEvents']
+    | PersistenceTables['taskArchiveAudit'],
 ): Promise<number> {
   const rows = await db.select({ n: count() }).from(table)
   return Number(rows[0]?.n ?? 0)
@@ -196,6 +194,7 @@ describeEachProvider(
       expect(
         (await command().runSweep({ enabled: true, retentionDays: 0 }, options(dirs))).archived,
       ).toHaveLength(0)
+      const { tasks, taskArchiveAudit } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(1)
       expect(await rowCount(harness.db, taskArchiveAudit)).toBe(0)
       expect(readdirSync(dirs.archiveDir)).toEqual([])
@@ -234,6 +233,7 @@ describeEachProvider(
       expect(preview[0]?.taskCount).toBe(2)
       expect(preview[0]?.lastFinishedAt).toBe(NOW - 299 * DAY)
       expect(await command().preview({ retentionDays: 0, maxTrees: 10, now: NOW })).toEqual([])
+      const { tasks } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(6)
       expect(readdirSync(dirs.archiveDir)).toEqual([])
     })
@@ -258,7 +258,15 @@ describeEachProvider(
       })
       await addRunWithEvents(harness.db, 'root', 'run-root', 3)
       await addRunWithEvents(harness.db, 'child', 'run-child', 2)
-      await harness.db.insert(reviewNodeReviewers).values({
+      const {
+        reviewNodeReviewers,
+        tasks,
+        nodeRuns,
+        nodeRunEvents,
+        taskExecutionMaintenanceClaims,
+        taskArchiveAudit,
+      } = tablesOf(harness.db)
+      await insertOne(harness.db, reviewNodeReviewers, {
         taskId: 'root',
         reviewNodeId: 'review-node',
         reviewerUserId: 'u1',
@@ -337,6 +345,7 @@ describeEachProvider(
       await seedBase(harness.db)
 
       await command().runSweep({ enabled: true, retentionDays: 90 }, options(dirs))
+      const { taskArchiveAudit } = tablesOf(harness.db)
       expect(await rowCount(harness.db, taskArchiveAudit)).toBe(0)
 
       const manual = await command().runManual(
@@ -367,6 +376,7 @@ describeEachProvider(
         { ...dirs },
       )
       expect(receipt.archived.map((tree) => tree.rootTaskId)).toEqual(['root'])
+      const { tasks, taskArchiveAudit } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(0)
       const audits = await harness.db.select().from(taskArchiveAudit)
       expect(audits[0]).toMatchObject({ source: 'manual', createdAt: NOW, treeCount: 1 })
@@ -383,6 +393,7 @@ describeEachProvider(
         options(dirs),
       )
       expect(receipt.archived).toHaveLength(2)
+      const { tasks } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(1)
     })
 
@@ -429,6 +440,7 @@ describeEachProvider(
       expect(existsSync(tmpDir)).toBe(false)
       expect(readFileSync(join(dirs.runsDir, 'root', 'prompt.md'), 'utf8')).toBe('moved prompt')
       expect(existsSync(join(dirs.logsDir, 'root', 'x.jsonl'))).toBe(true)
+      const { tasks } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(1)
     })
 
@@ -437,6 +449,7 @@ describeEachProvider(
       await seedBase(harness.db)
       await addTask(harness.db, { id: 'root', status: 'done', finishedAt: NOW - 300 * DAY })
       expect(await command().recover(options(dirs))).toEqual({ promoted: [], discarded: [] })
+      const { tasks } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(1)
     })
 
@@ -454,6 +467,7 @@ describeEachProvider(
       const finalDir = join(original.archiveDir, 'root')
       const { renameSync } = await import('node:fs')
       renameSync(finalDir, join(original.archiveDir, '.tmp-root'))
+      const { taskExecutionMaintenanceClaims, tasks } = tablesOf(harness.db)
       // 认领退回「盘上完成、库未删」的现场（崩在 rename 与删库之间）。
       await harness.db
         .update(taskExecutionMaintenanceClaims)

@@ -17,6 +17,8 @@
 //   drizzle INSERTs emit all HEAD columns and break on frozen schemas
 //   ([reference_new_column_breaks_frozen_migration_tests]).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -32,9 +34,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import {
   WORKGROUP_GATE_TRANSITIONS,
   WorkgroupGateTransitionError,
@@ -51,11 +52,12 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 1. gate state machine (HEAD schema)
 // ---------------------------------------------------------------------------
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  await db.insert(workflows).values({ id: wfId, name: `wf-${wfId}`, definition: '{}' })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'gate-machine',
     workflowId: wfId,

@@ -2,18 +2,19 @@
 // `domain/skillVersionCommit`；legacy 版本漏斗与融合的 tx-bound participant
 // （`skillTreeVersionParticipant.ts`）共用这一份读取。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import { skills } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 import type { SkillVersionCompositeLive } from '../domain/skillVersionCommit'
 
 /** RFC-359 W4-D23b：legacy 版本写入路径改吃中立事务后也用这一份，同步那份随之退役。 */
 export async function readSkillVersionCompositeLive(
-  transaction: DatabaseTransaction,
+  transaction: PersistenceTx,
   skillId: string,
 ): Promise<SkillVersionCompositeLive | null> {
+  const { skills } = tablesOf(transaction)
   const rows = await transaction
     .select({
       id: skills.id,

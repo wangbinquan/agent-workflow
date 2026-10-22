@@ -5,6 +5,9 @@
 // so a green result proves the new writer itself reads the exact parent inside
 // the initial INSERT transaction, including multi-level and concurrent calls.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec, queryWrite, queryRows } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +18,6 @@ import { ulid } from 'ulid'
 
 import type { TaskCatalogVisibility, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
@@ -32,11 +34,10 @@ interface Harness {
 
 function buildHarness(): Harness {
   const db = createInMemoryDb(MIGRATIONS)
-  db.run(sql`DROP TRIGGER trg_tasks_launch_origin_inherit_child`)
+  rawExec(db, sql`DROP TRIGGER trg_tasks_launch_origin_inherit_child`)
   const workflowId = ulid()
-  db.insert(workflows)
-    .values({ id: workflowId, name: `wf-${workflowId}`, definition: EMPTY_DEF })
-    .run()
+  const { workflows } = tablesOf(db)
+  insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: EMPTY_DEF })
   return { db, workflowId, roots: [] }
 }
 
@@ -99,26 +100,24 @@ function seedRunningTask(
   catalogVisibility: TaskCatalogVisibility = 'public',
 ): string {
   const id = ulid()
-  h.db
-    .insert(tasks)
-    .values({
-      id,
-      name: `task-${id}`,
-      workflowId: h.workflowId,
-      workflowSnapshot: EMPTY_DEF,
-      repoPath: '/tmp/rfc301-parent',
-      worktreePath: '/tmp/rfc301-parent',
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-      launchOrigin,
-      catalogVisibility,
-      parentTaskId,
-      invocationDepth: parentTaskId === null ? 0 : 1,
-    })
-    .run()
+  const { tasks } = tablesOf(h.db)
+  insertOne(h.db, tasks, {
+    id,
+    name: `task-${id}`,
+    workflowId: h.workflowId,
+    workflowSnapshot: EMPTY_DEF,
+    repoPath: '/tmp/rfc301-parent',
+    worktreePath: '/tmp/rfc301-parent',
+    baseBranch: 'main',
+    branch: `agent-workflow/${id}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+    launchOrigin,
+    catalogVisibility,
+    parentTaskId,
+    invocationDepth: parentTaskId === null ? 0 : 1,
+  })
   return id
 }
 
@@ -128,19 +127,17 @@ function seedRunningTask(
  */
 function seedCallRun(h: Harness, taskId: string, childTaskId: string): string {
   const id = ulid()
-  h.db
-    .insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId: `call-${id}`,
-      status: 'running',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      childTaskId,
-    })
-    .run()
+  const { nodeRuns } = tablesOf(h.db)
+  insertOne(h.db, nodeRuns, {
+    id,
+    taskId,
+    nodeId: `call-${id}`,
+    status: 'running',
+    retryIndex: 0,
+    iteration: 0,
+    startedAt: Date.now(),
+    childTaskId,
+  })
   return id
 }
 
@@ -185,11 +182,13 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
       },
     )
 
-    h.db
-      .update(tasks)
-      .set({ status: 'running' })
-      .where(sql`${tasks.id} = ${childId}`)
-      .run()
+    const { tasks } = tablesOf(h.db)
+    queryWrite(
+      h.db
+        .update(tasks)
+        .set({ status: 'running' })
+        .where(sql`${tasks.id} = ${childId}`),
+    )
     const grandchildId = ulid()
     const childRunId = seedCallRun(h, childId, grandchildId)
     await launchTestTask(
@@ -205,19 +204,16 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
     )
 
     const origins = new Map(
-      h.db
-        .select({ id: tasks.id, launchOrigin: tasks.launchOrigin })
-        .from(tasks)
-        .all()
-        .map((row) => [row.id, row.launchOrigin]),
+      queryRows(h.db.select({ id: tasks.id, launchOrigin: tasks.launchOrigin }).from(tasks)).map(
+        (row) => [row.id, row.launchOrigin],
+      ),
     )
     expect(origins.get(rootId)).toBe('webhook')
     expect(origins.get(childId)).toBe('webhook')
     expect(origins.get(grandchildId!)).toBe('webhook')
-    const visibilities = h.db
-      .select({ id: tasks.id, catalogVisibility: tasks.catalogVisibility })
-      .from(tasks)
-      .all()
+    const visibilities = queryRows(
+      h.db.select({ id: tasks.id, catalogVisibility: tasks.catalogVisibility }).from(tasks),
+    )
     expect(new Set(visibilities.map((row) => row.catalogVisibility))).toEqual(new Set(['internal']))
   })
 
@@ -245,11 +241,10 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
       ),
     )
 
-    const rows = h.db
-      .select({ id: tasks.id, launchOrigin: tasks.launchOrigin })
-      .from(tasks)
-      .all()
-      .filter((row) => row.id !== rootId)
+    const { tasks } = tablesOf(h.db)
+    const rows = queryRows(
+      h.db.select({ id: tasks.id, launchOrigin: tasks.launchOrigin }).from(tasks),
+    ).filter((row) => row.id !== rootId)
     expect(rows).toHaveLength(children.length)
     expect(new Set(rows.map((row) => row.launchOrigin))).toEqual(new Set(['scheduled']))
   })

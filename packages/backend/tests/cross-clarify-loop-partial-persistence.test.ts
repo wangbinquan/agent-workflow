@@ -31,13 +31,15 @@
 // If any of these go red the wrapper-loop reject persistence vs Q&A
 // reset contract is broken — investigate before relaxing.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
@@ -96,11 +98,12 @@ function loopDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = loopDef()
   const wfId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'loop-persist',
     description: '',
@@ -113,7 +116,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -130,26 +133,28 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await db
-      .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get(),
+    await first(
+      db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    ),
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
 async function seedQRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   loopIter = 0,
 ): Promise<string> {
   const id = `nr_${nodeId}_${loopIter}_${Math.random().toString(36).slice(2, 6)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -160,13 +165,10 @@ async function seedQRun(
   return id
 }
 
-async function seedDesignerRun(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  loopIter = 0,
-): Promise<string> {
+async function seedDesignerRun(db: PersistenceDb, taskId: string, loopIter = 0): Promise<string> {
   const id = `nr_d_${loopIter}_${Math.random().toString(36).slice(2, 6)}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'designer',
@@ -281,7 +283,8 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     })
     // Mint a fresh iter-1 pending cross-clarify node_run and dispatch.
     const iter1NodeRunId = `nr_cross1_iter1_${Math.random().toString(36).slice(2, 6)}`
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: iter1NodeRunId,
       taskId,
       nodeId: 'cross1',
@@ -337,6 +340,7 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
       actor,
     })
 
+    const { clarifyRounds } = tablesOf(db)
     // The iter-0 row is still queryable; loop-iter and iteration counter
     // are unchanged. (Forward-propagation would have moved it forward —
     // which would lose the iter-0 audit trail.)

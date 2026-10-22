@@ -2,13 +2,15 @@
 // atom. SQLite locks the complete reset/resume behavior; the PostgreSQL oracle
 // proves the same claim is compiled against the real PostgreSQL projection.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
+import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -28,38 +30,30 @@ import {
   rotateRuntimeSessionLease,
 } from '@/services/runtimeSessionLease'
 
-async function seedTaskRuns(db: ProviderNeutralDatabase) {
-  await db
-    .insert(workflows)
-    .values({ id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
-    .run()
-  await db
-    .insert(tasks)
-    .values({
-      id: 'task-lease',
-      name: 'task-lease',
-      workflowId: 'workflow-lease',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/worktree',
-      baseBranch: 'main',
-      branch: 'aw/lease',
-      status: 'running',
-      inputs: '{}',
-      startedAt: 1,
-    })
-    .run()
-  await db
-    .insert(nodeRuns)
-    .values(
-      ['run-1', 'run-2', 'run-3'].map((id) => ({
-        id,
-        taskId: 'task-lease',
-        nodeId: 'node-a',
-        status: 'running' as const,
-      })),
-    )
-    .run()
+async function seedTaskRuns(db: PersistenceDb) {
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
+  await insertOne(db, tasks, {
+    id: 'task-lease',
+    name: 'task-lease',
+    workflowId: 'workflow-lease',
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/worktree',
+    baseBranch: 'main',
+    branch: 'aw/lease',
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+  })
+  await db.insert(nodeRuns).values(
+    ['run-1', 'run-2', 'run-3'].map((id) => ({
+      id,
+      taskId: 'task-lease',
+      nodeId: 'node-a',
+      status: 'running' as const,
+    })),
+  )
   return db
 }
 
@@ -88,7 +82,10 @@ function postgresqlFixture() {
     if (normalized.includes('from "agent_workflow"."node_runs"')) return rows([['run-1']])
     return rows()
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -116,10 +113,6 @@ function postgresqlFixture() {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 runtime-session lease provider operations', () => {
   test('PostgreSQL claim uses the selected schema and generation-fenced transaction', async () => {
@@ -166,16 +159,14 @@ describeEachProvider('RFC-349 runtime-session lease provider operations', (harne
       leaseNonceDigest: 'nonce-1',
       leasedAt: 10,
     })
-    await db
-      .insert(nodeRunEvents)
-      .values({
-        nodeRunId: 'run-1',
-        ts: 1,
-        kind: 'text',
-        payload: '{}',
-        sessionId: first.sessionId,
-      })
-      .run()
+    const { nodeRunEvents, nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRunEvents, {
+      nodeRunId: 'run-1',
+      ts: 1,
+      kind: 'text',
+      payload: '{}',
+      sessionId: first.sessionId,
+    })
 
     await expect(
       claimNewRuntimeSession(operations, {
@@ -202,7 +193,7 @@ describeEachProvider('RFC-349 runtime-session lease provider operations', (harne
       getRuntimeSessionLease(operations, 'claude-code', rotated.sessionId),
     ).resolves.toMatchObject({ createdNodeRunId: 'run-1', leaseNodeRunId: 'run-1' })
     expect(
-      await db.select({ sessionId: nodeRunEvents.sessionId }).from(nodeRunEvents).get(),
+      await firstRow(db.select({ sessionId: nodeRunEvents.sessionId }).from(nodeRunEvents)),
     ).toEqual({
       sessionId: rotated.sessionId,
     })
@@ -218,7 +209,7 @@ describeEachProvider('RFC-349 runtime-session lease provider operations', (harne
       leasedAt: 20,
     })
     await expect(confirmRuntimeSessionResume(operations, resumed)).resolves.toBe(true)
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-2')).run()
+    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-2'))
     await expect(repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).resolves.toBe(1)
     await expect(releaseRuntimeSessionLease(operations, resumed)).resolves.toBe(false)
   })

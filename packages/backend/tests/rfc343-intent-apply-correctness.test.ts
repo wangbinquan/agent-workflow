@@ -12,6 +12,9 @@
 // 会话串行锁那两格是**进程内**的（模块级 Map），与库无关；留在双引擎里跑两遍无害，
 // 而且顺带证明了锁的计数不会被并发的另一条引擎腿污染。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -23,8 +26,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { intentApplyJournal, intentSessions, skillOperations, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   __intentApplyLockCountForTests,
   __withSessionApplyLockForTests,
@@ -43,7 +45,7 @@ import {
 
 const OWNER_ID = 'rfc343-intent-owner'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 let sessionId: string
 
@@ -63,7 +65,8 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
   appHome = mkdtempSync(join(tmpdir(), 'aw-rfc343-intent-'))
   sessionId = ulid()
   const now = Date.now()
-  await db.insert(users).values({
+  const { users, intentSessions } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER_ID,
     username: OWNER_ID,
     displayName: 'RFC-343 owner',
@@ -72,7 +75,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
     createdAt: now,
     updatedAt: now,
   })
-  await db.insert(intentSessions).values({
+  await insertOne(db, intentSessions, {
     id: sessionId,
     ownerUserId: OWNER_ID,
     title: 'RFC-343 Intent apply',
@@ -115,7 +118,8 @@ async function seedJournal(
 ): Promise<string> {
   const id = ulid()
   const stale = Date.now() - 11 * 60 * 1000
-  await db.insert(intentApplyJournal).values({
+  const { intentApplyJournal } = tablesOf(db)
+  await insertOne(db, intentApplyJournal, {
     id,
     sessionId,
     clientMutationId: ulid(),
@@ -229,16 +233,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         failed: 0,
         rolledForward: 0,
       })
-      const prepared = await db
-        .select()
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.id, preparedId))
-        .get()
-      const committed = await db
-        .select()
-        .from(intentApplyJournal)
-        .where(eq(intentApplyJournal.id, committedId))
-        .get()
+      const { intentApplyJournal } = tablesOf(db)
+      const prepared = await firstRow(
+        db.select().from(intentApplyJournal).where(eq(intentApplyJournal.id, preparedId)),
+      )
+      const committed = await firstRow(
+        db.select().from(intentApplyJournal).where(eq(intentApplyJournal.id, committedId)),
+      )
       expect(prepared?.state).toBe('prepared')
       expect(prepared?.error).toContain('artifact decode failed')
       expect(committed?.state).toBe('committed')
@@ -304,21 +305,24 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         failed: 0,
         rolledForward: 0,
       })
+      const { intentApplyJournal, skillOperations } = tablesOf(db)
       expect(
-        await db
-          .select({ error: intentApplyJournal.error })
-          .from(intentApplyJournal)
-          .where(eq(intentApplyJournal.id, journalId))
-          .get(),
+        await firstRow(
+          db
+            .select({ error: intentApplyJournal.error })
+            .from(intentApplyJournal)
+            .where(eq(intentApplyJournal.id, journalId)),
+        ),
       ).toEqual({
         error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
       })
       expect(
-        await db
-          .select({ active: skillOperations.active })
-          .from(skillOperations)
-          .where(eq(skillOperations.opId, staged.opId!))
-          .get(),
+        await firstRow(
+          db
+            .select({ active: skillOperations.active })
+            .from(skillOperations)
+            .where(eq(skillOperations.opId, staged.opId!)),
+        ),
       ).toEqual({ active: 1 })
 
       cpSync(staged.versionDir, staged.stagingDir, { recursive: true })
@@ -333,20 +337,19 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         rolledForward: 1,
       })
       expect(
-        await db
-          .select({ error: intentApplyJournal.error })
-          .from(intentApplyJournal)
-          .where(eq(intentApplyJournal.id, journalId))
-          .get(),
+        await firstRow(
+          db
+            .select({ error: intentApplyJournal.error })
+            .from(intentApplyJournal)
+            .where(eq(intentApplyJournal.id, journalId)),
+        ),
       ).toEqual({ error: null })
       expect(
         readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8'),
       ).toContain('body v2')
-      const operation = await db
-        .select()
-        .from(skillOperations)
-        .where(eq(skillOperations.opId, staged.opId!))
-        .get()
+      const operation = await firstRow(
+        db.select().from(skillOperations).where(eq(skillOperations.opId, staged.opId!)),
+      )
       expect(operation).toMatchObject({ phase: 'done', active: 0 })
 
       // The retained audit row is seen again, but the completed exact op is not

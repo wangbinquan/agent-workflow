@@ -1,9 +1,9 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { repositoryPreparationLane } from './workspaceLaunchLane'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -14,7 +14,7 @@ import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
 
 export async function admitDeferredRepositoryPreparation(input: {
-  transaction: ProviderNeutralDatabase
+  transaction: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   authority: RequestAuthority
   taskId: string
@@ -72,7 +72,7 @@ export async function admitDeferredRepositoryPreparation(input: {
 
 /** Null is only the documented pre-journal Task compatibility path. */
 export async function prepareDurableRepositoryWorkspace(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   taskId: string
   workingBranch?: string
@@ -123,6 +123,7 @@ export async function prepareDurableRepositoryWorkspace(input: {
     withTaskExecutionWrite(input.db, async (tx) => {
       await fenceTaskWrite(tx, { taskId: input.taskId, context })
       const current = await createWorkspacePreparationJournal(tx).forTask(input.taskId)
+      const { tasks } = tablesOf(tx)
       const task = (
         await tx.select({ path: tasks.worktreePath }).from(tasks).where(eq(tasks.id, input.taskId))
       )[0]
@@ -223,7 +224,7 @@ export async function prepareDurableRepositoryWorkspace(input: {
 
 /** Called inside the exact transaction that installs the workspace projection. */
 export async function acceptDurableRepositoryWorkspace(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
   taskId: string,
 ): Promise<void> {
   const journal = createWorkspacePreparationJournal(tx)
@@ -253,7 +254,7 @@ export async function acceptDurableRepositoryWorkspace(
 }
 
 export async function cleanupDurableRepositoryWorkspace(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   binding: TaskRepositoryPreparationBinding
   taskId: string
   gitCommitIdentity: GitCommitIdentity | null
@@ -268,6 +269,7 @@ export async function cleanupDurableRepositoryWorkspace(input: {
     withTaskExecutionWrite(input.db, async (tx) => {
       await fenceTaskWrite(tx, { taskId: input.taskId, context })
       const current = await createWorkspacePreparationJournal(tx).forTask(input.taskId)
+      const { tasks } = tablesOf(tx)
       const task = (
         await tx.select({ path: tasks.worktreePath }).from(tasks).where(eq(tasks.id, input.taskId))
       )[0]
@@ -295,7 +297,7 @@ export async function cleanupDurableRepositoryWorkspace(input: {
 }
 
 export async function hasDurableRepositoryPreparation(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<boolean> {
   return (await createWorkspacePreparationJournal(db).forTask(taskId)) !== null

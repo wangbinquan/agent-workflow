@@ -23,13 +23,10 @@
 // handler for a kind is a boot-stopping invariant violation: the active row and
 // its lock are preserved so a newer binary can recover it without lost evidence.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import { skills } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createLogger } from '@/util/log'
 import {
   abandonOperation,
@@ -58,17 +55,17 @@ export interface OpRecoveryHandler {
   rollbackFs?: (
     fsOpts: SkillOpFsOptions,
     op: SkillOperationRow,
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
   ) => void | Promise<void>
   /** Complete the publish (phase ≥ db-committed). FS-side, non-transactional. */
   rollForwardFs?: (
     fsOpts: SkillOpFsOptions,
     op: SkillOperationRow,
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
   ) => void | Promise<void>
   /** Optional DB writes contributed to the terminal tx (both directions). */
   recoverDb?: (
-    tx: DatabaseTransaction,
+    tx: PersistenceTx,
     op: SkillOperationRow,
     dir: 'rollback' | 'rollforward',
   ) => void | Promise<void>
@@ -102,7 +99,7 @@ export interface RecoveryReport {
  * a second run over the already-terminal state is a no-op (no active ops left).
  */
 export async function recoverSkillOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fsOpts: SkillOpFsOptions,
   registry: OpRecoveryRegistry,
 ): Promise<RecoveryReport> {
@@ -179,8 +176,9 @@ export async function recoverSkillOperations(
 
 /** Mark a managed skill quarantined (version_state) + retire the impossible op.
  *  External skills have no snapshot authority — retire the op only. */
-async function quarantineSkill(db: ProviderNeutralDatabase, op: SkillOperationRow): Promise<void> {
+async function quarantineSkill(db: PersistenceDb, op: SkillOperationRow): Promise<void> {
   await databaseSessionFor(db).transaction(async (tx) => {
+    const { skills } = tablesOf(tx)
     await tx.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, op.skillId))
     await abandonOperation(tx, op.opId)
   })

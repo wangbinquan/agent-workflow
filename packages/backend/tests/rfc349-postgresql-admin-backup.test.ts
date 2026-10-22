@@ -5,11 +5,11 @@ import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator'
 import type { CreatePostgresqlProviderBackupOptions } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 
 /** 协调器只把它转交给资产工厂；本文件的判据都在协调器这一层，不碰任何一条查询。 */
-const NEUTRAL_DATABASE = {} as ProviderNeutralDatabase
+const NEUTRAL_DATABASE = {} as PersistenceDb
 
 describe('RFC-349 PostgreSQL admin backup coordinator', () => {
   test('prepares application assets then requests one provider backup', async () => {

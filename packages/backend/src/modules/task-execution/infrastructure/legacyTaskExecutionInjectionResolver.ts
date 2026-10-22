@@ -18,12 +18,12 @@
 // `driver.buildSpawn` consumes — so the scheduler hands one object to
 // the runner instead of four parallel arrays.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq, inArray } from 'drizzle-orm'
 import { join as pathJoin } from 'node:path'
 import type { Agent, AgentSkillRef, Mcp, Plugin } from '@agent-workflow/shared'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { mcps as mcpRows, plugins as pluginRows, skills } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import { ConflictError, SkillQuarantinedError } from '@/util/errors'
 import { resolveDependsClosure, type AgentDependencyLookup } from '@/services/agentDeps'
@@ -86,7 +86,7 @@ export interface ResolveInjectionOpts {
  * or ambiguous resources, disabled plugins, quarantined skills alike).
  */
 export async function resolveInjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   agent: Agent,
   opts: ResolveInjectionOpts,
 ): Promise<InjectionResolution> {
@@ -167,12 +167,12 @@ export async function resolveInjection(
     {
       async loadByIds(ids) {
         if (ids.length === 0) return []
+        const { mcps } = tablesOf(db)
         return (
           await db
             .select()
-            .from(mcpRows)
-            .where(inArray(mcpRows.id, [...ids]))
-            .all()
+            .from(mcps)
+            .where(inArray(mcps.id, [...ids]))
         ).map(taskExecutionResourceDependencies.rowToMcp)
       },
     },
@@ -216,12 +216,12 @@ export async function resolveInjection(
     {
       async loadByIds(ids) {
         if (ids.length === 0) return []
+        const { plugins } = tablesOf(db)
         return (
           await db
             .select()
-            .from(pluginRows)
-            .where(inArray(pluginRows.id, [...ids]))
-            .all()
+            .from(plugins)
+            .where(inArray(plugins.id, [...ids]))
         ).map(taskExecutionResourceDependencies.rowToPlugin)
       },
     },
@@ -271,7 +271,7 @@ type SkillsResolution =
 // canonical-path gate return typed failures now (they were the only THROWS in
 // this resolver; a throw escaped runScope into a task-level failure).
 async function resolveSkills(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   refs: AgentSkillRef[],
 ): Promise<SkillsResolution> {
@@ -282,6 +282,7 @@ async function resolveSkills(
       out.push({ name: ref.name, sourceKind: 'project' })
       continue
     }
+    const { skills } = tablesOf(db)
     const rows = await db.select().from(skills).where(eq(skills.id, ref.skillId)).limit(1)
     const row = rows[0]
     if (!row) continue // exact-set caller converts this into skill-not-found

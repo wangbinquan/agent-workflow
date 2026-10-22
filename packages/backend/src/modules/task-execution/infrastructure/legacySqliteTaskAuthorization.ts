@@ -9,11 +9,11 @@
 // 缺陷（facets 数在 view 之后、origin 按 scheduled_task_id 猜、层级写死）。在同一个模块
 // 里再留一份「长得一样的」授权谓词，是同一个错误的更小号版本。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { SQL, SQLWrapper } from 'drizzle-orm'
 import { and, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import { tasks } from '@/db/schema'
 import { chunkedAll } from '@/util/sqlChunk'
 import {
   defaultTaskListRowRef,
@@ -50,8 +50,10 @@ export function legacySqliteTaskOwnershipScopeCondition(
   return taskListOwnershipScopeCondition(db, ref, actorUserId, scope)
 }
 
-export function legacySqliteDefaultTaskAuthorizationRef(): LegacySqliteTaskAuthorizationRef {
-  return defaultTaskListRowRef()
+export function legacySqliteDefaultTaskAuthorizationRef(
+  db: object,
+): LegacySqliteTaskAuthorizationRef {
+  return defaultTaskListRowRef(db)
 }
 
 export async function legacySqliteVisibleTaskIdsOf(
@@ -61,8 +63,9 @@ export async function legacySqliteVisibleTaskIdsOf(
 ): Promise<Set<string>> {
   if (taskIds.length === 0) return new Set()
   const readsAll = actor.permissions.has('tasks:read:all')
-  const rows = await chunkedAll(taskIds, (chunk) =>
-    db
+  const rows = await chunkedAll(taskIds, (chunk) => {
+    const { tasks } = tablesOf(db)
+    return db
       .select({ id: tasks.id })
       .from(tasks)
       .where(
@@ -72,11 +75,11 @@ export async function legacySqliteVisibleTaskIdsOf(
               inArray(tasks.id, chunk),
               legacySqliteTaskAuthorizationCondition(
                 db,
-                legacySqliteDefaultTaskAuthorizationRef(),
+                legacySqliteDefaultTaskAuthorizationRef(db),
                 actor,
               ),
             ),
-      ),
-  )
+      )
+  })
   return new Set(rows.map((row) => row.id))
 }

@@ -3,7 +3,7 @@
 // last-access-administrator protection + search + __system__ immutability).
 
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import {
   countNonSystemUsers,
@@ -20,7 +20,7 @@ import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { verifyPassword } from '../src/auth/passwords'
 
 describeEachProvider('users service', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db

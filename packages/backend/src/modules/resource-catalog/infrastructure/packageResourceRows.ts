@@ -1,16 +1,7 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { BundleResourceType } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import { users, workgroupMembers } from '@/db/schema'
-import type {
-  agents,
-  capabilityTemplates,
-  mcps,
-  plugins,
-  skills,
-  workflows,
-  workgroups,
-} from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   ResourcePackageOwnedResourceLookupPort,
   ResourcePackageReadPort,
@@ -29,11 +20,11 @@ import {
  * 与四个只服务 legacy 提交路径的同步助手，那四个仍留在 SQLite 命名的文件里，随 legacy 提交路径退役）。
  */
 export function createResourcePackageOwnedResourceLookup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): ResourcePackageOwnedResourceLookupPort {
   const port: ResourcePackageOwnedResourceLookupPort = {
     async findOwnedIdsByName(input) {
-      const table = ACL_TABLES[input.kind]
+      const table = ACL_TABLES(db)[input.kind]
       const rows = await db
         .select({ id: table.id })
         .from(table)
@@ -45,13 +36,13 @@ export function createResourcePackageOwnedResourceLookup(
 }
 
 type PackageResourceRow =
-  | typeof agents.$inferSelect
-  | typeof skills.$inferSelect
-  | typeof mcps.$inferSelect
-  | typeof plugins.$inferSelect
-  | typeof workflows.$inferSelect
-  | typeof workgroups.$inferSelect
-  | typeof capabilityTemplates.$inferSelect
+  | PersistenceTables['agents']['$inferSelect']
+  | PersistenceTables['skills']['$inferSelect']
+  | PersistenceTables['mcps']['$inferSelect']
+  | PersistenceTables['plugins']['$inferSelect']
+  | PersistenceTables['workflows']['$inferSelect']
+  | PersistenceTables['workgroups']['$inferSelect']
+  | PersistenceTables['capabilityTemplates']['$inferSelect']
 
 interface PackageWorkgroupMemberDocument {
   readonly id: string
@@ -70,6 +61,7 @@ async function packageWorkgroupMembers(
   workgroupIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly PackageWorkgroupMemberDocument[]>> {
   if (workgroupIds.length === 0) return new Map()
+  const { workgroupMembers, users } = tablesOf(db)
   const members = await db
     .select()
     .from(workgroupMembers)
@@ -145,7 +137,7 @@ async function listPackageRowsByIds(
   orderById: boolean,
 ): Promise<readonly PackageResourceRow[]> {
   if (ids.length === 0) return []
-  const table = ACL_TABLES[type]
+  const table = ACL_TABLES(db)[type]
   const query = db
     .select()
     .from(table)
@@ -160,7 +152,7 @@ async function listPackageRowsByNames(
   orderById: boolean,
 ): Promise<readonly PackageResourceRow[]> {
   if (names.length === 0) return []
-  const table = ACL_TABLES[type]
+  const table = ACL_TABLES(db)[type]
   const query = db
     .select()
     .from(table)
@@ -169,9 +161,7 @@ async function listPackageRowsByNames(
 }
 
 /** 预览 / 导出读模型。 */
-export function createResourcePackageReadPort(
-  db: ProviderNeutralDatabase,
-): ResourcePackageReadPort {
+export function createResourcePackageReadPort(db: PersistenceDb): ResourcePackageReadPort {
   const grants = createResourceGrantReadPort(db)
   const port: ResourcePackageReadPort = {
     async listByIds(type, ids, options = {}) {
@@ -202,6 +192,7 @@ export function createResourcePackageReadPort(
     listGrantedResourceIds: (actor, type) => grants.listGrantedResourceIds(actor, type),
     async findActiveUsersByUsername(usernames) {
       if (usernames.length === 0) return []
+      const { users } = tablesOf(db)
       const rows = await db
         .select({ id: users.id, username: users.username, status: users.status })
         .from(users)

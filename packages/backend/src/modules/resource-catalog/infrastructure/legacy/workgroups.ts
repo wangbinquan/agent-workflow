@@ -5,6 +5,9 @@
 // stable workgroup id + expected version and returns an exact in-transaction
 // receipt. Launched tasks remain isolated by their frozen config snapshot.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type {
   CopyWorkgroupRequest,
   CreateWorkgroup,
@@ -30,8 +33,7 @@ import { and, eq, inArray, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, scheduledTasks, tasks, users, workgroupMembers, workgroups } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   ConflictError,
   ForbiddenError,
@@ -60,10 +62,7 @@ import {
   resolveResourceAccessForTx,
   canViewResourceForTx,
 } from '@/modules/resource-catalog/infrastructure/resourceAclTransaction'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import {
   assertNoMissingRefs,
@@ -90,8 +89,8 @@ export {
   workgroupToDetail,
 } from '../workgroupPersistence'
 
-type WorkgroupRow = typeof workgroups.$inferSelect
-type MemberRow = typeof workgroupMembers.$inferSelect
+type WorkgroupRow = PersistenceTables['workgroups']['$inferSelect']
+type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 
 export type WorkgroupWritePrincipal =
   | { kind: 'actor'; actor: Actor }
@@ -102,7 +101,8 @@ interface PreparedAgentMembers {
   nameById: ReadonlyMap<string, string>
 }
 
-export async function listWorkgroups(db: ProviderNeutralDatabase): Promise<Workgroup[]> {
+export async function listWorkgroups(db: PersistenceDb): Promise<Workgroup[]> {
+  const { workgroups, workgroupMembers } = tablesOf(db)
   const rows = await db.select().from(workgroups)
   if (rows.length === 0) return []
   const memberRows = await db
@@ -124,9 +124,10 @@ export async function listWorkgroups(db: ProviderNeutralDatabase): Promise<Workg
 }
 
 export async function getWorkgroupById(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
 ): Promise<WorkgroupDetail | null> {
+  const { workgroups } = tablesOf(db)
   const row = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
   return row[0] === undefined ? null : getWorkgroupDetailByRow(db, row[0])
 }
@@ -142,7 +143,7 @@ export interface PreparedWorkgroupCreate {
 }
 
 export async function prepareWorkgroupCreate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateWorkgroup,
   aclOpts?: {
     ownerUserId?: string
@@ -178,7 +179,7 @@ export async function prepareWorkgroupCreate(
 
 /** The former createWorkgroup dbTxSync body, verbatim modulo destructuring. */
 export async function commitWorkgroupCreateInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   p: PreparedWorkgroupCreate,
 ): Promise<WorkgroupDetail> {
   const { groupId, input, ownerUserId, now } = p
@@ -196,12 +197,16 @@ export async function commitWorkgroupCreateInTx(
     nameById: new Map([...preparedAgents.nameById, ...freshPreparedAgents.nameById]),
   })
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
+  const { workgroups, workgroupMembers } = tablesOf(tx)
   if (
-    await tx
-      .select({ id: workgroups.id })
-      .from(workgroups)
-      .where(ownerScopedNameWhere(workgroups.ownerUserId, workgroups.name, ownerUserId, input.name))
-      .get()
+    await first(
+      tx
+        .select({ id: workgroups.id })
+        .from(workgroups)
+        .where(
+          ownerScopedNameWhere(workgroups.ownerUserId, workgroups.name, ownerUserId, input.name),
+        ),
+    )
   ) {
     throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
   }
@@ -217,12 +222,11 @@ export async function commitWorkgroupCreateInTx(
     .select()
     .from(workgroupMembers)
     .where(eq(workgroupMembers.workgroupId, groupId))
-    .all()
   return workgroupToDetail(rowToWorkgroup(inserted, persistedMembers))
 }
 
 export async function createWorkgroup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateWorkgroup,
   aclOpts?: {
     ownerUserId?: string
@@ -253,7 +257,7 @@ export async function createWorkgroup(
  * target is derived from one source revision inside the transaction.
  */
 export async function copyWorkgroup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   sourceId: string,
   input: CopyWorkgroupRequest,
   actor: Actor,
@@ -268,27 +272,30 @@ export async function copyWorkgroup(
   let created: WorkgroupDetail
   try {
     created = await databaseSessionFor(db).transaction(async (tx) => {
+      const { workgroups, workgroupMembers } = tablesOf(tx)
       // Do not read roster rows until the actor passes the fresh ACL gate.
-      const aclRow = await tx
-        .select({
-          id: workgroups.id,
-          ownerUserId: workgroups.ownerUserId,
-          visibility: workgroups.visibility,
-        })
-        .from(workgroups)
-        .where(eq(workgroups.id, sourceId))
-        .get()
+      const aclRow = await first(
+        tx
+          .select({
+            id: workgroups.id,
+            ownerUserId: workgroups.ownerUserId,
+            visibility: workgroups.visibility,
+          })
+          .from(workgroups)
+          .where(eq(workgroups.id, sourceId)),
+      )
       if (aclRow === undefined || !(await canViewResourceForTx(tx, actor, 'workgroup', aclRow))) {
         throwWorkgroupNotFound(sourceId)
       }
 
-      const currentRow = await tx.select().from(workgroups).where(eq(workgroups.id, sourceId)).get()
+      const currentRow = await first(
+        tx.select().from(workgroups).where(eq(workgroups.id, sourceId)),
+      )
       if (currentRow === undefined) throwWorkgroupNotFound(sourceId)
       const currentMembers = await tx
         .select()
         .from(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, sourceId))
-        .all()
       const source = rowToWorkgroup(currentRow, currentMembers)
       const currentRevision = workgroupRevisionOf(source)
       if (
@@ -310,7 +317,6 @@ export async function copyWorkgroup(
           .select({ name: workgroups.name })
           .from(workgroups)
           .where(eq(workgroups.ownerUserId, actor.user.id))
-          .all()
       ).map((row) => row.name)
       // RFC-264: persist the PARSED name — the schema is also the normalizer,
       // so ignoring its output would store an unfolded copy name.
@@ -334,7 +340,6 @@ export async function copyWorkgroup(
         .select()
         .from(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, id))
-        .all()
       return workgroupToDetail(rowToWorkgroup(inserted, persistedMembers))
     })
   } catch (error) {
@@ -366,7 +371,7 @@ export interface PreparedWorkgroupSave {
 }
 
 export async function prepareWorkgroupSave(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: UpdateWorkgroup,
   principal: WorkgroupWritePrincipal,
@@ -384,6 +389,7 @@ export async function prepareWorkgroupSave(
   const snapshot = normalizeWorkgroupSnapshot(parsed.data.snapshot, preflight.outputContract)
   const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
   await assertPrincipalCanEditPreflight(db, principal, preflight)
+  const { workgroupMembers } = tablesOf(db)
   const currentMembers = await db
     .select()
     .from(workgroupMembers)
@@ -408,11 +414,12 @@ export async function prepareWorkgroupSave(
 
 /** The former saveWorkgroup dbTxSync body, verbatim modulo destructuring. */
 export async function commitWorkgroupSaveInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   p: PreparedWorkgroupSave,
 ): Promise<{ receipt: SaveWorkgroupReceipt; committed: boolean }> {
   const { id, principal, parsed, snapshot, submittedBytes, preparedAgents } = p
-  const currentRow = await tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
+  const { workgroups, workgroupMembers } = tablesOf(tx)
+  const currentRow = await first(tx.select().from(workgroups).where(eq(workgroups.id, id)))
   if (currentRow === undefined) throwWorkgroupNotFound(id)
   const access = await assertPrincipalCanEditInTx(tx, principal, currentRow)
   // The async preflight is not the authorization/validity linearization point: an administrator
@@ -423,7 +430,6 @@ export async function commitWorkgroupSaveInTx(
     .select()
     .from(workgroupMembers)
     .where(eq(workgroupMembers.workgroupId, id))
-    .all()
   const current = rowToWorkgroup(currentRow, memberRows)
   await assertRefsUsableForTx(tx, principal.kind === 'actor' ? principal.actor : null, [
     { type: 'agent', names: diffNewAgentMemberIds(current, snapshot), domain: 'id' },
@@ -483,28 +489,29 @@ export async function commitWorkgroupSaveInTx(
       ? currentRow.leaderMemberId
       : resolveLeaderMemberId(snapshot, replacementMembers)
 
-  const returned = await tx
-    .update(workgroups)
-    .set({
-      name: snapshot.name,
-      description: snapshot.description,
-      instructions: snapshot.instructions,
-      mode: snapshot.mode,
-      outputContract: resolveWorkgroupOutputContract(snapshot.outputContract),
-      leaderMemberId,
-      shareOutputs: snapshot.switches.shareOutputs,
-      directMessages: snapshot.switches.directMessages,
-      blackboard: snapshot.switches.blackboard,
-      maxRounds: snapshot.maxRounds,
-      completionGate: snapshot.completionGate,
-      clarifyBudget: snapshot.clarifyBudget,
-      fanOut: snapshot.fanOut,
-      version: currentRow.version + 1,
-      updatedAt: now,
-    })
-    .where(and(eq(workgroups.id, id), eq(workgroups.version, parsed.data.expectedVersion)))
-    .returning()
-    .get()
+  const returned = await first(
+    tx
+      .update(workgroups)
+      .set({
+        name: snapshot.name,
+        description: snapshot.description,
+        instructions: snapshot.instructions,
+        mode: snapshot.mode,
+        outputContract: resolveWorkgroupOutputContract(snapshot.outputContract),
+        leaderMemberId,
+        shareOutputs: snapshot.switches.shareOutputs,
+        directMessages: snapshot.switches.directMessages,
+        blackboard: snapshot.switches.blackboard,
+        maxRounds: snapshot.maxRounds,
+        completionGate: snapshot.completionGate,
+        clarifyBudget: snapshot.clarifyBudget,
+        fanOut: snapshot.fanOut,
+        version: currentRow.version + 1,
+        updatedAt: now,
+      })
+      .where(and(eq(workgroups.id, id), eq(workgroups.version, parsed.data.expectedVersion)))
+      .returning(),
+  )
   if (returned === undefined) {
     throw staleConflictError('workgroup', `workgroup '${id}' changed; reload`, {
       current: currentRevision,
@@ -512,14 +519,13 @@ export async function commitWorkgroupSaveInTx(
   }
 
   if (replacementMembers !== null) {
-    await tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, id)).run()
+    await tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, id))
     await insertWorkgroupMembersInTx(tx, replacementMembers)
   }
   const returnedMembers = await tx
     .select()
     .from(workgroupMembers)
     .where(eq(workgroupMembers.workgroupId, id))
-    .all()
   const detail = workgroupToDetail(rowToWorkgroup(returned, returnedMembers))
   const committedSnapshot = workgroupDraftSnapshotOf(detail)
   return {
@@ -536,7 +542,7 @@ export async function commitWorkgroupSaveInTx(
 }
 
 export async function saveWorkgroup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: UpdateWorkgroup,
   principal: WorkgroupWritePrincipal,
@@ -566,7 +572,7 @@ export async function saveWorkgroup(
 }
 
 export async function deleteWorkgroup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: DeleteWorkgroup,
   principal: WorkgroupWritePrincipal,
@@ -587,6 +593,7 @@ export async function deleteWorkgroup(
     deletedVersion: number
     audience: WorkgroupDeletedAudienceContext
   }>(async (tx) => {
+    const { workgroups, workgroupMembers, tasks } = tablesOf(tx)
     const [currentRow] = await tx.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
     if (currentRow === undefined) throwWorkgroupNotFound(id)
     await assertPrincipalCanGovernForTx(tx, principal, currentRow)
@@ -656,7 +663,7 @@ export async function deleteWorkgroup(
  * race the autosave writer and never resolves identity through the old name.
  */
 export async function renameWorkgroup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: {
     newName: string
@@ -706,7 +713,7 @@ export function diffNewAgentMemberIds(
 }
 
 async function insertWorkgroupInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     id: string
     document: WorkgroupInsertDocument
@@ -715,26 +722,29 @@ async function insertWorkgroupInTx(
     now: number
   },
 ): Promise<WorkgroupRow> {
-  const inserted = await tx
-    .insert(workgroups)
-    .values({
-      ...workgroupContentPersistenceValues(input),
-      // RFC-231: every user-created resource starts private with ACL rev 0.
-      ...initialPrivateResourceAcl(input.ownerUserId),
-      createdAt: input.now,
-      updatedAt: input.now,
-    })
-    .returning()
-    .get()
+  const { workgroups } = tablesOf(tx)
+  const inserted = await first(
+    tx
+      .insert(workgroups)
+      .values({
+        ...workgroupContentPersistenceValues(input),
+        // RFC-231: every user-created resource starts private with ACL rev 0.
+        ...initialPrivateResourceAcl(input.ownerUserId),
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .returning(),
+  )
   if (inserted === undefined) throw new Error('workgroup insert returned no row')
   return inserted
 }
 
 async function insertWorkgroupMembersInTx(
-  tx: DatabaseTransaction,
-  members: ReadonlyArray<typeof workgroupMembers.$inferInsert>,
+  tx: PersistenceTx,
+  members: ReadonlyArray<PersistenceTables['workgroupMembers']['$inferInsert']>,
 ): Promise<void> {
-  for (const member of members) await tx.insert(workgroupMembers).values(member).run()
+  const { workgroupMembers } = tablesOf(tx)
+  for (const member of members) await insertOne(tx, workgroupMembers, member)
 }
 
 export function broadcastWorkgroupCreated(created: WorkgroupDetail): void {
@@ -753,18 +763,17 @@ function rosterBytes(snapshot: WorkgroupDraftSnapshot): string {
   })
 }
 
-async function loadRawWorkgroup(
-  db: ProviderNeutralDatabase,
-  id: string,
-): Promise<WorkgroupRow | null> {
+async function loadRawWorkgroup(db: PersistenceDb, id: string): Promise<WorkgroupRow | null> {
+  const { workgroups } = tablesOf(db)
   const rows = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
   return rows[0] ?? null
 }
 
 async function getWorkgroupDetailByRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   row: WorkgroupRow,
 ): Promise<WorkgroupDetail> {
+  const { workgroupMembers } = tablesOf(db)
   const members = await db
     .select()
     .from(workgroupMembers)
@@ -774,7 +783,7 @@ async function getWorkgroupDetailByRow(
 
 /** RFC-324 —— 保存面的预检门：内容写；返回 access 供改名围栏用。 */
 async function assertPrincipalCanEditPreflight(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   principal: WorkgroupWritePrincipal,
   row: WorkgroupRow,
 ): Promise<ResourceAccess> {
@@ -787,7 +796,7 @@ async function assertPrincipalCanEditPreflight(
 
 /** In-tx twin of the save gate — the authoritative one. */
 async function assertPrincipalCanEditInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   principal: WorkgroupWritePrincipal,
   row: WorkgroupRow,
 ): Promise<ResourceAccess> {
@@ -802,7 +811,7 @@ async function assertPrincipalCanEditInTx(
 
 /** RFC-324 —— 删除面的 in-tx 门：治理写，编辑授权不覆盖。 */
 async function assertPrincipalCanGovernForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   principal: WorkgroupWritePrincipal,
   row: WorkgroupRow,
 ): Promise<void> {
@@ -825,24 +834,26 @@ function workgroupReadOnlyError(): ForbiddenError {
 }
 
 async function assertNameChangeAllowedInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   current: Workgroup,
   nextName: string,
 ): Promise<void> {
   if (nextName === current.name) return
-  const collision = await tx
-    .select({ id: workgroups.id })
-    .from(workgroups)
-    .where(
-      ownerScopedNameWhere(
-        workgroups.ownerUserId,
-        workgroups.name,
-        current.ownerUserId ?? null,
-        nextName,
-        { column: workgroups.id, id: current.id },
+  const { workgroups } = tablesOf(tx)
+  const collision = await first(
+    tx
+      .select({ id: workgroups.id })
+      .from(workgroups)
+      .where(
+        ownerScopedNameWhere(
+          workgroups.ownerUserId,
+          workgroups.name,
+          current.ownerUserId ?? null,
+          nextName,
+          { column: workgroups.id, id: current.id },
+        ),
       ),
-    )
-    .get()
+  )
   if (collision !== undefined) {
     throw new ConflictError(
       'workgroup-name-in-use',
@@ -852,10 +863,11 @@ async function assertNameChangeAllowedInTx(
 }
 
 async function assertNoScheduledReferencesForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   principal: WorkgroupWritePrincipal,
   target: { id: string; name: string },
 ): Promise<void> {
+  const { scheduledTasks } = tablesOf(tx)
   const rows = await tx
     .select({
       id: scheduledTasks.id,
@@ -888,7 +900,7 @@ async function assertNoScheduledReferencesForTx(
 }
 
 async function prepareAgentMembers(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor | null,
   members: readonly WorkgroupDraftMember[],
   existingMembers: readonly MemberRow[],
@@ -913,6 +925,7 @@ async function prepareAgentMembers(
     grandfatheredIds,
   })
   assertNoMissingRefs(resolved.missing)
+  const { agents } = tablesOf(db)
   const rows =
     persistedIds.length === 0
       ? []
@@ -935,7 +948,7 @@ async function prepareAgentMembers(
 }
 
 async function prepareAgentMembersInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor | null,
   members: ReadonlyArray<{ memberType: string; agentId?: string }>,
 ): Promise<PreparedAgentMembers> {
@@ -947,6 +960,7 @@ async function prepareAgentMembersInTx(
     ),
   ]
   await assertRefsUsableForTx(tx, actor, [{ type: 'agent', names: ids, domain: 'id' }])
+  const { agents } = tablesOf(tx)
   const rows =
     ids.length === 0
       ? []
@@ -954,7 +968,6 @@ async function prepareAgentMembersInTx(
           .select({ id: agents.id, name: agents.name })
           .from(agents)
           .where(inArray(agents.id, ids))
-          .all()
   const nameById = new Map(rows.map((row) => [row.id, row.name]))
   const missingIds = ids.filter((id) => !nameById.has(id))
   if (missingIds.length > 0) {
@@ -970,7 +983,7 @@ function buildCreateMemberValues(
   members: Readonly<CreateWorkgroup['members']>,
   now: number,
   agentsPrepared: PreparedAgentMembers,
-): Array<typeof workgroupMembers.$inferInsert> {
+): Array<PersistenceTables['workgroupMembers']['$inferInsert']> {
   return workgroupMemberPersistenceValues(groupId, members, now, agentsPrepared.nameById, ulid)
 }
 
@@ -979,12 +992,12 @@ function buildDraftMemberValues(
   members: readonly WorkgroupDraftMember[],
   now: number,
   agentsPrepared: PreparedAgentMembers,
-): Array<typeof workgroupMembers.$inferInsert> {
+): Array<PersistenceTables['workgroupMembers']['$inferInsert']> {
   return workgroupMemberPersistenceValues(groupId, members, now, agentsPrepared.nameById, ulid)
 }
 
 async function assertHumanMembersActive(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   members: ReadonlyArray<{ memberType: string; userId?: string }>,
 ): Promise<void> {
   const ids = [
@@ -995,6 +1008,7 @@ async function assertHumanMembersActive(
     ),
   ]
   if (ids.length === 0) return
+  const { users } = tablesOf(db)
   const rows = await db
     .select({ id: users.id, status: users.status })
     .from(users)
@@ -1009,7 +1023,7 @@ async function assertHumanMembersActive(
 }
 
 async function assertHumanMembersActiveInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   members: ReadonlyArray<{ memberType: string; userId?: string }>,
 ): Promise<void> {
   const ids = [
@@ -1020,11 +1034,11 @@ async function assertHumanMembersActiveInTx(
     ),
   ]
   if (ids.length === 0) return
+  const { users } = tablesOf(tx)
   const rows = await tx
     .select({ id: users.id, status: users.status })
     .from(users)
     .where(inArray(users.id, ids))
-    .all()
   const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
   const invalid = ids.filter((id) => !active.has(id))
   if (invalid.length > 0) {

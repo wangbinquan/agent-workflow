@@ -26,12 +26,12 @@
 //
 // See design/test-guard-audit-2026-07-21 §3 结构守卫 G11.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getTableConfig } from 'drizzle-orm/sqlite-core'
-import { nodeRunEvents } from '@/db/schema'
-
 const repoRoot = resolve(import.meta.dir, '..', '..', '..')
 const read = (...segments: string[]): string => readFileSync(resolve(repoRoot, ...segments), 'utf8')
 
@@ -106,6 +106,8 @@ describe('docs ↔ implementation parity', () => {
     // still be asking for one.
     const notes = read('docs', 'performance-notes.md')
 
+    const db = schemaFixtureDb()
+    const { nodeRunEvents } = tablesOf(db)
     const hasIndex = getTableConfig(nodeRunEvents).indexes.some(
       ({ config }) =>
         config.name === 'idx_events_node' &&

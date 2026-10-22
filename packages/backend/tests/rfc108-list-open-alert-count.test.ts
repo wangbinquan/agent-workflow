@@ -4,6 +4,8 @@
 // 一条 grouped 查询（非 per-row fetch）。本测试锁定：① 有未决告警的任务 count>0；②
 // 无告警的任务 count=0；③ 已 resolved 的告警不计入。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import {
   taskListItemsProjection,
@@ -12,17 +14,16 @@ import {
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -43,12 +44,9 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   return taskId
 }
 
-async function addAlert(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  resolved: boolean,
-): Promise<void> {
-  await db.insert(lifecycleAlerts).values({
+async function addAlert(db: PersistenceDb, taskId: string, resolved: boolean): Promise<void> {
+  const { lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, lifecycleAlerts, {
     id: ulid(),
     taskId,
     rule: 'S6',
@@ -75,7 +73,7 @@ describeEachProvider('RFC-108 T22 — listTasks openAlertCount', (harness) => {
     expect(byId.get(healthy)).toBe(0)
 
     const ownerRows = await taskListItemsProjection(
-      { db: db, owners: composeOwnerIdentityQueries(db) },
+      { db, owners: composeOwnerIdentityQueries(db) },
       {},
     )
     const ownerById = new Map(ownerRows.map((s) => [s.id, s.openAlertCount ?? 0]))

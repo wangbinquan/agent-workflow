@@ -15,6 +15,8 @@
 //   H7 degraded row repair: partial PUT keeping the broken field → 422
 //      'scheduled-task-needs-repair'; full-field PUT repairs and clears the
 //      rfc165 lastError breadcrumb.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test, beforeAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { realpathSync } from 'node:fs'
@@ -24,9 +26,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { StartTaskSchema } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { scheduledTasks, users, workflows } from '../src/db/schema'
 import {
   getScheduledTask,
   healScheduledLaunchPayloads,
@@ -36,7 +37,7 @@ import { runGit } from '../src/util/git'
 import { pathToFileURL } from 'node:url'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let tmp: string
 
 async function seedRepo(name: string): Promise<string> {
@@ -58,10 +59,11 @@ async function seedRepo(name: string): Promise<string> {
 
 async function seedRow(
   payload: unknown,
-  overrides: Partial<typeof scheduledTasks.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['scheduledTasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(scheduledTasks).values({
+  const { scheduledTasks } = tablesOf(db)
+  await insertOne(db, scheduledTasks, {
     id,
     name: 'sched',
     ownerUserId: 'alice',
@@ -78,11 +80,13 @@ async function seedRow(
 }
 
 async function rawPayload(id: string): Promise<Record<string, unknown>> {
+  const { scheduledTasks } = tablesOf(db)
   const row = (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)))[0]!
   return JSON.parse(row.launchPayload) as Record<string, unknown>
 }
 
 async function rawRow(id: string) {
+  const { scheduledTasks } = tablesOf(db)
   return (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)))[0]!
 }
 
@@ -249,7 +253,8 @@ describeEachProvider('RFC-165 T4 — scheduled payload heal + tolerant repair', 
   })
 
   test('H7 degraded row: partial PUT 422, full-field PUT repairs + clears breadcrumb', async () => {
-    await db.insert(users).values({
+    const { users, workflows } = tablesOf(db)
+    await insertOne(db, users, {
       id: 'alice',
       username: 'alice',
       displayName: 'Alice',
@@ -258,7 +263,7 @@ describeEachProvider('RFC-165 T4 — scheduled payload heal + tolerant repair', 
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: 'wf1',
       name: 'wf',
       definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -402,10 +407,11 @@ describeEachProvider('RFC-165 T4 — scheduled payload heal + tolerant repair', 
   })
 
   test('H10 degraded row: rename + disable pass WITHOUT repair (guard narrowed)', async () => {
+    const { users } = tablesOf(db)
     // Implementation-gate P2: only operations that CONSUME the degraded field
     // (the result being enabled) force a full repair — a corrupt schedule must
     // stay stoppable/renamable.
-    await db.insert(users).values({
+    await insertOne(db, users, {
       id: 'alice',
       username: 'alice',
       displayName: 'Alice',

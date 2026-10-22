@@ -4,6 +4,8 @@
 // （默认视图快路径 / 过滤视图快路径 / 穷举管线 / 子页），只把数据库参数放宽到两个
 // provider 的公共基类型。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows as rawRowsRow } from '@/platform/persistence/queryHelpers'
 import {
   TaskOperationsChildPageSchema,
   TaskOperationsRootPageSchema,
@@ -12,7 +14,6 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 
-import { tasks } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
 import { taskListVisibilityCondition, type TaskListViewer } from './authorization'
 import type { TaskListPageDb } from './db'
@@ -44,6 +45,7 @@ async function assertVisibleParent(
   parentId: string,
   catalogVisibility?: TaskCatalogVisibility,
 ): Promise<void> {
+  const { tasks } = tablesOf(db)
   const row = await db
     .select({ id: tasks.id })
     .from(tasks)
@@ -71,6 +73,7 @@ async function assertVisibleParent(
  * 一次命中空集的索引探查。
  */
 export async function hasUnrootedTasks(db: TaskListPageDb): Promise<boolean> {
+  const { tasks } = tablesOf(db)
   const row = await db
     .select({ id: tasks.id })
     .from(tasks)
@@ -119,7 +122,8 @@ async function listPage(
     canUseFilteredFastPath(viewer) &&
     !(await hasUnrootedTasks(db))
 
-  const rawRows = (await db.all(
+  const rawRows = (await rawRowsRow(
+    db,
     parsed.parentId === undefined
       ? options.pipeline === 'exhaustive'
         ? rootQuery(db, viewer, parsed, options.catalogVisibility)

@@ -33,24 +33,13 @@
 //   R5 「INSERT 前先 SELECT」的路径只能降到 n+1：A1 的探测在循环外，是唯一真正 2n→1 的靶子；
 //      A4/A5 的回读改成一条 `inArray`，所以是 2n→2。用例按各自的真实条数断言。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq, getTableColumns } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  collaborationGateArtifacts,
-  docVersions,
-  eventDeliveries,
-  eventSubscriptions,
-  eventTypeCatalog,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import {
   encodeReviewGateOpenManifest,
@@ -73,7 +62,6 @@ import {
 } from '@/modules/event-center/domain/model'
 import { createCustomEventSourceStore } from '@/modules/event-center/infrastructure/customEventSourceStore'
 import { createEventStore } from '@/modules/event-center/infrastructure/eventStore'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -110,8 +98,9 @@ function insertsInto(
 // 播种
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(workflows).values({
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: taskId,
     description: '',
@@ -119,7 +108,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -226,7 +215,7 @@ function openRequest(taskId: string, manifest: ReviewGateOpenManifest): Canonica
 
 /** 把一个 review-open 门开到 `prepared`：begin → declareArtifacts → 全部 staged → markPrepared。 */
 async function prepareReviewOperation(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   operationId: string,
   taskId: string,
   manifest: ReviewGateOpenManifest,
@@ -271,7 +260,7 @@ async function prepareReviewOperation(
 }
 
 /** 生产的 mint 参与者由 task-execution 供给；这里只需要它真的把 node_run 行落下去。 */
-function mintParticipant(tx: DatabaseTransaction) {
+function mintParticipant(tx: PersistenceTx) {
   return {
     async mint(input: {
       readonly id: string
@@ -281,18 +270,16 @@ function mintParticipant(tx: DatabaseTransaction) {
       readonly iteration: number
       readonly overrides?: Readonly<{ reviewIteration?: number; startedAt?: number | null }>
     }): Promise<string> {
-      await tx
-        .insert(nodeRuns)
-        .values({
-          id: input.id,
-          taskId: input.taskId,
-          nodeId: input.nodeId,
-          status: input.status,
-          iteration: input.iteration,
-          reviewIteration: input.overrides?.reviewIteration ?? 0,
-          startedAt: input.overrides?.startedAt ?? NOW,
-        })
-        .run()
+      const { nodeRuns } = tablesOf(tx)
+      await insertOne(tx, nodeRuns, {
+        id: input.id,
+        taskId: input.taskId,
+        nodeId: input.nodeId,
+        status: input.status,
+        iteration: input.iteration,
+        reviewIteration: input.overrides?.reviewIteration ?? 0,
+        startedAt: input.overrides?.startedAt ?? NOW,
+      })
       return input.id
     },
   }
@@ -410,6 +397,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     })
     const inserts = insertsInto(rec.statements, 'collaboration_gate_artifacts')
     rec.stop()
+    const { collaborationGateArtifacts } = tablesOf(h.db)
     expect(inserts.length).toBe(batchesFor(h, collaborationGateArtifacts, 9))
 
     const stored = await h.db
@@ -468,6 +456,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
         })
       }),
     ).rejects.toThrow('artifact declaration is invalid')
+    const { collaborationGateArtifacts } = tablesOf(h.db)
     expect(
       await h.db
         .select({ artifactKey: collaborationGateArtifacts.artifactKey })
@@ -501,6 +490,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     })
     const inserts = insertsInto(rec.statements, 'doc_versions')
     rec.stop()
+    const { docVersions } = tablesOf(h.db)
     expect(inserts.length, `${n} 篇文档应当一条 INSERT 落定`).toBe(batchesFor(h, docVersions, n))
 
     const stored = await h.db
@@ -533,7 +523,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const askingRunId = `nr_ask_${taskId}`
     const intermediaryRunId = `nr_mid_${taskId}`
     for (const id of [askingRunId, intermediaryRunId]) {
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id,
         taskId,
         nodeId: id === askingRunId ? 'writer' : 'clarify',
@@ -546,7 +537,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       title: `question ${i}`,
     }))
     const roundId = `cr_${taskId}`
-    await h.db.insert(clarifyRounds).values({
+    const { clarifyRounds, taskQuestions } = tablesOf(h.db)
+    await insertOne(h.db, clarifyRounds, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -594,7 +586,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const askingRunId = `nr_ask_${taskId}`
     const intermediaryRunId = `nr_mid_${taskId}`
     for (const id of [askingRunId, intermediaryRunId]) {
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id,
         taskId,
         nodeId: id === askingRunId ? 'writer' : 'clarify',
@@ -604,7 +597,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const n = 6
     const roundId = `cr_${taskId}`
     const questions = Array.from({ length: n }, (_, i) => ({ id: `q-${i}`, title: `first ${i}` }))
-    await h.db.insert(clarifyRounds).values({
+    const { clarifyRounds, taskQuestions } = tablesOf(h.db)
+    await insertOne(h.db, clarifyRounds, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -673,7 +667,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const askingRunId = `nr_ask_${taskId}`
     const intermediaryRunId = `nr_mid_${taskId}`
     for (const id of [askingRunId, intermediaryRunId]) {
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id,
         taskId,
         nodeId: id === askingRunId ? 'writer' : 'clarify',
@@ -681,7 +676,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       })
     }
     const roundId = `cr_${taskId}`
-    await h.db.insert(clarifyRounds).values({
+    const { clarifyRounds, taskQuestions } = tablesOf(h.db)
+    await insertOne(h.db, clarifyRounds, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -743,6 +739,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       /^\s*select\b[\s\S]*\bfrom\b[^(]*\bevent_subscriptions\b/i.test(statement.sql),
     )
     rec.stop()
+    const { eventSubscriptions, eventDeliveries } = tablesOf(h.db)
     expect(inserts.length).toBe(batchesFor(h, eventSubscriptions, n))
     // 精确订阅一条 + 物化订阅回读一条；逐行时是 1 + n。
     expect(reads.length).toBe(2)
@@ -819,6 +816,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     expect(failure, '重复 id 的投递扇出应当撞唯一键（改批之前就是这个收场）').toBeDefined()
     expect(h.capabilities.classifyError(failure)).toBe('unique-violation')
     expect(h.capabilities.uniqueViolationTarget(failure) ?? '').toMatch(/event_deliveries/)
+    const { eventSubscriptions } = tablesOf(h.db)
     // 关键：抛点在**投递**上，不在订阅的批量 upsert 上——那一条语句发出去了、也没报冲突。
     expect(inserts.length).toBe(batchesFor(h, eventSubscriptions, 4))
     // 整笔回滚：一条订阅行都不该留下。
@@ -880,6 +878,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const inserts = insertsInto(rec.statements, 'event_subscriptions')
     rec.stop()
     expect(outcome).toBe('completed')
+    const { eventSubscriptions, eventDeliveries } = tablesOf(h.db)
     expect(inserts.length).toBe(batchesFor(h, eventSubscriptions, n))
     const stored = await h.db
       .select({ id: eventSubscriptions.id, originRef: eventSubscriptions.originRef })
@@ -919,7 +918,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
 
   test('A6 —— 自定义事件源发布：n 个事件类型 ⇒ ceil(n/max) 条 INSERT', async () => {
     const ownerId = `u_t25_${ulid()}`
-    await h.db.insert(users).values({
+    const { users, eventTypeCatalog } = tablesOf(h.db)
+    await insertOne(h.db, users, {
       id: ownerId,
       username: ownerId,
       displayName: ownerId,

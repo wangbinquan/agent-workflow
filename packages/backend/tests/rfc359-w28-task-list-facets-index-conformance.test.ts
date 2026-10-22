@@ -1,13 +1,15 @@
 // RFC-359 W28: the original full task page and facet SQL keeps its complete
 // ordered results when one additive index covers the facet read. Tiny plans
 // prove the access mechanism; hosted full HTTP runs retain the latency gate.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   createDatabaseTaskListPage,
@@ -32,15 +34,17 @@ const VIEWER = { userId: 'w28-facet-user', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
 const VIEWS = ['all', 'active', 'attention', 'finished'] as const
 
-async function physicalRows(db: ProviderNeutralDatabase) {
+async function physicalRows(db: PersistenceDb) {
+  const { tasks, lifecycleAlerts } = tablesOf(db)
   return {
     tasks: await db.select().from(tasks).orderBy(tasks.id),
     alerts: await db.select().from(lifecycleAlerts).orderBy(lifecycleAlerts.id),
   }
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const { users, workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
     displayName: 'W28 facet fixture',
@@ -49,7 +53,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'w28-facet-workflow',
     name: 'W28 facet workflow',
     definition: '{}',
@@ -67,7 +71,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
   ] as const
   for (let index = 0; index < 96; index++) {
     const id = `w28-facet-${String(index).padStart(3, '0')}`
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id,
       name: `fixture ${index}`,
       workflowId: 'w28-facet-workflow',
@@ -95,7 +99,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
       repoCount: 1,
     })
     if (index % 8 === 0) {
-      await db.insert(lifecycleAlerts).values({
+      await insertOne(db, lifecycleAlerts, {
         id: `w28-alert-${index}`,
         taskId: id,
         rule: `fixture-${index}`,
@@ -112,22 +116,35 @@ function statementContract(statements: readonly RecordedStatement[]) {
   return statements.map(({ sql, params, values }) => ({ sql, params, values }))
 }
 
-async function observe(
-  harness: ProviderHarness,
-  db: ProviderNeutralDatabase,
-  raw: TaskOperationsRawQuery,
-) {
+async function observe(harness: ProviderHarness, db: PersistenceDb, raw: TaskOperationsRawQuery) {
   const recording = harness.recordStatements()
   let rows: OperationsSqlRow[]
   let statements: RecordedStatement[]
   try {
-    rows = await db.all<OperationsSqlRow>(
+    rows = await rawRows<OperationsSqlRow>(
+      db,
       fastFilteredRootQuery(
         db,
         VIEWER,
         parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
         OPTIONS.catalogVisibility,
       ),
+      {
+        started_at: 'int',
+        running_ms: 'int',
+        running_since: 'int',
+        finished_at: 'int',
+        repo_count: 'int',
+        open_alert_count: 'int',
+        invocation_depth: 'int',
+        branch_started_at: 'int',
+        qualifying_child_count: 'int',
+        matching_descendant_count: 'int',
+        facet_all: 'int',
+        facet_active: 'int',
+        facet_attention: 'int',
+        facet_finished: 'int',
+      },
     )
     statements = [...recording.statements]
   } finally {
@@ -157,7 +174,7 @@ async function observe(
   }
 }
 
-async function pages(harness: ProviderHarness, db: ProviderNeutralDatabase) {
+async function pages(harness: ProviderHarness, db: PersistenceDb) {
   const observations = []
   for (const view of VIEWS) {
     const raw = { view, limit: '10' }
@@ -173,13 +190,19 @@ async function pages(harness: ProviderHarness, db: ProviderNeutralDatabase) {
 async function indexExists(harness: ProviderHarness): Promise<boolean> {
   const rows =
     harness.capabilities.provider === 'sqlite'
-      ? await harness.db.all<{ name: string }>(sql`
+      ? await rawRows<{ name: string }>(
+          harness.db,
+          sql`
           SELECT name FROM sqlite_master WHERE type = 'index' AND name = ${INDEX}
-        `)
-      : await harness.db.all<{ name: string }>(sql`
+        `,
+        )
+      : await rawRows<{ name: string }>(
+          harness.db,
+          sql`
           SELECT indexname AS name FROM pg_indexes
           WHERE schemaname = 'agent_workflow' AND indexname = ${INDEX}
-        `)
+        `,
+        )
   return rows.length === 1
 }
 
@@ -249,21 +272,27 @@ test('the appended history adds exactly the facet index and retains its precedin
 describeEachProvider('RFC-359 W28 task list facet covering index', (harness) => {
   test('actual catalogs expose the exact five-column non-unique non-partial index', async () => {
     if (harness.capabilities.provider === 'sqlite') {
-      const columns = await harness.db.all<{ name: string }>(
+      const columns = await rawRows<{ name: string }>(
+        harness.db,
         sql.raw(`PRAGMA index_info('${INDEX}')`),
       )
       expect(columns.map((column) => column.name)).toEqual(COLUMNS)
-      const indexes = await harness.db.all<{ name: string; unique: number; partial: number }>(
+      const indexes = await rawRows<{ name: string; unique: number; partial: number }>(
+        harness.db,
         sql.raw('PRAGMA index_list(tasks)'),
+        { unique: 'int', partial: 'int' },
       )
       const actual = indexes.find((index) => index.name === INDEX)
       expect(actual?.unique).toBe(0)
       expect(actual?.partial).toBe(0)
     } else {
-      const rows = await harness.db.all<{ indexdef: string }>(sql`
+      const rows = await rawRows<{ indexdef: string }>(
+        harness.db,
+        sql`
         SELECT indexdef FROM pg_indexes
         WHERE schemaname = 'agent_workflow' AND indexname = ${INDEX}
-      `)
+      `,
+      )
       expect(rows).toHaveLength(1)
       expect(rows[0]!.indexdef).toContain(`(${COLUMNS.join(', ')})`)
       expect(rows[0]!.indexdef).not.toContain('UNIQUE')
@@ -313,6 +342,7 @@ describeEachProvider('RFC-359 W28 task list facet covering index', (harness) => 
       let changed: { observation: Awaited<ReturnType<typeof observe>>; physical: typeof before }
       await expect(
         harness.session.transaction(async (tx) => {
+          const { tasks, lifecycleAlerts } = tablesOf(tx)
           await tx
             .update(tasks)
             .set({ status: 'done', name: 'changed inside transaction' })

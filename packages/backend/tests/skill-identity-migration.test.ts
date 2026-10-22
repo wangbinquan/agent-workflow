@@ -5,6 +5,9 @@
 // postconditions, and the committed version-write publish window that the old
 // best-effort reconciler deliberately cannot repair.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import {
@@ -24,8 +27,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skillOperationLocks, skillOperations, skills, skillVersions } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 import {
   skillFilesAbs,
@@ -59,7 +61,7 @@ interface SeedOptions {
 
 describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
   describe('RFC-223 PR-5 skill identity migration barrier', () => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
 
     beforeEach(() => {
@@ -90,12 +92,11 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       expect(readFileSync(join(skillFilesAbs(appHome, row.id), 'SKILL.md'), 'utf-8')).toContain(
         'happy live',
       )
+      const { skills, skillVersions } = tablesOf(db)
       expect(
-        await db
-          .select({ managedPath: skills.managedPath })
-          .from(skills)
-          .where(eq(skills.id, row.id))
-          .get(),
+        await firstRow(
+          db.select({ managedPath: skills.managedPath }).from(skills).where(eq(skills.id, row.id)),
+        ),
       ).toEqual({ managedPath: skillFilesRel(row.id) })
       expect(
         (
@@ -106,7 +107,6 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
             })
             .from(skillVersions)
             .where(eq(skillVersions.skillId, row.id))
-            .all()
         ).sort((a, b) => a.versionIndex - b.versionIndex),
       ).toEqual([
         { versionIndex: 1, filesPath: skillVersionRelPath(row.id, 1) },
@@ -156,12 +156,11 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
         expect(await lockCount(db)).toBe(0)
         expect(existsSync(skillRootAbs(appHome, row.id))).toBe(true)
         expect(existsSync(join(appHome, 'skills', row.name))).toBe(false)
+        const { skills } = tablesOf(db)
         expect(
-          await db
-            .select({ path: skills.managedPath })
-            .from(skills)
-            .where(eq(skills.id, row.id))
-            .get(),
+          await firstRow(
+            db.select({ path: skills.managedPath }).from(skills).where(eq(skills.id, row.id)),
+          ),
         ).toEqual({ path: skillFilesRel(row.id) })
       })
     }
@@ -191,8 +190,11 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       const report = await runSkillIdentityMigrationBarrier(db, { appHome })
       expect(report.recoveredOperations).toBe(1)
       expect(report.migratedSkills).toBe(1)
+      const { skills } = tablesOf(db)
       expect(
-        await db.select({ path: skills.managedPath }).from(skills).where(eq(skills.id, same)).get(),
+        await firstRow(
+          db.select({ path: skills.managedPath }).from(skills).where(eq(skills.id, same)),
+        ),
       ).toEqual({ path: skillFilesRel(same) })
       expect(await lockCount(db)).toBe(0)
     })
@@ -263,7 +265,8 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
         name: 'owner',
       })
       const huskId = 'canonical-empty-husk-id'
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id: huskId,
         name: owner.id,
         managedPath: skillFilesRel(huskId),
@@ -275,7 +278,7 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       const ownerHash = hashDir(skillRootAbs(appHome, owner.id))
 
       expect((await runSkillIdentityMigrationBarrier(db, { appHome })).removedHusks).toBe(1)
-      expect(await db.select().from(skills).where(eq(skills.id, huskId)).get()).toBeUndefined()
+      expect(await firstRow(db.select().from(skills).where(eq(skills.id, huskId)))).toBeUndefined()
       expect(hashDir(skillRootAbs(appHome, owner.id))).toBe(ownerHash)
     })
 
@@ -284,7 +287,8 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
         id: 'legacy-owner-id',
         name: 'owner',
       })
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id: 'legacy-alias-row',
         name: owner.id,
         managedPath: `skills/${owner.id}/files`,
@@ -307,7 +311,8 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
         name: 'owner',
       })
       const targetId = 'active-legacy-target'
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id: targetId,
         name: 'target',
         managedPath: skillFilesRel(targetId),
@@ -368,6 +373,7 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       test(`${kind} recovery rejects a payload from another path generation`, async () => {
         const row = await seedCanonicalSkill(db, appHome, `wrong-generation-${kind}`)
         if (kind === 'reserve') {
+          const { skills } = tablesOf(db)
           await db
             .update(skills)
             .set({ reservationState: 'reserving' })
@@ -395,6 +401,7 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
 
     test('migrate recovery binds legacyName to the immutable row generation', async () => {
       const row = await seedCanonicalSkill(db, appHome, 'wrong-generation-migrate')
+      const { skills, skillVersions } = tablesOf(db)
       await db
         .update(skills)
         .set({ managedPath: 'skills/wrong-legacy-generation/files' })
@@ -431,7 +438,8 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       const version = skillVersionAbs(appHome, id, 1)
       writeTree(files, 'reserve-v1')
       cpSync(files, version, { recursive: true })
-      await db.insert(skills).values({
+      const { skills, skillVersions } = tablesOf(db)
+      await insertOne(db, skills, {
         id,
         name: 'reserve-v1',
         managedPath: skillFilesRel(id),
@@ -439,7 +447,7 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
         reservationState: 'reserving',
         versionState: 'snapshot-authoritative',
       })
-      await db.insert(skillVersions).values({
+      await insertOne(db, skillVersions, {
         id: ulid(),
         skillId: id,
         versionIndex: 1,
@@ -461,7 +469,7 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       )
 
       expect((await runSkillIdentityMigrationBarrier(db, { appHome })).recoveredOperations).toBe(1)
-      expect(await db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
+      expect(await firstRow(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
       expect(existsSync(skillRootAbs(appHome, id))).toBe(false)
       expect(await lockCount(db)).toBe(0)
     })
@@ -477,8 +485,9 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
         /no recoverable filesystem directory/,
       )
+      const { skills, skillVersions } = tablesOf(db)
       expect(
-        await db.select({ id: skills.id }).from(skills).where(eq(skills.id, blocked.id)).get(),
+        await firstRow(db.select({ id: skills.id }).from(skills).where(eq(skills.id, blocked.id))),
       ).toEqual({ id: blocked.id })
 
       await db.delete(skillVersions).where(eq(skillVersions.skillId, blocked.id))
@@ -492,7 +501,7 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       })
       const report = await runSkillIdentityMigrationBarrier(db, { appHome })
       expect(report.removedHusks).toBe(1)
-      expect(await db.select().from(skills).where(eq(skills.id, husk.id)).get()).toBeUndefined()
+      expect(await firstRow(db.select().from(skills).where(eq(skills.id, husk.id)))).toBeUndefined()
     })
 
     test('recursively empty legacy husk is removed, but support bytes without SKILL.md survive', async () => {
@@ -514,7 +523,10 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
 
       const report = await runSkillIdentityMigrationBarrier(db, { appHome })
       expect(report.removedHusks).toBe(1)
-      expect(await db.select().from(skills).where(eq(skills.id, empty.id)).get()).toBeUndefined()
+      const { skills } = tablesOf(db)
+      expect(
+        await firstRow(db.select().from(skills).where(eq(skills.id, empty.id))),
+      ).toBeUndefined()
       expect(existsSync(join(appHome, 'skills', empty.name))).toBe(false)
       expect(readFileSync(join(skillFilesAbs(appHome, support.id), 'ref.md'), 'utf-8')).toBe(
         'support',
@@ -538,7 +550,8 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
       await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
         /not a real directory/,
       )
-      expect(await db.select().from(skills).where(eq(skills.id, row.id)).get()).toBeDefined()
+      const { skills } = tablesOf(db)
+      expect(await firstRow(db.select().from(skills).where(eq(skills.id, row.id)))).toBeDefined()
       expect(existsSync(legacyRoot)).toBe(true)
       expect(existsSync(skillRootAbs(appHome, row.id))).toBe(false)
     })
@@ -606,7 +619,8 @@ describeEachProvider('技能身份迁移屏障（双引擎）', (harness) => {
           },
         }),
       ).rejects.toThrow('husk-cleanup-fault')
-      expect(await db.select().from(skills).where(eq(skills.id, row.id)).get()).toBeUndefined()
+      const { skills } = tablesOf(db)
+      expect(await firstRow(db.select().from(skills).where(eq(skills.id, row.id)))).toBeUndefined()
       expect(existsSync(legacyRoot)).toBe(true)
 
       expect(await runSkillIdentityMigrationBarrier(db, { appHome })).toMatchObject({
@@ -667,7 +681,7 @@ describeEachProvider(
   '已提交版本写入的恢复（双引擎）',
   (harness) => {
     describe('RFC-223 PR-5 committed version-write recovery', () => {
-      let db: ProviderNeutralDatabase
+      let db: PersistenceDb
       let appHome: string
 
       beforeEach(() => {
@@ -721,11 +735,13 @@ describeEachProvider(
             const row = await seedCanonicalSkill(isolatedDb, isolatedHome, defect)
             await plantCommittedVersionWrite(isolatedDb, isolatedHome, row.id)
             if (defect === 'non-current') {
+              const { skills } = tablesOf(isolatedDb)
               await isolatedDb
                 .update(skills)
                 .set({ contentVersion: 1 })
                 .where(eq(skills.id, row.id))
             } else {
+              const { skillVersions } = tablesOf(isolatedDb)
               await isolatedDb
                 .update(skillVersions)
                 .set({ filesPath: skillVersionRelPath(row.id, 999) })
@@ -787,7 +803,7 @@ describeEachProvider(
 )
 
 async function seedLegacySkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   options: SeedOptions = {},
 ): Promise<{ id: string; name: string }> {
@@ -797,7 +813,8 @@ async function seedLegacySkill(
   const versionState = options.versionState ?? 'snapshot-authoritative'
   const managedPath =
     options.managedPath === undefined ? `skills/${name}/files` : options.managedPath
-  await db.insert(skills).values({
+  const { skills, skillVersions } = tablesOf(db)
+  await insertOne(db, skills, {
     id,
     name,
     description: '',
@@ -823,7 +840,7 @@ async function seedLegacySkill(
     const versionDir = join(root, 'versions', `v${version}`, 'files')
     mkdirSync(versionDir, { recursive: true })
     writeFileSync(join(versionDir, 'SKILL.md'), `# ${name} v${version}\n`)
-    await db.insert(skillVersions).values({
+    await insertOne(db, skillVersions, {
       id: ulid(),
       skillId: id,
       versionIndex: version,
@@ -837,7 +854,7 @@ async function seedLegacySkill(
 }
 
 async function seedCanonicalSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   label: string,
   identity: { id?: string; name?: string } = {},
@@ -848,7 +865,8 @@ async function seedCanonicalSkill(
   const versionDir = skillVersionAbs(appHome, id, 1)
   writeTree(filesDir, 'old-v1')
   cpSync(filesDir, versionDir, { recursive: true })
-  await db.insert(skills).values({
+  const { skills, skillVersions } = tablesOf(db)
+  await insertOne(db, skills, {
     id,
     name,
     description: '',
@@ -857,7 +875,7 @@ async function seedCanonicalSkill(
     reservationState: 'ready',
     versionState: 'snapshot-authoritative',
   })
-  await db.insert(skillVersions).values({
+  await insertOne(db, skillVersions, {
     id: ulid(),
     skillId: id,
     versionIndex: 1,
@@ -870,7 +888,7 @@ async function seedCanonicalSkill(
 }
 
 async function plantCommittedVersionWrite(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   skillId: string,
 ): Promise<{
@@ -902,8 +920,9 @@ async function plantCommittedVersionWrite(
     async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
   )
   await databaseSessionFor(db).transaction(async (tx) => {
+    const { skills, skillVersions } = tablesOf(tx)
     await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId))
-    await tx.insert(skillVersions).values({
+    await insertOne(tx, skillVersions, {
       id: ulid(),
       skillId,
       versionIndex: 2,
@@ -923,10 +942,12 @@ function writeTree(root: string, marker: string): void {
   writeFileSync(join(root, 'payload.txt'), marker)
 }
 
-async function lockCount(db: ProviderNeutralDatabase): Promise<number> {
-  return (await db.select().from(skillOperationLocks).all()).length
+async function lockCount(db: PersistenceDb): Promise<number> {
+  const { skillOperationLocks } = tablesOf(db)
+  return (await db.select().from(skillOperationLocks)).length
 }
 
-async function activeOperationCount(db: ProviderNeutralDatabase): Promise<number> {
-  return (await db.select().from(skillOperations).where(eq(skillOperations.active, 1)).all()).length
+async function activeOperationCount(db: PersistenceDb): Promise<number> {
+  const { skillOperations } = tablesOf(db)
+  return (await db.select().from(skillOperations).where(eq(skillOperations.active, 1))).length
 }

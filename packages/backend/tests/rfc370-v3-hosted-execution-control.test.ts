@@ -12,9 +12,9 @@
 // it) and only while the window is closed; and a guard that follows its own
 // lease refuses every write once the lease is lost or taken over. The
 // PostgreSQL lock behaviour is in `rfc370-v3-hosted-write-window.integration.test.ts`.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedExecutionControl } from '@/db/schema'
 import {
   HostedExecutionControlRegressionError,
   HostedExecutionControlStaleError,
@@ -36,13 +36,15 @@ const lease = { epoch: 3, leaseId: 'lease-3', instanceId: 'instance-a' }
 describeEachProvider('RFC-370 v3 hosted execution control row', (harness) => {
   let clock = 1_000_000
   const control = () => createDatabaseHostedExecutionControl({ db: harness.db, now: () => clock })
-  const row = async () =>
-    (
+  const row = async () => {
+    const { hostedExecutionControl } = tablesOf(harness.db)
+    return (
       await harness.db
         .select()
         .from(hostedExecutionControl)
         .where(eq(hostedExecutionControl.id, 'global'))
     )[0]
+  }
   const activate = async (expiresAt = clock + 30_000) => {
     const store = control()
     for (const phase of ['preparing', 'active'] as const)
@@ -221,6 +223,7 @@ describeEachProvider('RFC-370 v3 hosted execution control row', (harness) => {
     await expect(guard(booting)).resolves.toBeUndefined()
     booting.enforce()
     await expect(guard(booting)).rejects.toBeInstanceOf(HostedDatabaseWriteUnavailableError)
+    const { hostedExecutionControl } = tablesOf(harness.db)
     // A database without any control row (standalone-shaped) is never refused.
     await harness.db.delete(hostedExecutionControl)
     await expect(guard(serving)).resolves.toBeUndefined()
@@ -277,6 +280,7 @@ describeEachProvider('RFC-370 v3 hosted execution control row', (harness) => {
     // A drizzle query is a thenable, not a Promise: await it inside one.
     await expect(
       (async () => {
+        const { hostedExecutionControl } = tablesOf(harness.db)
         await harness.db
           .update(hostedExecutionControl)
           .set({ migrationOperationId: 'migration-x' })

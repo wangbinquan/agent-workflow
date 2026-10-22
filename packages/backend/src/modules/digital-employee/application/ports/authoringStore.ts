@@ -9,7 +9,7 @@ import type {
   ToolRegistrationContent,
   ToolValidationReceipt,
 } from '../../domain/model'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 export interface TypePackageRecord {
   readonly descriptor: EmployeeTypePackageDescriptor
@@ -179,7 +179,7 @@ export interface DigitalEmployeeAclIdentityPersistence {
   readonly type: DigitalEmployeeAclIdentityType
   getRevision(resourceId: string): Promise<number>
   loadForMutation(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     resourceId: string,
   ): Promise<DigitalEmployeeAclIdentityMutation | undefined>
 }

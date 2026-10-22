@@ -26,6 +26,8 @@
 // 拦成非法迁移并收成 abandoned。场景 A 的端到端断言一字未改；B/C / D19 的判据集合不变，改断言
 // 「铸造不写旧代 + 推导集合 + 迁移被拦落 abandoned」；源码锁改为锁铸造里**没有**旧代读写（AC-1）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -38,7 +40,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createNodeIso,
   discardNodeIso,
@@ -94,7 +95,8 @@ async function seedAgentWorkflowTask(
   status: 'pending' | 'interrupted',
 ): Promise<{ taskId: string }> {
   const agentId = ulid()
-  await h.db.insert(agents).values({
+  const { agents, workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, agents, {
     id: agentId,
     name: 'a',
     description: '',
@@ -114,14 +116,14 @@ async function seedAgentWorkflowTask(
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId,
@@ -151,7 +153,8 @@ async function fabricateCrashWindowRow(h: Harness, taskId: string, runId: string
   writeFileSync(join(handle.repos[0]!.isoWorktreePath, 'produced.txt'), 'stale generation\n')
   const nodeTrees = await snapshotNodeIsoFinal(handle)
   await discardNodeIso(handle)
-  await h.db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+  await insertOne(h.db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'A',
@@ -161,7 +164,7 @@ async function fabricateCrashWindowRow(h: Harness, taskId: string, runId: string
     isoNodeTree: nodeTrees[''],
     mergeState: 'pending-merge', // …但 merge-back 没跑（daemon 崩溃）
   })
-  await h.db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'summary', content: 'ok' })
+  await insertOne(h.db, nodeRunOutputs, { nodeRunId: runId, portName: 'summary', content: 'ok' })
 }
 
 function writeMockAgent(h: Harness, body: string): string {
@@ -194,8 +197,9 @@ process.exit(0)
 async function waitForTerminalTask(
   db: DbClient,
   taskId: string,
-): Promise<typeof tasks.$inferSelect> {
+): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
+    const { tasks } = tablesOf(db)
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
@@ -233,7 +237,7 @@ emit(envelope)`,
         binaryOverride: ['bun', 'run', mockPath],
       },
     }).retry({
-      taskId: taskId,
+      taskId,
       nodeRunId: staleId,
       cascade: true,
     })
@@ -242,6 +246,7 @@ emit(envelope)`,
 
     // 核心断言（修复前红）：被取代行的过期 delta 没有被入口 replay 物化。
     expect(existsSync(join(h.worktreePath, 'produced.txt'))).toBe(false)
+    const { nodeRuns } = tablesOf(h.db)
     const stale = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, staleId)))[0]!
     expect(stale.mergeState).toBe('abandoned') // 修复前：replay 把它推成 'merged'
     expect(stale.status).toBe('done') // abandon 只动 merge_state，不碰 status
@@ -273,7 +278,8 @@ describe('RFC-369 §4.5 / AC-7 情形 1 —— 同帧已被取代的较老 pendi
       [stalePending, 'pending'],
       [failed, 'failed'],
     ] as const) {
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id,
         taskId,
         nodeId: 'A',
@@ -300,6 +306,7 @@ emit(envelope)`,
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const byId = new Map(rows.map((row) => [row.id, row]))
     // 采纳它会在 mark-pending-merge 处被拦、节点失败；改为不采纳、就地终结。
@@ -317,13 +324,14 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
     })
     taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 't',
       id: taskId,
       workflowId,
@@ -344,7 +352,8 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
     mergeState?: string | null
     parentNodeRunId?: string | null
   }): Promise<void> {
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: opts.id,
       taskId,
       nodeId: opts.nodeId ?? 'W',
@@ -364,8 +373,10 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
 
     await mintNodeRun(db, { taskId, nodeId: 'W', status: 'pending', cause: 'retry-node' })
 
-    const stateOf = async (id: string): Promise<string | null> =>
-      (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!.mergeState
+    const stateOf = async (id: string): Promise<string | null> => {
+      const { nodeRuns } = tablesOf(db)
+      return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!.mergeState
+    }
     // 铸造不写旧代（AC-1）；前代与其子行由推导判为已取代，他节点行不在内。
     expect(await stateOf(mkId(1))).toBe('conflict-human')
     expect(await derivedSupersededIds(db, taskId)).toEqual([mkId(1), mkId(2)])
@@ -377,7 +388,8 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
   test('D19：abandon 是纯列写入——clarify 保留的 iso 目录不被删', async () => {
     const isoDir = mkdtempSync(join(tmpdir(), 'aw-rfc144-d19-'))
     try {
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: mkId(1),
         taskId,
         nodeId: 'W',
@@ -440,7 +452,8 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
   async function seedWrapperTaskRow(): Promise<{ taskId: string; runId: string }> {
     const { taskId } = await seedAgentWorkflowTask(h, 'pending')
     const runId = mkId(1)
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'lw',
@@ -474,6 +487,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const state = fakeSchedulerState(taskId)
     // gen-1：创建 iso（NULL→isolating + 盖 base 列），随后走完整代到 merged。
     await createOrRebuildWrapperIso(state, runId, null)
+    const { nodeRuns } = tablesOf(h.db)
     const gen1 = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     expect(gen1.mergeState).toBe('isolating')
     const gen1Base = gen1.isoBaseSnapshot!
@@ -517,6 +531,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     // gen-1 建 iso（目录真实落盘）。
     const gen1Handle = await createOrRebuildWrapperIso(state, runId, null)
     expect(existsSync(gen1Handle.repos[0]!.isoWorktreePath)).toBe(true)
+    const { nodeRuns } = tablesOf(h.db)
     // 伪造「reenter CAS 已提交（列/progress 原子清空）、清理/重建前崩溃」的现场：
     // 行 isolating + 基列空 + 旧 iso 目录仍在派生路径上。
     await h.db
@@ -561,6 +576,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const { taskId, runId } = await seedWrapperTaskRow()
     const state = fakeSchedulerState(taskId)
     await createOrRebuildWrapperIso(state, runId, null)
+    const { nodeRuns } = tablesOf(h.db)
     const gen1 = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     const gen1Base = gen1.isoBaseSnapshot!
     const mergeStates = createTaskExecutionPersistence(h.db).mergeStates
@@ -595,7 +611,8 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
     // 工作流：git wrapper 包一个 agent；伪造「崩溃于 merge-back 内、入口 replay 已
     // 推成 merged、行被收割成 interrupted」后的复活现场。
     const agentId = ulid()
-    await h.db.insert(agents).values({
+    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, agents, {
       id: agentId,
       name: 'a',
       description: '',
@@ -618,14 +635,14 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
     } as unknown as WorkflowDefinition
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db.insert(workflows).values({
+    await insertOne(h.db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       id: taskId,
       name: 'fixture',
       workflowId,
@@ -638,7 +655,7 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: mkId(1),
       taskId,
       nodeId: 'gw',
@@ -657,7 +674,7 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
     })
     // PR-5 复核 P2：真实崩溃现场里旧代的 git_diff 输出行已落库（输出先写、
     // merge-back 后崩）——新代重写必须走 upsert，裸 insert 撞 (runId, port) 主键。
-    await h.db.insert(nodeRunOutputs).values({
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: mkId(1),
       portName: 'git_diff',
       content: 'gen1.txt',
@@ -716,6 +733,7 @@ emit(envelope)`,
       binaryOverride: ['bun', 'run', mockPath],
     })
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(t.status).toBe('failed')
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -810,18 +828,20 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
     expect(program).not.toMatch(/\blt\(nodeRuns\.id/)
     expect(program.match(/\.from\(nodeRuns\)/g) ?? []).toHaveLength(1)
     expect(program).toContain('.where(eq(nodeRuns.id, record.containerRunId!))')
-    expect(program.match(/\.insert\(nodeRuns\)/g) ?? []).toHaveLength(1)
+    expect(program.match(/insertOne\(tx, nodeRuns,/g) ?? []).toHaveLength(1)
     expect(program.match(/\.insert\(nodeRunSeqAllocations\)/g) ?? []).toHaveLength(1)
     // RFC-374: the allocation is the immediately preceding database statement.
     const allocationAt = program.indexOf('.insert(nodeRunSeqAllocations)')
-    const runAt = program.indexOf('.insert(nodeRuns)')
+    const runAt = program.indexOf('insertOne(tx, nodeRuns,')
     expect(allocationAt).toBeLessThan(runAt)
     expect(
       program.slice(allocationAt, runAt).match(/\.(?:insert|update|delete|select)\(/g),
     ).toEqual(['.insert('])
     // 事务内工厂驱动的必须是上面这同一个 program，而不是自己再抄一份写序列。
     expect(src.slice(factoryAt)).toContain('nodeRunMintProgram(tx, input)')
-    expect(src.slice(factoryAt)).not.toContain('.insert(nodeRuns)')
+    expect(src.slice(factoryAt)).not.toMatch(
+      /(?:\.insert\(nodeRuns\)|insertOne\([^,]+,\s*nodeRuns,)/,
+    )
   })
 
   test('taskQuestionDispatch：同步 tx 内经中立铸造参与者铸行（RFC-120 原子 claim+mint 通道）', () => {

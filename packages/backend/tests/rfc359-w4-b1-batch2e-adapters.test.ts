@@ -2,14 +2,15 @@
 // 恢复事件簿、自动恢复窗口 / 熔断、repo-prep 行、运行时会话租约的孤儿修复（复用 / 作废两支）、
 // 四条注入的状态迁移只做转发（周期性收割先看有无活 run）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import {
   createTaskRecoveryOperations,
@@ -22,12 +23,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  db: PersistenceDb,
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -35,7 +37,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -53,12 +55,13 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  over: Partial<typeof nodeRuns.$inferInsert> = {},
+  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n',
@@ -98,7 +101,7 @@ function recordingMutations(): {
   }
 }
 
-function operationsFor(db: ProviderNeutralDatabase): {
+function operationsFor(db: PersistenceDb): {
   operations: TaskRecoveryOperations
   calls: string[]
 } {
@@ -184,10 +187,11 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 恢复事件簿与自动恢复
 
 describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿修复', (harness) => {
   async function seedLease(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     input: { taskId: string; runId: string; sessionId: string; resetPending?: boolean },
   ) {
-    await db.insert(runtimeSessionLeases).values({
+    const { runtimeSessionLeases } = tablesOf(db)
+    await insertOne(db, runtimeSessionLeases, {
       protocol: 'opencode',
       sessionId: input.sessionId,
       taskId: input.taskId,
@@ -208,6 +212,7 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿
     const { operations } = operationsFor(db)
     expect(await operations.findHeldRuntimeSessionId(reusable)).toBe('ses-ok')
     expect(await createRuntimeSessionLeaseOperations(db).repairAfterOrphanReap(reusable)).toBe(1)
+    const { runtimeSessionLeases, nodeRuns } = tablesOf(db)
     const released = await db
       .select({ leaseNodeRunId: runtimeSessionLeases.leaseNodeRunId })
       .from(runtimeSessionLeases)

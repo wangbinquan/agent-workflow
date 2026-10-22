@@ -5,7 +5,7 @@
 // runner 合一（`intentSqlProgramRunner.ts`）之后这对自动消失：实现体本来就是共享的
 // `IntentSqlPersistence`（`intentSqlPersistence.ts`，provider-无关的 Intent 表协议）。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IntentPersistence } from '../application/ports/intentPersistence'
 import { IntentSqlPersistence } from './intentSqlPersistence'
 import {
@@ -14,12 +14,12 @@ import {
   type IntentContextResourceAuthorizationFactoryDependency,
 } from './intentSqlProgramRunner'
 
-export function createIntentPersistence(db: ProviderNeutralDatabase): IntentPersistence {
+export function createIntentPersistence(db: PersistenceDb): IntentPersistence {
   return new IntentSqlPersistence(new PlainIntentSqlProgramRunner(db))
 }
 
 export function createAuthorizedIntentPersistence(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly contextAuthorization: IntentContextResourceAuthorizationFactoryDependency
 }): IntentPersistence {
   return new IntentSqlPersistence(

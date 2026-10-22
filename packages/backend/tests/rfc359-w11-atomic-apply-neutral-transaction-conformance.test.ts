@@ -25,6 +25,8 @@
 // 六条提交臂，所以资源会话用替身：替身在提交事务里经**它拿到的那个事务句柄**写一行标记，
 // 于是「这一行有没有留下」就直接回答了「参与者的写在不在这笔事务里」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { randomBytes, createHash } from 'node:crypto'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -37,14 +39,6 @@ import {
 
 import type { Actor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import {
-  intentApplyJournal,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  resourceBundleApplies,
-  users,
-} from '@/db/schema'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import { createIntentApplyEngine } from '@/modules/intent/infrastructure/intentApplyEngine'
 import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
@@ -80,7 +74,8 @@ const ACTOR: Actor = {
 
 async function seedOwner(harness: ProviderHarness): Promise<void> {
   const now = Date.now()
-  await harness.db.insert(users).values({
+  const { users } = tablesOf(harness.db)
+  await insertOne(harness.db, users, {
     id: OWNER,
     username: 'w11-owner',
     displayName: 'W11 owner',
@@ -88,7 +83,7 @@ async function seedOwner(harness: ProviderHarness): Promise<void> {
     status: 'active',
     createdAt: now,
     updatedAt: now,
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 /** 事务体内抛出的哨兵：断言只关心「残留」，不关心错误怎么冒泡。 */
@@ -146,20 +141,21 @@ async function seedIntentSession(harness: ProviderHarness, name: string): Promis
   const now = Date.now()
   const sessionId = ulid()
   const draftId = ulid()
-  await harness.db.insert(intentSessions).values({
+  const { intentSessions, intentDrafts } = tablesOf(harness.db)
+  await insertOne(harness.db, intentSessions, {
     id: sessionId,
     ownerUserId: OWNER,
     title: 'RFC-359 W11 apply',
     status: 'active',
     createdAt: now,
     updatedAt: now,
-  } as typeof intentSessions.$inferInsert)
+  } as PersistenceTables['intentSessions']['$inferInsert'])
 
   const parsed = parseIntentChangeset(JSON.stringify(intentChangeset(name)))
   if (!parsed.ok) throw new Error(parsed.errors.join('; '))
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
-  await harness.db.insert(intentDrafts).values({
+  await insertOne(harness.db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -168,7 +164,7 @@ async function seedIntentSession(harness: ProviderHarness, name: string): Promis
     draftHash,
     contextRevision: 0,
     createdAt: now,
-  } as typeof intentDrafts.$inferInsert)
+  } as PersistenceTables['intentDrafts']['$inferInsert'])
   await harness.db
     .update(intentSessions)
     .set({ currentDraftId: draftId })
@@ -253,6 +249,7 @@ describeEachProvider('RFC-359 W11 Intent apply 编排 · 事务边界', (harness
     )
     expect((error as Error).message).toContain('w11-boom:claim')
 
+    const { intentApplyJournal } = tablesOf(harness.db)
     const journal = await harness.db
       .select()
       .from(intentApplyJournal)
@@ -282,6 +279,7 @@ describeEachProvider('RFC-359 W11 Intent apply 编排 · 事务边界', (harness
     )
     expect((error as Error).message).toContain('w11-boom:commit')
 
+    const { intentProvenance, intentSessions } = tablesOf(harness.db)
     const provenance = await harness.db
       .select()
       .from(intentProvenance)
@@ -319,6 +317,7 @@ describeEachProvider('RFC-359 W11 Intent apply 编排 · 事务边界', (harness
     )
     expect((error as Error).message).toContain('w11-boom:before-commit-tx')
 
+    const { intentApplyJournal } = tablesOf(harness.db)
     const journal = await harness.db
       .select()
       .from(intentApplyJournal)
@@ -430,6 +429,7 @@ function packageMutationSessionFactory(options: PackageSessionOptions) {
               mcps: {
                 commit: async (prepared: { readonly operationId: string }) => {
                   const at = Date.now()
+                  const { resourceBundleApplies } = tablesOf(transaction)
                   await transaction.insert(resourceBundleApplies).values({
                     id: ulid(),
                     scope: MARKER_SCOPE,
@@ -439,7 +439,7 @@ function packageMutationSessionFactory(options: PackageSessionOptions) {
                     preparedArtifactsJson: '[]',
                     createdAt: at,
                     updatedAt: at,
-                  } as typeof resourceBundleApplies.$inferInsert)
+                  } as PersistenceTables['resourceBundleApplies']['$inferInsert'])
                   return Object.freeze({
                     resourceType: 'mcp' as const,
                     operationId: prepared.operationId,
@@ -462,6 +462,7 @@ function packageMutationSessionFactory(options: PackageSessionOptions) {
 }
 
 async function markerRows(harness: ProviderHarness) {
+  const { resourceBundleApplies } = tablesOf(harness.db)
   return await harness.db
     .select()
     .from(resourceBundleApplies)
@@ -526,6 +527,7 @@ describeEachProvider('RFC-359 W11 资源包原子导入编排 · 事务边界', 
     })
 
     expect((await markerRows(harness)).length, '成功路径上参与者的写必须落库').toBe(1)
+    const { resourceBundleApplies } = tablesOf(harness.db)
     const [journal] = await harness.db
       .select()
       .from(resourceBundleApplies)
@@ -571,13 +573,16 @@ describeEachProvider('RFC-359 W11 资源包原子导入编排 · 事务边界', 
       decisions: [{ localSlug: PACKAGE_SLUG, action: 'new' }] as never,
       humanMemberMappings: [],
       secretInputs: [],
-      mutationSessionFactory: packageMutationSessionFactory({ rootExists: true }) as never,
+      mutationSessionFactory: packageMutationSessionFactory({
+        rootExists: true,
+      }) as never,
     }
 
     const first = await operations.apply(input)
     const replay = await operations.apply(input)
     expect(replay, '同一 importId 的第二次导入必须回放第一次的收据').toEqual(first)
 
+    const { resourceBundleApplies } = tablesOf(harness.db)
     const journals = await harness.db
       .select()
       .from(resourceBundleApplies)

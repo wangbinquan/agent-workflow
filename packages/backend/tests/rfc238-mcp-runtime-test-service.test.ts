@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { afterEach, expect, test } from 'bun:test'
@@ -7,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
@@ -17,15 +19,6 @@ import {
   composeMcpRuntimeTestProvider,
 } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import {
-  mcps,
-  mcpRuntimeTestCreateReceipts,
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestTurns,
-  runtimes,
-  users,
-} from '../src/db/schema'
 import {
   MCP_RUNTIME_TEST_IDLE_MS,
   MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
@@ -60,7 +53,7 @@ const actor = buildActor({
   source: 'daemon',
 })
 
-function mcpBinding(db: ProviderNeutralDatabase): McpServiceBinding {
+function mcpBinding(db: PersistenceDb): McpServiceBinding {
   const catalog = composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -82,10 +75,7 @@ function mcpBinding(db: ProviderNeutralDatabase): McpServiceBinding {
   return Object.freeze({ catalog, authority })
 }
 
-function runtimeTestDependencies(
-  db: ProviderNeutralDatabase,
-  root: string,
-): McpDiagnosticsApplicationInput {
+function runtimeTestDependencies(db: PersistenceDb, root: string): McpDiagnosticsApplicationInput {
   const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
   const mcp = mcpBinding(db)
   return {
@@ -117,16 +107,17 @@ function successResult(
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   protocol: 'opencode' | 'claude-code' = 'opencode',
 ): Promise<{
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   mcp: NonNullable<Awaited<ReturnType<typeof getMcpById>>>
   root: string
   runtimeName: string
 }> {
   const runtimeName = protocol === 'claude-code' ? 'test-claude' : 'test-opencode'
-  await db.insert(runtimes).values({
+  const { runtimes, mcps } = tablesOf(db)
+  await insertOne(db, runtimes, {
     id: 'runtime-1',
     name: runtimeName,
     protocol,
@@ -135,7 +126,7 @@ async function seed(
     enabled: true,
   })
 
-  await db.insert(mcps).values({
+  await insertOne(db, mcps, {
     id: 'mcp-1',
     name: 'fixture',
     description: '',
@@ -293,6 +284,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
+        const { mcpRuntimeTestSessions } = tablesOf(db)
         const persistedNativeId =
           (
             await db
@@ -358,6 +350,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     )
     let session = await service.get(actor, mcp.id, created.sessionId)
     expect(session.nativeSessionReady).toBe(true)
+    const { mcpRuntimeTestSessions, mcpRuntimeTestEvents } = tablesOf(db)
     expect(
       (
         await db
@@ -396,6 +389,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
+        const { mcpRuntimeTestSessions } = tablesOf(db)
         const persistedNativeId = (
           await db
             .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
@@ -461,6 +455,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       captureState: 'incomplete',
       failureCode: 'mcp-test-session-conflict',
     })
+    const { mcpRuntimeTestTurns } = tablesOf(db)
     expect(
       (
         await db
@@ -480,6 +475,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
+        const { mcpRuntimeTestSessions } = tablesOf(db)
         const persistedNativeId = (
           await db
             .select({ id: mcpRuntimeTestSessions.runtimeSessionId })
@@ -703,6 +699,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       sessionId: first.sessionId,
       turnId,
     })
+    const { mcpRuntimeTestTurns, mcpRuntimeTestEvents } = tablesOf(db)
     // Re-open capture only for this isolated sink/dedupe assertion.
     await db
       .update(mcpRuntimeTestTurns)
@@ -785,7 +782,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
   test('transcripts are owner-only while mcp-runtime-tests:audit grants exact-id read only', async () => {
     const { db, mcp, root } = await seed(harness.db)
     for (const id of ['owner-user', 'stranger-user']) {
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id,
         username: id,
         displayName: id,
@@ -952,6 +950,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       async () => (await service.get(actor, mcp.id, created.sessionId)).status === 'ended',
     )
 
+    const { mcpRuntimeTestTurns } = tablesOf(db)
     const turn = (
       await db
         .select()
@@ -1031,6 +1030,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       expect(ended.status).toBe('ended')
       expect(ended.cleanupState).toBe('quarantined')
       expect(ended.endReason).toBe('capture-incomplete')
+      const { mcpRuntimeTestTurns, mcpRuntimeTestSessions } = tablesOf(db)
       expect(
         (
           await db
@@ -1094,7 +1094,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: 'orphan-session',
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1117,7 +1118,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       updatedAt: 900,
     })
 
-    await db.insert(mcpRuntimeTestTurns).values({
+    await insertOne(db, mcpRuntimeTestTurns, {
       id: 'orphan-turn',
       sessionId: 'orphan-session',
       seq: 1,
@@ -1143,15 +1144,16 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       },
     })
     await service.start()
-    await waitFor(
-      async () =>
+    await waitFor(async () => {
+      return (
         (
           await db
             .select({ status: mcpRuntimeTestSessions.status })
             .from(mcpRuntimeTestSessions)
             .where(eq(mcpRuntimeTestSessions.id, 'orphan-session'))
-        )[0]?.status === 'ended',
-    )
+        )[0]?.status === 'ended'
+      )
+    })
     const recovered = await service.get(actor, mcp.id, 'orphan-session')
     expect(String(reapedPid)).toBe('5151')
     expect(recovered.cleanupState).toBe('quarantined')
@@ -1177,7 +1179,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: sessionId,
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1201,7 +1204,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       updatedAt: 900,
     })
 
-    await db.insert(mcpRuntimeTestTurns).values({
+    await insertOne(db, mcpRuntimeTestTurns, {
       id: turnId,
       sessionId,
       seq: 1,
@@ -1353,6 +1356,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       clientMessageId: 'message-ending-shutdown',
     })
     await waitFor(() => running)
+    const { mcpRuntimeTestSessions } = tablesOf(db)
     await db
       .update(mcpRuntimeTestSessions)
       .set({
@@ -1442,7 +1446,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: 'expired-queued-session',
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1466,7 +1471,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       updatedAt: 2,
     })
 
-    await db.insert(mcpRuntimeTestTurns).values({
+    await insertOne(db, mcpRuntimeTestTurns, {
       id: 'expired-queued-turn',
       sessionId: 'expired-queued-session',
       seq: 2,
@@ -1491,7 +1496,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
 
   test('worker admission preserves a ready continuation that expires while queued', async () => {
     const { db, mcp, root } = await seed(harness.db)
-    await db.insert(mcps).values({
+    const { mcps, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcps, {
       id: 'mcp-2',
       name: 'fixture_two',
       description: '',
@@ -1563,15 +1569,16 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     now = queued.turns[1]!.hardDeadlineAt
     releaseBlockingRun()
 
-    await waitFor(
-      async () =>
+    await waitFor(async () => {
+      return (
         (
           await db
             .select({ status: mcpRuntimeTestTurns.status })
             .from(mcpRuntimeTestTurns)
             .where(eq(mcpRuntimeTestTurns.id, queued.turns[1]!.id))
-        )[0]?.status === 'timed_out',
-    )
+        )[0]?.status === 'timed_out'
+      )
+    })
     const recovered = await service.get(actor, secondMcp.id, primed.sessionId)
     expect(runs).toBe(2)
     expect(recovered.status).toBe('active')
@@ -1598,7 +1605,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: sessionId,
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1623,7 +1631,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       updatedAt: 2,
     })
 
-    await db.insert(mcpRuntimeTestTurns).values({
+    await insertOne(db, mcpRuntimeTestTurns, {
       id: turnId,
       sessionId,
       seq: 2,
@@ -1649,7 +1657,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: 'queued-session',
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1672,7 +1681,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       updatedAt: 1,
     })
 
-    await db.insert(mcpRuntimeTestTurns).values({
+    await insertOne(db, mcpRuntimeTestTurns, {
       id: 'queued-turn',
       sessionId: 'queued-session',
       seq: 1,
@@ -1703,7 +1712,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
       mcp,
     )
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestTurns } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: 'queued-resume-session',
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1774,7 +1784,8 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     const scratchRoot = join(root, 'mcp-runtime-tests', 'pending-session')
     mkdirSync(scratchRoot, { recursive: true })
-    await db.insert(mcpRuntimeTestSessions).values({
+    const { mcpRuntimeTestSessions, mcpRuntimeTestCreateReceipts } = tablesOf(db)
+    await insertOne(db, mcpRuntimeTestSessions, {
       id: 'pending-session',
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
@@ -1799,7 +1810,7 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       endedAt: 2,
     })
 
-    await db.insert(mcpRuntimeTestCreateReceipts).values({
+    await insertOne(db, mcpRuntimeTestCreateReceipts, {
       mcpId: mcp.id,
       ownerUserId: SYSTEM_USER_ID,
       clientCreateId: 'expired-create',

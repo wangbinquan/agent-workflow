@@ -12,6 +12,9 @@
 //      the opencode DB after the final live tick, without double-writing
 //      anything the live poll already inserted.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -21,7 +24,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -61,33 +63,30 @@ function makeAgent(): Agent {
 
 function seedTaskAndNodeRun(db: DbClient): { taskId: string; nodeRunId: string } {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: '{}',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      name: 'fixture-task',
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  insertOne(db, tasks, {
+    name: 'fixture-task',
+    id: taskId,
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   const nodeRunId = ulid()
-  db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'n1', status: 'pending' }).run()
+  insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'n1', status: 'pending' })
   return { taskId, nodeRunId }
 }
 
@@ -152,7 +151,8 @@ function seedSubagentRow(
 
 async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 
@@ -216,11 +216,10 @@ describe('runner subagent live capture (RFC-048)', () => {
         }),
     )
 
-    const rows = h.db
-      .select()
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+    const { nodeRunEvents } = tablesOf(h.db)
+    const rows = queryRows(
+      h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     const childRows = rows.filter((r) => r.sessionId === 'child-A')
     expect(childRows).toHaveLength(2)
     // No duplicate part IDs — live poll + post-run capture share the dedupe.
@@ -267,11 +266,10 @@ describe('runner subagent live capture (RFC-048)', () => {
         }),
     )
 
-    const rows = h.db
-      .select()
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+    const { nodeRunEvents } = tablesOf(h.db)
+    const rows = queryRows(
+      h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     const childRows = rows.filter((r) => r.sessionId === 'child-B')
     expect(childRows).toHaveLength(1)
   })
@@ -320,11 +318,10 @@ describe('runner subagent live capture (RFC-048)', () => {
         }),
     )
 
-    const rows = h.db
-      .select()
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+    const { nodeRunEvents } = tablesOf(h.db)
+    const rows = queryRows(
+      h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     const childRows = rows.filter((r) => r.sessionId === 'child-C')
     expect(childRows).toHaveLength(2)
   })

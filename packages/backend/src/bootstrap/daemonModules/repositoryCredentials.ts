@@ -1,5 +1,5 @@
 import { type SecretBox } from '@/auth/secretBox'
-import { type ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
 import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
 import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
@@ -14,7 +14,7 @@ import { createCodeHostConnectionsService } from '@/services/codeHost/connection
 import { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 
 export function composeDaemonRepositoryCredentials(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly secretBox: SecretBox
   readonly appHome: string
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore

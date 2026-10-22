@@ -233,6 +233,7 @@ export function nonViewCondition(
   if (filters.q !== undefined) {
     const pattern = `%${escapeLike(filters.q.toLocaleLowerCase('en-US'))}%`
     const escape = '\\'
+    const engine = engineOf(db)
     // `base` 里的两个**派生**列在裸 tasks 上不存在，快路径按同一定义还原：
     // workflow_name 是 workflows 的 JOIN，workgroup_name 走 `workgroupNameExpression`
     // ——RFC-359 W6-T24 之前这里与 `baseCtes` 各写了一遍同一段三层 CASE（注释里写着
@@ -245,19 +246,19 @@ export function nonViewCondition(
       return workgroupNameExpression(db, alias)
     }
     conditions.push(sql`(
-      lower(${col('name')}) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(${col('id')}) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(${derived('workflow_name')}, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(${derived('workgroup_name')}, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(${col('source_agent_name')}, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(${col('repo_path')}, '')) LIKE ${pattern} ESCAPE ${escape}
-      OR lower(COALESCE(${col('repo_url')}, '')) LIKE ${pattern} ESCAPE ${escape}
+      ${engine.likeCaseInsensitive(sql`lower(${col('name')})`, pattern, escape)}
+      OR ${engine.likeCaseInsensitive(sql`lower(${col('id')})`, pattern, escape)}
+      OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${derived('workflow_name')}, ''))`, pattern, escape)}
+      OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${derived('workgroup_name')}, ''))`, pattern, escape)}
+      OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${col('source_agent_name')}, ''))`, pattern, escape)}
+      OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${col('repo_path')}, ''))`, pattern, escape)}
+      OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${col('repo_url')}, ''))`, pattern, escape)}
       OR EXISTS (
         SELECT 1 FROM task_repos tr
         WHERE tr.task_id = ${col('id')}
           AND (
-            lower(COALESCE(tr.repo_path, '')) LIKE ${pattern} ESCAPE ${escape}
-            OR lower(COALESCE(tr.repo_url, '')) LIKE ${pattern} ESCAPE ${escape}
+            ${engine.likeCaseInsensitive(sql`lower(COALESCE(tr.repo_path, ''))`, pattern, escape)}
+            OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(tr.repo_url, ''))`, pattern, escape)}
           )
       )
     )`)

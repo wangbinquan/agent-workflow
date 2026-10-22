@@ -6,15 +6,11 @@
 // ConflictError 惯例），不让 raw 驱动错误以 500 泄给 route。publishRevision 在统一事务原语里「插 revision 行 +
 // 推进 identity.publishedRevision」，不存在半发布状态；archive 只封存 identity，revision 行 immutable。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  actionTemplateRevisions,
-  actionTemplates,
-  verificationProfileRevisions,
-  verificationProfiles,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
@@ -71,9 +67,7 @@ function revisionRecord(resourceId: string, row: RevisionRow): ConfigRevisionRec
 }
 
 /** actionTemplates 具体 persistence。 */
-export function createActionTemplatePersistence(
-  db: ProviderNeutralDatabase,
-): ActionTemplatePersistence {
+export function createActionTemplatePersistence(db: PersistenceDb): ActionTemplatePersistence {
   const session = databaseSessionFor(db)
   const notFound = (id: string): NotFoundError =>
     new NotFoundError('action-template-not-found', `action template not found: ${id}`)
@@ -89,6 +83,7 @@ export function createActionTemplatePersistence(
   const getById = async (
     id: string,
   ): Promise<ConfigResourceRecord<{ readonly capabilityId: string }> | null> => {
+    const { actionTemplates } = tablesOf(db)
     const row = (
       await db.select().from(actionTemplates).where(eq(actionTemplates.id, id)).limit(1)
     )[0]
@@ -97,7 +92,8 @@ export function createActionTemplatePersistence(
   return {
     async create(input) {
       try {
-        await db.insert(actionTemplates).values({
+        const { actionTemplates } = tablesOf(db)
+        await insertOne(db, actionTemplates, {
           id: input.id,
           name: input.name,
           capabilityId: input.extra.capabilityId,
@@ -116,6 +112,7 @@ export function createActionTemplatePersistence(
     },
     getById,
     async list() {
+      const { actionTemplates } = tablesOf(db)
       const rows = await db
         .select()
         .from(actionTemplates)
@@ -125,6 +122,7 @@ export function createActionTemplatePersistence(
     async updateDraft(input) {
       if ((await getById(input.id)) === null) throw notFound(input.id)
       try {
+        const { actionTemplates } = tablesOf(db)
         await db
           .update(actionTemplates)
           .set({
@@ -140,6 +138,7 @@ export function createActionTemplatePersistence(
     },
     async publishRevision(input) {
       await session.transaction(async (tx) => {
+        const { actionTemplates, actionTemplateRevisions } = tablesOf(tx)
         const identity = (
           await tx
             .select({ id: actionTemplates.id })
@@ -148,7 +147,7 @@ export function createActionTemplatePersistence(
             .limit(1)
         )[0]
         if (identity === undefined) throw notFound(input.resourceId)
-        await tx.insert(actionTemplateRevisions).values({
+        await insertOne(tx, actionTemplateRevisions, {
           templateId: input.resourceId,
           revision: input.revision,
           contentJson: input.contentJson,
@@ -163,6 +162,7 @@ export function createActionTemplatePersistence(
       })
     },
     async getRevision(resourceId, revision) {
+      const { actionTemplateRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -178,6 +178,7 @@ export function createActionTemplatePersistence(
       return row === undefined ? null : revisionRecord(resourceId, row)
     },
     async listRevisions(resourceId) {
+      const { actionTemplateRevisions } = tablesOf(db)
       const rows = await db
         .select()
         .from(actionTemplateRevisions)
@@ -186,6 +187,7 @@ export function createActionTemplatePersistence(
       return rows.map((row) => revisionRecord(resourceId, row))
     },
     async archive(id, now) {
+      const { actionTemplates } = tablesOf(db)
       const updated = await db
         .update(actionTemplates)
         .set({ archivedAt: now, updatedAt: now })
@@ -198,7 +200,7 @@ export function createActionTemplatePersistence(
 
 /** verificationProfiles 具体 persistence（无 extra 列）。 */
 export function createVerificationProfilePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): VerificationProfilePersistence {
   const session = databaseSessionFor(db)
   const empty: Record<never, never> = {}
@@ -216,6 +218,7 @@ export function createVerificationProfilePersistence(
   const getById = async (
     id: string,
   ): Promise<ConfigResourceRecord<Record<never, never>> | null> => {
+    const { verificationProfiles } = tablesOf(db)
     const row = (
       await db.select().from(verificationProfiles).where(eq(verificationProfiles.id, id)).limit(1)
     )[0]
@@ -224,7 +227,8 @@ export function createVerificationProfilePersistence(
   return {
     async create(input) {
       try {
-        await db.insert(verificationProfiles).values({
+        const { verificationProfiles } = tablesOf(db)
+        await insertOne(db, verificationProfiles, {
           id: input.id,
           name: input.name,
           draftJson: input.draftJson,
@@ -242,6 +246,7 @@ export function createVerificationProfilePersistence(
     },
     getById,
     async list() {
+      const { verificationProfiles } = tablesOf(db)
       const rows = await db
         .select()
         .from(verificationProfiles)
@@ -251,6 +256,7 @@ export function createVerificationProfilePersistence(
     async updateDraft(input) {
       if ((await getById(input.id)) === null) throw notFound(input.id)
       try {
+        const { verificationProfiles } = tablesOf(db)
         await db
           .update(verificationProfiles)
           .set({
@@ -265,6 +271,7 @@ export function createVerificationProfilePersistence(
     },
     async publishRevision(input) {
       await session.transaction(async (tx) => {
+        const { verificationProfiles, verificationProfileRevisions } = tablesOf(tx)
         const identity = (
           await tx
             .select({ id: verificationProfiles.id })
@@ -273,7 +280,7 @@ export function createVerificationProfilePersistence(
             .limit(1)
         )[0]
         if (identity === undefined) throw notFound(input.resourceId)
-        await tx.insert(verificationProfileRevisions).values({
+        await insertOne(tx, verificationProfileRevisions, {
           profileId: input.resourceId,
           revision: input.revision,
           contentJson: input.contentJson,
@@ -288,6 +295,7 @@ export function createVerificationProfilePersistence(
       })
     },
     async getRevision(resourceId, revision) {
+      const { verificationProfileRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -303,6 +311,7 @@ export function createVerificationProfilePersistence(
       return row === undefined ? null : revisionRecord(resourceId, row)
     },
     async listRevisions(resourceId) {
+      const { verificationProfileRevisions } = tablesOf(db)
       const rows = await db
         .select()
         .from(verificationProfileRevisions)
@@ -311,6 +320,7 @@ export function createVerificationProfilePersistence(
       return rows.map((row) => revisionRecord(resourceId, row))
     },
     async archive(id, now) {
+      const { verificationProfiles } = tablesOf(db)
       const updated = await db
         .update(verificationProfiles)
         .set({ archivedAt: now, updatedAt: now })

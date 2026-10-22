@@ -1,9 +1,9 @@
 // RFC-359 W4-B1 —— node run 冻结运行时持久化：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   NodeRunRuntimePersistence,
@@ -12,18 +12,21 @@ import type {
 } from '../application/ports/nodeRunRuntimePersistence'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
-const projection = {
-  runtime: nodeRuns.runtime,
-  runtimeBinary: nodeRuns.runtimeBinary,
-  runtimeParamsJson: nodeRuns.runtimeParamsJson,
+const projection = (db: object) => {
+  const { nodeRuns } = tablesOf(db)
+  return {
+    runtime: nodeRuns.runtime,
+    runtimeBinary: nodeRuns.runtimeBinary,
+    runtimeParamsJson: nodeRuns.runtimeParamsJson,
+  }
 }
 
 export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersistence {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly isRuntimeKnown: (protocol: string | null) => boolean,
     private readonly bindSelection: (
-      transaction: ProviderNeutralDatabase,
+      transaction: PersistenceDb,
       assertTaskScope: () => void,
     ) => (
       agentRuntime: string | null | undefined,
@@ -36,6 +39,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
     body: (session: NodeRunRuntimeSelectionSession) => Promise<T>,
   ): Promise<T> {
     return withTaskExecutionWrite(this.db, async (tx) => {
+      const { nodeRuns } = tablesOf(tx)
       // This capability never escapes the callback's live transaction. Its owner fence is
       // taken before either selection or snapshot write, including inherited snapshots.
       let active = true
@@ -64,7 +68,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
           load: async () => {
             assertActive()
             let rows = await tx
-              .select(projection)
+              .select(projection(tx))
               .from(nodeRuns)
               .where(eq(nodeRuns.id, nodeRunId))
               .limit(1)
@@ -72,7 +76,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
               await ensureFence()
               // A concurrent first dispatch may have frozen while we waited for the owner/row lock.
               rows = await tx
-                .select(projection)
+                .select(projection(tx))
                 .from(nodeRuns)
                 .where(eq(nodeRuns.id, nodeRunId))
                 .limit(1)
@@ -95,7 +99,6 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
                 runtimeParamsJson: input.runtimeParamsJson,
               })
               .where(eq(nodeRuns.id, nodeRunId))
-              .run()
           },
         })
       } finally {
@@ -105,8 +108,9 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
   }
 
   async load(nodeRunId: string) {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
-      .select(projection)
+      .select(projection(this.db))
       .from(nodeRuns)
       .where(eq(nodeRuns.id, nodeRunId))
       .limit(1)
@@ -114,8 +118,9 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
   }
 
   async findBySessionId(sessionId: string) {
+    const { nodeRuns } = tablesOf(this.db)
     const rows = await this.db
-      .select(projection)
+      .select(projection(this.db))
       .from(nodeRuns)
       .where(eq(nodeRuns.opencodeSessionId, sessionId))
       .limit(1)
@@ -124,6 +129,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
 
   async freeze(input: Parameters<NodeRunRuntimePersistence['freeze']>[0]): Promise<void> {
     await withTaskExecutionWrite(this.db, async (tx) => {
+      const { nodeRuns } = tablesOf(tx)
       const rows = await tx
         .select({ taskId: nodeRuns.taskId })
         .from(nodeRuns)
@@ -140,7 +146,6 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
           runtimeParamsJson: input.runtimeParamsJson,
         })
         .where(eq(nodeRuns.id, input.nodeRunId))
-        .run()
     })
   }
 }

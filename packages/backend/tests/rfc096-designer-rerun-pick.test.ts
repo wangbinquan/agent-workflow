@@ -29,13 +29,14 @@
 // The picker's own predicate matrix stays behaviorally locked by
 // rfc096-pick-freshest.test.ts; this file locks the dispatch-layer WIRING.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 
@@ -89,10 +90,11 @@ function mkQuestion(id: string): ClarifyQuestion {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `t_${ulid()}`
   const def = fixtureDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc096-designer-rerun-pick',
     description: '',
@@ -100,7 +102,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId: `wf_${taskId}`,
@@ -120,13 +122,14 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 // production ULIDs provide). The dispatch anchor must follow THIS order, never
 // startedAt.
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<typeof nodeRuns.$inferInsert>,
+  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']>,
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -144,7 +147,7 @@ async function seedRun(
  *  `answered` lets the reassign-added designer pass the dispatch seal gate
  *  (assertRequestedEntriesSealed treats an answered round as sealed). */
 async function seedAnsweredCrossRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   questionerRunId: string,
 ): Promise<string> {
@@ -162,7 +165,8 @@ async function seedAnsweredCrossRound(
     directive: 'continue' as const,
     status: 'answered' as const,
   }
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     ...common,
     kind: 'cross',
     askingNodeId: Q,
@@ -174,7 +178,8 @@ async function seedAnsweredCrossRound(
   return crossNodeRunId
 }
 
-async function loadRun(db: ProviderNeutralDatabase, id: string) {
+async function loadRun(db: PersistenceDb, id: string) {
+  const { nodeRuns } = tablesOf(db)
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]
 }
 

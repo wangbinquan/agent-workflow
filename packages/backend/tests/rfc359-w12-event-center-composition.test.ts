@@ -1,9 +1,9 @@
 // Both production factories own the database used by every step below. Passive
 // task facts need no observer, delivery consumer, or WorkStart implementation.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 
-import { eventRecords, eventTypeCatalog } from '@/db/schema'
 import { composeEventCenter } from './helpers/eventCenter'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
@@ -50,6 +50,7 @@ describeEachProvider('RFC-359 W12 Event Center complete composition', (harness) 
     expect(catalog.eventTypes.map((event) => event.eventTypeRef)).toContainEqual(
       TASK_STATUS_CHANGED_EVENT_REF,
     )
+    const { eventTypeCatalog } = tablesOf(harness.db)
     const registered = await harness.db
       .select()
       .from(eventTypeCatalog)
@@ -104,6 +105,7 @@ describeEachProvider('RFC-359 W12 Event Center complete composition', (harness) 
       subject,
       deliveryClass: 'platform.task-status',
     })
+    const { eventRecords } = tablesOf(harness.db)
     const records = await harness.db.select().from(eventRecords)
     expect(records).toHaveLength(1)
     const record = records[0]
@@ -168,6 +170,7 @@ describeEachProvider('RFC-359 W12 Event Center complete composition', (harness) 
     const fresh = await final.participant.pendingDeliveries(secondSubscriber, 10)
     expect(fresh).toHaveLength(1)
     expect(fresh[0]?.eventId).not.toBe(replayed.eventId)
+    const { eventRecords } = tablesOf(harness.db)
     const latest = await harness.db
       .select()
       .from(eventRecords)

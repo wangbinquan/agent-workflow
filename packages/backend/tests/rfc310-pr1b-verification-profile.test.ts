@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   validateVerificationProfileForPublish,
   verificationProfileContentSchema,
@@ -50,7 +50,7 @@ const VALID_CONTENT = {
   maxParallel: 1,
 } as const
 
-function newDeps(db: ProviderNeutralDatabase): VerificationProfileCommandDeps {
+function newDeps(db: PersistenceDb): VerificationProfileCommandDeps {
   let tick = 2_000_000
   return { store: createVerificationProfilePersistence(db), now: () => ++tick }
 }

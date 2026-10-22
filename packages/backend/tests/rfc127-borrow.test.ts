@@ -9,28 +9,32 @@
 //      reject)只读图上 node id,绝不读归属列(confirmedBy/displayName/...)。
 // 原 buildBorrowedAgent 纯函数锁 + execution wiring 锁随函数/分支删除。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 
 describeEachProvider(
   'RFC-127 node_runs.agent_override_name persistence (migration 0067)',
   (harness) => {
     const TASK_ID = 'task-borrow'
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(async () => {
       db = harness.db
-      await db.run(sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-      await db.run(sql`
+      await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
+      await rawExec(
+        db,
+        sql`
       INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
         base_branch, branch, status, inputs, started_at, schema_version)
       VALUES (${TASK_ID}, 'b', 'wf', '{}', '/tmp/r', '/tmp/w', 'main', 'b', 'running', '{}', 1, 1)
-    `)
+    `,
+      )
     })
 
     test('override persists; default null', async () => {
@@ -41,6 +45,7 @@ describeEachProvider(
         cause: 'initial',
         overrides: { agentOverrideName: 'agent-x' },
       })
+      const { nodeRuns } = tablesOf(db)
       const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
       expect(row.agentOverrideName).toBe('agent-x')
 

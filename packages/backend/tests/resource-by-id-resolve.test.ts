@@ -7,12 +7,13 @@
 //   - visibility is checked on that exact id before ACL/mutation behavior;
 //   - rename keeps the canonical id URL stable.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, mcps, skills, workgroups } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
 
@@ -34,7 +35,7 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-resource-by-id-',
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let app: Hono
     let alice: { id: string; token: string }
     let bob: { id: string; token: string }
@@ -71,25 +72,26 @@ describeEachProviderHttpApplication(
         { base: 'workgroups', id: ulid(), name: 'route-workgroup' },
       ]
       const [agent, skill, mcp, group] = resources
-      await db.insert(agents).values({
+      const { agents, skills, mcps, workgroups } = tablesOf(db)
+      await insertOne(db, agents, {
         id: agent!.id,
         name: agent!.name,
         ownerUserId: alice.id,
       })
-      await db.insert(skills).values({
+      await insertOne(db, skills, {
         id: skill!.id,
         name: skill!.name,
         managedPath: `skills/${skill!.id}/files/`,
         ownerUserId: alice.id,
       })
-      await db.insert(mcps).values({
+      await insertOne(db, mcps, {
         id: mcp!.id,
         name: mcp!.name,
         type: 'local',
         config: JSON.stringify({ command: ['echo'] }),
         ownerUserId: alice.id,
       })
-      await db.insert(workgroups).values({
+      await insertOne(db, workgroups, {
         id: group!.id,
         name: group!.name,
         ownerUserId: alice.id,

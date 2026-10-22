@@ -1,5 +1,5 @@
 export { createFileRuntimeLegacyConfiguration as composeFileRuntimeLegacyConfiguration } from '../infrastructure/local/fileRuntimeLegacyConfiguration'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createRuntimeRegistryApplication } from '../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryEffects'
 import type { RuntimeRegistryOperations } from '../application/ports/runtimeRegistry'
@@ -7,7 +7,7 @@ export { initializeRuntimeRegistryBoot } from '../application/runtimeRegistryBoo
 import { DrizzleRuntimeRegistryPersistence } from '@/modules/runtime-management/infrastructure/runtimeRegistryPersistence'
 
 export function composeRuntimeRegistryOperations(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   participants: ConstructorParameters<typeof DrizzleRuntimeRegistryPersistence>[1],
 ): RuntimeRegistryOperations {
   return createRuntimeRegistryApplication(

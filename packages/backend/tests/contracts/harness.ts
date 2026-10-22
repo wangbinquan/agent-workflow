@@ -11,6 +11,8 @@
 //   - packages/backend/tests/api-contract.test.ts          (drives the registry)
 //   - packages/backend/tests/api-contract-coverage.test.ts (scans + matches)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
 import { resolve } from 'node:path'
@@ -25,20 +27,6 @@ import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { composeDatabaseMigrationModule } from '../../src/modules/system-operations/composition/databaseMigration'
 import { getWorkflow } from '../../src/services/workflow'
 import { createUser } from '../helpers/userFixture'
-import {
-  agents,
-  mcps,
-  memories,
-  nodeRuns,
-  plugins,
-  scheduledTasks,
-  skills,
-  tasks,
-  users,
-  workflows,
-  workgroups,
-} from '../../src/db/schema'
-
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
 export const DAEMON_TOKEN = 'a'.repeat(64)
@@ -109,7 +97,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
 
   const app = (
     await openTestApplication(
-      { provider: 'sqlite', db: db },
+      { provider: 'sqlite', db },
       {
         token: DAEMON_TOKEN,
         configPath,
@@ -130,6 +118,19 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     role: 'admin',
     password: 'correctPassword123',
   })
+  const {
+    users,
+    agents,
+    skills,
+    mcps,
+    plugins,
+    workgroups,
+    workflows,
+    tasks,
+    scheduledTasks,
+    nodeRuns,
+    memories,
+  } = tablesOf(db)
   const aliceRows = await db.select().from(users)
   const alice = aliceRows.find((u) => u.username === 'alice')
   if (!alice) throw new Error('contract harness: failed to seed alice')
@@ -150,19 +151,19 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const memoryId = ulid()
 
   const now = Date.now()
-  await db.insert(agents).values({
+  await insertOne(db, agents, {
     id: agentId,
     name: agentName,
     description: 'contract-suite seed',
     outputs: JSON.stringify(['answer']),
   })
-  await db.insert(skills).values({
+  await insertOne(db, skills, {
     id: skillId,
     name: skillName,
     description: 'contract-suite seed',
     managedPath: 'skills/contract-skill/files/',
   })
-  await db.insert(mcps).values({
+  await insertOne(db, mcps, {
     id: mcpId,
     name: mcpName,
     description: 'contract-suite seed',
@@ -170,7 +171,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     config: JSON.stringify({ command: ['echo'] }),
     enabled: true,
   })
-  await db.insert(plugins).values({
+  await insertOne(db, plugins, {
     id: pluginId,
     name: pluginName,
     description: 'contract-suite seed',
@@ -182,7 +183,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     installedAt: now,
     enabled: true,
   })
-  await db.insert(workgroups).values({
+  await insertOne(db, workgroups, {
     id: workgroupId,
     name: 'contract-workgroup',
     description: 'contract-suite seed',
@@ -192,7 +193,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     createdAt: now,
     updatedAt: now,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'contract-workflow',
     description: 'contract-suite seed',
@@ -219,7 +220,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
       edges: [],
     }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'contract-task',
     workflowId,
@@ -234,7 +235,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     finishedAt: now,
     ownerUserId: alice.id,
   })
-  await db.insert(scheduledTasks).values({
+  await insertOne(db, scheduledTasks, {
     id: scheduledTaskId,
     name: 'contract-schedule',
     ownerUserId: alice.id,
@@ -251,14 +252,14 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     createdAt: now,
     updatedAt: now,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId: 'agent_1',
     status: 'done',
     promptText: 'hello',
   })
-  await db.insert(memories).values({
+  await insertOne(db, memories, {
     id: memoryId,
     scopeType: 'global',
     scopeId: null,

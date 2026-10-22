@@ -14,16 +14,15 @@
 // to a row the editor cannot view, and the error deliberately echoes ONLY the
 // name the editor typed (no id / description / owner — D1).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, GrantResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
 import { and, eq, like } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
+import type { AnyColumn } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
-import { agents, resourceGrants } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 import {
   hasResourceAclBypass,
@@ -117,7 +116,7 @@ export function stripWorkflowNodeAgentIds(def: WorkflowDefinition): WorkflowDefi
  * aggregate `missing` across groups into one `acl-missing-refs`.
  */
 export async function resolveRefsUsableByName(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor | null,
   type: AclResourceType,
   names: readonly string[],
@@ -163,7 +162,7 @@ function groupRowsByName(
 
 /** id + name maps for the tokens that matched a row of `type`. */
 async function loadAclRefRows(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   tokens: readonly string[],
 ): Promise<{
@@ -341,7 +340,7 @@ export function assertRefsUsableInTx(
 }
 
 export async function assertRefsUsableForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   actor: Actor | null,
   groups: readonly RefCheckGroup[],
 ): Promise<void> {
@@ -389,7 +388,7 @@ function missingRefsError(
  * single `acl-missing-refs`.
  */
 export async function resolveRefsUsableById(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor | null,
   type: AclResourceType,
   tokens: readonly string[],
@@ -451,7 +450,7 @@ export interface ReferencingAgentRow {
 
 export interface ReferencingScanArgs {
   /** agents 表上的 JSON 文本列（agents.mcp / plugins / skills / dependsOn）。 */
-  column: AnySQLiteColumn
+  column: AnyColumn
   /** 被引用的资源 id。 */
   id: string
   /** 对 parse 后的列值做权威判定。 */
@@ -490,7 +489,8 @@ function collectReferencing(
   return out
 }
 
-function referencingSelectShape(column: AnySQLiteColumn) {
+function referencingSelectShape(db: object, column: AnyColumn) {
+  const { agents } = tablesOf(db)
   return {
     id: agents.id,
     name: agents.name,
@@ -501,11 +501,12 @@ function referencingSelectShape(column: AnySQLiteColumn) {
 }
 
 export async function findAgentsReferencingIdInJsonColumn(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   args: ReferencingScanArgs,
 ): Promise<ReferencingAgentRow[]> {
+  const { agents } = tablesOf(db)
   const rows = await db
-    .select(referencingSelectShape(args.column))
+    .select(referencingSelectShape(db, args.column))
     .from(agents)
     .where(like(args.column, `%"${args.id}"%`))
   return collectReferencing(rows, args)
@@ -524,10 +525,11 @@ export async function findAgentsReferencingIdInJsonColumn(
  * `infrastructure/legacy/`。那条链收敛时把这一份并进去。
  */
 export async function listResourceGrantUserIdsForTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   type: GrantResourceType,
   resourceId: string,
 ): Promise<string[]> {
+  const { resourceGrants } = tablesOf(tx)
   const rows = await tx
     .select({ userId: resourceGrants.userId })
     .from(resourceGrants)

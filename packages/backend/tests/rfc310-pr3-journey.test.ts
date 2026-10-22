@@ -29,6 +29,8 @@
 // 原来放在 beforeAll 里的整套 fixture 因此改成 `seedFixture` 按用例重铺；只有
 // requirement provider mock 与只读的 baseline git 仓仍是整文件一份。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   afterAll,
@@ -51,8 +53,7 @@ import {
 } from '@agent-workflow/system-mocks/development/requirement-provider'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { cachedRepos } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeDevelopmentAutomation,
   type DevelopmentAutomationModule,
@@ -83,7 +84,7 @@ let repoHome = ''
 let repoPath = ''
 
 let mock: StartedRequirementProviderMock
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let fx: ProviderPr3Fixture
 let app: Hono
 let token: string
@@ -239,7 +240,8 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   // 是整文件一份（`--randomize` 下用例顺序不定，跨引擎也共用同一个 mock 进程）。
   seedExternal('REQ-7', 'r1', 'v1')
   fx = await buildPr3Fixture({ db, external: { mockUrl: mock.url } })
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id: 'repo-1',
     urlHash: 'deadbeef',
     localPath: repoPath,

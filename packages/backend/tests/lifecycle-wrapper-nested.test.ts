@@ -10,22 +10,16 @@
 // scheduler-rfc040-wrapper-await.test.ts and friends; this file pins the
 // shape-level invariants the refactor must not break.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   dispatchReviewNode,
   submitReviewDecision,
@@ -36,7 +30,7 @@ import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 interface Fixture {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   repoPath: string
   taskId: string
@@ -57,7 +51,8 @@ async function buildFixture(harness: ProviderHarness): Promise<Fixture> {
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
   const db = harness.db
-  await db.insert(agentsTable).values({
+  const { agents, workflows, tasks } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name: 'doc',
     description: '',
@@ -88,13 +83,13 @@ async function buildFixture(harness: ProviderHarness): Promise<Fixture> {
     edges: [],
   }
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -136,7 +131,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
     test('W1 iter scope — dispatch at iter=1 ignores iter=0 done rows', async () => {
       // iter=0: full pass done (agent + review approved)
       const iter0Agent = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs, tasks, docVersions } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: iter0Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -146,11 +142,13 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 1000,
         finishedAt: Date.now() - 900,
       })
-      await h.db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: iter0Agent, portName: 'docpath', content: '# v0' })
+      await insertOne(h.db, nodeRunOutputs, {
+        nodeRunId: iter0Agent,
+        portName: 'docpath',
+        content: '# v0',
+      })
       const iter0Review = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: iter0Review,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -164,7 +162,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
 
       // iter=1: agent re-ran with new content; review pending.
       const iter1Agent = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: iter1Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -174,9 +172,11 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await h.db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: iter1Agent, portName: 'docpath', content: '# v1' })
+      await insertOne(h.db, nodeRunOutputs, {
+        nodeRunId: iter1Agent,
+        portName: 'docpath',
+        content: '# v1',
+      })
 
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({
@@ -216,7 +216,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
 
     test('W2 iter scope — iterate at iter=1 mints upstream retry at iter=1, leaves iter=0 alone', async () => {
       const iter0Agent = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: iter0Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -227,7 +228,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         finishedAt: Date.now() - 900,
       })
       const iter1Agent = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: iter1Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -237,12 +238,14 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await h.db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: iter1Agent, portName: 'docpath', content: '# v1' })
+      await insertOne(h.db, nodeRunOutputs, {
+        nodeRunId: iter1Agent,
+        portName: 'docpath',
+        content: '# v1',
+      })
 
       const reviewRunId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: reviewRunId,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -254,7 +257,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       })
       mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
       writeFileSync(join(h.appHome, 'doc_versions', 'v1.md'), '# v1')
-      await h.db.insert(docVersions).values({
+      await insertOne(h.db, docVersions, {
         id: ulid(),
         taskId: h.taskId,
         reviewNodeId: 'rev_1',
@@ -304,7 +307,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
     test('W3 fan-out child rows are excluded from latestPerNode (parentNodeRunId set)', async () => {
       // Simulate an agent-multi fan-out: parent row done + N children done.
       const parent = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: parent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -315,7 +319,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         finishedAt: Date.now() - 500,
       })
       for (let i = 0; i < 3; i++) {
-        await h.db.insert(nodeRuns).values({
+        await insertOne(h.db, nodeRuns, {
           id: ulid(),
           taskId: h.taskId,
           nodeId: 'doc',
@@ -347,7 +351,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // Parent done with docpath output; phantom child with retry=99 but
       // parentNodeRunId set. dispatchReviewNode must pick parent.
       const parent = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: parent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -357,12 +362,14 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 1000,
         finishedAt: Date.now() - 500,
       })
-      await h.db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: parent, portName: 'docpath', content: '# parent body' })
+      await insertOne(h.db, nodeRunOutputs, {
+        nodeRunId: parent,
+        portName: 'docpath',
+        content: '# parent body',
+      })
 
       const child = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: child,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -399,7 +406,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // Seed: each iter has its own agent done row + review done + approved doc_version.
       for (const iter of [0, 1]) {
         const a = ulid()
-        await h.db.insert(nodeRuns).values({
+        const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(h.db)
+        await insertOne(h.db, nodeRuns, {
           id: a,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -409,11 +417,13 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
           startedAt: Date.now() - 1000,
           finishedAt: Date.now() - 900,
         })
-        await h.db
-          .insert(nodeRunOutputs)
-          .values({ nodeRunId: a, portName: 'docpath', content: `# iter-${iter}` })
+        await insertOne(h.db, nodeRunOutputs, {
+          nodeRunId: a,
+          portName: 'docpath',
+          content: `# iter-${iter}`,
+        })
         const rv = ulid()
-        await h.db.insert(nodeRuns).values({
+        await insertOne(h.db, nodeRuns, {
           id: rv,
           taskId: h.taskId,
           nodeId: 'rev_1',
@@ -426,7 +436,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         })
         mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
         writeFileSync(join(h.appHome, 'doc_versions', `iter${iter}.md`), `# iter-${iter}`)
-        await h.db.insert(docVersions).values({
+        await insertOne(h.db, docVersions, {
           id: ulid(),
           taskId: h.taskId,
           reviewNodeId: 'rev_1',
@@ -442,7 +452,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       }
       // iter=2: agent done, no review yet
       const iter2Agent = ulid()
-      await h.db.insert(nodeRuns).values({
+      const { nodeRuns, nodeRunOutputs, tasks, docVersions } = tablesOf(h.db)
+      await insertOne(h.db, nodeRuns, {
         id: iter2Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -452,9 +463,11 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await h.db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: iter2Agent, portName: 'docpath', content: '# iter-2' })
+      await insertOne(h.db, nodeRunOutputs, {
+        nodeRunId: iter2Agent,
+        portName: 'docpath',
+        content: '# iter-2',
+      })
 
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       const res = await dispatchReviewNode({

@@ -1,13 +1,14 @@
 // RFC-349 — owner projections and owner/name conflicts are provider-neutral;
 // SQL remains in Identity Access infrastructure.
 
-import { afterEach, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { users } from '@/db/schema'
 import { createOwnerIdentityQueries } from '@/modules/identity-access/application/ports/ownerIdentityQueries'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { isOwnerScopedNameConflict } from '@/modules/identity-access/public/operations'
@@ -40,7 +41,10 @@ function postgresqlFixture() {
     }
     return rows()
   }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: execute,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -65,10 +69,6 @@ function postgresqlFixture() {
   }
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describeEachProvider('RFC-349 owner identity provider seam', (harness) => {
   test('application owns filtering, bounded batches and malformed-row degradation', async () => {
@@ -102,7 +102,8 @@ describeEachProvider('RFC-349 owner identity provider seam', (harness) => {
 
   test('SQLite and PostgreSQL expose the same Promise query contract', async () => {
     const sqlite = harness.db
-    await sqlite.insert(users).values({
+    const { users } = tablesOf(sqlite)
+    await insertOne(sqlite, users, {
       id: 'owner-sqlite',
       username: 'owner-sqlite',
       displayName: 'SQLite Owner',

@@ -2,6 +2,8 @@
 // names with 422, persisting the trimmed value on accept, and behaving the
 // same way for JSON and multipart body paths.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
@@ -11,11 +13,9 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import { tasks, workflows } from '../src/db/schema'
-
 import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -26,7 +26,7 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
   const TOKEN = 'a'.repeat(64)
 
   interface Harness {
-    db: ProviderNeutralDatabase
+    db: PersistenceDb
     app: Hono
     repoPath: string
     appHome: string
@@ -63,7 +63,8 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
 
       const db = databaseHarness.db
       const wfId = ulid()
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: wfId,
         name: 'wf',
         definition: JSON.stringify(EMPTY_DEF),
@@ -188,7 +189,8 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
       expect(res.status).toBe(201)
       const body = (await res.json()) as { id: string; name: string }
       expect(body.name).toBe(name)
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, body.id)).all())[0]
+      const { tasks } = tablesOf(h.db)
+      const row = (await h.db.select().from(tasks).where(eq(tasks.id, body.id)))[0]
       expect(row?.name).toBe(name)
     })
 
@@ -203,7 +205,8 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
       expect(res.status).toBe(201)
       const body = (await res.json()) as { id: string; name: string }
       expect(body.name).toBe('PR-1234 fix')
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, body.id)).all())[0]
+      const { tasks } = tablesOf(h.db)
+      const row = (await h.db.select().from(tasks).where(eq(tasks.id, body.id)))[0]
       expect(row?.name).toBe('PR-1234 fix')
     })
 

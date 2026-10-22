@@ -19,11 +19,12 @@
 // 头注释刻意**不点名**任一 provider 适配器的文件：`rfc359-w5-t19d-coverage-parity` 按「测试文件
 // 提到该侧模块名」计注意力，一句讲历史的散文就能把「PG 侧被更多测试盯着」的倒挂推深一格——
 // 而这条测试恰恰是喂两侧的。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertFrozenTaskTriggerPreflight } from '../src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import { ValidationError } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -58,7 +59,7 @@ const VALID_CONTEXT = JSON.stringify({
 })
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   row: {
     readonly snapshot: string
     readonly triggerContextJson?: string | null
@@ -67,7 +68,8 @@ async function seedTask(
 ): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: `wf-${workflowId}`,
     description: '',
@@ -76,7 +78,7 @@ async function seedTask(
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: `task-${taskId}`,
     workflowId,

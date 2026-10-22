@@ -12,16 +12,12 @@
 // `setBy` is the task-member user id, recorded for the UI/audit trail only; like
 // every other attribution column it MUST NOT enter an agent prompt.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, ne } from 'drizzle-orm'
 import { isClarifyAskingNode, type ClarifyDirective } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import { taskNodeClarifyDirectives } from '@/db/schema'
-
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 /**
  * RFC-122: is `nodeId` an asking-agent node in the task's frozen workflow
  * snapshot (the JSON the route holds as a string)? Owns the JSON.parse so the
@@ -43,7 +39,7 @@ export function isAskingNodeInSnapshot(snapshotJson: string, nodeId: string): bo
  * `undefined` when no row exists (⇒ caller treats as 'continue').
  */
 export async function getNodeClarifyDirective(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   shardKey?: string | null,
@@ -60,7 +56,7 @@ export async function getNodeClarifyDirective(
  * the stop it overrides. Returns `undefined` when no row exists.
  */
 export async function getNodeClarifyDirectiveRow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   /**
@@ -70,6 +66,7 @@ export async function getNodeClarifyDirectiveRow(
    */
   shardKey?: string | null,
 ): Promise<{ directive: ClarifyDirective; updatedAt: number } | undefined> {
+  const { taskNodeClarifyDirectives } = tablesOf(db)
   const rows = await db
     .select({
       shardKey: taskNodeClarifyDirectives.shardKey,
@@ -96,7 +93,7 @@ export async function getNodeClarifyDirectiveRow(
  * behaviorally identical to an absent one.
  */
 export async function setNodeClarifyDirective(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   directive: ClarifyDirective,
@@ -111,7 +108,7 @@ export async function setNodeClarifyDirective(
 
 /** RFC-341 — transaction participant used by the clarify decision seal (RFC-359: both engines). */
 export async function setNodeClarifyDirectiveTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   taskId: string,
   nodeId: string,
   directive: ClarifyDirective,
@@ -120,6 +117,7 @@ export async function setNodeClarifyDirectiveTx(
   now: number,
 ): Promise<void> {
   const key = shardKey ?? ''
+  const { taskNodeClarifyDirectives } = tablesOf(tx)
   await tx
     .insert(taskNodeClarifyDirectives)
     .values({ taskId, nodeId, shardKey: key, directive, setBy, updatedAt: now })
@@ -153,9 +151,10 @@ export async function setNodeClarifyDirectiveTx(
  * asking-agent node's toggle; nodes with no row are absent (⇒ 'continue').
  */
 export async function listNodeClarifyDirectives(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
 ): Promise<Record<string, ClarifyDirective>> {
+  const { taskNodeClarifyDirectives } = tablesOf(db)
   const rows = await db
     .select({
       nodeId: taskNodeClarifyDirectives.nodeId,

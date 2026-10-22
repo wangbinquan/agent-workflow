@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLogger } from '@/util/log'
 // RFC-359 W1-T7b（P0-10）—— 驱动释放时清算 process effect，两个引擎各跑一遍。
 //
@@ -14,18 +16,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionOwners,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
@@ -68,9 +59,10 @@ function continuation(taskId: string): CanonicalContinuationRequest {
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'rfc359-t7b',
     description: '',
@@ -78,7 +70,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -101,7 +93,7 @@ async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<vo
  * attempt 的任务——即子进程节点在 driver 释放前的真实形状。
  */
 async function seedOwnedProcessEffect(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   over: {
     readonly runStatus?: 'done' | 'failed' | 'running'
     readonly spawned?: boolean
@@ -129,7 +121,8 @@ async function seedOwnedProcessEffect(
   expect(attached).toBe('attached')
 
   const runId = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -208,7 +201,9 @@ function withGatedOwnerRead<P extends { readonly ownership: object }>(
   return { ...persistence, ownership: gated }
 }
 
-async function readEffect(db: ProviderNeutralDatabase, effectId: string) {
+async function readEffect(db: PersistenceDb, effectId: string) {
+  const { taskExecutionEffects, taskExecutionEffectAttempts, taskExecutionEffectFences } =
+    tablesOf(db)
   const effect = (
     await db.select().from(taskExecutionEffects).where(eq(taskExecutionEffects.id, effectId))
   )[0]!
@@ -223,7 +218,8 @@ async function readEffect(db: ProviderNeutralDatabase, effectId: string) {
   return { effect, attempt: attempts[0]!, fences }
 }
 
-async function readOwner(db: ProviderNeutralDatabase, taskId: string) {
+async function readOwner(db: PersistenceDb, taskId: string) {
+  const { taskExecutionOwners } = tablesOf(db)
   return (
     await db.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
   )[0]!
@@ -256,6 +252,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
     const owner = await readOwner(db, seeded.taskId)
     expect(owner.state).toBe('released')
     expect(owner.recoveryCode).toBeNull()
+    const { taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(db)
     const intent = (
       await db
         .select({ state: taskExecutionIntents.state })
@@ -315,6 +312,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
     const owner = await readOwner(db, seeded.taskId)
     expect(owner.state).toBe('released')
     expect(owner.recoveryCode).toBe('task-execution-outcome-unknown')
+    const { taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(db)
     const intent = (
       await db
         .select()
@@ -444,6 +442,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
     const db = harness.db
     const seeded = await seedOwnedProcessEffect(db, { spawned: true, runStatus: 'done' })
     const oldOwner = await readOwner(db, seeded.taskId)
+    const { taskExecutionOwners } = tablesOf(db)
     await db
       .update(taskExecutionOwners)
       .set({ state: 'revoked', revision: oldOwner.revision + 1 })

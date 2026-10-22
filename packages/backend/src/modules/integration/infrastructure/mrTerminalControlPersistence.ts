@@ -2,15 +2,11 @@
 // 事务走统一原语；PG 侧「先按流序列化再看 open 状态」的事务级 advisory lock 由引擎能力矩阵表达
 // （SQLite 单写者下是 no-op）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, lt, lte, ne, or } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-  webhookMrLaunchGuards,
-  webhookMrStreamStates,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   MrLaunchGuardPersistencePort,
@@ -30,9 +26,7 @@ function safeCode(errorCode: string): string {
   return errorCode.replace(/[^a-z0-9._-]/gi, '-').slice(0, 200)
 }
 
-export function createMrLaunchGuardPersistence(
-  db: ProviderNeutralDatabase,
-): MrLaunchGuardPersistencePort {
+export function createMrLaunchGuardPersistence(db: PersistenceDb): MrLaunchGuardPersistencePort {
   const session = databaseSessionFor(db)
   return {
     async reserve(input) {
@@ -41,6 +35,7 @@ export function createMrLaunchGuardPersistence(
         // Unlike a row lock this also serializes the first event, before a
         // stream-state row exists, closing terminal-update -> guard-insert.
         await engineOf(tx).advisoryLock(tx, `${input.endpointId}:${input.streamKey}`)
+        const { webhookMrStreamStates, webhookMrLaunchGuards } = tablesOf(tx)
         const stream = (
           await tx
             .select({
@@ -69,7 +64,7 @@ export function createMrLaunchGuardPersistence(
             'the MR/PR stream became terminal before launch reservation',
           )
         }
-        await tx.insert(webhookMrLaunchGuards).values({
+        await insertOne(tx, webhookMrLaunchGuards, {
           id: input.guardId,
           endpointId: input.endpointId,
           streamKey: input.streamKey,
@@ -87,6 +82,7 @@ export function createMrLaunchGuardPersistence(
       })
     },
     async markLaunching(guardId, now) {
+      const { webhookMrLaunchGuards } = tablesOf(db)
       await db
         .update(webhookMrLaunchGuards)
         .set({ status: 'launching', updatedAt: now })
@@ -95,6 +91,7 @@ export function createMrLaunchGuardPersistence(
         )
     },
     async assertCanCommit(input) {
+      const { webhookMrLaunchGuards, webhookMrStreamStates } = tablesOf(db)
       const row = (
         await db
           .select({
@@ -121,6 +118,7 @@ export function createMrLaunchGuardPersistence(
       )
     },
     async markTaskCommitted(guardId, taskId, now) {
+      const { webhookMrLaunchGuards } = tablesOf(db)
       await db
         .update(webhookMrLaunchGuards)
         .set({ taskId, status: 'task-committed', updatedAt: now })
@@ -132,6 +130,7 @@ export function createMrLaunchGuardPersistence(
         )
     },
     async markLaunchSettled(guardId, taskId, now) {
+      const { webhookMrLaunchGuards } = tablesOf(db)
       await db
         .update(webhookMrLaunchGuards)
         .set({ taskId, status: 'launch-settled', launchOwnerKey: null, updatedAt: now })
@@ -143,6 +142,7 @@ export function createMrLaunchGuardPersistence(
         )
     },
     async markFailed(guardId, errorCode, now) {
+      const { webhookMrLaunchGuards } = tablesOf(db)
       const current = (
         await db
           .select({ status: webhookMrLaunchGuards.status })
@@ -162,6 +162,7 @@ export function createMrLaunchGuardPersistence(
         .where(eq(webhookMrLaunchGuards.id, guardId))
     },
     async listRevokingGuardIds() {
+      const { webhookMrLaunchGuards } = tablesOf(db)
       const rows = await db
         .select({ id: webhookMrLaunchGuards.id })
         .from(webhookMrLaunchGuards)
@@ -170,6 +171,7 @@ export function createMrLaunchGuardPersistence(
     },
     async reconcileStaleOnBoot(now) {
       await session.transaction(async (tx) => {
+        const { webhookMrLaunchGuards } = tablesOf(tx)
         await tx
           .update(webhookMrLaunchGuards)
           .set({ status: 'aborted-terminal', launchOwnerKey: null, updatedAt: now })
@@ -206,6 +208,7 @@ export function createMrLaunchGuardPersistence(
       })
     },
     async hasLaunchBarrier(binding, revision) {
+      const { webhookMrLaunchGuards } = tablesOf(db)
       return (
         (
           await db
@@ -226,12 +229,13 @@ export function createMrLaunchGuardPersistence(
 }
 
 export function createMrTerminalEffectPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): MrTerminalEffectPersistencePort {
   const session = databaseSessionFor(db)
   return {
     async claimNextDue(input) {
       return await session.transaction(async (tx) => {
+        const { webhookMrControlEffects } = tablesOf(tx)
         const candidates = await tx
           .select()
           .from(webhookMrControlEffects)
@@ -306,6 +310,7 @@ export function createMrTerminalEffectPersistence(
     async recordReceipts(effectId, receipts, now) {
       await session.transaction(async (tx) => {
         for (const receipt of receipts) {
+          const { webhookMrControlTargets } = tablesOf(tx)
           await tx
             .insert(webhookMrControlTargets)
             .values({
@@ -345,6 +350,7 @@ export function createMrTerminalEffectPersistence(
       })
     },
     async listReleaseOutcomes(effectId) {
+      const { webhookMrControlTargets } = tablesOf(db)
       const rows = await db
         .select({ releaseOutcome: webhookMrControlTargets.releaseOutcome })
         .from(webhookMrControlTargets)
@@ -352,6 +358,7 @@ export function createMrTerminalEffectPersistence(
       return rows.map((row) => row.releaseOutcome)
     },
     async finishAttempt(input) {
+      const { webhookMrControlEffects } = tablesOf(db)
       await db
         .update(webhookMrControlEffects)
         .set({

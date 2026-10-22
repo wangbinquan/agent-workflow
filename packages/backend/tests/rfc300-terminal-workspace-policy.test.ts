@@ -2,13 +2,14 @@
 // and the lifecycle atomicity seam: terminal status + prune claim are one CAS,
 // while a losing CAS leaves no orphaned claim.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { SpaceKind, TaskStatus } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import {
   ConcurrentTaskTransition,
   registerTerminalWorkspacePrunePolicy,
@@ -20,7 +21,7 @@ import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integ
 
 const ulid = monotonicFactory()
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let workflowId: string
 let uninstallAfterCommitPump: (() => void) | null = null
 
@@ -29,7 +30,8 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     db = harness.db
     uninstallAfterCommitPump = null
     workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'rfc300-policy',
       definition: '{}',
@@ -43,10 +45,11 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
   async function seedTask(
     status: TaskStatus = 'running',
-    overrides: Partial<typeof tasks.$inferInsert> = {},
+    overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
   ): Promise<string> {
     const id = ulid()
-    await db.insert(tasks).values({
+    const { tasks } = tablesOf(db)
+    await insertOne(db, tasks, {
       id,
       name: 'rfc300-policy',
       workflowId,
@@ -66,6 +69,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
   }
 
   async function rowOf(id: string) {
+    const { tasks } = tablesOf(db)
     return (await db.select().from(tasks).where(eq(tasks.id, id)))[0]!
   }
 
@@ -250,6 +254,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
           now: 301,
           reason: 'rfc300-atomic-loss',
           beforeCas: async () => {
+            const { tasks } = tablesOf(db)
             await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
           },
         }),

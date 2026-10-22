@@ -12,11 +12,12 @@
 //  2. **与真实展平同语义**。组套组、深度上限、循环检测、只读并集、挂载点冲突
 //     全部按真实规则报错，而不是「预览通过、保存 422」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { cachedRepos, repoGroupNodes, repoGroups } from '../src/db/schema'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { previewRepoGroupLayout as previewRepoGroupLayoutImpl } from '../src/services/repoGroup'
 import {
@@ -24,28 +25,26 @@ import {
   type RepoGroupAttachmentSpec,
 } from './helpers/repoGroupFixture'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 async function seedRepo(slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(cachedRepos)
-    .values({
-      id,
-      urlHash: `${slug}0000000`.slice(0, 8),
-      urlRedacted: `https://git.example/${slug}.git`,
-      localPath: `/tmp/${slug}`,
-      defaultBranch: 'main',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
+    id,
+    urlHash: `${slug}0000000`.slice(0, 8),
+    urlRedacted: `https://git.example/${slug}.git`,
+    localPath: `/tmp/${slug}`,
+    defaultBranch: 'main',
+    lastFetchedAt: now,
+    createdAt: now,
+  })
   return id
 }
 
 function previewRepoGroupLayout(
-  database: ProviderNeutralDatabase,
+  database: PersistenceDb,
   input: { name?: string; attachments: readonly RepoGroupAttachmentSpec[] },
 ) {
   return previewRepoGroupLayoutImpl(composeSqliteRepositoryWorkspaceStore(database), {
@@ -58,31 +57,26 @@ function previewRepoGroupLayout(
 async function seedGroup(name: string, repoIds: readonly string[]): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db
-    .insert(repoGroups)
-    .values({
-      id,
-      name,
-      description: '',
-      version: 1,
-      createdByUserId: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  const { repoGroups, repoGroupNodes } = tablesOf(db)
+  await insertOne(db, repoGroups, {
+    id,
+    name,
+    description: '',
+    version: 1,
+    createdByUserId: null,
+    createdAt: now,
+    updatedAt: now,
+  })
   for (const [i, rid] of repoIds.entries()) {
-    await db
-      .insert(repoGroupNodes)
-      .values({
-        groupId: id,
-        path: i === 0 ? '' : `m${i}`,
-        attachmentKind: 'repo',
-        cachedRepoId: rid,
-        ref: '',
-        subdir: '',
-        readonly: false,
-      })
-      .run()
+    await insertOne(db, repoGroupNodes, {
+      groupId: id,
+      path: i === 0 ? '' : `m${i}`,
+      attachmentKind: 'repo',
+      cachedRepoId: rid,
+      ref: '',
+      subdir: '',
+      readonly: false,
+    })
   }
   return id
 }
@@ -122,7 +116,8 @@ describeEachProvider('RFC-248 —— 干跑布局预览', (harness) => {
   })
 
   test('**零副作用**：只给 URL 的成员不导入、不落库，只计入 pendingImports', async () => {
-    const before = (await db.select().from(cachedRepos).all()).length
+    const { cachedRepos, repoGroups } = tablesOf(db)
+    const before = (await db.select().from(cachedRepos)).length
     const r = await previewRepoGroupLayout(db, {
       attachments: [
         {
@@ -138,9 +133,9 @@ describeEachProvider('RFC-248 —— 干跑布局预览', (harness) => {
     expect(r.pendingImports).toBe(1)
     expect(r.repos).toEqual([])
     // 关键：一行镜像都没多。
-    expect(await db.select().from(cachedRepos).all()).toHaveLength(before)
+    expect(await db.select().from(cachedRepos)).toHaveLength(before)
     // 组表同样不能多出行来——预览是纯读。
-    expect(await db.select().from(repoGroups).all()).toHaveLength(0)
+    expect(await db.select().from(repoGroups)).toHaveLength(0)
   })
 
   test('引用真实子组 ⇒ 递归展平，子组成员带上外层挂载前缀', async () => {

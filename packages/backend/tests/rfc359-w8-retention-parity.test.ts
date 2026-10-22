@@ -34,24 +34,11 @@
 // `platform/background/maintenanceWorkerRuntime.ts` 的分片调度器驱动。整趟入口不同不影响
 // **每一片删什么**，本文件锁的是后者。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  intentSessions,
-  intentTurnEvents,
-  intentTurns,
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  mcps,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  tasks,
-  users,
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggers,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -125,23 +112,38 @@ async function sweepToCompletion(
  *      MCP 联调会话还活着 / webhook 指向的任务还在执行。宿主行上的计数与状态列不会跟着消失，
  *      提前删掉事件会让面板呈现成「complete · 42 events」而内容空白（RFC-311 实现门 P2-11）。
  */
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const {
+    users,
+    mcps,
+    webhookEndpoints,
+    webhookTriggers,
+    memoryDistillJobs,
+    memoryDistillEvents,
+    intentSessions,
+    intentTurns,
+    intentTurnEvents,
+    mcpRuntimeTestSessions,
+    mcpRuntimeTestEvents,
+    tasks,
+    webhookTriggerFires,
+  } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(mcps).values({ id: 'mcp-1', name: 'mcp-1', type: 'local' })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, mcps, { id: 'mcp-1', name: 'mcp-1', type: 'local' })
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'ep',
     provider: 'gitlab',
     urlToken: 'tok',
     secretEnc: 'x',
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'trig-1',
     name: 'trig',
     endpointId: 'ep-1',
@@ -394,8 +396,10 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
 }
 
 /** 清理后仍在库里的行（按用户能认出来的标识），两个引擎必须逐字相同。 */
-async function survivors(db: ProviderNeutralDatabase): Promise<Record<string, string[]>> {
+async function survivors(db: PersistenceDb): Promise<Record<string, string[]>> {
   const sorted = (values: string[]): string[] => [...values].sort()
+  const { memoryDistillEvents, intentTurnEvents, mcpRuntimeTestEvents, webhookTriggerFires } =
+    tablesOf(db)
   return {
     distillEvents: sorted(
       (await db.select({ kind: memoryDistillEvents.kind }).from(memoryDistillEvents)).map(

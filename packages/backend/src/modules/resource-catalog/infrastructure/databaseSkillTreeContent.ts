@@ -2,7 +2,7 @@
 // `skill_content_entries`. A candidate is its own tree namespace
 // (`candidate:<id>`): never live, a version, staging or trash, so recovery and
 // residue checks ignore it, and deleting the skill removes it with the rest.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ValidationError } from '@/util/errors'
 import type { SkillPackageContentEntry } from '../application/skills/packageContentReader'
@@ -35,12 +35,12 @@ function entries(files: readonly SkillTreeFile[]): readonly SkillPackageContentE
 }
 
 export function createDatabaseSkillTreeContent(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly now?: () => number
 }): SkillTreeContentStore {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
-  const transaction = <T>(run: (handle: ProviderNeutralDatabase) => Promise<T>): Promise<T> =>
+  const transaction = <T>(run: (handle: PersistenceDb) => Promise<T>): Promise<T> =>
     session.transaction(run)
   return Object.freeze({
     async readVersion(request: { readonly skillId: string; readonly version: number }) {

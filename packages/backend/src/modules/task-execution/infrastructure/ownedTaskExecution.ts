@@ -9,14 +9,11 @@
 // 有上下文就按 token 做 owner CAS（不做 revision / lease 等值判定，心跳可能已推进它们）；
 // 没有上下文就是控制面 / 修复写手，只在任务仍有**活着的**（`claimed`）owner 时拒绝。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionOwners } from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import {
   assertTaskExecutionContext,
@@ -25,11 +22,11 @@ import {
 import { TaskExecutionError } from '../application/taskExecutionError'
 import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
 
-export type TaskExecutionTransaction = DatabaseTransaction
+export type TaskExecutionTransaction = PersistenceTx
 
 /** 任务执行面的写事务：体内抛错整笔回滚；重入复用外层事务。 */
 export function withTaskExecutionWrite<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return databaseSessionFor(db).transaction(body)
@@ -42,7 +39,7 @@ export function withTaskExecutionWrite<T>(
  * **体必须可重放**：PG 上它可能被整笔重跑。
  */
 export function withTaskExecutionSerializable<T>(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   body: (tx: TaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return databaseSessionFor(db).serializable(body)
@@ -55,6 +52,7 @@ export async function assertTaskOwnerTx(
   now: number,
 ): Promise<void> {
   assertOwnershipToken(token)
+  const { taskExecutionOwners } = tablesOf(tx)
   const rows = await tx
     .update(taskExecutionOwners)
     .set({
@@ -84,6 +82,7 @@ export async function assertTaskOwnerlessTx(
   tx: TaskExecutionTransaction,
   taskId: string,
 ): Promise<void> {
+  const { taskExecutionOwners } = tablesOf(tx)
   const rows = await tx
     .select({ state: taskExecutionOwners.state })
     .from(taskExecutionOwners)

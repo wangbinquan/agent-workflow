@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCrewStationSystemAgentRunFamily } from '@/modules/task-execution/composition/crewstationSystemAgentRunFamily'
 import { executeTaskImageSystemWorkspace } from '@/modules/runtime-management/composition/taskImageMaterial'
 import type {
@@ -149,7 +149,7 @@ function fixture() {
     },
   }
   const inputs: Parameters<typeof createCrewStationSystemAgentRunFamily>[0] = {
-    db: new Proxy({} as ProviderNeutralDatabase, {
+    db: new Proxy({} as PersistenceDb, {
       get() {
         throw new Error('unexpected Task database effect')
       },

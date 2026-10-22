@@ -20,9 +20,9 @@
 //
 // Nothing is upgraded unless the platform reports both the capability and the
 // parent's current image; only the image the release declares is requested.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskWorkspaces } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   BusinessOperation,
   BusinessTask,
@@ -138,7 +138,7 @@ export const NO_HOSTED_IMAGE_UPGRADES: HostedWorkspaceImageUpgrades = Object.fre
 type Registration = { readonly taskId: string; readonly requestKey: string }
 
 export function createHostedWorkspaceImageUpgrades(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly api: CrewStationBusinessExecution
   readonly fence: Pick<CrewStationMutationFence, 'current'>
   /** The task image version the running release declares; null when the
@@ -279,6 +279,7 @@ export function createHostedWorkspaceImageUpgrades(input: {
   }
   const upgradeOnDemand = async (owner: string): Promise<boolean> => {
     const target = await declared()
+    const { hostedTaskWorkspaces } = tablesOf(input.db)
     const row = (
       await input.db
         .select({

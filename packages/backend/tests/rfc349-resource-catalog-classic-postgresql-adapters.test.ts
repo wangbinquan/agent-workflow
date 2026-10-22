@@ -18,7 +18,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
   test('agent repository and composition are one provider-neutral implementation (RFC-359 W4-D14)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/agentRepository.ts')
     const composition = source('src/modules/resource-catalog/composition/agentOperations.ts')
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
@@ -35,7 +35,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
   test('skill repository and composition are one provider-neutral implementation (RFC-359 W4-D23c)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/skillRepository.ts')
     const composition = source('src/modules/resource-catalog/composition/skillOperations.ts')
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
     )
@@ -53,7 +53,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     )
 
     expect(bundle).toContain('export function composeClassicCatalogs(')
-    expect(bundle).toContain('readonly db: ProviderNeutralDatabase')
+    expect(bundle).toContain('readonly db: PersistenceDb')
     for (const root of ['src/bootstrap/daemonStart.ts', 'src/bootstrap/daemonApplication.ts']) {
       expect(source(root), root).toContain('composeDaemonResourceCatalogModules({')
       expect(source('src/bootstrap/daemonModules/resourceCatalog.ts')).toContain(

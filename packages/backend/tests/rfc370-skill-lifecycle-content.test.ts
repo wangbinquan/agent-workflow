@@ -1,12 +1,13 @@
 // RFC-370 H6: await storage effects before publishing legacy adoption or boot
 // availability. Real provider state remains owned by the existing AW workflow.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { skills, skillVersions } from '@/db/schema'
 import type {
   SkillLifecycleContentStore,
   SkillSnapshotInspector,
@@ -66,15 +67,21 @@ describeEachProvider('RFC-370 skill lifecycle content', (harness) => {
   })
   async function seed(name: string, reservationState: 'ready' | 'reserving' = 'ready') {
     const id = ulid()
-    await harness.db
-      .insert(skills)
-      .values({ id, name, managedPath: `skills/${id}/files`, reservationState })
+    const { skills } = tablesOf(harness.db)
+    await insertOne(harness.db, skills, {
+      id,
+      name,
+      managedPath: `skills/${id}/files`,
+      reservationState,
+    })
     return id
   }
   async function row(id: string) {
+    const { skills } = tablesOf(harness.db)
     return (await harness.db.select().from(skills).where(eq(skills.id, id)))[0]
   }
   async function versions(id: string) {
+    const { skillVersions } = tablesOf(harness.db)
     return await harness.db.select().from(skillVersions).where(eq(skillVersions.skillId, id))
   }
 
@@ -298,6 +305,7 @@ describeEachProvider('RFC-370 skill lifecycle content', (harness) => {
       verified: 1,
       quarantined: 0,
     })
+    const { skills } = tablesOf(harness.db)
     await harness.db.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, created.id))
     let inspected = false
     const counted: SkillSnapshotInspector = {

@@ -12,6 +12,8 @@
 // per-port repair prompt content is covered separately in the runner unit
 // + shared followup-prompt suites.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -19,9 +21,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -30,7 +31,7 @@ import {
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -55,9 +56,10 @@ function buildHarness(provider: ProviderHarness): Harness {
   }
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'rfc-049',
@@ -75,14 +77,15 @@ async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<str
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -183,6 +186,7 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
     // Task ends failed (both attempts hit the same missing-file failure).
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')

@@ -14,12 +14,13 @@
 //     两个引擎必须同样「不翻状态、不误伤 running 行」。
 //   · `recordLimitCancellation` 的降级：审计写失败只告警，**不能**把取消动作本身拖红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, recoveryEvents, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleResourceLimitPersistence } from '@/modules/system-operations/infrastructure/resourceLimitPersistence'
 import { __resetRecoveryCountersForTest, recoveryCountersSnapshot } from '@/services/recovery'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -36,9 +37,10 @@ interface SeedTask {
   readonly errorMessage?: string | null
 }
 
-async function seedTask(db: ProviderNeutralDatabase, input: SeedTask = {}): Promise<string> {
+async function seedTask(db: PersistenceDb, input: SeedTask = {}): Promise<string> {
   const taskId = `task-${ulid()}`
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w7',
@@ -64,7 +66,7 @@ async function seedTask(db: ProviderNeutralDatabase, input: SeedTask = {}): Prom
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly taskId: string
     readonly tokTotal?: number | null
@@ -73,7 +75,8 @@ async function seedRun(
   },
 ): Promise<string> {
   const runId = `run-${ulid()}`
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId: input.taskId,
     nodeId: 'node-w7',
@@ -86,7 +89,7 @@ async function seedRun(
 }
 
 /** 审计 sink 挂掉的样子：只有 `.insert` 抛，其余照常走真库。 */
-function withFailingInsert(db: ProviderNeutralDatabase): ProviderNeutralDatabase {
+function withFailingInsert(db: PersistenceDb): PersistenceDb {
   return new Proxy(db, {
     get(target, property) {
       if (property === 'insert') {
@@ -229,8 +232,9 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
       errorMessage: null,
     })
 
-    const read = async (taskId: string) =>
-      (
+    const read = async (taskId: string) => {
+      const { tasks } = tablesOf(harness.db)
+      return (
         await harness.db
           .select({
             status: tasks.status,
@@ -241,6 +245,7 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
           .where(eq(tasks.id, taskId))
           .limit(1)
       )[0]
+    }
 
     await persistence.writeLimitReason({
       taskId: canceled,
@@ -283,6 +288,7 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
       now: 1_700,
     })
 
+    const { recoveryEvents } = tablesOf(harness.db)
     const events = await harness.db
       .select()
       .from(recoveryEvents)
@@ -324,6 +330,7 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
       }),
     ).resolves.toBeUndefined()
 
+    const { recoveryEvents } = tablesOf(harness.db)
     expect(
       await harness.db.select().from(recoveryEvents).where(eq(recoveryEvents.taskId, taskId)),
     ).toHaveLength(0)

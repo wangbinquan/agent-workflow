@@ -2,15 +2,12 @@
 // 发布走统一事务；最后一步对定义行做 CAS（草稿与已发布修订未变、未退役），PG 的 READ COMMITTED 下需要它，
 // SQLite 独占事务下恒成立。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  customEventSourceDefinitions,
-  customEventSourceRevisions,
-  eventSources,
-  eventTypeCatalog,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CustomEventSourceStorePort } from '../application/ports/customEventSourceStore'
@@ -35,12 +32,11 @@ function validationReceipt(value: string): CustomEventSourceValidationReceipt {
   return parsed as CustomEventSourceValidationReceipt
 }
 
-export function createCustomEventSourceStore(
-  db: ProviderNeutralDatabase,
-): CustomEventSourceStorePort {
+export function createCustomEventSourceStore(db: PersistenceDb): CustomEventSourceStorePort {
   const record = async (
-    row: typeof customEventSourceDefinitions.$inferSelect,
+    row: PersistenceTables['customEventSourceDefinitions']['$inferSelect'],
   ): Promise<CustomEventSourceAuthoringRecord> => {
+    const { customEventSourceRevisions } = tablesOf(db)
     const published =
       row.publishedRevision === null
         ? undefined
@@ -68,18 +64,21 @@ export function createCustomEventSourceStore(
     }
   }
 
-  const definition = async (id: string) =>
-    (
+  const definition = async (id: string) => {
+    const { customEventSourceDefinitions } = tablesOf(db)
+    return (
       await db
         .select()
         .from(customEventSourceDefinitions)
         .where(eq(customEventSourceDefinitions.id, id))
         .limit(1)
     )[0]
+  }
 
   return {
     async create(input) {
-      await db.insert(customEventSourceDefinitions).values({
+      const { customEventSourceDefinitions } = tablesOf(db)
+      await insertOne(db, customEventSourceDefinitions, {
         id: input.id,
         draftJson: JSON.stringify(input.draft),
         publishedRevision: null,
@@ -99,6 +98,7 @@ export function createCustomEventSourceStore(
     },
 
     async list() {
+      const { customEventSourceDefinitions } = tablesOf(db)
       const rows = await db
         .select()
         .from(customEventSourceDefinitions)
@@ -110,6 +110,7 @@ export function createCustomEventSourceStore(
     },
 
     async update(input) {
+      const { customEventSourceDefinitions } = tablesOf(db)
       const changed = await db
         .update(customEventSourceDefinitions)
         .set({ draftJson: JSON.stringify(input.draft), updatedAt: input.now })
@@ -127,6 +128,12 @@ export function createCustomEventSourceStore(
 
     async publish(input) {
       await databaseSessionFor(db).transaction(async (tx) => {
+        const {
+          customEventSourceDefinitions,
+          customEventSourceRevisions,
+          eventSources,
+          eventTypeCatalog,
+        } = tablesOf(tx)
         const current = (
           await tx
             .select()
@@ -144,7 +151,7 @@ export function createCustomEventSourceStore(
           throw new Error('custom event source draft changed during validation')
         }
 
-        await tx.insert(customEventSourceRevisions).values({
+        await insertOne(tx, customEventSourceRevisions, {
           sourceId: input.id,
           revision: input.revision,
           contentJson: JSON.stringify(input.draft),
@@ -153,7 +160,7 @@ export function createCustomEventSourceStore(
           publishedAt: input.now,
           publishedBy: input.actorUserId,
         })
-        await tx.insert(eventSources).values({
+        await insertOne(tx, eventSources, {
           sourceId: input.source.sourceRef.id,
           revision: input.source.sourceRef.revision,
           descriptorJson: JSON.stringify(input.source),
@@ -178,11 +185,9 @@ export function createCustomEventSourceStore(
             state: 'published' as const,
             registeredAt: input.now,
           })),
-          (batch) =>
-            tx
-              .insert(eventTypeCatalog)
-              .values([...batch])
-              .run(),
+          (batch) => {
+            return queryWrite(tx.insert(eventTypeCatalog).values([...batch]))
+          },
         )
         const published = await tx
           .update(customEventSourceDefinitions)
@@ -211,6 +216,7 @@ export function createCustomEventSourceStore(
     },
 
     async retire(id, now) {
+      const { customEventSourceDefinitions } = tablesOf(db)
       const retired = await db
         .update(customEventSourceDefinitions)
         .set({ retiredAt: now, updatedAt: now })
@@ -225,6 +231,7 @@ export function createCustomEventSourceStore(
     },
 
     async getPublished(ref) {
+      const { customEventSourceRevisions } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -247,6 +254,7 @@ export function createCustomEventSourceStore(
     },
 
     async acceptsNewSubscriptions(ref) {
+      const { customEventSourceDefinitions, customEventSourceRevisions } = tablesOf(db)
       const definitionRow = (
         await db
           .select({ retiredAt: customEventSourceDefinitions.retiredAt })

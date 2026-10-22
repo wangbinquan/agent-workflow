@@ -4,12 +4,13 @@
 // (the service-level codes are asserted in task-file-content.test.ts /
 // change-narrative.test.ts by behavior).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { resetChangeNarrativeStateForTests } from '../src/services/changeNarrative'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -19,18 +20,16 @@ afterEach(() => {
   resetChangeNarrativeStateForTests()
 })
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  lineage?: typeof providerTaskLineage,
-): Promise<string> {
+async function seedTask(db: PersistenceDb, lineage?: typeof providerTaskLineage): Promise<string> {
   const taskId = `01RC${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -95,7 +94,7 @@ describe('RFC-239 route error codes', () => {
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedTaskFixture: typeof seedTask,
   ) => void,
 ): void {

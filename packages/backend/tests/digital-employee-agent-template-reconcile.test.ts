@@ -14,11 +14,11 @@
  * A drifted row is compared against the snapshot taken right after the first
  * seed, so these cases stay honest without restating the template text.
  */
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents as agentRows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { getAgentById, listAgents } from '@/services/agent'
@@ -29,7 +29,7 @@ import {
 } from '@/services/digitalEmployeeAgentTemplates'
 import { describeEachProvider } from './helpers/eachProvider'
 
-function templateCatalog(db: ProviderNeutralDatabase) {
+function templateCatalog(db: PersistenceDb) {
   return composeDigitalEmployeeAgentTemplateCatalogFor(
     db,
     composeDigitalEmployeeAgentTemplateCatalogParticipant,
@@ -37,7 +37,7 @@ function templateCatalog(db: ProviderNeutralDatabase) {
 }
 
 /** Everything the template owns; timestamps move on every repair by design. */
-async function definitionOf(db: ProviderNeutralDatabase, id: string) {
+async function definitionOf(db: PersistenceDb, id: string) {
   const agent = await getAgentById(db, id)
   expect(agent).not.toBeNull()
   const { createdAt: _createdAt, updatedAt: _updatedAt, ...definition } = agent!
@@ -54,14 +54,15 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     )
 
     for (const id of DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS) {
+      const { agents } = tablesOf(db)
       await db
-        .update(agentRows)
+        .update(agents)
         .set({
           description: 'drifted description',
           bodyMd: 'drifted body',
           frontmatterExtra: '{}',
         })
-        .where(eq(agentRows.id, id))
+        .where(eq(agents.id, id))
     }
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
@@ -81,7 +82,8 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     const seeded = await definitionOf(db, id)
     const seededCount = (await listAgents(db)).length
 
-    await db.update(agentRows).set({ name: 'drifted-name' }).where(eq(agentRows.id, id))
+    const { agents } = tablesOf(db)
+    await db.update(agents).set({ name: 'drifted-name' }).where(eq(agents.id, id))
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
     expect(await definitionOf(db, id)).toEqual(seeded)
@@ -94,7 +96,8 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-    await db.update(agentRows).set({ description: 'drifted' }).where(eq(agentRows.id, id))
+    const { agents } = tablesOf(db)
+    await db.update(agents).set({ description: 'drifted' }).where(eq(agents.id, id))
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const repaired = await getAgentById(db, id)
 
@@ -110,7 +113,8 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const privatedId = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[8]
 
-    await db.update(agentRows).set({ visibility: 'private' }).where(eq(agentRows.id, privatedId))
+    const { agents } = tablesOf(db)
+    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, privatedId))
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
@@ -134,7 +138,8 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
       await ensureDigitalEmployeeAgentTemplates(catalog)
       const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-      await db.update(agentRows).set(squat).where(eq(agentRows.id, id))
+      const { agents } = tablesOf(db)
+      await db.update(agents).set(squat).where(eq(agents.id, id))
 
       await expect(ensureDigitalEmployeeAgentTemplates(catalog)).rejects.toMatchObject({
         code: 'builtin-agent-id-collision',

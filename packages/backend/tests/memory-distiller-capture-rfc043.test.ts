@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -22,8 +24,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { memories, memoryDistillJobs } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { clipAndRedactStderr } from '../src/modules/memory/application/distill/memoryDistiller'
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
@@ -35,7 +36,7 @@ import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastruct
 import { appHome } from '../src/util/paths'
 import { describeEachProvider } from './helpers/eachProvider'
 
-function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
+function createMemoryDistillTestContext(db: PersistenceDb) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
@@ -68,9 +69,10 @@ function fakeRun(over: Partial<SystemAgentRunResult> = {}): RunDistillOptions['r
     }) as SystemAgentRunResult
 }
 
-async function seedJobRow(db: ProviderNeutralDatabase, attempts = 0) {
+async function seedJobRow(db: PersistenceDb, attempts = 0) {
   const id = ulid()
-  await db.insert(memoryDistillJobs).values({
+  const { memoryDistillJobs } = tablesOf(db)
+  await insertOne(db, memoryDistillJobs, {
     id,
     debounceKey: 'task-x:feedback',
     sourceKind: 'feedback',
@@ -93,9 +95,10 @@ async function seedJobRow(db: ProviderNeutralDatabase, attempts = 0) {
   )[0]!
 }
 
-async function seedGlobalApproved(db: ProviderNeutralDatabase, title: string) {
+async function seedGlobalApproved(db: PersistenceDb, title: string) {
   const id = ulid()
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id,
     scopeType: 'global',
     scopeId: null,
@@ -115,7 +118,7 @@ async function seedGlobalApproved(db: ProviderNeutralDatabase, title: string) {
 }
 
 describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: ReturnType<typeof createMemoryDistillTestContext>
   let previousHome: string | undefined
   let temporaryHome: string
@@ -146,6 +149,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
       siblings: [job],
       runFn,
     })
+    const { memoryDistillJobs } = tablesOf(db)
     const refreshed = (
       await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job.id)).limit(1)
     )[0]!
@@ -163,6 +167,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
 
   test('attempts>0 leaves user_prompt_md untouched but still refreshes post-spawn columns', async () => {
     const row = await seedJobRow(db, 1)
+    const { memoryDistillJobs } = tablesOf(db)
     // Pretend attempt-0 already wrote the prompt
     await db
       .update(memoryDistillJobs)
@@ -207,6 +212,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
         runFn,
       }),
     ).rejects.toThrow(/exited with code 1/)
+    const { memoryDistillJobs } = tablesOf(db)
     const refreshed = (
       await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job.id)).limit(1)
     )[0]!
@@ -242,6 +248,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
       }),
     ).rejects.toThrow(DistillerProtocolError)
     expect(calls).toHaveLength(1)
+    const { memoryDistillJobs } = tablesOf(db)
     const refreshed = (
       await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job.id)).limit(1)
     )[0]!

@@ -10,19 +10,14 @@
 //   · 判据 —— 终态化写回行数对不上就 `task-continuation-stale` 整笔回滚，SQLite 不再「写没写进去
 //     都算成功」。
 // Existing companion-record fields are opaque data; no domain decisions are exercised.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, rawRows } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
 import { eq, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEventFamilyCutovers,
-  committedEvents,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
   DrizzleTaskExecutionIntentTerminalPersistence,
@@ -36,11 +31,16 @@ const INPUT_NOW = 1_700_000_000_200
 const WALL_NOW = INPUT_NOW + 500
 const FAILURE = 'boot-fixture-interrupted'
 
-async function seed(db: ProviderNeutralDatabase, state: 'pending' | 'claimed' = 'pending') {
-  await db
-    .insert(workflows)
-    .values({ id: 'workflow-boot', name: 'workflow-boot', definition: '{}' })
-  await db.insert(tasks).values({
+async function seed(db: PersistenceDb, state: 'pending' | 'claimed' = 'pending') {
+  const {
+    workflows,
+    tasks,
+    taskExecutionIntents,
+    taskExecutionLineageOperationRecords,
+    committedEventFamilyCutovers,
+  } = tablesOf(db)
+  await insertOne(db, workflows, { id: 'workflow-boot', name: 'workflow-boot', definition: '{}' })
+  await insertOne(db, tasks, {
     id: ID,
     name: ID,
     workflowId: 'workflow-boot',
@@ -61,7 +61,7 @@ async function seed(db: ProviderNeutralDatabase, state: 'pending' | 'claimed' = 
       { stableNodeKey: 'task-root', frozenOccurrenceKey: ID, workflowRevision: 1 },
     ]),
   })
-  await db.insert(taskExecutionIntents).values({
+  await insertOne(db, taskExecutionIntents, {
     id: 'intent-boot',
     taskId: ID,
     kind: 'recovery',
@@ -78,7 +78,7 @@ async function seed(db: ProviderNeutralDatabase, state: 'pending' | 'claimed' = 
     createdAt: INPUT_NOW - 100,
     updatedAt: INPUT_NOW - 100,
   })
-  await db.insert(taskExecutionLineageOperationRecords).values({
+  await insertOne(db, taskExecutionLineageOperationRecords, {
     id: 'record-boot',
     recordKind: 'replay-decision',
     executionLineageId: ID,
@@ -103,18 +103,19 @@ async function seed(db: ProviderNeutralDatabase, state: 'pending' | 'claimed' = 
     .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
 }
 
-async function snapshot(db: ProviderNeutralDatabase) {
-  const task = await db.select().from(tasks).where(eq(tasks.id, ID)).get()
-  const intent = await db
-    .select()
-    .from(taskExecutionIntents)
-    .where(eq(taskExecutionIntents.id, 'intent-boot'))
-    .get()
-  const record = await db
-    .select()
-    .from(taskExecutionLineageOperationRecords)
-    .where(eq(taskExecutionLineageOperationRecords.id, 'record-boot'))
-    .get()
+async function snapshot(db: PersistenceDb) {
+  const { tasks, taskExecutionIntents, taskExecutionLineageOperationRecords, committedEvents } =
+    tablesOf(db)
+  const task = await first(db.select().from(tasks).where(eq(tasks.id, ID)))
+  const intent = await first(
+    db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.id, 'intent-boot')),
+  )
+  const record = await first(
+    db
+      .select()
+      .from(taskExecutionLineageOperationRecords)
+      .where(eq(taskExecutionLineageOperationRecords.id, 'record-boot')),
+  )
   if (task === undefined || intent === undefined || record === undefined) {
     throw new Error('boot companion fixture is incomplete')
   }
@@ -267,7 +268,10 @@ describeEachProvider(
           },
         })
         expect(
-          await harness.db.all(sql`SELECT task_status FROM rfc359_boot_companion_observations`),
+          await rawRows(
+            harness.db,
+            sql`SELECT task_status FROM rfc359_boot_companion_observations`,
+          ),
         ).toEqual([{ task_status: 'running' }])
         expect(publications).toEqual([after])
       })
@@ -377,11 +381,12 @@ describeEachProvider('RFC-359 boot companion writes inside the caller transactio
         now: INPUT_NOW,
         claimedOwnerEpoch: 7,
       })
+      const { taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(tx)
       // 同一笔事务里读得到自己的写入。
-      expect(await tx.select().from(taskExecutionIntents).get()).toEqual(
+      expect(await first(tx.select().from(taskExecutionIntents))).toEqual(
         terminalIntent(before.intent),
       )
-      expect(await tx.select().from(taskExecutionLineageOperationRecords).get()).toEqual(
+      expect(await first(tx.select().from(taskExecutionLineageOperationRecords))).toEqual(
         terminalRecord(before.record),
       )
     })

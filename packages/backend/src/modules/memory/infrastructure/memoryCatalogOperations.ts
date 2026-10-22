@@ -4,6 +4,9 @@
 // 大小写不敏感搜索经引擎能力矩阵表达。判据本身在 domain/scopeAuthorization.ts，两个 provider 只有这一份。
 // 测试用的故障注入缝（`MemoryCatalogTestHooks`）只在装配时给，与旧 SQLite 实现的 `MemoryMutationTestHooks` 同义。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, getTableColumns, inArray, lt, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
@@ -34,13 +37,6 @@ import type {
   RepositoryScopeAuthorizationInTx,
   RepositoryScopeTarget,
 } from '@/modules/source-control/public/participants'
-import {
-  memories,
-  memoryDistillJobs,
-  memoryScopeMoveEvents,
-  userPermissionGrants,
-  users,
-} from '@/db/schema'
 import type {
   AuthenticatedPrincipal,
   DirectCommandContextFactory,
@@ -56,12 +52,8 @@ import {
   type MemoryScopeKind,
 } from '../domain/scopeAuthorization'
 import type { ResourceMemoryScopeRef } from '@/modules/resource-catalog/public/types'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { listFusedIntoSkill } from './skillMemoryFusionParticipant'
 import {
   ConflictError,
@@ -85,10 +77,10 @@ import type {
 } from '../../memory/public/catalog'
 
 /** RFC-359 W4-D4：一份实现，两个 provider 共用——事务句柄是统一事务原语的句柄。 */
-export type MemoryTransaction = DatabaseTransaction
+export type MemoryTransaction = PersistenceTx
 /** 旧名保留为别名，PG 装配收敛后删除。 */
 export type PostgresqlMemoryTransaction = MemoryTransaction
-type MemoryRow = typeof memories.$inferSelect
+type MemoryRow = PersistenceTables['memories']['$inferSelect']
 
 /** 测试专用故障注入缝：SQL 写入之后、事务提交之前；以及 Move 授权判定之后、写入之前。 */
 export interface MemoryCatalogTestHooks {
@@ -97,10 +89,11 @@ export interface MemoryCatalogTestHooks {
 }
 
 /** 摘要路径不读正文（RFC-311）。列映射在函数里取：schema 表是按 provider 投影的代理，模块级常量会钉死一个 provider。 */
-function summaryColumns() {
+function summaryColumns(db: object) {
+  const { memories } = tablesOf(db)
   return Object.fromEntries(
     Object.entries(getTableColumns(memories)).filter(([key]) => key !== 'bodyMd'),
-  ) as Omit<ReturnType<typeof getTableColumns<typeof memories>>, 'bodyMd'>
+  ) as Omit<ReturnType<typeof getTableColumns<PersistenceTables['memories']>>, 'bodyMd'>
 }
 
 function scopeKey(scope: MemoryScopeRef): string {
@@ -204,6 +197,7 @@ async function currentActor(
   tx: MemoryTransaction,
   principal: AuthenticatedPrincipal,
 ): Promise<Actor> {
+  const { users, userPermissionGrants } = tablesOf(tx)
   const accountRows = await tx
     .select({
       id: users.id,
@@ -216,7 +210,6 @@ async function currentActor(
     .from(users)
     .where(eq(users.id, principal.userId))
     .limit(1)
-    .all()
   const account = accountRows[0]
   if (account === undefined || account.status !== 'active') {
     throw new UnauthorizedError('request authority is no longer active')
@@ -225,7 +218,6 @@ async function currentActor(
     .select({ permission: userPermissionGrants.permission })
     .from(userPermissionGrants)
     .where(eq(userPermissionGrants.userId, account.id))
-    .all()
   const additionalPermissions = normalizeStoredAdditionalPermissions({
     role: account.role,
     additionalPermissions: grants.map((row) => row.permission),
@@ -324,7 +316,7 @@ async function assertManageable(input: {
 }
 
 export function composeMemoryCatalogOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly contexts: DirectCommandContextFactory
   readonly authorization: MemoryResourceScopeAccessParticipant<MemoryTransaction>
   readonly testHooks?: MemoryCatalogTestHooks
@@ -357,11 +349,11 @@ export function composeMemoryCatalogOperations(input: {
   const loadJobLanguages = async (ids: readonly string[]) => {
     const languages = new Map<string, 'zh-CN' | 'en-US' | null>()
     if (ids.length === 0) return languages
+    const { memoryDistillJobs } = tablesOf(input.db)
     const rows = await input.db
       .select({ id: memoryDistillJobs.id, outputLang: memoryDistillJobs.outputLang })
       .from(memoryDistillJobs)
       .where(inArray(memoryDistillJobs.id, [...ids]))
-      .all()
     for (const row of rows) {
       languages.set(
         row.id,
@@ -373,6 +365,7 @@ export function composeMemoryCatalogOperations(input: {
 
   const listRows = async (filter: MemoryListFilter = {}) => {
     const conditions = []
+    const { memories } = tablesOf(input.db)
     if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))
     if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
     if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
@@ -388,13 +381,19 @@ export function composeMemoryCatalogOperations(input: {
     }
     const where = conditions.length === 0 ? undefined : and(...conditions)
     const rows = await (where === undefined
-      ? input.db.select(summaryColumns()).from(memories).orderBy(desc(memories.createdAt)).all()
-      : input.db
-          .select(summaryColumns())
-          .from(memories)
-          .where(where)
-          .orderBy(desc(memories.createdAt))
-          .all())
+      ? queryRows(
+          input.db
+            .select(summaryColumns(input.db))
+            .from(memories)
+            .orderBy(desc(memories.createdAt)),
+        )
+      : queryRows(
+          input.db
+            .select(summaryColumns(input.db))
+            .from(memories)
+            .where(where)
+            .orderBy(desc(memories.createdAt)),
+        ))
     const kept = rows.filter((row) => matchesTagFilter(parseTags(row.tags), filter))
     const jobIds = kept.flatMap((row) =>
       row.status === 'candidate' && row.distillJobId !== null ? [row.distillJobId] : [],
@@ -416,6 +415,7 @@ export function composeMemoryCatalogOperations(input: {
     size: number,
   ): Promise<MemoryPageRow[]> => {
     const conditions = []
+    const { memories } = tablesOf(input.db)
     if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))
     if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
     if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
@@ -439,11 +439,13 @@ export function composeMemoryCatalogOperations(input: {
     }
     const where = conditions.length === 0 ? undefined : and(...conditions)
     const base = input.db
-      .select({ ...summaryColumns(), createdAt: memories.createdAt })
+      .select({ ...summaryColumns(input.db), createdAt: memories.createdAt })
       .from(memories)
     const rows = await (where === undefined
-      ? base.orderBy(desc(memories.createdAt), desc(memories.id)).limit(size).all()
-      : base.where(where).orderBy(desc(memories.createdAt), desc(memories.id)).limit(size).all())
+      ? queryRows(base.orderBy(desc(memories.createdAt), desc(memories.id)).limit(size))
+      : queryRows(
+          base.where(where).orderBy(desc(memories.createdAt), desc(memories.id)).limit(size),
+        ))
     const jobIds = rows.flatMap((row) =>
       row.status === 'candidate' && row.distillJobId !== null ? [row.distillJobId] : [],
     )
@@ -458,7 +460,8 @@ export function composeMemoryCatalogOperations(input: {
   }
 
   const getById = async (id: string): Promise<MemoryWithChain | null> => {
-    const rows = await input.db.select().from(memories).where(eq(memories.id, id)).limit(1).all()
+    const { memories } = tablesOf(input.db)
+    const rows = await input.db.select().from(memories).where(eq(memories.id, id)).limit(1)
     const first = rows[0]
     if (first === undefined) return null
     const memory = rowToMemory(first)
@@ -472,7 +475,6 @@ export function composeMemoryCatalogOperations(input: {
         .from(memories)
         .where(eq(memories.id, cursor))
         .limit(1)
-        .all()
       const parent = parentRows[0]
       if (parent === undefined) break
       const parsed = rowToMemory(parent)
@@ -509,6 +511,7 @@ export function composeMemoryCatalogOperations(input: {
     listFusedInto: (skillId: string) => listFusedIntoSkill(input.db, skillId),
     async listWithBody(filter = {}) {
       const conditions = []
+      const { memories } = tablesOf(input.db)
       if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))
       if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
       if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
@@ -523,8 +526,10 @@ export function composeMemoryCatalogOperations(input: {
       }
       const where = conditions.length === 0 ? undefined : and(...conditions)
       const rows = await (where === undefined
-        ? input.db.select().from(memories).orderBy(desc(memories.createdAt)).all()
-        : input.db.select().from(memories).where(where).orderBy(desc(memories.createdAt)).all())
+        ? queryRows(input.db.select().from(memories).orderBy(desc(memories.createdAt)))
+        : queryRows(
+            input.db.select().from(memories).where(where).orderBy(desc(memories.createdAt)),
+          ))
       return rows.map(rowToMemory).filter((memory) => matchesTagFilter(memory.tags, filter))
     },
     getById,
@@ -601,7 +606,8 @@ export function composeMemoryCatalogOperations(input: {
     next: MemoryStatus,
     code: string,
   ): Promise<Memory> => {
-    const rows = await input.db.select().from(memories).where(eq(memories.id, id)).limit(1).all()
+    const { memories } = tablesOf(input.db)
+    const rows = await input.db.select().from(memories).where(eq(memories.id, id)).limit(1)
     const row = rows[0]
     if (row === undefined) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
     if (!expected.includes(row.status)) {
@@ -615,7 +621,6 @@ export function composeMemoryCatalogOperations(input: {
       .set({ status: next })
       .where(and(eq(memories.id, id), eq(memories.status, row.status)))
       .returning()
-      .all()
     if (changed[0] === undefined) throw staleConflictError('memory', `memory ${id} changed`)
     return rowToMemory(changed[0])
   }
@@ -643,26 +648,25 @@ export function composeMemoryCatalogOperations(input: {
         version: 1,
         fusedIntoSkillId: null,
       })
-      await input.db
-        .insert(memories)
-        .values({
-          ...memory,
-          tags: JSON.stringify(memory.tags),
-          status: 'candidate',
-          sourceKind: 'manual',
-        })
-        .run()
+      const { memories } = tablesOf(input.db)
+      await insertOne(input.db, memories, {
+        ...memory,
+        tags: JSON.stringify(memory.tags),
+        status: 'candidate',
+        sourceKind: 'manual',
+      })
       publish({ type: 'memory.candidate.created', memory: summaryFromMemory(memory) })
       return memory
     },
     async promote(id, command, administratorUserId) {
       const committed = await session.transaction(async (tx) => {
+        const { memories } = tablesOf(tx)
         // 读—改—写：`status === 'candidate'` 的裁决判据、写回的 `version` 与 `tags` 都由这次读
         // 决定，而 UPDATE 的 where 只有 id。不先锁住候选行，PG 的 READ COMMITTED 下两个管理员
         // 同时批准 / 拒绝同一条候选会**双双拿到 200**，库里只留后写的那个
         // （tests/rfc359-w8-t28-lost-update.test.ts L4）。
         await engineOf(tx).lockAggregateRoot(tx, memories, memories.id, id)
-        const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
+        const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1)
         const candidate = rows[0]
         if (candidate === undefined)
           throw new NotFoundError('memory-not-found', `memory ${id} not found`)
@@ -678,14 +682,13 @@ export function composeMemoryCatalogOperations(input: {
             .set({ status: 'rejected' })
             .where(eq(memories.id, id))
             .returning()
-            .all()
           return { memory: rowToMemory(rejected[0]!), supersededIds: [] as string[] }
         }
         const supersededIds = command.action === 'approve_and_supersede' ? command.supersedeIds : []
         const targets =
           supersededIds.length === 0
             ? []
-            : await tx.select().from(memories).where(inArray(memories.id, supersededIds)).all()
+            : await tx.select().from(memories).where(inArray(memories.id, supersededIds))
         if (targets.length !== supersededIds.length) {
           const missing = supersededIds.filter(
             (targetId) => !targets.some((row) => row.id === targetId),
@@ -728,13 +731,11 @@ export function composeMemoryCatalogOperations(input: {
           })
           .where(eq(memories.id, id))
           .returning()
-          .all()
         if (supersededIds.length > 0) {
           await tx
             .update(memories)
             .set({ status: 'superseded', supersededById: id })
             .where(inArray(memories.id, supersededIds))
-            .run()
         }
         return { memory: rowToMemory(approved[0]!), supersededIds }
       })
@@ -763,7 +764,8 @@ export function composeMemoryCatalogOperations(input: {
       if (!parsed.success)
         throw new ValidationError('invalid-body', 'invalid patch request', parsed.error.format())
       const committed = await session.transaction(async (tx): Promise<PatchMemoryResult> => {
-        const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
+        const { memories } = tablesOf(tx)
+        const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1)
         const row = rows[0]
         if (row === undefined) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
         if (row.status === 'superseded' || row.status === 'rejected' || row.status === 'fused') {
@@ -803,7 +805,6 @@ export function composeMemoryCatalogOperations(input: {
           })
           .where(and(eq(memories.id, id), eq(memories.version, row.version)))
           .returning()
-          .all()
         if (updated[0] === undefined)
           throw staleConflictError('memory', `memory ${id} changed; reload and retry`)
         await hooks.afterWriteInTransaction?.(tx)
@@ -829,7 +830,8 @@ export function composeMemoryCatalogOperations(input: {
       const principal = input.contexts.resolveCommandContext(context)
       const committed = await session.transaction(async (tx) => {
         const actor = await currentActor(tx, principal)
-        const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
+        const { memories, memoryScopeMoveEvents } = tablesOf(tx)
+        const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1)
         const row = rows[0]
         if (row === undefined) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
         if (row.version !== parsed.data.expectedVersion)
@@ -884,12 +886,7 @@ export function composeMemoryCatalogOperations(input: {
         await hooks.afterMoveAuthorizationInTransaction?.(tx)
         // 写事务本身已经排除了外部写者；这里的二次读把命令锁在同事务的后续参与者之外，
         // 也让「目标被删 / 授权漂移」的变异测试成为真实分支。
-        const refreshedRows = await tx
-          .select()
-          .from(memories)
-          .where(eq(memories.id, id))
-          .limit(1)
-          .all()
+        const refreshedRows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1)
         const refreshed = refreshedRows[0]
         if (
           refreshed === undefined ||
@@ -930,29 +927,25 @@ export function composeMemoryCatalogOperations(input: {
           })
           .where(and(eq(memories.id, id), eq(memories.version, row.version)))
           .returning()
-          .all()
         if (updated[0] === undefined)
           throw staleConflictError('memory', `memory ${id} changed; reload and retry`, {
             expectedVersion: row.version,
           })
-        await tx
-          .insert(memoryScopeMoveEvents)
-          .values({
-            id: context.operationId,
-            memoryId: id,
-            actorUserId: principal.userId,
-            actorSource: principal.source,
-            fromScopeType: previousScope.scopeType,
-            fromScopeId: previousScope.scopeId,
-            toScopeType: nextScope.scopeType,
-            toScopeId: nextScope.scopeId,
-            expectedVersion: row.version,
-            resultingVersion: row.version + 1,
-            correlationId: context.correlationId,
-            causationId: context.causationId ?? null,
-            occurredAt: context.now,
-          })
-          .run()
+        await insertOne(tx, memoryScopeMoveEvents, {
+          id: context.operationId,
+          memoryId: id,
+          actorUserId: principal.userId,
+          actorSource: principal.source,
+          fromScopeType: previousScope.scopeType,
+          fromScopeId: previousScope.scopeId,
+          toScopeType: nextScope.scopeType,
+          toScopeId: nextScope.scopeId,
+          expectedVersion: row.version,
+          resultingVersion: row.version + 1,
+          correlationId: context.correlationId,
+          causationId: context.causationId ?? null,
+          occurredAt: context.now,
+        })
         await hooks.afterWriteInTransaction?.(tx)
         return {
           memory: rowToMemory(updated[0]),
@@ -986,11 +979,11 @@ export function composeMemoryCatalogOperations(input: {
       return memory
     },
     async delete(id) {
+      const { memories } = tablesOf(input.db)
       const deleted = await input.db
         .delete(memories)
         .where(eq(memories.id, id))
         .returning({ id: memories.id })
-        .all()
       if (deleted[0] === undefined)
         throw new NotFoundError('memory-not-found', `memory ${id} not found`)
       publish({ type: 'memory.deleted', memoryId: id })

@@ -1,15 +1,11 @@
 // RFC-371 v2 §2/§5 — task facts offered to run-observability. Task execution is
 // the only owner of task visibility; observation never reads these tables.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import {
-  taskVisibilityCondition,
-  taskVisibilitySubjectOf,
-  visibleTaskIdsFor,
-  type ProviderNeutralDatabase,
-} from '@/db/query'
-import { nodeRuns, tasks } from '@/db/schema'
+import { taskVisibilityCondition, taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   ObservationTaskFactsPort,
@@ -24,7 +20,8 @@ const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
 
 // Built per query: schema columns are provider projections and must not be captured at load time.
-function taskFields() {
+function taskFields(db: object) {
+  const { tasks } = tablesOf(db)
   return {
     id: tasks.id,
     name: tasks.name,
@@ -70,7 +67,7 @@ function decodeAfter(after: string | undefined): [number, string] | null {
   throw new RangeError('invalid-cursor')
 }
 
-export function createTaskObservationFacts(db: ProviderNeutralDatabase): ObservationTaskFactsPort {
+export function createTaskObservationFacts(db: PersistenceDb): ObservationTaskFactsPort {
   const visible = (actor: Actor) => taskVisibilityCondition(db, taskVisibilitySubjectOf(actor))
   const bounded = (ids: readonly string[]) => {
     if (ids.length > MAX_IDS) throw new RangeError('task id batch exceeds 500')
@@ -87,11 +84,11 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
     async summaries(ids) {
       const unique = bounded(ids)
       if (!unique.length) return []
+      const { tasks } = tablesOf(db)
       const rows = await db
-        .select(taskFields())
+        .select(taskFields(db))
         .from(tasks)
         .where(and(inArray(tasks.id, unique), isNull(tasks.deletedAt)))
-        .all()
       return rows.map(fact)
     },
 
@@ -100,8 +97,9 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
       const after = decodeAfter(query.after)
       const engine = engineOf(db)
       const search = query.q === undefined ? null : engine.likeEscape(query.q)
+      const { tasks } = tablesOf(db)
       const rows = await db
-        .select(taskFields())
+        .select(taskFields(db))
         .from(tasks)
         .where(
           and(
@@ -129,7 +127,6 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
         )
         .orderBy(desc(tasks.startedAt), desc(tasks.id))
         .limit(query.limit + 1)
-        .all()
       const items = rows.slice(0, query.limit).map(fact)
       const last = items.at(-1)
       return {
@@ -143,6 +140,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
 
     async counts(actor, window) {
       if (!canRead(actor)) return { statuses: {}, durations: [] }
+      const { tasks } = tablesOf(db)
       const scope = and(
         visible(actor),
         isNull(tasks.deletedAt),
@@ -154,7 +152,6 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
         .select({ status: tasks.status, startedAt: tasks.startedAt, finishedAt: tasks.finishedAt })
         .from(tasks)
         .where(scope)
-        .all()
       const statuses: Record<string, number> = {}
       const durations: number[] = []
       for (const row of rows) {
@@ -171,13 +168,13 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
     },
 
     async attempts(taskId) {
+      const { nodeRuns } = tablesOf(db)
       const rows = await db
         .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .orderBy(engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
         .limit(MAX_ATTEMPTS)
-        .all()
       return rows.map((row) => ({
         nodeRunId: row.id,
         nodeId: row.nodeId,

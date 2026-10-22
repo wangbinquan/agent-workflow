@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '../application/ports/taskInputFiles'
 import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
@@ -33,20 +36,11 @@ import {
   webhookTaskSourceLinkOf,
   workgroupLaunchReadiness,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import {
-  taskCollaborators,
-  taskExecutionIntents,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  users,
-  workgroupTaskState,
-} from '@/db/schema'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
 import type { SourceTerminationSnapshot } from '../public/types'
@@ -254,7 +248,7 @@ export interface TaskRoutePreparedWorkspace {
   readonly repositories: readonly TaskRouteWorkspaceRepository[]
   readonly nodePaths: readonly string[]
   /** Private adapter joins source/plan admission to the existing Task transaction. */
-  admit(transaction: ProviderNeutralDatabase): Promise<TaskWorkspaceLaunchLane>
+  admit(transaction: PersistenceDb): Promise<TaskWorkspaceLaunchLane>
   /** Non-throwing lease promotion after the owning database commit. */
   commit(): void
   rollback(): Promise<WorkspaceCleanupReport>
@@ -290,7 +284,7 @@ export interface RootTaskLaunchDependencies {
   readonly inputFiles?: TaskInputFiles
   readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly workspaceUploads?: WorkspaceUploadContentFactory
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly gitCommitIdentity: Readonly<{
     execute(userId: string): Promise<GitCommitIdentity>
   }>
@@ -643,6 +637,7 @@ async function activeTaskMembers(
   }>,
 ): Promise<readonly string[]> {
   const userIds = [...new Set([input.ownerUserId, ...input.collaboratorUserIds])]
+  const { users } = tablesOf(db)
   const rows = await db
     .select({ id: users.id })
     .from(users)
@@ -859,7 +854,15 @@ function createRootLaunch(
           preparedWorkspace.worktreePath !== ''
         )
           throw new Error('repository-preparation-lane-already-materialized')
-        await tx.insert(tasks).values({
+        const {
+          tasks,
+          taskRepos,
+          taskSpaceNodes,
+          taskCollaborators,
+          taskExecutionIntents,
+          workgroupTaskState,
+        } = tablesOf(tx)
+        await insertOne(tx, tasks, {
           id: taskId,
           name: input.task.name,
           workflowId: input.subject.workflowId,
@@ -944,7 +947,7 @@ function createRootLaunch(
             return { taskId, userId, role, addedBy: input.actor.user.id, addedAt: startedAt }
           }),
         )
-        await tx.insert(taskExecutionIntents).values({
+        await insertOne(tx, taskExecutionIntents, {
           id: intentId,
           taskId,
           kind: 'launch',
@@ -972,7 +975,7 @@ function createRootLaunch(
           updatedAt: startedAt,
         })
         if (input.subject.workgroup !== undefined) {
-          await tx.insert(workgroupTaskState).values({
+          await insertOne(tx, workgroupTaskState, {
             taskId,
             gateStatus: 'idle',
             dwStateJson:
@@ -1394,16 +1397,18 @@ function triggerDefersRepositoryPreparation(invoker: ExecutionInvoker): boolean 
 
 /** Owner-local receipt lookup used by the Event Center target provider. */
 export async function findTaskAutomationReceipt(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   eventDeliveryId: string,
 ): Promise<string | null> {
+  const { tasks } = tablesOf(db)
   return (
     (
-      await db
-        .select({ taskId: tasks.id })
-        .from(tasks)
-        .where(eq(tasks.eventDeliveryId, eventDeliveryId))
-        .get()
+      await first(
+        db
+          .select({ taskId: tasks.id })
+          .from(tasks)
+          .where(eq(tasks.eventDeliveryId, eventDeliveryId)),
+      )
     )?.taskId ?? null
   )
 }

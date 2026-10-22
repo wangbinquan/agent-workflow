@@ -4,16 +4,11 @@
 // Receipts outlive endpoints and business failures. Durable intake needs no
 // execution lease; admission, publication receipts and retries run under the
 // execution fence, so an instance that lost authority leaves them untouched.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  csEventInbox,
-  csEventRoutes,
-  csEventTargets,
-  webhookDeliveries,
-  webhookEndpoints,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   EventObservationInput,
   EventObservationReceipt,
@@ -55,7 +50,7 @@ function normalizeFrozen(
 }
 
 export function createCrewStationEventInbox(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly installationId: string
   readonly fence: CrewStationMutationFence
   readonly now?: () => number
@@ -63,25 +58,36 @@ export function createCrewStationEventInbox(input: {
   const { db, installationId, fence } = input
   const now = input.now ?? Date.now
   const session = databaseSessionFor(db)
-  const fenced = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> => {
+  const fenced = <T>(body: (tx: PersistenceDb) => Promise<T>): Promise<T> => {
     const token = fence.current()
     return session.transaction(async (tx) => {
       await fence.assertHeld(tx, token)
       return await body(tx)
     })
   }
-  const inboxKey = (deliveryId: string) =>
-    and(eq(csEventInbox.installationId, installationId), eq(csEventInbox.deliveryId, deliveryId))
-  const targetKey = (id: string) => eq(csEventTargets.id, id)
-  const lockTarget = (tx: ProviderNeutralDatabase, id: string) =>
+  const inboxKey = (deliveryId: string) => {
+    const { csEventInbox } = tablesOf(db)
+    return and(
+      eq(csEventInbox.installationId, installationId),
+      eq(csEventInbox.deliveryId, deliveryId),
+    )
+  }
+  const targetKey = (id: string) => {
+    const { csEventTargets } = tablesOf(db)
+    return eq(csEventTargets.id, id)
+  }
+  const lockTarget = (tx: PersistenceDb, id: string) =>
     engineOf(tx).advisoryLock(tx, `cs-target:${id}`)
-  const readTarget = async (tx: ProviderNeutralDatabase, id: string) =>
-    (await tx.select().from(csEventTargets).where(targetKey(id)).limit(1))[0]
+  const readTarget = async (tx: PersistenceDb, id: string) => {
+    const { csEventTargets } = tablesOf(tx)
+    return (await tx.select().from(csEventTargets).where(targetKey(id)).limit(1))[0]
+  }
 
   return Object.freeze({
     async record(delivery): Promise<CrewStationRecordOutcome> {
       return await session.transaction(async (tx): Promise<CrewStationRecordOutcome> => {
         await engineOf(tx).advisoryLock(tx, `cs-delivery:${installationId}:${delivery.deliveryId}`)
+        const { csEventInbox, csEventRoutes, csEventTargets } = tablesOf(tx)
         const prior = (
           await tx.select().from(csEventInbox).where(inboxKey(delivery.deliveryId)).limit(1)
         )[0]
@@ -129,7 +135,7 @@ export function createCrewStationEventInbox(input: {
           if (plan.kind === 'unroutable') return plan
           const timestamp = now()
           routeId = ulid()
-          await tx.insert(csEventRoutes).values({
+          await insertOne(tx, csEventRoutes, {
             id: routeId,
             installationId,
             producerId: delivery.producerId,
@@ -143,7 +149,7 @@ export function createCrewStationEventInbox(input: {
             conflicts: 0,
           })
           for (const target of plan.targets) {
-            await tx.insert(csEventTargets).values({
+            await insertOne(tx, csEventTargets, {
               id: ulid(),
               logicalId: routeId,
               endpointId: target.endpointId,
@@ -156,7 +162,7 @@ export function createCrewStationEventInbox(input: {
             })
           }
         }
-        await tx.insert(csEventInbox).values({
+        await insertOne(tx, csEventInbox, {
           installationId,
           deliveryId: delivery.deliveryId,
           logicalId: routeId,
@@ -173,6 +179,7 @@ export function createCrewStationEventInbox(input: {
     },
 
     async due(limit) {
+      const { csEventTargets, csEventRoutes } = tablesOf(db)
       const rows = await db
         .select({ id: csEventTargets.id })
         .from(csEventTargets)
@@ -203,6 +210,7 @@ export function createCrewStationEventInbox(input: {
             ),
           }
         }
+        const { csEventRoutes, webhookEndpoints, csEventTargets } = tablesOf(tx)
         const route = (
           await tx
             .select()
@@ -274,6 +282,7 @@ export function createCrewStationEventInbox(input: {
         const observations = JSON.parse(row.observationsJson ?? '[]') as unknown[]
         const ordered = observations.map((_, at) => receipts[String(at)])
         const complete = ordered.every((entry) => entry !== undefined)
+        const { csEventTargets, webhookDeliveries, webhookEndpoints } = tablesOf(tx)
         await tx
           .update(csEventTargets)
           .set({
@@ -298,6 +307,7 @@ export function createCrewStationEventInbox(input: {
 
     async defer(targetId, error) {
       await fenced(async (tx) => {
+        const { csEventTargets } = tablesOf(tx)
         await tx
           .update(csEventTargets)
           .set({

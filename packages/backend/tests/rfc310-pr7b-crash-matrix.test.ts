@@ -31,7 +31,7 @@ import { createAttemptContextStore } from '../src/modules/development-automation
 import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 setDefaultTimeout(120_000)
 
@@ -43,7 +43,7 @@ function cell(value: FactCellValue): FactCell<FactCellValue> {
 }
 
 async function fixtureWithNeverPolicy(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): Promise<{ fx: Pr3Fixture; policyId: string }> {
   const fx = await buildPr3Fixture({ db: db })
   const policy = await createAutomationPolicy(fx.db, {

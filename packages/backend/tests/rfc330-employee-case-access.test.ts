@@ -16,14 +16,15 @@
 // 拆掉，404/403 组必须立刻红。行直接种进 `employee_cases`（无上下文 / 轮次），所以正向
 // 用例只断言「门放行」（响应码不是门的码），放行后的投影 / 状态机失败不归本文件管。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createSession } from './helpers/auth/sessionStore'
-import { employeeCaseMembers, employeeCases } from '../src/db/schema'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -46,7 +47,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Actor
   collaborator: Actor
@@ -94,12 +95,13 @@ async function req(
 }
 
 async function seedCase(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string | null,
   state: 'active' | 'blocked' = 'active',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(employeeCases).values({
+  const { employeeCases } = tablesOf(db)
+  await insertOne(db, employeeCases, {
     id,
     name: `case-${id.slice(-6)}`,
     employeeId: 'employee-1',
@@ -119,14 +121,13 @@ async function seedCase(
 }
 
 async function seedMember(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   caseId: string,
   userId: string,
   role: 'collaborator' | 'observer',
 ): Promise<void> {
-  await db
-    .insert(employeeCaseMembers)
-    .values({ caseId, userId, role, addedBy: 'seed', addedAt: NOW })
+  const { employeeCaseMembers } = tablesOf(db)
+  await insertOne(db, employeeCaseMembers, { caseId, userId, role, addedBy: 'seed', addedAt: NOW })
 }
 
 async function code(res: Response): Promise<string | undefined> {
@@ -210,6 +211,7 @@ describeEachProviderHttpApplication(
       const h = await buildHarness(scope)
       const id = await seedCase(h.db, h.owner.id, 'blocked')
       await seedMember(h.db, id, h.observer.id, 'observer')
+      const { employeeCases } = tablesOf(h.db)
       const before = (await h.db.select().from(employeeCases).where(eq(employeeCases.id, id)))[0]
       for (const [path, init] of OPERATIONS(id)) {
         const observer = await req(h.app, h.observer.token, path, init)
@@ -359,6 +361,7 @@ describeEachProviderHttpApplication(
       }
       expect(body.members).toEqual([expect.objectContaining({ role: 'observer' })])
       expect(body.members[0]?.user.id).toBe(h.observer.id)
+      const { employeeCaseMembers } = tablesOf(h.db)
       // 旧 collaborator 被全量替换掉；observer 只剩最后一条。
       expect(
         (
@@ -391,6 +394,7 @@ describeEachProviderHttpApplication(
         expect(body.members.map((m) => [m.user.id, m.role])).toEqual([[h.owner.id, 'collaborator']])
         // 前任仍能操作但不再能管理成员。
         expect(body.canManage).toBe(false)
+        const { employeeCases } = tablesOf(h.db)
         expect(
           (
             await h.db

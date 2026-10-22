@@ -19,9 +19,9 @@
 // with a key built from the generation the refusal had advanced; every poll
 // was admitted as a new lifecycle operation (generation 6 → 83 in half an
 // hour). The refused request is now replayed as it was sent.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedTaskWorkspaces,
   HostedTaskImageUnvalidatedError,
@@ -96,13 +96,15 @@ describeEachProvider('RFC-370 a full task quota is waited out', (harness) => {
       },
       readyTimeoutMs: 300_000,
     })
-    const row = async (owner: string) =>
-      (
+    const row = async (owner: string) => {
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      return (
         await harness.db
           .select()
           .from(hostedTaskWorkspaces)
           .where(eq(hostedTaskWorkspaces.taskId, owner))
       )[0]
+    }
     return { workspaces, keys, row, api, parents, elapsed: () => clock - 1_000_000 }
   }
 

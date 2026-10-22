@@ -39,6 +39,8 @@
 // snaps back on refresh. Callers of these helpers place their
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import {
@@ -49,13 +51,9 @@ import {
   isTerminalNodeRunStatus,
 } from '@agent-workflow/shared'
 import { resolveTerminalWorkspacePruneDecision } from '../terminalWorkspacePrune'
-import { nodeRuns, tasks } from '@/db/schema'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
@@ -116,12 +114,13 @@ export async function transitionNodeRunStatus(args: {
   // RFC-359 W8：体内已全部走中立原语（中立预读 + `withTaskExecutionWrite` + `fenceTaskWrite`
   // + 中立异步 CAS），不再有 bun:sqlite 独有的同步面——两个引擎都跑得动，签名随之放宽
   // （与 W4-D28b 放宽 `transitionMergeState` 同形）。
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   nodeRunId: string
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra
   executionContext?: TaskExecutionContextRef
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
+  const { nodeRuns } = tablesOf(args.db)
   // RFC-326: a pure wrapper around the transactional companion — the ONLY
   // status write for this event kind now lives in transitionNodeRunStatusTx, so
   // the kernel's direct-write count (lifecycle-grep-guard) stays at three.
@@ -187,17 +186,19 @@ export function transitionNodeRunStatusTx(args: {
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra
 }): { from: NodeRunStatus; to: NodeRunStatus } {
-  const row = args.tx
-    .select({
-      status: nodeRuns.status,
-      taskId: nodeRuns.taskId,
-      sourceTerminationFence: tasks.sourceTerminationFence,
-    })
-    .from(nodeRuns)
-    .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-    .where(eq(nodeRuns.id, args.nodeRunId))
-    .limit(1)
-    .get()
+  const { nodeRuns, tasks } = tablesOf(args.tx)
+  const row = first(
+    args.tx
+      .select({
+        status: nodeRuns.status,
+        taskId: nodeRuns.taskId,
+        sourceTerminationFence: tasks.sourceTerminationFence,
+      })
+      .from(nodeRuns)
+      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
+      .where(eq(nodeRuns.id, args.nodeRunId))
+      .limit(1),
+  )
   if (row === undefined) {
     throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
   }
@@ -208,12 +209,13 @@ export function transitionNodeRunStatusTx(args: {
   // returns the affected row(s) via .returning(); affectedRows.length === 0
   // means another writer changed status between our SELECT and UPDATE.
   // rfc053-allow-direct-status-write -- single allowlisted writer (RFC-326: Tx form)
-  const updated = args.tx
-    .update(nodeRuns)
-    .set({ status: to, ...(args.extra ?? {}) })
-    .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-    .returning({ id: nodeRuns.id })
-    .all()
+  const updated = queryRows(
+    args.tx
+      .update(nodeRuns)
+      .set({ status: to, ...(args.extra ?? {}) })
+      .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
+      .returning({ id: nodeRuns.id }),
+  )
   if (updated.length === 0) {
     throw new ConcurrentNodeRunTransition(args.nodeRunId, from, args.event.kind)
   }
@@ -238,7 +240,7 @@ export function transitionNodeRunStatusTx(args: {
  */
 export async function setNodeRunStatus(args: {
   // RFC-359 W8：同 `transitionNodeRunStatus`——体内两条分支都已中立，签名放宽到两个引擎共用。
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   nodeRunId: string
   to: NodeRunStatus
   allowedFrom: readonly NodeRunStatus[]
@@ -261,6 +263,7 @@ export async function setNodeRunStatus(args: {
   reason?: string
   executionContext?: TaskExecutionContextRef
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
+  const { nodeRuns, tasks } = tablesOf(args.db)
   const row = (
     await args.db
       .select({
@@ -340,17 +343,19 @@ export function setNodeRunStatusTx(args: {
   allowTerminal?: boolean
   reason?: string
 }): { from: NodeRunStatus; to: NodeRunStatus } {
-  const row = args.tx
-    .select({
-      status: nodeRuns.status,
-      taskId: nodeRuns.taskId,
-      sourceTerminationFence: tasks.sourceTerminationFence,
-    })
-    .from(nodeRuns)
-    .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-    .where(eq(nodeRuns.id, args.nodeRunId))
-    .limit(1)
-    .get()
+  const { nodeRuns, tasks } = tablesOf(args.tx)
+  const row = first(
+    args.tx
+      .select({
+        status: nodeRuns.status,
+        taskId: nodeRuns.taskId,
+        sourceTerminationFence: tasks.sourceTerminationFence,
+      })
+      .from(nodeRuns)
+      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
+      .where(eq(nodeRuns.id, args.nodeRunId))
+      .limit(1),
+  )
   if (row === undefined) {
     throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
   }
@@ -369,12 +374,13 @@ export function setNodeRunStatusTx(args: {
     )
   }
   // rfc053-allow-direct-status-write -- transactional companion of setNodeRunStatus
-  const updated = args.tx
-    .update(nodeRuns)
-    .set({ status: args.to, ...(args.extra ?? {}) })
-    .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-    .returning({ id: nodeRuns.id })
-    .all()
+  const updated = queryRows(
+    args.tx
+      .update(nodeRuns)
+      .set({ status: args.to, ...(args.extra ?? {}) })
+      .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
+      .returning({ id: nodeRuns.id }),
+  )
   if (updated.length === 0) {
     throw new ConcurrentNodeRunTransition(
       args.nodeRunId,
@@ -444,7 +450,9 @@ export class ConcurrentTaskTransition extends ConflictError {
  * 手抄一份联合类型等于把同一个词汇表写两遍：schema 加一个取值时，这里不会红，
  * 而是安静地把新原因判成不合法。派生则让「取值域」只有一个事实源。
  */
-export type WorkspacePruneCause = NonNullable<(typeof tasks.$inferSelect)['workspacePruneCause']>
+export type WorkspacePruneCause = NonNullable<
+  PersistenceTables['tasks']['$inferSelect']['workspacePruneCause']
+>
 
 /**
  * RFC-359 —— 同一个写序列的**异步解释**。
@@ -457,8 +465,8 @@ export type WorkspacePruneCause = NonNullable<(typeof tasks.$inferSelect)['works
  * 它要的就是同步解释。
  */
 async function writeTaskStatusAsync(
-  input: TaskLifecycleWriteInput<DatabaseTransaction> & {
-    readonly tx: DatabaseTransaction
+  input: TaskLifecycleWriteInput<PersistenceTx> & {
+    readonly tx: PersistenceTx
     readonly allowedFrom: readonly TaskStatus[]
     readonly reason: string
   },
@@ -487,12 +495,13 @@ async function writeTaskStatusAsync(
  * 节点转移表（中立的 `transitionNodeRunStatusInTx`）。
  */
 export async function cancelOpenNodeRuns(args: {
-  readonly tx: DatabaseTransaction
+  readonly tx: PersistenceTx
   readonly taskId: string
   readonly finishedAt: number
   readonly errorMessage: string
 }): Promise<Array<{ id: string; nodeId: string }>> {
   const cancelableStatuses = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
+  const { nodeRuns } = tablesOf(args.tx)
   const rows = await args.tx
     .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
     .from(nodeRuns)
@@ -529,7 +538,7 @@ export async function setTaskStatus(args: {
   // RFC-359 AC-6：形参放宽到中立客户端。函数体本来就是中立的——它走
   // `databaseSessionFor(db).transaction(...)` + 中立异步 CAS，一条 bun:sqlite 同步游标都没有
   // （W8 把那条 `.get()` 预读改掉时就是为此）。放宽是向后兼容的：`DbClient` 是它的子类型。
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   to: TaskStatus
   allowedFrom: readonly TaskStatus[]
@@ -541,7 +550,7 @@ export async function setTaskStatus(args: {
    * would otherwise tear if resume loses or preflight fails.
    */
   onTransitionTx?: (
-    tx: DatabaseTransaction,
+    tx: PersistenceTx,
     transition: { from: TaskStatus; to: TaskStatus },
     collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
   ) => void | Promise<void>
@@ -572,6 +581,7 @@ export async function setTaskStatus(args: {
   beforeCas?: () => void | Promise<void>
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
+  const { tasks } = tablesOf(args.db)
   const rows = await args.db
     .select({
       status: tasks.status,
@@ -644,6 +654,7 @@ export async function setTaskStatus(args: {
           taskId: args.taskId,
           ...(args.executionContext === undefined ? {} : { context: args.executionContext }),
         })
+        const { tasks } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ workspacePrunedAt: Date.now() })
@@ -686,7 +697,7 @@ export async function setTaskStatus(args: {
   // 头注释三条。最要紧的一条是**事务体只 await 数据库操作**：本函数体内除写序列外只有
   // `onTransitionTx` 一个外部回调，它的四个生产实现（`services/task.ts`）也只做库写。
   // 新增回调时这条要继续守住。
-  const commitTransition = async (tx: DatabaseTransaction): Promise<void> => {
+  const commitTransition = async (tx: PersistenceTx): Promise<void> => {
     const committed = await writeTaskStatusAsync({
       tx,
       taskId: args.taskId,
@@ -736,14 +747,14 @@ export async function setTaskStatus(args: {
  */
 export async function trySetTaskStatus(args: {
   // RFC-359 AC-6：同 `setTaskStatus`，它整个就是把参数转交过去，函数体零方言。
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   to: TaskStatus
   allowedFrom: readonly TaskStatus[]
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (
-    tx: DatabaseTransaction,
+    tx: PersistenceTx,
     transition: { from: TaskStatus; to: TaskStatus },
     collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
   ) => void | Promise<void>
@@ -784,13 +795,13 @@ export async function trySetTaskStatus(args: {
  * over incrementally (Codex audit cross-check: two-step, no big-bang churn).
  */
 export async function transitionTaskStatusByEvent(args: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   event: TaskTransitionEvent
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (
-    tx: DatabaseTransaction,
+    tx: PersistenceTx,
     transition: { from: TaskStatus; to: TaskStatus },
     collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
   ) => void | Promise<void>

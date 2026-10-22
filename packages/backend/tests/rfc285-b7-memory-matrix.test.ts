@@ -17,11 +17,12 @@
 // 为此本轮补齐了三块此前没覆盖的格子：workflow scope、RFC-324 D9 的 `write` 授权档、
 // 以及 `annotateMemoryManageRights` 与 `canManageMemory` 之间既存的判据差。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, resourceGrants, users, workflows } from '../src/db/schema'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
@@ -32,9 +33,10 @@ function actorOfRole(role: 'admin' | 'manager' | 'user', id = `u_${role}`): Acto
   })
 }
 
-async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = 'agt_matrix'
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name: 'matrix-agent',
     ownerUserId,
@@ -43,9 +45,10 @@ async function seedAgent(db: ProviderNeutralDatabase, ownerUserId: string): Prom
   return id
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): Promise<string> {
+async function seedWorkflow(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = 'wf_matrix'
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: 'matrix-workflow',
     definition: '{"$schema_version":1,"nodes":[],"edges":[]}',
@@ -57,14 +60,15 @@ async function seedWorkflow(db: ProviderNeutralDatabase, ownerUserId: string): P
 
 /** RFC-324 D9 的 `write` 授权档：被授权人不是 owner，但可以改内容。 */
 async function seedWriteGrant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   resourceType: 'agent' | 'workflow',
   resourceId: string,
   userId: string,
   ownerId: string,
 ): Promise<void> {
   const now = Date.now()
-  await db.insert(users).values({
+  const { users, resourceGrants } = tablesOf(db)
+  await insertOne(db, users, {
     id: userId,
     username: userId,
     displayName: userId,
@@ -73,7 +77,7 @@ async function seedWriteGrant(
     createdAt: now,
     updatedAt: now,
   })
-  await db.insert(resourceGrants).values({
+  await insertOne(db, resourceGrants, {
     resourceType,
     resourceId,
     userId,

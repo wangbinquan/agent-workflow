@@ -19,7 +19,7 @@
 // RFC-359 W12：这些正典文件与消费路径已统一使用中立名称。
 
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationClarifyDraftEventPublisher,
   CollaborationRoutePersistenceOperations,
@@ -34,7 +34,7 @@ const loadClarifySeal = () => import('./clarify/seal')
 
 export interface CreateCollaborationRouteOperationsInput {
   readonly reviewReader?: CommittedReviewArtifactReader
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** 草稿提交后的实时投影：装配点注入，持久化实现不直接够全局广播器。 */
   readonly clarifyDraftEvents: CollaborationClarifyDraftEventPublisher
 }

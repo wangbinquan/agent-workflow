@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   createIntentApplyJournalConvergence,
   decodeIntentApplyRecoveryArtifacts,
@@ -68,7 +68,10 @@ function fixture(updatedAt: number) {
     }
     throw new Error(`unexpected PostgreSQL intent maintenance query: ${sql}`)
   }
-  const connection: PostgresqlReservedConnection = { unsafe: execute, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: execute,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -95,10 +98,6 @@ function fixture(updatedAt: number) {
 }
 
 const log = Object.freeze({ info() {}, warn() {}, error() {}, debug() {} }) as never
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
   test('recovery decoder accepts native PostgreSQL and versioned migrated artifacts', () => {

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation'
 // RFC-359 W8 —— effect 账本 / attempt 台账 / 资源围栏：**一份**实现，两个 provider 共用。
 //
@@ -32,19 +34,7 @@ import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  taskRepos,
-  taskSpaceNodes,
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   CodeHostNodeSettlementProjection,
@@ -97,6 +87,7 @@ async function applyCodeHostProjection(
   projection: CodeHostNodeSettlementProjection,
 ): Promise<void> {
   for (const output of projection.outputs ?? []) {
+    const { nodeRunOutputs } = tablesOf(tx)
     await tx
       .insert(nodeRunOutputs)
       .values({ nodeRunId: projection.nodeRunId, ...output })
@@ -104,7 +95,6 @@ async function applyCodeHostProjection(
         target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
         set: { content: output.content },
       })
-      .run()
   }
   await setNodeRunStatusTx({
     tx,
@@ -126,24 +116,19 @@ async function applyWorkspacePreparationProjection(
   projection: WorkspacePreparationSettlementProjection,
 ): Promise<void> {
   await acceptDurableRepositoryWorkspace(tx, projection.taskId)
-  await tx.update(tasks).set(projection.task).where(eq(tasks.id, projection.taskId)).run()
+  const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
+  await tx.update(tasks).set(projection.task).where(eq(tasks.id, projection.taskId))
   if (projection.repositories.length > 0) {
-    await tx
-      .insert(taskRepos)
-      .values(projection.repositories.map((row) => ({ ...row })))
-      .run()
+    await tx.insert(taskRepos).values(projection.repositories.map((row) => ({ ...row })))
   }
   if (projection.nodePaths.length > 0) {
-    await tx
-      .insert(taskSpaceNodes)
-      .values(
-        projection.nodePaths.map((nodePath) => ({
-          taskId: projection.taskId,
-          nodePath,
-          schemaVersion: 1,
-        })),
-      )
-      .run()
+    await tx.insert(taskSpaceNodes).values(
+      projection.nodePaths.map((nodePath) => ({
+        taskId: projection.taskId,
+        nodePath,
+        schemaVersion: 1,
+      })),
+    )
   }
   await setNodeRunStatusTx({
     tx,
@@ -169,6 +154,7 @@ async function applyGateRollbackProjection(
   }>,
 ): Promise<void> {
   if (input.sourceNodeRunIds.length === 0) return
+  const { nodeRuns } = tablesOf(tx)
   const rows = await tx
     .select({ id: nodeRuns.id, errorMessage: nodeRuns.errorMessage })
     .from(nodeRuns)
@@ -209,9 +195,10 @@ async function applyGateRollbackProjection(
 }
 
 export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffectPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async readLineage(input: Parameters<TaskExecutionEffectPersistence['readLineage']>[0]) {
+    const { tasks, taskExecutionIntents, nodeRuns } = tablesOf(this.db)
     const taskRows = await this.db
       .select({
         executionLineageId: tasks.executionLineageId,
@@ -276,6 +263,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async nextOperationGeneration(
     input: Parameters<TaskExecutionEffectPersistence['nextOperationGeneration']>[0],
   ): Promise<number> {
+    const { taskExecutionEffects, taskExecutionLineageOperationRecords } = tablesOf(this.db)
     const live = await this.db
       .select({ generation: max(taskExecutionEffects.operationGeneration) })
       .from(taskExecutionEffects)
@@ -302,6 +290,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async planCodeHostAttempt(
     input: Parameters<TaskExecutionEffectPersistence['planCodeHostAttempt']>[0],
   ) {
+    const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(this.db)
     const effects = await this.db
       .select()
       .from(taskExecutionEffects)
@@ -346,6 +335,13 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     const recoveryDescriptorJson = bounded(input.recoveryDescriptorJson)
     return await withTaskExecutionSerializable(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
+      const {
+        taskExecutionIntents,
+        taskExecutionEffects,
+        taskExecutionLineageOperationRecords,
+        taskExecutionEffectAttempts,
+        taskExecutionEffectFences,
+      } = tablesOf(tx)
       const intents = await tx
         .select({
           id: taskExecutionIntents.id,
@@ -462,27 +458,24 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
           )
         }
         const effectId = ulid()
-        await tx
-          .insert(taskExecutionEffects)
-          .values({
-            id: effectId,
-            taskId: input.token.taskId,
-            originIntentId: input.intentId,
-            currentIntentId: input.intentId,
-            operationKey: input.operationKey,
-            executionLineageId: input.executionLineageId,
-            operationFamilyKey: input.operationFamilyKey,
-            operationGeneration: input.operationGeneration,
-            kind: input.kind,
-            requestHash: input.requestHash,
-            slotPathJson: input.slotPathJson,
-            slotPathDigest: input.slotPathDigest,
-            state: 'open',
-            lastAttemptNo: 0,
-            preparedAt: now,
-            updatedAt: now,
-          })
-          .run()
+        await insertOne(tx, taskExecutionEffects, {
+          id: effectId,
+          taskId: input.token.taskId,
+          originIntentId: input.intentId,
+          currentIntentId: input.intentId,
+          operationKey: input.operationKey,
+          executionLineageId: input.executionLineageId,
+          operationFamilyKey: input.operationFamilyKey,
+          operationGeneration: input.operationGeneration,
+          kind: input.kind,
+          requestHash: input.requestHash,
+          slotPathJson: input.slotPathJson,
+          slotPathDigest: input.slotPathDigest,
+          state: 'open',
+          lastAttemptNo: 0,
+          preparedAt: now,
+          updatedAt: now,
+        })
         const inserted = await tx
           .select()
           .from(taskExecutionEffects)
@@ -546,37 +539,31 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
         )
       }
       const attemptId = ulid()
-      await tx
-        .insert(taskExecutionEffectAttempts)
-        .values({
-          id: attemptId,
-          effectId: effect.id,
-          attemptNo,
-          intentId: input.intentId,
-          epoch: input.token.epoch,
-          state: 'prepared',
-          candidateId: input.candidateId,
-          requestHash: input.requestHash,
-          recoveryClass: input.recoveryClass,
-          recoveryDescriptorJson,
-          classifierVersion: input.classifierVersion,
-          transportPolicyVersion: input.transportPolicyVersion,
-          retryAuthority: input.retryAuthority,
-          preparedAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(tx, taskExecutionEffectAttempts, {
+        id: attemptId,
+        effectId: effect.id,
+        attemptNo,
+        intentId: input.intentId,
+        epoch: input.token.epoch,
+        state: 'prepared',
+        candidateId: input.candidateId,
+        requestHash: input.requestHash,
+        recoveryClass: input.recoveryClass,
+        recoveryDescriptorJson,
+        classifierVersion: input.classifierVersion,
+        transportPolicyVersion: input.transportPolicyVersion,
+        retryAuthority: input.retryAuthority,
+        preparedAt: now,
+        updatedAt: now,
+      })
       for (const fenceKey of resources) {
         try {
-          await tx
-            .insert(taskExecutionEffectFences)
-            .values({
-              effectAttemptId: attemptId,
-              fenceKey,
-              acquiredEpoch: input.token.epoch,
-              acquiredAt: now,
-            })
-            .run()
+          await insertOne(tx, taskExecutionEffectFences, {
+            effectAttemptId: attemptId,
+            fenceKey,
+            acquiredEpoch: input.token.epoch,
+            acquiredAt: now,
+          })
         } catch (error) {
           // 驱动错误形状经能力矩阵归类：PG 的 SQLSTATE 23505（`errno` 或 `code`）与 SQLite 的
           // `SQLITE_CONSTRAINT_UNIQUE` / `UNIQUE constraint failed` 都归 'unique-violation'。
@@ -629,6 +616,11 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     }
     const now = input.now ?? Date.now()
     await assertTaskOwnerTx(tx, input.token, now)
+    const {
+      taskExecutionEffectAttempts,
+      taskExecutionEffects,
+      taskExecutionLineageOperationRecords,
+    } = tablesOf(tx)
     const attemptRows = await tx
       .select()
       .from(taskExecutionEffectAttempts)
@@ -725,7 +717,6 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
             eq(taskExecutionEffectAttempts.epoch, input.token.epoch),
           ),
         )
-        .run()
       if (projection !== undefined) await applyCodeHostProjection(tx, projection)
       return
     }
@@ -774,26 +765,23 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
       throw new Error('operation generation digest differs from retained watermark')
     }
     if (watermark === undefined) {
-      await tx
-        .insert(taskExecutionLineageOperationRecords)
-        .values({
-          id: ulid(),
-          recordKind: 'generation-watermark',
-          executionLineageId: effect.executionLineageId,
-          operationFamilyKey: effect.operationFamilyKey,
-          operationGeneration: null,
-          highestSettledGeneration: effect.operationGeneration,
-          lastOutcome: outcome.state,
-          requestHash: effect.requestHash,
-          slotPathJson: effect.slotPathJson,
-          slotPathDigest: effect.slotPathDigest,
-          rootAnchorTaskId: effect.taskId,
-          currentAnchorTaskId: effect.taskId,
-          recordRevision: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(tx, taskExecutionLineageOperationRecords, {
+        id: ulid(),
+        recordKind: 'generation-watermark',
+        executionLineageId: effect.executionLineageId,
+        operationFamilyKey: effect.operationFamilyKey,
+        operationGeneration: null,
+        highestSettledGeneration: effect.operationGeneration,
+        lastOutcome: outcome.state,
+        requestHash: effect.requestHash,
+        slotPathJson: effect.slotPathJson,
+        slotPathDigest: effect.slotPathDigest,
+        rootAnchorTaskId: effect.taskId,
+        currentAnchorTaskId: effect.taskId,
+        recordRevision: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
     } else {
       const advanced = await tx
         .update(taskExecutionLineageOperationRecords)
@@ -899,6 +887,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     const now = input.now ?? Date.now()
     await withTaskExecutionSerializable(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
+      const { taskExecutionEffectAttempts, taskExecutionEffects, nodeRuns } = tablesOf(tx)
       const attempts = await tx
         .select({
           state: taskExecutionEffectAttempts.state,

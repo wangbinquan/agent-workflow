@@ -20,6 +20,9 @@
 // 端到端那一半由 `e2e/fusion-lifecycle.spec.ts` 用真实 agent 跑完整条链验证；
 // 这里留一条快的、不依赖运行时的判据，让「谁把这行删了」当场变红。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,7 +36,6 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { fusions, memories, skills, tasks } from '../src/db/schema'
 import {
   createFusion as createFusionWithAuthority,
   type FusionDeps,
@@ -160,20 +162,19 @@ async function build(): Promise<Harness> {
 
 function approvedGlobalMemory(db: DbClient, title: string): string {
   const id = ulid()
-  db.insert(memories)
-    .values({
-      id,
-      scopeType: 'global',
-      scopeId: null,
-      title,
-      bodyMd: `body of ${title}`,
-      tags: '[]',
-      status: 'approved',
-      sourceKind: 'manual',
-      createdAt: Date.now(),
-      version: 1,
-    })
-    .run()
+  const { memories } = tablesOf(db)
+  insertOne(db, memories, {
+    id,
+    scopeType: 'global',
+    scopeId: null,
+    title,
+    bodyMd: `body of ${title}`,
+    tags: '[]',
+    status: 'approved',
+    sourceKind: 'manual',
+    createdAt: Date.now(),
+    version: 1,
+  })
   return id
 }
 
@@ -189,11 +190,10 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
       bodyMd: 'v1',
       frontmatterExtra: {},
     })
-    const skillId = h.db
-      .select({ id: skills.id })
-      .from(skills)
-      .where(eq(skills.name, 'lint'))
-      .get()!.id
+    const { skills, fusions, tasks } = tablesOf(h.db)
+    const skillId = first(
+      h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')),
+    )!.id
     const memoryId = approvedGlobalMemory(h.db, 'two spaces')
 
     const fusion = await createFusion(
@@ -202,18 +202,20 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
       adminActor,
       'api',
     )
-    const taskId = h.db
-      .select({ currentTaskId: fusions.currentTaskId })
-      .from(fusions)
-      .where(eq(fusions.id, fusion.id))
-      .get()!.currentTaskId
+    const taskId = first(
+      h.db
+        .select({ currentTaskId: fusions.currentTaskId })
+        .from(fusions)
+        .where(eq(fusions.id, fusion.id)),
+    )!.currentTaskId
     expect(taskId, '融合没有关联任务 ⇒ 下面的判据无从谈起').not.toBeNull()
 
-    const roster = h.db
-      .select({ json: tasks.platformInputPathsJson, spaceKind: tasks.spaceKind })
-      .from(tasks)
-      .where(eq(tasks.id, taskId!))
-      .get()!
+    const roster = first(
+      h.db
+        .select({ json: tasks.platformInputPathsJson, spaceKind: tasks.spaceKind })
+        .from(tasks)
+        .where(eq(tasks.id, taskId!)),
+    )!
     expect(roster.spaceKind, 'force-include 名册只对 internal 空间开放').toBe('internal')
     expect(
       roster.json === null ? [] : (JSON.parse(roster.json) as string[]),

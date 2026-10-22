@@ -11,9 +11,9 @@
 // review-supersede row (superseded_by_review column non-null, RFC-145)
 // stays parked — see design/RFC-095-scope-outcome-exhaustive/design.md §1.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import type { nodeRuns } from '../src/db/schema'
 import {
   isDispatchable,
   wrapperExternalUpstreamSources,
@@ -23,7 +23,7 @@ import {
 } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 function run(over: Partial<Row>): Row {
   return {

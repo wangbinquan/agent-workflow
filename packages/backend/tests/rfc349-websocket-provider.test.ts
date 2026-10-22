@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { STUB_REALTIME_CREDENTIALS } from './helpers/realtimeRuntime'
 // RFC-349 — WebSocket transport consumes one closed realtime contract; the
 // realtime query mechanics stay behind that contract's single adapter.
@@ -17,15 +19,6 @@ import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  memories,
-  nodeRunEvents,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
 import { createRealtimeChannelAccess } from '@/modules/runtime-management/application/realtimeChannelAccess'
 import { DrizzleRealtimeStore } from '@/modules/runtime-management/infrastructure/realtimeStore'
 import type {
@@ -255,7 +248,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
    * `createRealtimeChannelAccess`，下面一条用 `postgresqlFixture` 回放罐头行跑
    * `DrizzleRealtimeStore`，并断言**发出去的 SQL 文本**含 `"agent_workflow"."<表>"`。
    *
-   * 但 `DrizzleRealtimeStore` 的形参本来就是 `ProviderNeutralDatabase`——**一份实现**，
+   * 但 `DrizzleRealtimeStore` 的形参本来就是 `PersistenceDb`——**一份实现**，
    * 两条用例只是喂了两种库。于是合成一条双引擎：同一份真数据、同一组断言，两个引擎各跑一遍。
    *
    * 丢掉的只有那组 SQL 文本断言，这是**净赚**：它们原本用来证明 PG 投影带 schema 限定名，
@@ -264,6 +257,8 @@ describe('RFC-349 WebSocket provider boundary', () => {
   describeEachProvider('RFC-349 realtime store / channel access（双引擎）', (harness) => {
     async function seed(): Promise<void> {
       const db = harness.db
+      const { users, workflows, tasks, taskCollaborators, nodeRuns, nodeRunEvents, memories } =
+        tablesOf(db)
       await db.insert(users).values([
         {
           id: 'realtime-owner',
@@ -282,10 +277,12 @@ describe('RFC-349 WebSocket provider boundary', () => {
           updatedAt: 1,
         },
       ])
-      await db
-        .insert(workflows)
-        .values({ id: 'realtime-workflow', name: 'Realtime workflow', definition: '{}' })
-      await db.insert(tasks).values({
+      await insertOne(db, workflows, {
+        id: 'realtime-workflow',
+        name: 'Realtime workflow',
+        definition: '{}',
+      })
+      await insertOne(db, tasks, {
         id: 'realtime-task',
         name: 'Realtime task',
         workflowId: 'realtime-workflow',
@@ -299,14 +296,14 @@ describe('RFC-349 WebSocket provider boundary', () => {
         startedAt: 1,
         ownerUserId: 'realtime-owner',
       })
-      await db.insert(taskCollaborators).values({
+      await insertOne(db, taskCollaborators, {
         taskId: 'realtime-task',
         userId: 'realtime-member',
         role: 'collaborator',
         addedBy: 'realtime-owner',
         addedAt: 1,
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'realtime-run',
         taskId: 'realtime-task',
         nodeId: 'node-1',
@@ -318,7 +315,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
         { id: 1, nodeRunId: 'realtime-run', ts: 1, kind: 'text', payload: '{"token":"old"}' },
         { id: 2, nodeRunId: 'realtime-run', ts: 2, kind: 'text', payload: '{"token":"new"}' },
       ])
-      await db.insert(memories).values({
+      await insertOne(db, memories, {
         id: 'memory-1',
         scopeType: 'repo',
         scopeId: 'repo-1',

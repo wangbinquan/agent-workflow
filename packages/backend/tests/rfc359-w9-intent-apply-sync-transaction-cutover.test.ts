@@ -34,6 +34,8 @@
 // context.recordArtifact`）是源码层文本断言：漏掉 await 不会让任何既有测试变红，
 // 而 `bun run lint:promises` 挡得住裸调用、挡不住显式 `void`。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { createIntentApplyJournalConvergence } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -49,13 +51,6 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import {
-  intentApplyJournal,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-  users,
-} from '@/db/schema'
 import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
 import {
   createIntentApplyEngine,
@@ -179,20 +174,21 @@ async function seedSession(harness: ProviderHarness, name: string): Promise<Sess
   const now = Date.now()
   const sessionId = ulid()
   const draftId = ulid()
-  await harness.db.insert(intentSessions).values({
+  const { intentSessions, intentDrafts } = tablesOf(harness.db)
+  await insertOne(harness.db, intentSessions, {
     id: sessionId,
     ownerUserId: OWNER,
     title: 'RFC-359 W9 apply',
     status: 'active',
     createdAt: now,
     updatedAt: now,
-  } as typeof intentSessions.$inferInsert)
+  } as PersistenceTables['intentSessions']['$inferInsert'])
 
   const parsed = parseIntentChangeset(JSON.stringify(changeset(name)))
   if (!parsed.ok) throw new Error(parsed.errors.join('; '))
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
-  await harness.db.insert(intentDrafts).values({
+  await insertOne(harness.db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -201,7 +197,7 @@ async function seedSession(harness: ProviderHarness, name: string): Promise<Sess
     draftHash,
     contextRevision: 0,
     createdAt: now,
-  } as typeof intentDrafts.$inferInsert)
+  } as PersistenceTables['intentDrafts']['$inferInsert'])
   await harness.db
     .update(intentSessions)
     .set({ currentDraftId: draftId })
@@ -220,6 +216,7 @@ function command(fixture: SessionFixture, clientMutationId = ulid()): IntentAppl
 }
 
 async function journalRows(harness: ProviderHarness, sessionId: string) {
+  const { intentApplyJournal } = tablesOf(harness.db)
   return await harness.db
     .select()
     .from(intentApplyJournal)
@@ -227,6 +224,7 @@ async function journalRows(harness: ProviderHarness, sessionId: string) {
 }
 
 async function journalRow(harness: ProviderHarness, journalId: string) {
+  const { intentApplyJournal } = tablesOf(harness.db)
   const [row] = await harness.db
     .select()
     .from(intentApplyJournal)
@@ -246,7 +244,8 @@ async function seedJournal(
 ): Promise<string> {
   const id = ulid()
   const at = Date.now() - STALE_MS
-  await harness.db.insert(intentApplyJournal).values({
+  const { intentApplyJournal } = tablesOf(harness.db)
+  await insertOne(harness.db, intentApplyJournal, {
     id,
     sessionId: fixture.sessionId,
     clientMutationId: ulid(),
@@ -261,7 +260,7 @@ async function seedJournal(
     error: input.error ?? null,
     createdAt: at,
     updatedAt: at,
-  } as typeof intentApplyJournal.$inferInsert)
+  } as PersistenceTables['intentApplyJournal']['$inferInsert'])
   return id
 }
 
@@ -370,7 +369,8 @@ afterEach(() => {
 describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => {
   beforeEach(async () => {
     const now = Date.now()
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: 'w9-owner',
       displayName: 'W9 owner',
@@ -378,7 +378,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
       status: 'active',
       createdAt: now,
       updatedAt: now,
-    } as typeof users.$inferInsert)
+    } as PersistenceTables['users']['$inferInsert'])
   })
 
   // ── ① claim（唯一的多语句 journal 事务）────────────────────────────────────
@@ -395,6 +395,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     expect(rows[0]?.state).toBe('committed')
     expect(JSON.parse(rows[0]?.receiptJson ?? 'null')).toEqual(receipt)
 
+    const { intentProvenance, intentSessions } = tablesOf(harness.db)
     // 大事务体内那四条从 `.run()` 改成 `await` 的写：不 await 的惰性 QueryPromise 一条都不会
     // 发生，所以 provenance 行 / 会话代次关闭同时也是那条改动的判据。
     const provenance = await harness.db
@@ -516,6 +517,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     const fixture = await seedSession(harness, 'w9-cas-lost')
     const port = applyPortFor(harness, appHome, {
       afterRecord: async () => {
+        const { intentApplyJournal } = tablesOf(harness.db)
         // 把 journal 挪出 'prepared'：大事务的 prepared→applying CAS 于是命中 0 行。
         await harness.db
           .update(intentApplyJournal)

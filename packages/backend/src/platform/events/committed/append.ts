@@ -1,6 +1,7 @@
 // The asynchronous transaction boundary for the shared committed-event append program.
 
-import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
 import {
   appendCommittedEventProgram,
@@ -16,7 +17,7 @@ import type {
 } from './types'
 
 export async function readCommittedEventCutover(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   producer: CommittedEventProducer,
   family: CommittedEventFamily,
 ): Promise<CommittedEventCutover> {
@@ -26,7 +27,7 @@ export async function readCommittedEventCutover(
 }
 
 export async function appendCommittedEvent<TType extends string, TPayload>(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: AppendCommittedEventInput<TType, TPayload>,
 ): Promise<AppendCommittedEventReceipt> {
   return await driveAsyncProgram(
@@ -36,7 +37,7 @@ export async function appendCommittedEvent<TType extends string, TPayload>(
 }
 
 export async function changeCommittedEventCutover(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: Parameters<typeof changeCommittedEventCutoverProgram>[1],
 ): Promise<CommittedEventCutover> {
   return await driveAsyncProgram(changeCommittedEventCutoverProgram(tx, input), (step) => step())

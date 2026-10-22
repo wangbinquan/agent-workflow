@@ -10,6 +10,8 @@
 // 自己的旗舰用例）、合成的 agent 新行必须字段齐全（否则 validator 在无保护解引用上抛）、
 // loose 定义必须先过 canonical schema（否则整轮崩）、同批新建的资源必须注入（否则假阳性）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { join } from 'node:path'
@@ -23,13 +25,11 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'
 import { canonicalIntentJson } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { intentDrafts, intentSessions, workflows as workflowsTable } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { withAgentSidecarsFrom } from '@/modules/resource-catalog/domain/agentSidecarBackfill'
-import { users } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   buildIntentGraphCandidates,
@@ -57,7 +57,7 @@ import type { Actor } from '../src/auth/actor'
 
 const OWNER = 'user_owner_rfc358_00000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
@@ -67,7 +67,8 @@ const actor: Actor = {
 
 async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER,
     username: 'owner',
     displayName: 'Owner',
@@ -690,7 +691,8 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
       const canonical = canonicalIntentJson(changeset)
       const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
       const draftId = ulid()
-      await db.insert(intentDrafts).values({
+      const { intentDrafts, intentSessions } = tablesOf(db)
+      await insertOne(db, intentDrafts, {
         id: draftId,
         sessionId,
         revision: 1,
@@ -744,7 +746,8 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
       ])
       const draft = await installDraft(session.id, changeset)
 
-      const before = (await db.select().from(workflowsTable)).length
+      const { workflows } = tablesOf(db)
+      const before = (await db.select().from(workflows)).length
       await expect(
         applyIntentChangeset(
           {
@@ -758,7 +761,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
         ),
       ).rejects.toThrow(/intent-workflow-invalid|workflow validation/)
       // preflight 段还没有任何副作用，所以零落库。
-      expect((await db.select().from(workflowsTable)).length).toBe(before)
+      expect((await db.select().from(workflows)).length).toBe(before)
     })
 
     test('AC-6: the same bundle commits cleanly once the edge is wired to a real port', async () => {
@@ -863,7 +866,8 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
         },
         { ownerUserId: OWNER, actor },
       )
-      await db.insert(workflowsTable).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: ulid(),
         name: 'downstream-pipeline',
         description: '',

@@ -18,6 +18,7 @@
 //
 // Added alongside the snapshot change; see db/client.ts migratedSnapshot().
 
+import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -62,7 +63,9 @@ describe('createInMemoryDb snapshot parity', () => {
     const controlRows = control.query(MASTER_QUERY).values() as unknown[][]
 
     const hydrated = createInMemoryDb(MIGRATIONS)
-    const hydratedRows = hydrated.values(sql.raw(MASTER_QUERY)) as unknown[][]
+    const hydratedRows = rawRows(hydrated, sql.raw(MASTER_QUERY)).map((row) =>
+      Object.values(row),
+    ) as unknown[][]
 
     // Non-trivial schema actually present (guards against an empty snapshot).
     const tableNames = controlRows.map((r) => String(r[0])).filter((n) => !n.startsWith('__'))
@@ -77,15 +80,17 @@ describe('createInMemoryDb snapshot parity', () => {
     expect(sqlFileCount).toBeGreaterThan(0)
 
     const db = createInMemoryDb(MIGRATIONS)
-    const appliedRows = db.values(
-      sql.raw('SELECT count(*) FROM __drizzle_migrations'),
+    const appliedRows = rawRows(db, sql.raw('SELECT count(*) FROM __drizzle_migrations')).map(
+      (row) => Object.values(row),
     ) as unknown[][]
     expect(Number(appliedRows[0]?.[0])).toBe(sqlFileCount)
   })
 
   test('foreign-key enforcement is ON (per-connection pragma re-applied after deserialize)', () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const fkRows = db.values(sql.raw('PRAGMA foreign_keys')) as unknown[][]
+    const fkRows = rawRows(db, sql.raw('PRAGMA foreign_keys')).map((row) =>
+      Object.values(row),
+    ) as unknown[][]
     expect(Number(fkRows[0]?.[0])).toBe(1)
   })
 
@@ -93,17 +98,19 @@ describe('createInMemoryDb snapshot parity', () => {
     const a = createInMemoryDb(MIGRATIONS)
     const b = createInMemoryDb(MIGRATIONS)
 
-    a.run(sql.raw('CREATE TABLE __isolation_probe (x integer)'))
+    rawExec(a, sql.raw('CREATE TABLE __isolation_probe (x integer)'))
 
-    const seenInB = b.values(
+    const seenInB = rawRows(
+      b,
       sql.raw("SELECT name FROM sqlite_master WHERE name = '__isolation_probe'"),
-    ) as unknown[][]
+    ).map((row) => Object.values(row)) as unknown[][]
     expect(seenInB.length).toBe(0)
 
     // And a still has its probe (sanity that the write landed somewhere).
-    const seenInA = a.values(
+    const seenInA = rawRows(
+      a,
       sql.raw("SELECT name FROM sqlite_master WHERE name = '__isolation_probe'"),
-    ) as unknown[][]
+    ).map((row) => Object.values(row)) as unknown[][]
     expect(seenInA.length).toBe(1)
   })
 })

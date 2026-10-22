@@ -1,6 +1,8 @@
 // RFC-386: real provider claims exercise shared profiles, live child settings and epoch-scoped failures.
 // Former wiring controls preserve missing settings/profiles; current epoch wiring and an unscoped
 // negative control distinguish existing behavior from the factory consolidation.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -12,14 +14,6 @@ import { DEFAULT_DISTILL_POLICY, type Config } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
-import {
-  tasks,
-  taskRepos,
-  nodeRuns,
-  taskExecutionIntents,
-  memoryDistillJobs,
-  users,
-} from '@/db/schema'
 import { createLogger } from '@/util/log'
 import { gitDiffSnapshot } from '@/util/git'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
@@ -121,7 +115,8 @@ async function childRequest(harness: ProviderDatabaseHarness, appHome: string) {
   const parent = await seedBundleTask(harness, appHome, 'running', false)
   const childId = ulid(),
     userId = ulid()
-  await harness.db.insert(users).values({
+  const { users, tasks, nodeRuns } = tablesOf(harness.db)
+  await insertOne(harness.db, users, {
     id: userId,
     username: userId,
     displayName: userId,
@@ -350,6 +345,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         fixture = taskBundleInput(harness, appHome),
         bundle = fixture.compose()
       const seeded = await seedBundleTask(harness, appHome)
+      const { taskExecutionIntents } = tablesOf(harness.db)
       await harness.db
         .update(taskExecutionIntents)
         .set({
@@ -383,6 +379,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         await launch.launchWorkflow({ ...request, schedulerDriver: fixture.schedulerDriver })
         const childId = request.materializedSpace.taskId
         await awaitDriverSettled(bundle, childId)
+        const { tasks } = tablesOf(harness.db)
         const [child] = await harness.db.select().from(tasks).where(eq(tasks.id, childId))
         expect(child?.autoCommitPush).toBe(false)
         expect(JSON.parse(child!.workflowSnapshot).nodes).toEqual([])
@@ -487,6 +484,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         await expect(
           coordinator.submit({ ...seeded, completionMode: 'await-settle' }),
         ).rejects.toThrow('rfc386-engine-failure')
+        const { taskExecutionIntents } = tablesOf(harness.db)
         const intents = await harness.db
           .select()
           .from(taskExecutionIntents)
@@ -674,6 +672,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       fixture = taskBundleInput(harness, appHome),
       bundle = fixture.compose()
     const seeded = await seedBundleTask(harness, appHome)
+    const { tasks, memoryDistillJobs } = tablesOf(harness.db)
     await harness.db.update(tasks).set({ spaceKind: 'local' }).where(eq(tasks.id, seeded.taskId))
     await bundle.coordinatorFactory
       .coordinatorFor({ runConfig: { kind: 'inherit-parent', parent: { appHome } } })
@@ -747,6 +746,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       const fixture = taskBundleInput(harness, appHome)
       const bundle = composeDaemonTaskExecutionModules({ ...fixture.input, testSeams: undefined })
       const seeded = await seedBundleTask(harness, repo)
+      const { taskExecutionIntents, tasks, taskRepos } = tablesOf(harness.db)
       await harness.db
         .update(taskExecutionIntents)
         .set({ kind: 'gate-continuation', payloadJson: JSON.stringify({ v: 1, event: 'resume' }) })
@@ -757,7 +757,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         .update(tasks)
         .set({ workflowSnapshot: '{}' })
         .where(eq(tasks.id, seeded.taskId))
-      await harness.db.insert(taskRepos).values({
+      await insertOne(harness.db, taskRepos, {
         taskId: seeded.taskId,
         repoIndex: 0,
         repoPath: repo,
@@ -820,6 +820,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       if (entry === 'child-resume') {
         await launch.launchWorkflow({ ...request, schedulerDriver: fixture.schedulerDriver })
         await awaitDriverSettled(bundle, childId)
+        const { tasks } = tablesOf(harness.db)
         await harness.db
           .update(tasks)
           .set({ status: 'interrupted', errorSummary: 'daemon-restart' })
@@ -849,6 +850,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
             ),
           ).rejects.toThrow('entry-drive-failed')
         }
+        const { tasks, taskExecutionIntents } = tablesOf(harness.db)
         const [task] = await harness.db.select().from(tasks).where(eq(tasks.id, taskId))
         expect(task).toMatchObject({ status: 'failed', errorSummary: failure.errorSummary })
         expect(transition.mock.calls[0]![0].reason).toBe(failure.reason)

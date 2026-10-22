@@ -1,4 +1,6 @@
 // RFC-374 T10: real SQLite logical copying preserves run seq and the pruned allocation high-water row; PostgreSQL identity continues above it.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -6,8 +8,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { nodeRuns, nodeRunSeqAllocations, tasks } from '@/db/schema'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
@@ -27,17 +27,17 @@ describeEachProvider(
         const root = mkdtempSync(join(tmpdir(), 'rfc374-copy-')),
           path = join(root, 'source.sqlite'),
           artifactRoot = join(root, 'artifact')
-        const restoreProvider = selectDatabaseSchemaProvider('sqlite')
         const sourceDb = sourceHarness.db,
           sqlite: unknown = Reflect.get(sourceDb, '$client')
         if (!(sqlite instanceof Database)) throw new Error('expected sqlite source')
         let taskId: string,
-          runs: (typeof nodeRuns.$inferSelect)[],
-          allocations: (typeof nodeRunSeqAllocations.$inferSelect)[]
+          runs: PersistenceTables['nodeRuns']['$inferSelect'][],
+          allocations: PersistenceTables['nodeRunSeqAllocations']['$inferSelect'][]
         try {
           taskId = await seedSequenceTask(sourceDb)
           await mintSequenceRun(sourceDb, taskId, { id: 'z-old' })
           await mintSequenceRun(sourceDb, taskId, { id: 'a-new' })
+          const { tasks, nodeRuns, nodeRunSeqAllocations } = tablesOf(sourceDb)
           await sourceDb
             .update(tasks)
             .set({ status: 'done', finishedAt: 2 })
@@ -48,7 +48,6 @@ describeEachProvider(
           writeFileSync(path, sqlite.serialize())
         } finally {
           sqlite.close()
-          restoreProvider()
         }
         const history = await loadPostgresqlMigrationHistory({
             headContract: buildLogicalSchemaContract(),
@@ -104,6 +103,7 @@ describeEachProvider(
             } finally {
               await target.close()
             }
+            const { nodeRuns, nodeRunSeqAllocations } = tablesOf(harness.db)
             expect(
               (await harness.db.select().from(nodeRuns))
                 .map(({ id, seq }) => ({ id, seq }))
@@ -136,7 +136,7 @@ describeEachProvider(
             }
             const next = await mintSequenceRun(harness.db, taskId, { id: '0-next' })
             expect(
-              (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, next)).get())!.seq!,
+              (await first(harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, next))))!.seq!,
             ).toBeGreaterThan(allocations[0]!.seq)
           }
         } finally {

@@ -12,7 +12,7 @@ import type { BusinessExecutionFence } from '@/platform/crewstation/businessExec
 // returned selections to the one shared start sequence.
 import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   prepareHostedPostgresqlProviderRuntime,
   type PreparedPostgresqlProviderSchema,
@@ -55,7 +55,7 @@ export function composeCrewStationDatabaseWriteBarrier(): HostedDatabaseWriteBar
 /** A worker borrows its launching owner's exact fence. It never acquires or
  * follows a newer lease merely because the control row has changed. */
 export function composeCrewStationWorkerFence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   lease: BusinessExecutionFence,
 ): CrewStationMutationFence {
   const frozen = Object.freeze({
@@ -282,7 +282,7 @@ export function composeCrewStationMigrationInstallation(
 }
 
 export interface CrewStationSystemSelections {
-  readonly database: ProviderNeutralDatabase
+  readonly database: PersistenceDb
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly databaseInstallation: DatabaseInstallationPort<PreparedPostgresqlProviderSchema>
   readonly executionAuthority: CrewStationExecutionAuthorityPort

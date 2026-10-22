@@ -12,7 +12,7 @@ import { repoRelativePathSchema } from '../domain/requirementManifest'
 import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
@@ -586,7 +586,7 @@ function detailReader(
 
 /** 一份读侧，两个 provider 共用（RFC-359 W4-D13）。 */
 export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): DevelopmentEmployeeCaseWorkspaceDetailReader {
   return detailReader(createEmployeeWorkspacePersistence(db))
 }
@@ -1372,7 +1372,7 @@ type DevelopmentEmployeeWorkspaceBootstrapInput = Omit<
 
 /** 一份装配，两个 provider 共用（RFC-359 W4-D13）。 */
 export function composeDevelopmentEmployeeWorkspace(
-  input: DevelopmentEmployeeWorkspaceBootstrapInput & { readonly db: ProviderNeutralDatabase },
+  input: DevelopmentEmployeeWorkspaceBootstrapInput & { readonly db: PersistenceDb },
 ): DevelopmentEmployeeWorkspaceParticipant {
   const { db, ...composition } = input
   return composeDevelopmentEmployeeWorkspaceFromPersistence({

@@ -1,6 +1,8 @@
 // RFC-359 W4-D18 —— Workgroup 聚合的唯一仓库实现（此前 `sqliteWorkgroupRepository` / `postgresqlWorkgroupRepository`
 // 各一份、逐字同形）。写路径全在统一的 serializable 事务里；owner + name 唯一冲突经能力矩阵 `uniqueViolationTarget`
 // 映射回 `workgroup-name-in-use` / `workgroup-copy-name-conflict`。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
@@ -14,8 +16,7 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm'
-import { agents, scheduledTasks, tasks, users, workgroupMembers, workgroups } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   ConflictError,
@@ -54,8 +55,8 @@ import {
   workgroupContentPersistenceValues,
 } from './workgroupPersistence'
 
-type WorkgroupRow = typeof workgroups.$inferSelect
-type MemberRow = typeof workgroupMembers.$inferSelect
+type WorkgroupRow = PersistenceTables['workgroups']['$inferSelect']
+type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 
 export interface WorkgroupAclIdentityRow {
   readonly id: string
@@ -174,11 +175,12 @@ function activeHumanIds(
 }
 
 async function assertHumansActive(
-  database: ProviderNeutralDatabase | ResourceCatalogTransaction,
+  database: PersistenceDb | ResourceCatalogTransaction,
   members: ReadonlyArray<{ readonly memberType: string; readonly userId?: string }>,
 ): Promise<void> {
   const ids = activeHumanIds(members)
   if (ids.length === 0) return
+  const { users } = tablesOf(database)
   const rows = await database
     .select({ id: users.id, status: users.status })
     .from(users)
@@ -193,9 +195,10 @@ async function assertHumansActive(
 }
 
 async function agentNames(
-  database: ProviderNeutralDatabase | ResourceCatalogTransaction,
+  database: PersistenceDb | ResourceCatalogTransaction,
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, string>> {
+  const { agents } = tablesOf(database)
   const rows =
     ids.length === 0
       ? []
@@ -215,10 +218,11 @@ async function agentNames(
 
 async function insertMembers(
   transaction: ResourceCatalogTransaction,
-  members: readonly (typeof workgroupMembers.$inferInsert)[],
+  members: readonly PersistenceTables['workgroupMembers']['$inferInsert'][],
 ): Promise<void> {
   for (const member of members) {
-    await transaction.insert(workgroupMembers).values(member)
+    const { workgroupMembers } = tablesOf(transaction)
+    await insertOne(transaction, workgroupMembers, member)
   }
 }
 
@@ -236,6 +240,7 @@ async function insertWorkgroup(
     readonly now: number
   },
 ): Promise<WorkgroupRow> {
+  const { workgroups } = tablesOf(transaction)
   const row = (
     await transaction
       .insert(workgroups)
@@ -266,7 +271,13 @@ function assertGovernAccess(access: ResourceAccess, id: string): void {
   }
 }
 
-function ownerScopedNameWhere(ownerUserId: string | null, name: string, excludeId?: string) {
+function ownerScopedNameWhere(
+  db: object,
+  ownerUserId: string | null,
+  name: string,
+  excludeId?: string,
+) {
+  const { workgroups } = tablesOf(db)
   const owner =
     ownerUserId === null ? isNull(workgroups.ownerUserId) : eq(workgroups.ownerUserId, ownerUserId)
   const identity = and(owner, eq(workgroups.name, name))
@@ -279,11 +290,12 @@ async function assertNameAvailableInTransaction(
   nextName: string,
 ): Promise<void> {
   if (current.name === nextName) return
+  const { workgroups } = tablesOf(transaction)
   const collision = (
     await transaction
       .select({ id: workgroups.id })
       .from(workgroups)
-      .where(ownerScopedNameWhere(current.ownerUserId ?? null, nextName, current.id))
+      .where(ownerScopedNameWhere(transaction, current.ownerUserId ?? null, nextName, current.id))
       .limit(1)
   )[0]
   if (collision !== undefined) {
@@ -295,7 +307,7 @@ async function assertNameAvailableInTransaction(
 }
 
 export function createWorkgroupRepository(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   deps: WorkgroupRepositoryDependencies,
 ): WorkgroupRepositoryBundle {
   const engine = databaseSessionFor(db).engine
@@ -305,6 +317,7 @@ export function createWorkgroupRepository(
   }
   async function get(id: string): Promise<WorkgroupDetail | null> {
     return runResourceCatalogTransaction(db, async (transaction) => {
+      const { workgroups, workgroupMembers } = tablesOf(transaction)
       const row = (
         await transaction.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
       )[0]
@@ -325,6 +338,7 @@ export function createWorkgroupRepository(
   const repository: WorkgroupRepository = {
     async list(): Promise<readonly Workgroup[]> {
       return runResourceCatalogTransaction(db, async (transaction) => {
+        const { workgroups, workgroupMembers } = tablesOf(transaction)
         const rows = await transaction.select().from(workgroups)
         if (rows.length === 0) return []
         const members = await transaction
@@ -356,11 +370,18 @@ export function createWorkgroupRepository(
           await assertHumansActive(transaction, input.document.members)
           await deps.assertAgentIdsUsableInTransaction(transaction, input.authority, ids)
           const names = await agentNames(transaction, ids)
+          const { workgroups, workgroupMembers } = tablesOf(transaction)
           const collision = (
             await transaction
               .select({ id: workgroups.id })
               .from(workgroups)
-              .where(ownerScopedNameWhere(input.initialAcl.ownerUserId, input.document.name))
+              .where(
+                ownerScopedNameWhere(
+                  transaction,
+                  input.initialAcl.ownerUserId,
+                  input.document.name,
+                ),
+              )
               .limit(1)
           )[0]
           if (collision !== undefined) {
@@ -403,6 +424,7 @@ export function createWorkgroupRepository(
     async copy(input): Promise<WorkgroupDetail> {
       try {
         return await runResourceCatalogTransaction(db, async (transaction) => {
+          const { workgroups, workgroupMembers } = tablesOf(transaction)
           const aclRow = (
             await transaction
               .select({
@@ -488,6 +510,7 @@ export function createWorkgroupRepository(
       authority: WorkgroupOperationContext,
       input: UpdateWorkgroupCatalogInput,
     ): Promise<WorkgroupSaveResult> {
+      const { workgroups, workgroupMembers } = tablesOf(db)
       const preflight = (
         await db.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
       )[0]
@@ -506,6 +529,7 @@ export function createWorkgroupRepository(
         new Set(currentMembers.flatMap((member) => (member.agentId ? [member.agentId] : []))),
       )
       return runResourceCatalogTransaction(db, async (transaction) => {
+        const { workgroups, workgroupMembers } = tablesOf(transaction)
         const row = (
           await transaction.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
         )[0]
@@ -631,6 +655,7 @@ export function createWorkgroupRepository(
       input: ValidatedWorkgroupDeleteInput,
     ): Promise<WorkgroupDeleteResult> {
       return runResourceCatalogTransaction(db, async (transaction) => {
+        const { workgroups, workgroupMembers, scheduledTasks, tasks } = tablesOf(transaction)
         const row = (
           await transaction.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
         )[0]

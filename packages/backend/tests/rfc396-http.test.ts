@@ -1,8 +1,9 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // Explicit product roles: observers read, owners/collaborators edit through the same Case boundary.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { canonicalJson, GraphEvidenceBindingSchema } from '@agent-workflow/shared'
-import { employeeCases, employeeCaseMembers } from '@/db/schema'
 import { createUser } from './helpers/userFixture'
 import { createGraphDesignStore } from '@/modules/development-automation/infrastructure/graph-development/designStore'
 import { createGraphDesignArtifacts } from '@/modules/development-automation/infrastructure/graph-development/designArtifacts'
@@ -30,7 +31,8 @@ describeEachProviderHttpApplication(
       const owner = await user('graph-owner'),
         observer = await user('graph-observer'),
         collaborator = await user('graph-collaborator')
-      await db.insert(employeeCases).values({
+      const { employeeCases, employeeCaseMembers } = tablesOf(db)
+      await insertOne(db, employeeCases, {
         id: 'case-a',
         name: 'graph case',
         employeeId: 'employee',

@@ -23,17 +23,14 @@
 // 变异验证（2026-09-07 实测，见 RFC-359 W7 报告）：把 append 原子性与投递一次性各改坏一次，
 // 本文件都变红；还原后复绿。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { and, asc, eq } from 'drizzle-orm'
 
 import { canonicalJson } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  committedEventAggregateHeads,
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import type {
@@ -61,10 +58,11 @@ function persistenceFor(harness: ProviderHarness): CommittedEventDeliveryPersist
 
 /** 把 collaboration/review 家族推到 dispatchable@EPOCH，让种下的事件可派发。 */
 async function enableCutover(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   mode: 'legacy' | 'shadow' | 'dispatchable' = 'dispatchable',
   epoch = EPOCH,
 ): Promise<void> {
+  const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
     .set({ mode, epoch, changedAt: NOW, changeRef: 'test:rfc359-w7' })
@@ -74,7 +72,6 @@ async function enableCutover(
         eq(committedEventFamilyCutovers.family, 'review'),
       ),
     )
-    .run()
 }
 
 interface SeedConsumer {
@@ -108,7 +105,7 @@ interface SeedEvent {
  * 直接种事件行 + 投递行。绕过 append 是有意的：投递侧的判据要精确控制 state / lease / 时间戳，
  * 而 append 只会造出 pending@0。envelope 与 digest 按真实规则算，`storedEventFromRow` 才认。
  */
-async function seedEvent(db: ProviderNeutralDatabase, input: SeedEvent): Promise<void> {
+async function seedEvent(db: PersistenceDb, input: SeedEvent): Promise<void> {
   const aggregateId = input.aggregateId ?? 'review-1'
   const aggregateSeq = input.aggregateSeq ?? 1
   const eventGroupId = input.eventGroupId ?? committedEventGroupId('collaboration', input.eventId)
@@ -130,62 +127,60 @@ async function seedEvent(db: ProviderNeutralDatabase, input: SeedEvent): Promise
     payload: { value: input.eventId },
   }
   const payloadJson = canonicalJson(envelope)
-  await db
-    .insert(committedEvents)
-    .values({
-      id: input.eventId,
-      eventGroupId,
-      eventGroupOrdinal,
-      producer: 'collaboration',
-      family: 'review',
-      eventType: 'fixture.changed.v1',
-      schemaVersion: 1,
-      aggregateKind: 'review-round',
-      aggregateId,
-      aggregateSeq,
-      operationRef: input.eventId,
-      correlationRef: null,
-      causationRef: null,
-      occurredAt: createdAt,
-      payloadJson,
-      payloadDigest: input.payloadDigest ?? sha256Hex(payloadJson),
-      deliveryMode: input.deliveryMode ?? 'dispatchable',
-      producerEpoch: input.producerEpoch ?? EPOCH,
-      createdAt,
-    })
-    .run()
+  const { committedEvents, committedEventDeliveries } = tablesOf(db)
+  await insertOne(db, committedEvents, {
+    id: input.eventId,
+    eventGroupId,
+    eventGroupOrdinal,
+    producer: 'collaboration',
+    family: 'review',
+    eventType: 'fixture.changed.v1',
+    schemaVersion: 1,
+    aggregateKind: 'review-round',
+    aggregateId,
+    aggregateSeq,
+    operationRef: input.eventId,
+    correlationRef: null,
+    causationRef: null,
+    occurredAt: createdAt,
+    payloadJson,
+    payloadDigest: input.payloadDigest ?? sha256Hex(payloadJson),
+    deliveryMode: input.deliveryMode ?? 'dispatchable',
+    producerEpoch: input.producerEpoch ?? EPOCH,
+    createdAt,
+  })
   for (const consumer of input.consumers ?? [{ id: 'event-center.fixture' }]) {
-    await db
-      .insert(committedEventDeliveries)
-      .values({
-        eventId: input.eventId,
-        consumerId: consumer.id,
-        deliveryClass: consumer.deliveryClass ?? CRITICAL,
-        state: consumer.state ?? 'pending',
-        attemptCount: consumer.attemptCount ?? 0,
-        nextAttemptAt: consumer.nextAttemptAt ?? createdAt,
-        claimedBy: consumer.claimedBy ?? null,
-        leaseEpoch: consumer.leaseEpoch ?? 0,
-        claimExpiresAt: consumer.claimExpiresAt ?? null,
-        lastErrorCode: null,
-        lastErrorSummary: consumer.lastErrorSummary ?? null,
-        replayGeneration: 0,
-        createdAt: consumer.createdAt ?? createdAt,
-        updatedAt: consumer.updatedAt ?? createdAt,
-      })
-      .run()
+    await insertOne(db, committedEventDeliveries, {
+      eventId: input.eventId,
+      consumerId: consumer.id,
+      deliveryClass: consumer.deliveryClass ?? CRITICAL,
+      state: consumer.state ?? 'pending',
+      attemptCount: consumer.attemptCount ?? 0,
+      nextAttemptAt: consumer.nextAttemptAt ?? createdAt,
+      claimedBy: consumer.claimedBy ?? null,
+      leaseEpoch: consumer.leaseEpoch ?? 0,
+      claimExpiresAt: consumer.claimExpiresAt ?? null,
+      lastErrorCode: null,
+      lastErrorSummary: consumer.lastErrorSummary ?? null,
+      replayGeneration: 0,
+      createdAt: consumer.createdAt ?? createdAt,
+      updatedAt: consumer.updatedAt ?? createdAt,
+    })
   }
 }
 
-function deliveryRows(db: ProviderNeutralDatabase) {
-  return db
-    .select()
-    .from(committedEventDeliveries)
-    .orderBy(asc(committedEventDeliveries.eventId), asc(committedEventDeliveries.consumerId))
-    .all()
+function deliveryRows(db: PersistenceDb) {
+  const { committedEventDeliveries } = tablesOf(db)
+  return queryRows(
+    db
+      .select()
+      .from(committedEventDeliveries)
+      .orderBy(asc(committedEventDeliveries.eventId), asc(committedEventDeliveries.consumerId)),
+  )
 }
 
-async function deliveryRow(db: ProviderNeutralDatabase, eventId: string, consumerId: string) {
+async function deliveryRow(db: PersistenceDb, eventId: string, consumerId: string) {
+  const { committedEventDeliveries } = tablesOf(db)
   const row = await db
     .select()
     .from(committedEventDeliveries)
@@ -195,7 +190,6 @@ async function deliveryRow(db: ProviderNeutralDatabase, eventId: string, consume
         eq(committedEventDeliveries.consumerId, consumerId),
       ),
     )
-    .all()
   return row[0]
 }
 
@@ -234,10 +228,11 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · append �
       }),
     ).rejects.toThrow('business write failed')
 
+    const { committedEvents, committedEventAggregateHeads } = tablesOf(db)
     // 事件、投递、聚合头三张表都必须回到 append 之前
-    expect(await db.select().from(committedEvents).all()).toEqual([])
+    expect(await db.select().from(committedEvents)).toEqual([])
     expect(await deliveryRows(db)).toEqual([])
-    expect(await db.select().from(committedEventAggregateHeads).all()).toEqual([])
+    expect(await db.select().from(committedEventAggregateHeads)).toEqual([])
   })
 
   test('提交的事务留下事件 + 投递行，且聚合序号从 1 起递增', async () => {
@@ -261,7 +256,8 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · append �
       async (tx) => await appendCommittedEvent(tx, appendInput({ operation: 'op-2' })),
     )
     expect(second.eventRef).toMatchObject({ aggregate: { seq: 2 } })
-    expect(await db.select().from(committedEvents).all()).toHaveLength(2)
+    const { committedEvents } = tablesOf(db)
+    expect(await db.select().from(committedEvents)).toHaveLength(2)
     expect(await deliveryRows(db)).toHaveLength(2)
   })
 
@@ -272,7 +268,8 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · append �
       async (tx) => await appendCommittedEvent(tx, appendInput({ operation: 'legacy' })),
     )
     expect(legacy.eventRef).toBeNull()
-    expect(await db.select().from(committedEvents).all()).toEqual([])
+    const { committedEvents } = tablesOf(db)
+    expect(await db.select().from(committedEvents)).toEqual([])
 
     await enableCutover(db)
     const input = appendInput({ operation: 'replayed' })
@@ -283,7 +280,7 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · append �
       async (tx) => await appendCommittedEvent(tx, input),
     )
     expect(replay.eventRef).toEqual(first.eventRef)
-    expect(await db.select().from(committedEvents).all()).toHaveLength(1)
+    expect(await db.select().from(committedEvents)).toHaveLength(1)
 
     await expect(
       harness.session.transaction(
@@ -803,7 +800,7 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · 并发领
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · 运维投影', (harness) => {
-  async function seedProjectionFixture(db: ProviderNeutralDatabase): Promise<void> {
+  async function seedProjectionFixture(db: PersistenceDb): Promise<void> {
     await enableCutover(db)
     await seedEvent(db, {
       eventId: 'evt-a',

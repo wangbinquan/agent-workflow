@@ -1,18 +1,20 @@
 // Service + HTTP coverage for Agents CRUD (P-1-08).
 // In-memory SQLite via createInMemoryDb — no daemon spawn needed.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { workflows } from '../src/db/schema'
 import {
   createAgent,
   deleteAgent,
@@ -36,7 +38,7 @@ const TOKEN = 'a'.repeat(64)
 
 async function buildHarness(
   scope: ProviderHttpApplicationScope,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   const db = scope.harness.db
   await seedTestDefaultOpencodeRuntime(db)
   return { db, app: (await scope.open()).app }
@@ -86,7 +88,7 @@ function servicePayload(name: string): Parameters<typeof createAgent>[1] {
 }
 
 describeEachProvider('agent service provider create/read', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -122,7 +124,7 @@ describeEachProvider('agent service provider create/read', (harness) => {
 })
 
 describeEachProvider('agent service provider duplicate-name', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -197,7 +199,7 @@ describeEachProvider('agent service provider duplicate-name', (harness) => {
 })
 
 describeEachProvider('agent service provider update/delete', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -288,7 +290,7 @@ describeEachProvider('agent service provider update/delete', (harness) => {
 })
 
 describeEachProvider('agent service provider referenced-delete', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -307,8 +309,9 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
       frontmatterExtra: {},
       bodyMd: '',
     })
+    const { workflows } = tablesOf(db)
     // Insert a workflow whose node references the canonical agent id.
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: ulid(),
       name: 'wf1',
       definition: JSON.stringify({
@@ -369,7 +372,8 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: ulid(),
       name: 'wf',
       definition: JSON.stringify({ nodes: [{ agentId: created.id, agentName: 'a' }] }),
@@ -463,7 +467,10 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
     // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive
     // parser). Simulate by raw UPDATE.
     const { sql } = await import('drizzle-orm')
-    await db.run(sql`UPDATE agents SET depends_on = '{not-an-array}' WHERE name = 'orchestrator'`)
+    await rawExec(
+      db,
+      sql`UPDATE agents SET depends_on = '{not-an-array}' WHERE name = 'orchestrator'`,
+    )
     const reread = await getAgent(db, 'orchestrator')
     expect(reread?.dependsOn).toEqual([])
   })

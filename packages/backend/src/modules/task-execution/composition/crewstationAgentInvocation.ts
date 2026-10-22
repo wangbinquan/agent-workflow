@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
   CreateBusinessMaterial,
@@ -78,7 +78,7 @@ export function createHostedAgentParticipants(): HostedAgentParticipants {
 export function createHostedAgentInvocationPreparation(
   input: HostedNativeMaterialContent & {
     readonly materialEnvironment?: (intent: AgentMaterialIntent) => CreateBusinessMaterial['env']
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly fence: CrewStationMutationFence
     readonly api: CrewStationBusinessExecution
     readonly executions: HostedExecution

@@ -6,14 +6,15 @@
 // so we re-run the idempotent (kind IS NULL-gated) UPDATE against freshly seeded
 // rows to exercise the backfill logic.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKFILL_SQL = readFileSync(
   resolve(MIGRATIONS, '0038_rfc072_backfill_review_output_kind.sql'),
@@ -24,7 +25,8 @@ async function seedReviewApproval(
   db: DbClient,
   opts: { taskId: string; reviewRunId: string; sourceFilePath: string | null; content: string },
 ): Promise<void> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: opts.reviewRunId,
     taskId: opts.taskId,
     nodeId: 'rev_1',
@@ -34,13 +36,13 @@ async function seedReviewApproval(
     reviewIteration: 0,
     startedAt: Date.now(),
   })
-  await db.insert(nodeRunOutputs).values({
+  await insertOne(db, nodeRunOutputs, {
     nodeRunId: opts.reviewRunId,
     portName: 'approved_doc',
     content: opts.content,
     // kind intentionally omitted → NULL, simulating a pre-RFC-072 row.
   })
-  await db.insert(docVersions).values({
+  await insertOne(db, docVersions, {
     id: `${opts.reviewRunId}-dv`,
     taskId: opts.taskId,
     reviewNodeId: 'rev_1',
@@ -58,7 +60,8 @@ async function seedReviewApproval(
 describe('RFC-072 — migration 0038 backfills review approved_doc kind', () => {
   test('file-backed approval → markdown_file; inline approval → stays NULL', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: 'wf',
       name: 'wf',
       description: '',
@@ -66,7 +69,7 @@ describe('RFC-072 — migration 0038 backfills review approved_doc kind', () => 
       version: 1,
       schemaVersion: 4,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: 't1',
       name: 't1',
       workflowId: 'wf',
@@ -99,7 +102,7 @@ describe('RFC-072 — migration 0038 backfills review approved_doc kind', () => 
     expect(before.every((r) => r.kind === null)).toBe(true)
 
     // Re-run the actual migration SQL.
-    await db.run(sql.raw(BACKFILL_SQL))
+    await rawExec(db, sql.raw(BACKFILL_SQL))
 
     const fileRow = (
       await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, 'rev_file'))

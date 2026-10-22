@@ -1,15 +1,9 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, sql, type SQLWrapper } from 'drizzle-orm'
 
+import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
-import {
-  cachedRepos,
-  memories,
-  repoGroupNodes,
-  repoGroups,
-  scheduledTasks,
-  taskRepos,
-  tasks,
-} from '@/db/schema'
 import type {
   CachedRepositoryPageQuery,
   CachedRepositoryPageRecords,
@@ -26,7 +20,11 @@ import {
 } from '../ports/repositoryWorkspaceStore'
 
 export interface RepositoryWorkspaceSqlExecutor {
-  all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]>
+  readonly db: PersistenceDb
+  all<T extends Record<string, unknown>>(
+    query: SQLWrapper,
+    codecs?: RawRowCodecs<T>,
+  ): Promise<readonly T[]>
   run(query: SQLWrapper): Promise<number>
   /**
    * 每格一条 `SELECT count(*) FROM cached_repos WHERE <谓词>` 的标量子查询。
@@ -55,8 +53,8 @@ interface RawCachedRepoRow {
   readonly default_branch: string | null
   readonly last_fetched_at: number
   readonly created_at: number
-  readonly has_submodules: boolean | number | null
-  readonly last_submodule_sync_ok: boolean | number | null
+  readonly has_submodules: boolean | null
+  readonly last_submodule_sync_ok: boolean | null
   readonly last_submodule_sync_error: string | null
   readonly last_auto_refresh_at: number | null
 }
@@ -80,10 +78,12 @@ interface RawRepositoryGroupNodeRow {
   readonly ref: string
   readonly subdir: string
   readonly child_group_id: string | null
-  readonly readonly: boolean | number
+  readonly readonly: boolean
 }
 
-const cachedRepoSelect = sql`
+const cachedRepoSelect = (db: object) => {
+  const { cachedRepos } = tablesOf(db)
+  return sql`
   ${cachedRepos.id} AS id,
   ${cachedRepos.urlHash} AS url_hash,
   ${cachedRepos.urlEnc} AS url_enc,
@@ -97,9 +97,6 @@ const cachedRepoSelect = sql`
   ${cachedRepos.lastSubmoduleSyncError} AS last_submodule_sync_error,
   ${cachedRepos.lastAutoRefreshAt} AS last_auto_refresh_at
 `
-
-function nullableBoolean(value: boolean | number | null): boolean | null {
-  return value === null ? null : value === true || value === 1
 }
 
 export function mapCachedRepository(row: RawCachedRepoRow): CachedRepositoryRecord {
@@ -112,8 +109,8 @@ export function mapCachedRepository(row: RawCachedRepoRow): CachedRepositoryReco
     defaultBranch: row.default_branch,
     lastFetchedAt: Number(row.last_fetched_at),
     createdAt: Number(row.created_at),
-    hasSubmodules: nullableBoolean(row.has_submodules),
-    lastSubmoduleSyncOk: nullableBoolean(row.last_submodule_sync_ok),
+    hasSubmodules: row.has_submodules,
+    lastSubmoduleSyncOk: row.last_submodule_sync_ok,
     lastSubmoduleSyncError: row.last_submodule_sync_error,
     lastAutoRefreshAt: row.last_auto_refresh_at === null ? null : Number(row.last_auto_refresh_at),
   }
@@ -123,13 +120,13 @@ function scheduleOf(row: {
   readonly id: string
   readonly name: string
   readonly launch_payload: string
-  readonly enabled: boolean | number
+  readonly enabled: boolean
 }): RepositoryScheduleRecord {
   return {
     id: row.id,
     name: row.name,
     launchPayload: row.launch_payload,
-    enabled: row.enabled === true || row.enabled === 1,
+    enabled: row.enabled,
   }
 }
 
@@ -137,40 +134,50 @@ function columnName(column: { readonly name: string }): SQLWrapper {
   return sql.identifier(column.name)
 }
 
-function patchAssignments(patch: CachedRepositoryPatch): SQLWrapper[] {
+function patchAssignments(db: object, patch: CachedRepositoryPatch): SQLWrapper[] {
   const assignments: SQLWrapper[] = []
   if (patch.urlHash !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.urlHash)} = ${patch.urlHash}`)
   }
   if (patch.urlEnc !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.urlEnc)} = ${patch.urlEnc}`)
   }
   if (patch.urlRedacted !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.urlRedacted)} = ${patch.urlRedacted}`)
   }
   if (patch.localPath !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.localPath)} = ${patch.localPath}`)
   }
   if (patch.defaultBranch !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.defaultBranch)} = ${patch.defaultBranch}`)
   }
   if (patch.lastFetchedAt !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.lastFetchedAt)} = ${patch.lastFetchedAt}`)
   }
   if (patch.hasSubmodules !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.hasSubmodules)} = ${patch.hasSubmodules}`)
   }
   if (patch.lastSubmoduleSyncOk !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(
       sql`${columnName(cachedRepos.lastSubmoduleSyncOk)} = ${patch.lastSubmoduleSyncOk}`,
     )
   }
   if (patch.lastSubmoduleSyncError !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(
       sql`${columnName(cachedRepos.lastSubmoduleSyncError)} = ${patch.lastSubmoduleSyncError}`,
     )
   }
   if (patch.lastAutoRefreshAt !== undefined) {
+    const { cachedRepos } = tablesOf(db)
     assignments.push(sql`${columnName(cachedRepos.lastAutoRefreshAt)} = ${patch.lastAutoRefreshAt}`)
   }
   return assignments
@@ -186,7 +193,8 @@ function scheduledReferenceIds(rows: readonly { readonly launch_payload: string 
   return ids
 }
 
-function scheduledCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
+function scheduledCondition(db: object, scheduleIds: ReadonlySet<string>): SQLWrapper {
+  const { cachedRepos } = tablesOf(db)
   return scheduleIds.size === 0
     ? // RFC-349: this fragment lands in a boolean position (an `OR` arm in
       // `referencedCondition`, the leading `AND` term in `scheduledOnly`), and the
@@ -202,23 +210,29 @@ function scheduledCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
 }
 
 /** 被至少一行显式 `task_repos` 引用。 */
-const explicitReference = sql`exists (
+const explicitReference = (db: object) => {
+  const { taskRepos, cachedRepos } = tablesOf(db)
+  return sql`exists (
   select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id}
 )`
+}
 
 /** 被**遗留直挂**引用：任务自己带 `cached_repo_id`，且它一行 `task_repos` 都没有。 */
-const legacyReference = sql`exists (
+const legacyReference = (db: object) => {
+  const { tasks, cachedRepos, taskRepos } = tablesOf(db)
+  return sql`exists (
   select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
     and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
 )`
+}
 
 /** Row-level predicate: 三条来源的并集。用在**分页 WHERE** 里，两个 planner 在那个位置
  *  都能把 `exists` 上提成 semi/anti join，形状没有问题。 */
-function referencedCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
+function referencedCondition(db: object, scheduleIds: ReadonlySet<string>): SQLWrapper {
   return sql`(
-    ${explicitReference}
-    or ${legacyReference}
-    or ${scheduledCondition(scheduleIds)}
+    ${explicitReference(db)}
+    or ${legacyReference(db)}
+    or ${scheduledCondition(db, scheduleIds)}
   )`
 }
 
@@ -250,23 +264,29 @@ function referencedCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
  * 结果等价（三格相加 === 原来的并集）由 `rfc359-w8-t26-plan-reshape-conformance`
  * 用一对多 / 空集 / NULL / 悬空键四类语料在两个引擎上钉住。
  */
-function referencedFacetCounts(scheduleIds: ReadonlySet<string>): {
+function referencedFacetCounts(
+  db: object,
+  scheduleIds: ReadonlySet<string>,
+): {
   readonly explicit: SQLWrapper
   readonly legacyOnly: SQLWrapper
   readonly scheduledOnly: SQLWrapper
 } {
   return {
-    explicit: explicitReference,
-    legacyOnly: sql`not ${explicitReference} and ${legacyReference}`,
-    scheduledOnly: sql`${scheduledCondition(scheduleIds)}
-      and not ${explicitReference} and not ${legacyReference}`,
+    explicit: explicitReference(db),
+    legacyOnly: sql`not ${explicitReference(db)} and ${legacyReference(db)}`,
+    scheduledOnly: sql`${scheduledCondition(db, scheduleIds)}
+      and not ${explicitReference(db)} and not ${legacyReference(db)}`,
   }
 }
 
-const attentionCondition = sql`(
+const attentionCondition = (db: object) => {
+  const { cachedRepos } = tablesOf(db)
+  return sql`(
   ${cachedRepos.hasSubmodules} = ${true}
   and ${cachedRepos.lastSubmoduleSyncOk} = ${false}
 )`
+}
 
 const REPOSITORY_FACETS_TTL_MS = 5_000
 
@@ -280,6 +300,9 @@ interface RepositoryFacetsCacheEntry {
 /** Shared provider-independent SQL projection. Provider-specific transaction
  * implementations wrap the mutation sets exposed by this base class. */
 export class RepositoryWorkspaceSqlStore {
+  protected get database(): PersistenceDb {
+    return this.executor.db
+  }
   private facetsCache: RepositoryFacetsCacheEntry | null = null
 
   constructor(
@@ -293,26 +316,53 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async findCachedRepoByHash(hash: string): Promise<CachedRepositoryRecord | null> {
-    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(sql`
-      SELECT ${cachedRepoSelect}
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(
+      sql`
+      SELECT ${cachedRepoSelect(persistenceDb)}
       FROM ${cachedRepos}
       WHERE ${cachedRepos.urlHash} = ${hash}
       LIMIT 1
-    `)
+    `,
+      {
+        last_fetched_at: 'int',
+        created_at: 'int',
+        has_submodules: 'bool',
+        last_submodule_sync_ok: 'bool',
+        last_auto_refresh_at: 'int',
+      },
+    )
     return rows[0] === undefined ? null : mapCachedRepository(rows[0])
   }
 
   async findCachedRepoById(id: string): Promise<CachedRepositoryRecord | null> {
-    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(sql`
-      SELECT ${cachedRepoSelect}
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(
+      sql`
+      SELECT ${cachedRepoSelect(persistenceDb)}
       FROM ${cachedRepos}
       WHERE ${cachedRepos.id} = ${id}
       LIMIT 1
-    `)
+    `,
+      {
+        last_fetched_at: 'int',
+        created_at: 'int',
+        has_submodules: 'bool',
+        last_submodule_sync_ok: 'bool',
+        last_auto_refresh_at: 'int',
+      },
+    )
     return rows[0] === undefined ? null : mapCachedRepository(rows[0])
   }
 
   async insertCachedRepo(record: CachedRepositoryRecord): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
     const changes = await this.executor.run(sql`
       INSERT INTO ${cachedRepos} (
         ${columnName(cachedRepos.id)}, ${columnName(cachedRepos.urlHash)},
@@ -339,8 +389,11 @@ export class RepositoryWorkspaceSqlStore {
     patch: CachedRepositoryPatch,
     expectedUrlHash?: string,
   ): Promise<boolean> {
-    const assignments = patchAssignments(patch)
+    const persistenceDb = this.database
+
+    const assignments = patchAssignments(persistenceDb, patch)
     if (assignments.length === 0) return true
+    const { cachedRepos } = tablesOf(persistenceDb)
     const changes = await this.executor.run(sql`
       UPDATE ${cachedRepos}
       SET ${sql.join(assignments, sql`, `)}
@@ -352,6 +405,9 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async upsertCachedRepo(record: CachedRepositoryRecord): Promise<void> {
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
     await this.executor.run(sql`
       INSERT INTO ${cachedRepos} (
         ${columnName(cachedRepos.id)}, ${columnName(cachedRepos.urlHash)},
@@ -382,29 +438,54 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async countCachedRepos(): Promise<number> {
-    const rows = await this.executor.all<{ count: number }>(sql`
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<{ count: number }>(
+      sql`
       SELECT count(*) AS count FROM ${cachedRepos}
-    `)
+    `,
+      { count: 'int' },
+    )
     return Number(rows[0]?.count ?? 0)
   }
 
   async listCachedRepos(): Promise<readonly CachedRepositoryRecord[]> {
-    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(sql`
-      SELECT ${cachedRepoSelect}
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(
+      sql`
+      SELECT ${cachedRepoSelect(persistenceDb)}
       FROM ${cachedRepos}
       ORDER BY ${cachedRepos.lastFetchedAt} DESC, ${cachedRepos.id} DESC
-    `)
+    `,
+      {
+        last_fetched_at: 'int',
+        created_at: 'int',
+        has_submodules: 'bool',
+        last_submodule_sync_ok: 'bool',
+        last_auto_refresh_at: 'int',
+      },
+    )
     return rows.map(mapCachedRepository)
   }
 
   private async schedulePayloadRows(): Promise<readonly { launch_payload: string }[]> {
+    const persistenceDb = this.database
+
+    const { scheduledTasks } = tablesOf(persistenceDb)
     return await this.executor.all<{ launch_payload: string }>(sql`
       SELECT ${scheduledTasks.launchPayload} AS launch_payload FROM ${scheduledTasks}
     `)
   }
 
   async cachedRepoReferenceCount(id: string): Promise<number> {
-    const rows = await this.executor.all<{ count: number }>(sql`
+    const persistenceDb = this.database
+
+    const { taskRepos, tasks } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<{ count: number }>(
+      sql`
       SELECT count(*) AS count FROM (
         SELECT ${taskRepos.taskId} AS task_id
         FROM ${taskRepos}
@@ -418,7 +499,9 @@ export class RepositoryWorkspaceSqlStore {
             SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
           )
       ) AS task_refs
-    `)
+    `,
+      { count: 'int' },
+    )
     let count = Number(rows[0]?.count ?? 0)
     const needle = `"cachedRepoId":${JSON.stringify(id)}`
     for (const row of await this.schedulePayloadRows()) {
@@ -428,31 +511,40 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async cachedRepoReferenceCounts(ids: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    const persistenceDb = this.database
+
     const counts = new Map<string, number>()
     if (ids.length === 0) return counts
     const idSet = sql.join(
       ids.map((id) => sql`${id}`),
       sql`, `,
     )
+    const { taskRepos, tasks } = tablesOf(persistenceDb)
     const explicitRows = await this.executor.all<{
       cached_repo_id: string
       count: number
-    }>(sql`
+    }>(
+      sql`
       SELECT ${taskRepos.cachedRepoId} AS cached_repo_id, count(distinct ${taskRepos.taskId}) AS count
       FROM ${taskRepos}
       WHERE ${taskRepos.cachedRepoId} IN (${idSet})
       GROUP BY ${taskRepos.cachedRepoId}
-    `)
+    `,
+      { count: 'int' },
+    )
     const legacyRows = await this.executor.all<{
       cached_repo_id: string
       count: number
-    }>(sql`
+    }>(
+      sql`
       SELECT ${tasks.cachedRepoId} AS cached_repo_id, count(*) AS count
       FROM ${tasks}
       WHERE ${tasks.cachedRepoId} IN (${idSet})
         AND ${tasks.id} NOT IN (SELECT ${taskRepos.taskId} FROM ${taskRepos})
       GROUP BY ${tasks.cachedRepoId}
-    `)
+    `,
+      { count: 'int' },
+    )
     for (const row of explicitRows) counts.set(row.cached_repo_id, Number(row.count))
     for (const row of legacyRows) {
       counts.set(row.cached_repo_id, (counts.get(row.cached_repo_id) ?? 0) + Number(row.count))
@@ -469,6 +561,8 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async listCachedRepoPage(query: CachedRepositoryPageQuery): Promise<CachedRepositoryPageRecords> {
+    const persistenceDb = this.database
+
     const cachedFacets =
       this.facetsCache !== null &&
       this.facetsCache.expiresAt > Date.now() &&
@@ -481,12 +575,14 @@ export class RepositoryWorkspaceSqlStore {
     const term = query.q?.trim() ?? ''
     if (term !== '') {
       const { pattern, escape } = this.engine.likeEscape(term)
+      const { cachedRepos } = tablesOf(persistenceDb)
       conditions.push(sql`(
         ${this.engine.likeCaseInsensitive(sql`coalesce(${cachedRepos.urlRedacted}, '<url unavailable>')`, pattern, escape)}
         or ${this.engine.likeCaseInsensitive(cachedRepos.localPath, pattern, escape)}
         or ${this.engine.likeCaseInsensitive(cachedRepos.defaultBranch, pattern, escape)}
       )`)
     }
+    const { cachedRepos } = tablesOf(persistenceDb)
     if (query.submodules === 'with') conditions.push(sql`${cachedRepos.hasSubmodules} = ${true}`)
     if (query.submodules === 'without') {
       conditions.push(sql`${cachedRepos.hasSubmodules} = ${false}`)
@@ -497,10 +593,10 @@ export class RepositoryWorkspaceSqlStore {
     if (query.autoRefresh === 'never') {
       conditions.push(sql`${cachedRepos.lastAutoRefreshAt} is null`)
     }
-    const referenced = referencedCondition(scheduleIds)
+    const referenced = referencedCondition(persistenceDb, scheduleIds)
     if (query.view === 'referenced') conditions.push(referenced)
     if (query.view === 'unused') conditions.push(sql`not ${referenced}`)
-    if (query.view === 'attention') conditions.push(attentionCondition)
+    if (query.view === 'attention') conditions.push(attentionCondition(persistenceDb))
     if (query.cursor !== undefined) {
       conditions.push(sql`(
         ${cachedRepos.lastFetchedAt}, ${cachedRepos.id}
@@ -509,21 +605,30 @@ export class RepositoryWorkspaceSqlStore {
       )`)
     }
     const where = conditions.length === 0 ? sql`` : sql`WHERE ${and(...conditions)}`
-    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(sql`
-      SELECT ${cachedRepoSelect}
+    const rows = await this.executor.all<RawCachedRepoRow & Record<string, unknown>>(
+      sql`
+      SELECT ${cachedRepoSelect(persistenceDb)}
       FROM ${cachedRepos}
       ${where}
       ORDER BY ${cachedRepos.lastFetchedAt} DESC, ${cachedRepos.id} DESC
       LIMIT ${query.limit + 1}
-    `)
+    `,
+      {
+        last_fetched_at: 'int',
+        created_at: 'int',
+        has_submodules: 'bool',
+        last_submodule_sync_ok: 'bool',
+        last_auto_refresh_at: 'int',
+      },
+    )
     const mapped = rows.map(mapCachedRepository)
     const page = mapped.slice(0, query.limit)
     const counts = await this.cachedRepoReferenceCounts(page.map((row) => row.id))
     let facets = cachedFacets?.facets
     if (facets === undefined) {
       const facetRow = await this.executor.cachedRepoFacets({
-        ...referencedFacetCounts(scheduleIds),
-        attention: attentionCondition,
+        ...referencedFacetCounts(persistenceDb, scheduleIds),
+        attention: attentionCondition(persistenceDb),
       })
       const all = Number(facetRow.all_count)
       // 三格按构造互斥（E / ¬E∧L / ¬E∧¬L∧S），相加即改写前那个 OR 的并集势。
@@ -556,6 +661,9 @@ export class RepositoryWorkspaceSqlStore {
     readonly dueBefore: number
     readonly freshAfter: number
   }): Promise<readonly Pick<CachedRepositoryRecord, 'id' | 'urlRedacted'>[]> {
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ id: string; url_redacted: string | null }>(sql`
       SELECT ${cachedRepos.id} AS id, ${cachedRepos.urlRedacted} AS url_redacted
       FROM ${cachedRepos}
@@ -570,7 +678,10 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async stampAutoRefreshed(ids: readonly string[], at: number): Promise<void> {
+    const persistenceDb = this.database
+
     if (ids.length === 0) return
+    const { cachedRepos } = tablesOf(persistenceDb)
     await this.executor.run(sql`
       UPDATE ${cachedRepos}
       SET ${columnName(cachedRepos.lastAutoRefreshAt)} = ${at}
@@ -582,6 +693,9 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async listKnownRepositoryPaths(): Promise<readonly string[]> {
+    const persistenceDb = this.database
+
+    const { cachedRepos } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ local_path: string }>(sql`
       SELECT ${cachedRepos.localPath} AS local_path FROM ${cachedRepos}
     `)
@@ -589,6 +703,9 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async groupsReferencingRepo(id: string): Promise<readonly { id: string; name: string }[]> {
+    const persistenceDb = this.database
+
+    const { repoGroups, repoGroupNodes } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ id: string; name: string }>(sql`
       SELECT ${repoGroups.id} AS id, ${repoGroups.name} AS name
       FROM ${repoGroupNodes}
@@ -600,6 +717,9 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async detachRepoFromAllGroups(id: string): Promise<number> {
+    const persistenceDb = this.database
+
+    const { repoGroupNodes } = tablesOf(persistenceDb)
     return await this.executor.run(sql`
       UPDATE ${repoGroupNodes}
       SET ${columnName(repoGroupNodes.attachmentKind)} = null,
@@ -613,22 +733,37 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async readCredentialSealingSnapshot(): Promise<RepositoryCredentialSealingSnapshot> {
+    const persistenceDb = this.database
+
+    const { cachedRepos, taskRepos, tasks, scheduledTasks } = tablesOf(persistenceDb)
     const [repoRows, taskRepoRows, taskRows, scheduleRows] = await Promise.all([
-      this.executor.all<RawCachedRepoRow & Record<string, unknown>>(sql`
-        SELECT ${cachedRepoSelect} FROM ${cachedRepos}
-      `),
+      this.executor.all<RawCachedRepoRow & Record<string, unknown>>(
+        sql`
+        SELECT ${cachedRepoSelect(persistenceDb)} FROM ${cachedRepos}
+      `,
+        {
+          last_fetched_at: 'int',
+          created_at: 'int',
+          has_submodules: 'bool',
+          last_submodule_sync_ok: 'bool',
+          last_auto_refresh_at: 'int',
+        },
+      ),
       this.executor.all<{
         task_id: string
         repo_index: number
         repo_url: string | null
         cached_repo_id: string | null
         submodule_init_error: string | null
-      }>(sql`
+      }>(
+        sql`
         SELECT ${taskRepos.taskId} AS task_id, ${taskRepos.repoIndex} AS repo_index,
           ${taskRepos.repoUrl} AS repo_url, ${taskRepos.cachedRepoId} AS cached_repo_id,
           ${taskRepos.submoduleInitError} AS submodule_init_error
         FROM ${taskRepos}
-      `),
+      `,
+        { repo_index: 'int' },
+      ),
       this.executor.all<{
         id: string
         repo_url: string | null
@@ -642,13 +777,16 @@ export class RepositoryWorkspaceSqlStore {
         id: string
         name: string
         launch_payload: string
-        enabled: boolean | number
-      }>(sql`
+        enabled: boolean
+      }>(
+        sql`
         SELECT ${scheduledTasks.id} AS id, ${scheduledTasks.name} AS name,
           ${scheduledTasks.launchPayload} AS launch_payload,
           ${scheduledTasks.enabled} AS enabled
         FROM ${scheduledTasks}
-      `),
+      `,
+        { enabled: 'bool' },
+      ),
     ])
     return {
       cachedRepos: repoRows.map(mapCachedRepository),
@@ -669,8 +807,13 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async readRepositoryGroupSnapshot(): Promise<RepositoryGroupSnapshot> {
+    const persistenceDb = this.database
+
+    const { repoGroups, repoGroupNodes, cachedRepos, memories, scheduledTasks } =
+      tablesOf(persistenceDb)
     const [groupRows, nodeRows, repoRows, memoryRows, scheduleRows] = await Promise.all([
-      this.executor.all<RawRepositoryGroupRow & Record<string, unknown>>(sql`
+      this.executor.all<RawRepositoryGroupRow & Record<string, unknown>>(
+        sql`
         SELECT ${repoGroups.id} AS id, ${repoGroups.name} AS name,
           ${repoGroups.description} AS description, ${repoGroups.version} AS version,
           ${repoGroups.createdByUserId} AS created_by_user_id,
@@ -678,8 +821,11 @@ export class RepositoryWorkspaceSqlStore {
           ${repoGroups.schemaVersion} AS schema_version
         FROM ${repoGroups}
         ORDER BY ${repoGroups.name}, ${repoGroups.id}
-      `),
-      this.executor.all<RawRepositoryGroupNodeRow & Record<string, unknown>>(sql`
+      `,
+        { version: 'int', created_at: 'int', updated_at: 'int', schema_version: 'int' },
+      ),
+      this.executor.all<RawRepositoryGroupNodeRow & Record<string, unknown>>(
+        sql`
         SELECT ${repoGroupNodes.groupId} AS group_id, ${repoGroupNodes.path} AS path,
           ${repoGroupNodes.attachmentKind} AS attachment_kind,
           ${repoGroupNodes.cachedRepoId} AS cached_repo_id,
@@ -688,30 +834,38 @@ export class RepositoryWorkspaceSqlStore {
           ${repoGroupNodes.readonly} AS readonly
         FROM ${repoGroupNodes}
         ORDER BY ${repoGroupNodes.groupId}, ${repoGroupNodes.path}
-      `),
+      `,
+        { readonly: 'bool' },
+      ),
       this.executor.all<{ id: string; url_redacted: string | null }>(sql`
         SELECT ${cachedRepos.id} AS id, ${cachedRepos.urlRedacted} AS url_redacted
         FROM ${cachedRepos}
       `),
-      this.executor.all<{ scope_id: string; count: number }>(sql`
+      this.executor.all<{ scope_id: string; count: number }>(
+        sql`
         SELECT ${memories.scopeId} AS scope_id, count(*) AS count
         FROM ${memories}
         WHERE ${memories.scopeType} = 'repo_group'
           AND ${memories.status} IN ('candidate', 'approved', 'superseded', 'rejected')
           AND ${memories.scopeId} IS NOT NULL
         GROUP BY ${memories.scopeId}
-      `),
+      `,
+        { count: 'int' },
+      ),
       this.executor.all<{
         id: string
         name: string
         launch_payload: string
-        enabled: boolean | number
-      }>(sql`
+        enabled: boolean
+      }>(
+        sql`
         SELECT ${scheduledTasks.id} AS id, ${scheduledTasks.name} AS name,
           ${scheduledTasks.launchPayload} AS launch_payload,
           ${scheduledTasks.enabled} AS enabled
         FROM ${scheduledTasks}
-      `),
+      `,
+        { enabled: 'bool' },
+      ),
     ])
     return {
       groups: groupRows.map((row) => ({
@@ -732,7 +886,7 @@ export class RepositoryWorkspaceSqlStore {
         ref: row.ref,
         subdir: row.subdir,
         childGroupId: row.child_group_id,
-        readonly: row.readonly === true || row.readonly === 1,
+        readonly: row.readonly,
       })),
       repoUrls: new Map(repoRows.map((row) => [row.id, row.url_redacted])),
       boundMemoryCounts: new Map(memoryRows.map((row) => [row.scope_id, Number(row.count)])),
@@ -741,6 +895,9 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async findWorktreeTask(id: string): Promise<WorktreeTaskRecord | null> {
+    const persistenceDb = this.database
+
+    const { tasks, taskRepos } = tablesOf(persistenceDb)
     const taskRows = await this.executor.all<{
       id: string
       owner_user_id: string | null
@@ -760,7 +917,8 @@ export class RepositoryWorkspaceSqlStore {
       worktree_path: string
       base_commit: string | null
       mount_path: string
-    }>(sql`
+    }>(
+      sql`
       SELECT ${taskRepos.repoIndex} AS repo_index,
         ${taskRepos.worktreePath} AS worktree_path,
         ${taskRepos.baseCommit} AS base_commit,
@@ -768,7 +926,9 @@ export class RepositoryWorkspaceSqlStore {
       FROM ${taskRepos}
       WHERE ${taskRepos.taskId} = ${id}
       ORDER BY ${taskRepos.repoIndex}
-    `)
+    `,
+      { repo_index: 'int' },
+    )
     return {
       id: task.id,
       ownerUserId: task.owner_user_id,

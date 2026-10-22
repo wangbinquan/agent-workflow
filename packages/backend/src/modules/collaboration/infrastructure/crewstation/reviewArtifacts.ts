@@ -3,10 +3,10 @@
 // id); the gate journal keeps the receipt and stays the only publication and
 // recovery authority. Cleanup of an unconsumed document is an owner release;
 // whether its upload ever completed is settled by object maintenance.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, or } from 'drizzle-orm'
 import { z } from 'zod'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type {
   CrewStationStreamObjectStorage,
@@ -63,7 +63,7 @@ function receiptFor(artifact: HumanGateArtifactSnapshot) {
 }
 
 export function createHostedReviewArtifacts(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
 }): ReviewArtifactSelection & {
@@ -81,6 +81,7 @@ export function createHostedReviewArtifacts(input: {
   }
   return {
     async archiveFiles(taskId) {
+      const { collaborationGateArtifacts, collaborationGateOperations } = tablesOf(input.db)
       const rows = await input.db
         .select({ artifact: collaborationGateArtifacts })
         .from(collaborationGateArtifacts)
@@ -140,6 +141,7 @@ export function createHostedReviewArtifacts(input: {
     },
     content: {
       async read(reference) {
+        const { collaborationGateArtifacts, collaborationGateOperations } = tablesOf(input.db)
         const rows = await input.db
           .select({ artifact: collaborationGateArtifacts })
           .from(collaborationGateArtifacts)

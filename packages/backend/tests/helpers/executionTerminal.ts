@@ -6,7 +6,7 @@
 // 于是它挪到测试树里，而不是让一个没有生产消费者的文件继续存在。
 //
 // 它自己没有任何 provider 判断：`watchTaskTerminal` 与 `getExecutionOutcome` 都是中立实现。
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ExecutionOutcome } from '@/services/execution/types'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal, type TerminalWatchResult } from '@/services/execution/executionWatch'
@@ -20,7 +20,7 @@ export type WatchExecutionResult =
  * `missing` = 任务行消失了（被删）——永不挂死；`aborted` = 调用方的 signal 先触发。
  */
 export async function watchExecutionTerminal(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<WatchExecutionResult> {

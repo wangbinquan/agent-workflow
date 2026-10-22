@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -27,14 +29,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  memories,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  taskFeedback,
-  tasks,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
@@ -82,7 +77,7 @@ function providerTaskLineage(id: string) {
 }
 
 describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let previousHome: string | undefined
   let temporaryHome: string
 
@@ -102,7 +97,8 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
 
   async function seedJob(over: { taskId?: string | null; sourceEventId?: string } = {}) {
     const id = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id,
       debounceKey: `${over.taskId ?? 'task-x'}:feedback`,
       sourceKind: 'feedback',
@@ -203,6 +199,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
 
     // The parser demonstrably consumed exactly this envelope (nonce + payload).
     expect(result.candidatesCreated).toBe(1)
+    const { memories } = tablesOf(db)
     const persisted = await db.select().from(memories).where(eq(memories.distillJobId, job.id))
     expect(persisted).toHaveLength(1)
 
@@ -229,6 +226,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
     expect(result.candidatesCreated).toBe(1)
     expect(fake.calls[0]!.protocol).toBe('claude-code')
 
+    const { memoryDistillEvents } = tablesOf(db)
     const rows = await db
       .select()
       .from(memoryDistillEvents)
@@ -244,7 +242,8 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
 
   test('AC-10: full attempts (ok and protocol failure) rewrite no historical row', async () => {
     const taskId = ulid()
-    await db.insert(tasks).values({
+    const { tasks, taskFeedback, memories } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'history-task',
       workflowId: 'wf-history',
@@ -260,7 +259,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
       finishedAt: 2,
       ...providerTaskLineage(taskId),
     })
-    await db.insert(taskFeedback).values({
+    await insertOne(db, taskFeedback, {
       id: 'fb-hist',
       taskId,
       authorUserId: null,

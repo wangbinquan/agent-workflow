@@ -11,7 +11,7 @@ import { admitTransferredWorkspace } from '../infrastructure/transferredWorkspac
 
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID } from '../domain/digitalEmployeeHost'
 import type {
   RootTaskLaunchKernel,
@@ -50,7 +50,7 @@ export function borrowedPostgresqlWorkspace(input: {
         earlyError: null,
         repositories: [],
         nodePaths: [],
-        admit: (transaction: ProviderNeutralDatabase) =>
+        admit: (transaction: PersistenceDb) =>
           admitTransferredWorkspace(transaction, {
             kind: 'borrowed',
             taskId: request.taskId,
@@ -73,7 +73,7 @@ export function borrowedPostgresqlWorkspace(input: {
 }
 
 export interface ActionExecutionEnvironmentDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /**
    * **惰性**取 actor：只有 `launchHostTask` 用得到它，而 SQLite 侧的组合根
    * （`server.ts` 的 `composeFallbackDevelopmentAutomation`）是**同步**函数，

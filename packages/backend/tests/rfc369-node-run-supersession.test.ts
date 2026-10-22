@@ -10,14 +10,15 @@
 //   ④ 入口重放的 `excludeSuperseded`；
 //   ⑤ AC-7 收紧情形（ULID 不单调的晚提交行、遗留行）与 AC-8 调度器跳过已被取代的 pending 行。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { IllegalMergeStateTransition, type MergeStateOrNull } from '@agent-workflow/shared'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   isStructurallySuperseded,
   isSupersedableMergeState,
@@ -131,11 +132,12 @@ describe('RFC-369 §3 取代判据（纯函数）', () => {
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: SNAPSHOT })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: SNAPSHOT })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -152,12 +154,13 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   r: SupersessionRow,
   opts: { mergeState?: MergeStateOrNull; status?: NodeRunStatus; isoNodeTree?: string } = {},
 ): Promise<string> {
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: r.id,
     seq: r.seq,
     taskId,
@@ -175,7 +178,8 @@ async function seedRun(
   return r.id
 }
 
-async function mergeStateOf(db: ProviderNeutralDatabase, id: string) {
+async function mergeStateOf(db: PersistenceDb, id: string) {
+  const { nodeRuns } = tablesOf(db)
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
 }
 
@@ -210,6 +214,7 @@ describeEachProvider('RFC-369 §3 判据：生产 SQL 谓词与纯函数对拍',
         rows.push(r)
         await seedRun(db, taskId, r, { mergeState: 'pending-merge' })
       }
+      const { nodeRuns } = tablesOf(db)
       const sqlSet = (
         await db
           .select({ id: nodeRuns.id })
@@ -273,6 +278,7 @@ describeEachProvider('RFC-369 AC-2 —— 同任务并发铸造不再互相中�
       await mintIn('b', mkId(11))
     }
     expect(bodyRuns).toEqual({ a: 1, b: 1 })
+    const { nodeRuns } = tablesOf(db)
     const allocated = await db
       .select({ seq: nodeRuns.seq })
       .from(nodeRuns)
@@ -666,6 +672,7 @@ describeEachProvider(
         })
         expect(result).toMatchObject({ nodeRunId: minted, adopted: false })
         expect(canceled).toEqual([])
+        const { nodeRuns } = tablesOf(db)
         const statuses = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
           .map((r) => [r.id === minted ? 'minted' : r.id, r.status])
           .sort()

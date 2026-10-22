@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { cachedRepos } from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeRepositoryWorkspaceOperations } from '@/modules/source-control/composition'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
@@ -17,7 +18,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 
 function rows(direct: readonly Record<string, unknown>[] = []): SqlRows {
-  return Object.assign(Promise.resolve(direct), {
+  return Object.assign(Promise.resolve(Object.assign([...direct], { count: direct.length })), {
     async values() {
       return []
     },
@@ -38,10 +39,10 @@ function postgresqlFixture(): {
     if (/^\s*select count\(\*\)/i.test(query)) return rows([{ count: 1 }])
     return rows(/^\s*(DELETE|INSERT|UPDATE)/i.test(query) ? [{}] : [])
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe: execute,
     release() {},
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -69,10 +70,6 @@ function postgresqlFixture(): {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 repository workspace provider boundary', () => {
   test('production consumers contain no database mechanism and PostgreSQL has a native adapter', () => {
@@ -103,7 +100,7 @@ describe('RFC-349 repository workspace provider boundary', () => {
       ),
       'utf8',
     )
-    expect(postgresql).toContain('ProviderNeutralDatabase')
+    expect(postgresql).toContain('PersistenceDb')
     expect(postgresql).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
     expect(postgresql).not.toContain('createInMemoryDb')
     expect(postgresql).not.toContain('deasync')
@@ -266,7 +263,8 @@ describeEachProvider('RFC-349 repository workspace provider boundary', (harness)
       attachmentKind: null,
       cachedRepoId: null,
     })
-    expect(await db.select().from(cachedRepos).all()).toHaveLength(0)
+    const { cachedRepos } = tablesOf(db)
+    expect(await db.select().from(cachedRepos)).toHaveLength(0)
   })
 
   test('facets retain the short cache and expose explicit cross-store invalidation', async () => {
@@ -288,15 +286,13 @@ describeEachProvider('RFC-349 repository workspace provider boundary', (harness)
     } as const
     await store.insertCachedRepo(record)
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(1)
-    await db
-      .insert(cachedRepos)
-      .values({
-        ...record,
-        id: 'repo-cache-2',
-        urlHash: 'hash-cache-2',
-        localPath: '/cache/repo-cache-2',
-      })
-      .run()
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
+      ...record,
+      id: 'repo-cache-2',
+      urlHash: 'hash-cache-2',
+      localPath: '/cache/repo-cache-2',
+    })
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(1)
     invalidateRepositoryWorkspaceFacetCaches()
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(2)

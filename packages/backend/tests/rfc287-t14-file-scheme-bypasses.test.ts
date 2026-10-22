@@ -7,6 +7,8 @@
 //
 // 这个文件按「通道」而不是按「函数」组织：将来加第四条入口时，这里该多一个 describe。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import {
   StartBatchImportRequestSchema,
@@ -17,11 +19,9 @@ import {
 import { selectDueRepos } from '@/services/submoduleRefresh'
 import { ulid } from 'ulid'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { cachedRepos } from '@/db/schema'
-
 const FILE_URL = 'file:///srv/private/repo'
 
 describe('RFC-287 G5 — 判据单点化', () => {
@@ -53,10 +53,11 @@ describeEachProvider(
     // 成员、多仓循环、sourceTaskId 重放、webhook 命中存量缓存。
     //
     // 「存量可见不可运行」：行照样在、列表照样显示、导入照样允许，只是启动与刷新被拒。
-    async function seedFileMirror(db: ProviderNeutralDatabase): Promise<string> {
+    async function seedFileMirror(db: PersistenceDb): Promise<string> {
       const id = ulid()
       const now = Date.now()
-      await db.insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id,
         urlHash: 'legacy-file',
         urlRedacted: FILE_URL,
@@ -123,12 +124,13 @@ describeEachProvider('RFC-287 G5 绕过③ — 后台保鲜对 url_redacted=NULL
   // NULL 不是理论情形：repairCachedRepoRedaction 在密钥丢失/轮换导致解封失败时会
   // continue，把 url_redacted 原样留在 NULL。
   async function seed(
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     rows: Array<{ id: string; urlRedacted: string | null }>,
   ): Promise<void> {
     const now = Date.now()
     for (const r of rows) {
-      await db.insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id: r.id,
         urlHash: `h-${r.id}`,
         urlRedacted: r.urlRedacted,

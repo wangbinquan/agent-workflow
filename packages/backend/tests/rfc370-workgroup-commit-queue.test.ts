@@ -3,11 +3,16 @@
 // DatabaseSession. The PG fixture controls protocol ACKs; it is not a real PG.
 import { describe, expect, test } from 'bun:test'
 import type { SQL } from 'drizzle-orm'
-import { PgDialect } from 'drizzle-orm/pg-core'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  createPostgresqlDatabaseRuntime,
+  type PostgresqlPool,
+} from '@/platform/persistence/postgresqlRuntime'
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 
 import { createInMemoryDb } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
 import {
   createWorkgroupTurnsPersistence,
@@ -41,7 +46,7 @@ function operation(key: string) {
   return { kind: 'fail-host-run' as const, operationKey: key, runId: key, message: key }
 }
 
-function persistenceOn(db: ProviderNeutralDatabase, apply: Apply = async () => committed()) {
+function persistenceOn(db: PersistenceDb, apply: Apply = async () => committed()) {
   const participants: unknown[] = []
   const persistence = createWorkgroupTurnsPersistence({
     db,
@@ -58,25 +63,47 @@ function persistenceOn(db: ProviderNeutralDatabase, apply: Apply = async () => c
 
 function postgresqlFixture() {
   const queries: string[] = []
-  const dialect = new PgDialect()
   let attempts = 0
   let afterBody: (attempt: number) => Promise<void> = async () => undefined
-  const transactionHandle = () => ({
-    async run(query: SQL) {
-      queries.push(dialect.sqlToQuery(query).sql)
+  const connection = withNativeTransactions({
+    unsafe(statement: string) {
+      if (/^set transaction/i.test(statement)) queries.push(statement.toUpperCase())
+      return Object.assign(Promise.resolve([]), {
+        async values() {
+          return []
+        },
+      })
     },
+    release() {},
   })
-  const db = {
-    $provider: 'postgresql' as const,
-    async transaction<T>(
-      body: (transaction: ReturnType<typeof transactionHandle>) => Promise<T>,
-    ): Promise<T> {
-      const attempt = ++attempts
-      const result = await body(transactionHandle())
+  const begin = connection.begin.bind(connection)
+  connection.begin = async (body) => {
+    const attempt = ++attempts
+    return await begin(async (client) => {
+      const value = await body(client)
       await afterBody(attempt)
-      return result
+      return value
+    })
+  }
+  const pool: PostgresqlPool = {
+    unsafe: connection.unsafe,
+    reserve: async () => connection,
+    close: async () => {},
+  }
+  const runtime = createPostgresqlDatabaseRuntime({
+    generationId: 'commit_fixture',
+    config: {
+      provider: 'postgresql',
+      urlEnv: 'COMMIT_FIXTURE_URL',
+      poolMax: 1,
+      connectTimeoutMs: 1000,
+      statementTimeoutMs: 1000,
+      idleTimeoutMs: 1000,
     },
-  } as unknown as ProviderNeutralDatabase
+    env: { COMMIT_FIXTURE_URL: 'postgresql://fixture@localhost/commit' },
+    poolFactory: () => pool,
+  })
+  const db = createPostgresqlDatabaseClient(runtime)
   return {
     db,
     queries,

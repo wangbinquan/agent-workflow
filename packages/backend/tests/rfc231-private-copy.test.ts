@@ -1,6 +1,8 @@
 // RFC-231 — user resources default private and Workflow/Workgroup copies are
 // exact, actor-owned, reference-safe snapshots.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   CreateMcpSchema,
   CreateWorkgroupSchema,
@@ -17,22 +19,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import {
-  agents,
-  mcps,
-  plugins,
-  resourceGrants,
-  skills,
-  users,
-  workflows,
-  workgroupMembers,
-  workgroups,
-} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   composePluginServiceBindingForTest,
@@ -77,8 +68,9 @@ function actor(id: string): Actor {
   })
 }
 
-async function seedUsers(db: ProviderNeutralDatabase, ids: readonly string[]): Promise<void> {
+async function seedUsers(db: PersistenceDb, ids: readonly string[]): Promise<void> {
   const now = Date.now()
+  const { users } = tablesOf(db)
   await db.insert(users).values(
     ids.map((id) => ({
       id,
@@ -93,12 +85,13 @@ async function seedUsers(db: ProviderNeutralDatabase, ids: readonly string[]): P
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: AclResourceType,
   resourceId: string,
   userId: string,
 ): Promise<void> {
-  await db.insert(resourceGrants).values({
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
     resourceType: type,
     resourceId,
     userId,
@@ -107,7 +100,7 @@ async function grant(
   })
 }
 
-function mcpBinding(db: ProviderNeutralDatabase, principal: Actor): McpServiceBinding {
+function mcpBinding(db: PersistenceDb, principal: Actor): McpServiceBinding {
   const catalog = composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -130,7 +123,7 @@ function mcpBinding(db: ProviderNeutralDatabase, principal: Actor): McpServiceBi
 }
 
 function pluginBinding(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   principal: Actor,
   pluginsDir: string,
 ): PluginServiceBinding {
@@ -276,6 +269,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
         { ownerUserId: 'alice', actor: alice },
       )
 
+      const { agents, skills, mcps, plugins, workflows, workgroups } = tablesOf(db)
       const rows = [
         (await db.select().from(agents).where(eq(agents.id, createdAgent.id)))[0],
         (await db.select().from(skills).where(eq(skills.id, createdSkill.id)))[0],
@@ -308,6 +302,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
         config: { command: ['printf'] },
       }),
     )
+    const { mcps } = tablesOf(db)
     expect((await db.select().from(mcps).where(eq(mcps.id, created.id)))[0]?.ownerUserId).toBe(
       'bob',
     )
@@ -322,6 +317,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       { name: 'tightened-agent', ...AGENT_INPUT },
       { ownerUserId: 'target-owner', actor: owner },
     )
+    const { agents, workflows } = tablesOf(db)
     await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, target.id))
 
     await expect(
@@ -400,7 +396,10 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
 
     for (const [table, expected] of Object.entries(expectedInserts)) {
       const actual: Record<string, number> = {}
-      const pattern = new RegExp(`\\.insert\\s*\\(\\s*${table}\\s*\\)`, 'g')
+      const pattern = new RegExp(
+        `(?:\\.insert\\s*\\(\\s*${table}\\s*\\)|insertOne\\s*\\([^,]+,\\s*${table}\\s*,)`,
+        'g',
+      )
       for (const [file, source] of sources) {
         const count = source.match(pattern)?.length ?? 0
         if (count > 0) actual[file] = count
@@ -478,6 +477,7 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
       expectedVersion: source.version,
       expectedSnapshotHash: source.snapshotHash,
     }
+    const { workflows, resourceGrants } = tablesOf(db)
     const countBefore = (await db.select({ id: workflows.id }).from(workflows)).length
 
     await expect(copyWorkflow(db, source.id, request, bob)).rejects.toMatchObject({
@@ -524,7 +524,8 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
     await seedUsers(db, ['alice', 'bob'])
     const bob = actor('bob')
     const corruptId = ulid()
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: corruptId,
       name: 'corrupt-private',
       definition: '{not-json',
@@ -542,7 +543,7 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
 
     const legacyId = ulid()
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: legacyId,
       name: 'Legacy Flow / 中文',
       description: 'legacy',
@@ -629,6 +630,7 @@ describeEachProvider('RFC-231 Workgroup exact copy', (harness) => {
       expectedVersion: sourceRevision.version,
       expectedSnapshotHash: sourceRevision.snapshotHash,
     }
+    const { workgroups, agents, resourceGrants, workgroupMembers, users } = tablesOf(db)
     const countBefore = (await db.select({ id: workgroups.id }).from(workgroups)).length
 
     await expect(copyWorkgroup(db, source.id, request, bob)).rejects.toMatchObject({

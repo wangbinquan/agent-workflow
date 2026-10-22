@@ -1,7 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { runtimes } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { RUNTIME_KINDS } from '@/services/runtime'
 import type {
   NativeMemoryDistillRuntimeResolver as MemoryDistillRuntimeResolver,
@@ -33,7 +33,7 @@ function fallback(protocol: 'opencode' | 'claude-code' = 'opencode') {
 
 /** RFC-359 W4-D4：一份实现，两个 provider 共用——按名字取运行时档案，缺省回落到内建 kind。 */
 export class DrizzleMemoryDistillRuntimeResolver implements MemoryDistillRuntimeResolver {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async resolve(
     input: Parameters<MemoryDistillRuntimeResolver['resolve']>[0],
@@ -60,6 +60,7 @@ export class DrizzleMemoryDistillRuntimeResolver implements MemoryDistillRuntime
   }
 
   private async find(name: string): Promise<RuntimeProfileRow | null> {
+    const { runtimes } = tablesOf(this.db)
     const rows = await this.db
       .select({
         protocol: runtimes.protocol,

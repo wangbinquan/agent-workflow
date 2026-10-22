@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-041 PR3 — runtime memory inject service.
 //
@@ -19,8 +21,7 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { cachedRepos, memories, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   clipByBudget,
   DEFAULT_INJECTION_BUDGET,
@@ -40,7 +41,7 @@ import { DrizzleMemoryInjectionReadStore } from '../src/modules/memory/infrastru
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedApprovedMemory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     scopeType: 'agent' | 'workflow' | 'repo' | 'global'
     scopeId: string | null
@@ -50,7 +51,8 @@ async function seedApprovedMemory(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id,
     scopeType: opts.scopeType,
     scopeId: opts.scopeId,
@@ -66,7 +68,7 @@ async function seedApprovedMemory(
 }
 
 async function seedNonApprovedMemory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     status: 'candidate' | 'superseded' | 'archived' | 'rejected'
     scopeType: 'agent' | 'workflow' | 'repo' | 'global'
@@ -74,7 +76,8 @@ async function seedNonApprovedMemory(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(memories).values({
+  const { memories } = tablesOf(db)
+  await insertOne(db, memories, {
     id,
     scopeType: opts.scopeType,
     scopeId: opts.scopeId,
@@ -90,7 +93,7 @@ async function seedNonApprovedMemory(
 }
 
 describeEachProvider('loadInjectableMemories', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
     resetBroadcastersForTests()
@@ -439,7 +442,7 @@ describe('clipByBudget / estimateTokens / formatMemoryBlock', () => {
 })
 
 describeEachProvider('injectMemoryForRun', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
     resetBroadcastersForTests()
@@ -452,7 +455,8 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     workflowId: string
   }> {
     const wfId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: wfId,
       name: 'wf',
       definition: JSON.stringify({ schemaVersion: 1, nodes: [], edges: [] }),
@@ -462,7 +466,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     })
 
     const taskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'fixture-task',
       workflowId: wfId,
@@ -542,7 +546,8 @@ describeEachProvider('injectMemoryForRun', (harness) => {
   // credentialed/private repo — the credentialed case below is that regression.
   test('resolves repoId via tasks.cached_repo_id', async () => {
     const url = 'https://github.com/acme/web.git'
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: 'cr-1',
       urlHash: 'aabbccdd',
       urlRedacted: url,
@@ -563,10 +568,11 @@ describeEachProvider('injectMemoryForRun', (harness) => {
   })
 
   test('private repo (redacted repo_url) still resolves its repo scope', async () => {
+    const { cachedRepos } = tablesOf(db)
     // Pre-RFC-204 this returned null: repo_url was stored as
     // `https://***@github.com/acme/priv.git` and never equalled the plaintext
     // cached_repos.url, so private-repo memories were silently dropped.
-    await db.insert(cachedRepos).values({
+    await insertOne(db, cachedRepos, {
       id: 'cr-priv',
       urlHash: 'ddccbbaa',
       urlRedacted: 'https://***@github.com/acme/priv.git',

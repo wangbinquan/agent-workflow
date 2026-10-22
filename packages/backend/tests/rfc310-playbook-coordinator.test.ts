@@ -25,7 +25,7 @@ import type { ReconcileDeps } from '../src/modules/development-automation/applic
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 const ref = (id: string, revision = 1) => ({ id, revision })
 type EmployeeStep = NonNullable<DigitalEmployeeContent['steps']>[number]
@@ -99,7 +99,7 @@ function agentStep(stepId: string, onSuccess: string, onExhausted: string): Empl
 }
 
 async function setup(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   patch:
     | Partial<DigitalEmployeeContent>
     | ((context: {

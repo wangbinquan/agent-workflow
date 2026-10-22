@@ -1,6 +1,8 @@
 // Service + HTTP coverage for Skills CRUD (P-1-09).
 // Uses real temp filesystem (skill content lives on disk) + in-memory SQLite.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -10,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { type DbClient } from '../src/db/client'
-import { agents, skills } from '../src/db/schema'
 import {
   createManagedSkill,
   deleteSkill,
@@ -26,7 +27,7 @@ import {
 import { getSkill } from './helpers/resourceLookup'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -51,7 +52,7 @@ interface Harness {
 
 // RFC-359 W46: use the complete provider application while retaining native fixtures.
 interface ProviderSkillHarness extends Omit<Harness, 'db' | 'cleanup'> {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   cleanup: () => Promise<void>
 }
 
@@ -299,8 +300,9 @@ describeProviderSkills('skill service (continued)', (buildHarness) => {
     expect(existsSync(skillDir)).toBe(true)
     const fooId = skill.id
 
+    const { agents } = tablesOf(h.db)
     // Insert agent referencing 'foo' via a typed MANAGED skill ref (RFC-223 PR-1).
-    await h.db.insert(agents).values({
+    await insertOne(h.db, agents, {
       id: ulid(),
       name: 'a1',
       description: '',
@@ -515,6 +517,7 @@ describeProviderSkills('skill HTTP routes (formerly native fixture)', (buildHarn
     const content = (await (await req(h.app, `/api/skills/${skill.id}/content`)).json()) as {
       token: string
     }
+    const { skills } = tablesOf(h.db)
     await h.db
       .update(skills)
       .set({ ownerUserId: 'other-owner', aclRevision: 1 })

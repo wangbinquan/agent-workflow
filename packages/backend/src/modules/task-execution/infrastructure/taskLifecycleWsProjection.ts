@@ -1,10 +1,10 @@
 // RFC-359 W4-B1 —— 任务生命周期 WS 投影：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { tasks, workflows } from '@/db/schema'
 import type {
   TaskLifecycleCreatedProjection,
   TaskLifecycleWsProjection,
@@ -12,10 +12,11 @@ import type {
 import { createTaskLifecycleWsProjector } from './taskLifecycleWsProjector'
 
 export function createDatabaseTaskLifecycleWsProjection(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): TaskLifecycleWsProjection {
   return Object.freeze({
     async findCreatedTask(taskId: string): Promise<TaskLifecycleCreatedProjection | null> {
+      const { tasks, workflows } = tablesOf(db)
       const rows = await db
         .select({ task: tasks, workflowName: workflows.name })
         .from(tasks)
@@ -44,6 +45,6 @@ export function createDatabaseTaskLifecycleWsProjection(
   })
 }
 
-export function createDatabaseTaskLifecycleWsProjector(db: ProviderNeutralDatabase) {
+export function createDatabaseTaskLifecycleWsProjector(db: PersistenceDb) {
   return createTaskLifecycleWsProjector(createDatabaseTaskLifecycleWsProjection(db))
 }

@@ -1,10 +1,12 @@
 // RFC-359 W20: the page's legacy reference count changes only its exclusion
 // expression. Real catalogs prove the non-null premise; the old SQL remains
 // the data oracle. These tiny cases make no PostgreSQL performance claim.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { eq, sql, type SQLWrapper } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { scheduledTasks, taskRepos, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { RepositoryWorkspaceSqlStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceSqlStore'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -15,7 +17,8 @@ const repoIds = ['w18-repo-a', 'w18-repo-b', 'w18-repo-c'] as const
 
 async function seed(harness: ProviderHarness) {
   const db = harness.db
-  await db.insert(users).values({
+  const { users, workflows, tasks, taskRepos, scheduledTasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'w18-user',
     username: 'w18',
     displayName: 'w18',
@@ -25,7 +28,7 @@ async function seed(harness: ProviderHarness) {
     createdAt: since,
     updatedAt: since,
   })
-  await db.insert(workflows).values({ id: 'w18-wf', name: 'w18', definition: '{}' })
+  await insertOne(db, workflows, { id: 'w18-wf', name: 'w18', definition: '{}' })
   const seeds = [
     { id: 'a', status: 'running', cachedRepoId: repoIds[0] },
     { id: 'b', status: 'running', cachedRepoId: repoIds[0] },
@@ -42,7 +45,7 @@ async function seed(harness: ProviderHarness) {
   ] as const
   // Parent a must exist before its child c on both providers.
   for (const item of seeds) {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       workflowId: 'w18-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -74,7 +77,7 @@ async function seed(harness: ProviderHarness) {
       worktreePath: `/fixture/${taskId}`,
     })),
   )
-  await db.insert(scheduledTasks).values({
+  await insertOne(db, scheduledTasks, {
     id: 'w18-schedule',
     name: 'w18',
     ownerUserId: 'w18-user',
@@ -93,11 +96,12 @@ interface ObservedRead {
   readonly rows: readonly Record<string, unknown>[]
 }
 
-function observedStore(db: ProviderNeutralDatabase, reads: ObservedRead[]) {
+function observedStore(db: PersistenceDb, reads: ObservedRead[]) {
   return new RepositoryWorkspaceSqlStore(
     {
+      db,
       async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
-        const rows = await db.all<T>(query)
+        const rows = await rawRows<T>(db, query)
         reads.push({ rows })
         return rows
       },
@@ -114,11 +118,12 @@ function observedStore(db: ProviderNeutralDatabase, reads: ObservedRead[]) {
 
 // The three original SQL statements are the reference, including the original
 // correlated exclusion. Every result below still comes from the selected DB.
-function originalCountQueries(ids: readonly string[]): readonly SQLWrapper[] {
+function originalCountQueries(db: object, ids: readonly string[]): readonly SQLWrapper[] {
   const idSet = sql.join(
     ids.map((id) => sql`${id}`),
     sql`, `,
   )
+  const { taskRepos, tasks, scheduledTasks } = tablesOf(db)
   return [
     sql`
       SELECT ${taskRepos.cachedRepoId} AS cached_repo_id, count(distinct ${taskRepos.taskId}) AS count
@@ -164,26 +169,31 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
         ['task_repos', 'task_id'],
         ['tasks', 'id'],
       ] as const) {
-        const rows = await harness.db.all<{ name: string; notnull: number }>(
+        const rows = await rawRows<{ name: string; notnull: number }>(
+          harness.db,
           sql.raw(`PRAGMA table_info('${table}')`),
+          { notnull: 'int' },
         )
         const matches = rows.filter((row) => row.name === column)
         expect(matches).toHaveLength(1)
         columns.push({ table, column, notNull: matches[0]!.notnull === 1 })
       }
     } else {
-      const rows = await harness.db.all<{
+      const rows = await rawRows<{
         table_name: string
         column_name: string
         is_nullable: string
-      }>(sql`
+      }>(
+        harness.db,
+        sql`
         SELECT table_name, column_name, is_nullable
         FROM information_schema.columns
         WHERE table_schema = 'agent_workflow'
           AND ((table_name = 'task_repos' AND column_name = 'task_id')
             OR (table_name = 'tasks' AND column_name = 'id'))
         ORDER BY table_name, column_name
-      `)
+      `,
+      )
       columns.push(
         ...rows.map((row) => ({
           table: row.table_name,
@@ -203,7 +213,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
     let comparisons = 0
     async function compare(
       expectedForAllIds: readonly (readonly [string, number])[],
-      db: ProviderNeutralDatabase = harness.db,
+      db: PersistenceDb = harness.db,
     ) {
       const selections: readonly (readonly string[])[] = [
         repoIds,
@@ -233,8 +243,8 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
           const originalReads: (readonly Record<string, unknown>[])[] = []
           const originalRecording = harness.recordStatements()
           try {
-            for (const query of originalCountQueries(ids)) {
-              originalReads.push(await db.all<Record<string, unknown>>(query))
+            for (const query of originalCountQueries(db, ids)) {
+              originalReads.push(await rawRows<Record<string, unknown>>(db, query))
             }
           } finally {
             originalRecording.stop()
@@ -260,6 +270,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       [repoIds[0], 6],
       [repoIds[1], 5],
     ])
+    const { taskRepos, tasks } = tablesOf(harness.db)
     await harness.db.delete(taskRepos)
     await compare([
       [repoIds[0], 6],
@@ -295,7 +306,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       .from(tasks)
       .orderBy(tasks.id)
     for (const row of taskRows) {
-      await harness.db.insert(taskRepos).values({
+      await insertOne(harness.db, taskRepos, {
         taskId: row.id,
         repoIndex: 0,
         cachedRepoId: row.cachedRepoId,
@@ -317,6 +328,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
     const interruption = new Error('reference count rollback')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { tasks, taskRepos } = tablesOf(tx)
         await tx.update(tasks).set({ cachedRepoId: repoIds[2] }).where(eq(tasks.id, 'a'))
         await tx.delete(taskRepos).where(eq(taskRepos.taskId, 'a'))
         await compare(

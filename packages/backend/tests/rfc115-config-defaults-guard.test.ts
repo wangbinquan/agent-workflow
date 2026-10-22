@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeFileRuntimeLegacyConfiguration } from '../src/modules/runtime-management/composition/runtimeRegistry'
 // RFC-115 (Codex impl-gate F-high) — assertConfigDefaultsMigrated fail-loud
 // guard for the CONFIG-only skip-upgrade data-loss path.
@@ -19,8 +21,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { runtimes } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   assertConfigDefaultsMigrated,
   seedBuiltinRuntimes,
@@ -30,7 +31,7 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 describeEachProvider(
   'RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let tmp: string
     let cfg: string
     beforeEach(async () => {
@@ -50,6 +51,7 @@ describeEachProvider(
       await expect(
         assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), configuration),
       ).rejects.toThrow(/defaultClaudeModel/)
+      const { runtimes } = tablesOf(db)
       await db
         .update(runtimes)
         .set({ model: 'legacy-model' })
@@ -81,6 +83,7 @@ describeEachProvider(
 
     test('legacy defaults on disk but a built-in profile is set (RFC-113 ran) → passes', async () => {
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
+      const { runtimes } = tablesOf(db)
       // Simulate RFC-113's config→runtime backfill having migrated the default.
       await db
         .update(runtimes)
@@ -129,6 +132,7 @@ describeEachProvider(
     // ACCURATE message that names the seed-failure possibility, NOT skipping the
     // guard (my first F4 attempt returned here and reopened the data-loss path).
     test('built-ins absent (seed failed) + legacy config → ABORTs with seed-aware message', async () => {
+      const { runtimes } = tablesOf(db)
       await db.delete(runtimes) // simulate seedBuiltinRuntimes never having run
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
       await expect(
@@ -140,12 +144,13 @@ describeEachProvider(
     })
 
     test('RFC-153 F3: a user row reusing a preseeded NAME under a mismatched protocol does NOT satisfy the guard', async () => {
+      const { runtimes } = tablesOf(db)
       // Delete the canonical opencode row and recreate 'opencode' as a claude-code
       // row WITH a model. The name matches BUILTIN_NAMES but protocol !== name, so it
       // must NOT count as proof the RFC-113 backfill preserved the legacy defaults —
       // the surviving canonical claude-code row is still all-NULL → still ABORT.
       await db.delete(runtimes).where(eq(runtimes.name, 'opencode'))
-      await db.insert(runtimes).values({
+      await insertOne(db, runtimes, {
         id: 'r-fake-oc',
         name: 'opencode',
         protocol: 'claude-code',

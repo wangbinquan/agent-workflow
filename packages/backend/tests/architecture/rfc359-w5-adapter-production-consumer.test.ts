@@ -398,7 +398,7 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // （`createPostgresqlIdentityAccessRuntime` / `composePostgresqlDigitalEmployee`，
       // 体就是 `return 中立那份(input)`）。
       // RFC-359 AC-1（2026-09-16，plan §5gs）：87 → 86。`composeSqliteWebhookDispatchCore` 改名成中立的
-      // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `ProviderNeutralDatabase`，
+      // `composeWebhookDispatchCore`——它**没有 PostgreSQL 孪生**，形参早就是 `PersistenceDb`，
       // 前缀纯属历史（proposal.md AC-1 第三款的「命名债」）。**是改名不是删实现**，分母因此少一。
       // RFC-359 AC-1（2026-09-16，plan §5hi）：86 → 82。数字员工动作执行的三层同文件孪生合齐，
       // 退役四个 provider 命名的导出：`createPostgresqlActionExecutionEnvironment` /

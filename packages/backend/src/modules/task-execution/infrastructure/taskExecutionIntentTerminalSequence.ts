@@ -1,9 +1,10 @@
 // One transaction-local sequence; the original entry points retain their
 // synchronous or asynchronous execution and affected-row contracts.
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, queryWrite } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskExecutionIntents, taskExecutionLineageOperationRecords } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   transactionStep,
   type TransactionProgramStep,
@@ -11,30 +12,33 @@ import {
 import { TaskExecutionError } from '../application/taskExecutionError'
 import type { TerminalizeTaskExecutionIntentsInput } from '../application/terminalizeExecutionIntent'
 
-export function* taskExecutionIntentTerminalSequence<Tx extends ProviderNeutralDatabase>(
+export function* taskExecutionIntentTerminalSequence<Tx extends PersistenceDb>(
   tx: Tx,
   input: TerminalizeTaskExecutionIntentsInput,
   writeChecks: 'unchecked' | 'require-returned-rows',
 ): Generator<TransactionProgramStep, void, void> {
-  const active = yield* transactionStep(() =>
-    tx
-      .select({ id: taskExecutionIntents.id })
-      .from(taskExecutionIntents)
-      .where(
-        and(
-          eq(taskExecutionIntents.taskId, input.taskId),
-          input.claimedOwnerEpoch === undefined
-            ? inArray(taskExecutionIntents.state, ['pending', 'claimed'])
-            : and(
-                eq(taskExecutionIntents.state, 'claimed'),
-                eq(taskExecutionIntents.claimedEpoch, input.claimedOwnerEpoch),
-              ),
+  const active = yield* transactionStep(() => {
+    const { taskExecutionIntents } = tablesOf(tx)
+    return queryRows(
+      tx
+        .select({ id: taskExecutionIntents.id })
+        .from(taskExecutionIntents)
+        .where(
+          and(
+            eq(taskExecutionIntents.taskId, input.taskId),
+            input.claimedOwnerEpoch === undefined
+              ? inArray(taskExecutionIntents.state, ['pending', 'claimed'])
+              : and(
+                  eq(taskExecutionIntents.state, 'claimed'),
+                  eq(taskExecutionIntents.claimedEpoch, input.claimedOwnerEpoch),
+                ),
+          ),
         ),
-      )
-      .all(),
-  )
+    )
+  })
   const activeIntentIds = active.map((row) => row.id)
   if (activeIntentIds.length === 0) return
+  const { taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(tx)
   const terminalize = tx
     .update(taskExecutionIntents)
     .set({
@@ -45,9 +49,9 @@ export function* taskExecutionIntentTerminalSequence<Tx extends ProviderNeutralD
     })
     .where(inArray(taskExecutionIntents.id, activeIntentIds))
   if (writeChecks === 'require-returned-rows') {
-    const terminalized = yield* transactionStep(() =>
-      terminalize.returning({ id: taskExecutionIntents.id }).all(),
-    )
+    const terminalized = yield* transactionStep(() => {
+      return queryRows(terminalize.returning({ id: taskExecutionIntents.id }))
+    })
     if (terminalized.length !== activeIntentIds.length) {
       throw new TaskExecutionError(
         'task-continuation-stale',
@@ -55,24 +59,25 @@ export function* taskExecutionIntentTerminalSequence<Tx extends ProviderNeutralD
       )
     }
   } else {
-    yield* transactionStep(() => terminalize.run())
+    yield* transactionStep(() => queryWrite(terminalize))
   }
-  const decisions = yield* transactionStep(() =>
-    tx
-      .select({
-        id: taskExecutionLineageOperationRecords.id,
-        revision: taskExecutionLineageOperationRecords.recordRevision,
-      })
-      .from(taskExecutionLineageOperationRecords)
-      .where(
-        and(
-          eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'),
-          eq(taskExecutionLineageOperationRecords.decisionState, 'actor-replay-authorized'),
-          inArray(taskExecutionLineageOperationRecords.boundIntentId, activeIntentIds),
+  const decisions = yield* transactionStep(() => {
+    return queryRows(
+      tx
+        .select({
+          id: taskExecutionLineageOperationRecords.id,
+          revision: taskExecutionLineageOperationRecords.recordRevision,
+        })
+        .from(taskExecutionLineageOperationRecords)
+        .where(
+          and(
+            eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'),
+            eq(taskExecutionLineageOperationRecords.decisionState, 'actor-replay-authorized'),
+            inArray(taskExecutionLineageOperationRecords.boundIntentId, activeIntentIds),
+          ),
         ),
-      )
-      .all(),
-  )
+    )
+  })
   for (const decision of decisions) {
     const release = tx
       .update(taskExecutionLineageOperationRecords)
@@ -94,9 +99,9 @@ export function* taskExecutionIntentTerminalSequence<Tx extends ProviderNeutralD
         ),
       )
     if (writeChecks === 'require-returned-rows') {
-      const released = yield* transactionStep(() =>
-        release.returning({ id: taskExecutionLineageOperationRecords.id }).all(),
-      )
+      const released = yield* transactionStep(() => {
+        return queryRows(release.returning({ id: taskExecutionLineageOperationRecords.id }))
+      })
       if (released[0] === undefined) {
         throw new TaskExecutionError(
           'task-continuation-stale',
@@ -104,7 +109,7 @@ export function* taskExecutionIntentTerminalSequence<Tx extends ProviderNeutralD
         )
       }
     } else {
-      yield* transactionStep(() => release.run())
+      yield* transactionStep(() => queryWrite(release))
     }
   }
 }

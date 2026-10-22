@@ -10,21 +10,14 @@
 // 正典取合一前的 SQLite 语义：门操作先消费、任务再跃迁、提交后才发事件；停靠成功后 clarify round 与
 // question 行一次落定，操作行走到 completed。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  clarifyRounds,
-  collaborationGateOperations,
-  committedEvents,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
@@ -34,11 +27,12 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_969_900_000
 
-async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRunningTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'd25 park task',
     workflowId,
@@ -52,7 +46,7 @@ async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
     startedAt: NOW - 1_000,
     lifecycleEventRevision: 1,
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: `${taskId}-asking`,
     taskId,
     nodeId: 'writer',
@@ -64,7 +58,7 @@ async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 /** 走生产那条准备路（`ClarifyGateOpenPreparation`），拿到一个可停靠的 prepared 门。 */
-async function prepareClarifyGate(db: ProviderNeutralDatabase, taskId: string) {
+async function prepareClarifyGate(db: PersistenceDb, taskId: string) {
   const result = await new ClarifyGateOpenPreparation(
     new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
     new DatabaseClarifyQuestionSnapshotReader(db),
@@ -93,7 +87,7 @@ async function prepareClarifyGate(db: ProviderNeutralDatabase, taskId: string) {
 
 describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) => {
   test('无主停靠：门消费 + 任务跃迁 + 两族已提交事件在同一笔事务里落定', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedRunningTask(db)
     const opening = await prepareClarifyGate(db, taskId)
 
@@ -114,6 +108,14 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     // 任务生命周期一条 + collaboration 开门一条。
     expect(parked.eventRefs).toHaveLength(2)
 
+    const {
+      tasks,
+      collaborationGateOperations,
+      clarifyRounds,
+      taskQuestions,
+      nodeRuns,
+      committedEvents,
+    } = tablesOf(db)
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
     expect(task?.status).toBe('awaiting_human')
     expect(task?.lifecycleEventRevision).toBe(2)
@@ -155,11 +157,12 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
   })
 
   test('陈旧的 taskRevision 一律拒绝停靠：任务与门操作都不动', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedRunningTask(db)
     const opening = await prepareClarifyGate(db, taskId)
+    const { tasks, collaborationGateOperations, clarifyRounds } = tablesOf(db)
     // 别人先把任务推进了一格，prepared 门上记的 expectedTaskRevision 随之陈旧。
-    await db.update(tasks).set({ lifecycleEventRevision: 7 }).where(eq(tasks.id, taskId)).run()
+    await db.update(tasks).set({ lifecycleEventRevision: 7 }).where(eq(tasks.id, taskId))
 
     let failed = false
     try {
@@ -192,7 +195,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
   })
 
   test('没有待结的手工问题时，结算是 no-op；任务状态与修订号都不动', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedRunningTask(db)
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
@@ -201,13 +204,14 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     ).settleManualQuestionParks({ taskId, now: NOW + 4 })
 
     expect(settled).toEqual({ parked: false, taskRevision: 1, operationIds: [], eventRefs: [] })
+    const { tasks } = tablesOf(db)
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
     expect(task?.status).toBe('running')
     expect(task?.lifecycleEventRevision).toBe(1)
   })
 
   test('没有待结义务时，带守卫的 CAS 正常落定（两个引擎同一条判据）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const taskId = await seedRunningTask(db)
 
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
@@ -222,6 +226,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     })
 
     expect(outcome).toEqual({ kind: 'settled', won: true })
+    const { tasks } = tablesOf(db)
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]?.status).toBe(
       'done',
     )
@@ -250,7 +255,7 @@ test('源码锁：停靠只剩一份实现，legacy 同步停靠路与 provider 
   expect(participant).toContain('this.journal.commitTx({')
   expect(participant).toContain('this.journal.completeTx({')
   // 事务类型只认中立句柄；`DbTxSync` 出现在注释里是有意的（要说清合一前 SQLite 那份是同步的）。
-  expect(participant).toContain('tx: DatabaseTransaction')
+  expect(participant).toContain('tx: PersistenceTx')
   expect(participant).not.toMatch(/: DbTxSync|PostgresqlCommittedEventTransaction/)
 
   for (const retired of [

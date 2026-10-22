@@ -1,11 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  taskExecutionEffectAttempts,
-  taskExecutionEffects,
-  taskExecutionEffectFences,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { ExclusiveDaemonLockProof } from '../../domain/ownership'
@@ -28,7 +23,7 @@ import type { HostedExecutionStore } from './executionStore'
  *   adopts the same platform subtask instead of starting a second model call;
  * - everything no run will adopt is settled by the background settler. */
 export function createHostedBootRecovery(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly store: HostedExecutionStore
   readonly proof: () => ExclusiveDaemonLockProof
@@ -63,6 +58,11 @@ export function createHostedBootRecovery(input: {
             const lease = input.fence.current()
             await databaseSessionFor(input.db).transaction(async (tx) => {
               await input.fence.assertHeld(tx, lease)
+              const {
+                taskExecutionEffectAttempts,
+                taskExecutionEffects,
+                taskExecutionEffectFences,
+              } = tablesOf(tx)
               const attempts = await tx
                 .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
                 .from(taskExecutionEffectAttempts)
@@ -181,6 +181,7 @@ export function createHostedBootRecovery(input: {
             await databaseSessionFor(input.db).transaction(async (tx) => {
               await input.fence.assertHeld(tx, lease)
               if (adoptableRuns.size === 0 || finalized.releasedTaskIds.length === 0) return
+              const { nodeRuns } = tablesOf(tx)
               const adoptable = and(
                 inArray(nodeRuns.id, [...adoptableRuns]),
                 eq(nodeRuns.status, 'interrupted'),

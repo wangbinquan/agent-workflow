@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 import {
   WorkflowDefinitionSchema,
@@ -15,18 +17,7 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  taskCollaborators,
-  taskExecutionIntents,
-  taskRepos,
-  taskSpaceNodes,
-  tasks,
-  users,
-  workflows,
-  workgroupTaskState,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import { FrozenWorkgroupGroupSchema } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
@@ -76,7 +67,7 @@ export interface ChildExecutionLaunchDependencies {
    * 体内唯一与引擎相关的一处是 `engineOf(tx).greatest(...)`（能力矩阵按引擎渲染），
    * 事务走的已经是中立的 `withSerializableTaskExecution`。
    */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   /** RFC-386: the session factory owns the provider lifecycle and live configuration. */
   readonly coordinatorFactory: TaskDriveCoordinatorFactory
@@ -332,6 +323,7 @@ async function activeCollaborators(
     ...new Set([ownerUserId, ...collaboratorUserIds.filter((userId) => userId !== ownerUserId)]),
   ]
   if (requested.length === 0) return []
+  const { users } = tablesOf(tx)
   const rows = await tx
     .select({ id: users.id })
     .from(users)
@@ -392,6 +384,16 @@ async function launchPreparedChild(
   if (primary === undefined) throw new Error('child-materialized-space-missing-primary-repo')
 
   const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    const {
+      tasks,
+      nodeRuns,
+      workflows,
+      taskRepos,
+      taskSpaceNodes,
+      taskCollaborators,
+      taskExecutionIntents,
+      workgroupTaskState,
+    } = tablesOf(tx)
     const parent = (
       await tx
         .select({
@@ -498,7 +500,7 @@ async function launchPreparedChild(
       baseCommit: space.baseCommit,
       ownerRef: request.parentNodeRunId,
     })
-    await tx.insert(tasks).values({
+    await insertOne(tx, tasks, {
       id: taskId,
       name: prepared.task.name,
       workflowId: prepared.subject.workflowId,
@@ -614,7 +616,7 @@ async function launchPreparedChild(
         }),
       )
     }
-    await tx.insert(taskExecutionIntents).values({
+    await insertOne(tx, taskExecutionIntents, {
       id: intentId,
       taskId,
       kind: 'launch',
@@ -640,7 +642,7 @@ async function launchPreparedChild(
       updatedAt: occurredAt,
     })
     if (prepared.subject.workgroup !== null) {
-      await tx.insert(workgroupTaskState).values({
+      await insertOne(tx, workgroupTaskState, {
         taskId,
         gateStatus: 'idle',
         dwStateJson: prepared.subject.workgroup.dynamic ? JSON.stringify(initialDwState()) : null,

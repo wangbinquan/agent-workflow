@@ -20,6 +20,8 @@
 // / cutover-rollback-after-flip / cutover-adopt-rejected /
 // cutover-repo-binding-missing。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -29,16 +31,8 @@ import { ulid } from 'ulid'
 
 import type { CodeHostEvent } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import {
-  legacyCodeWorkItemLinks,
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggers,
-} from '../src/db/schema'
 import {
   INITIAL_CUTOVER_STATE,
   decideCutoverTransition,
@@ -65,7 +59,7 @@ const NOW = 1_755_500_000_000
 const ROUNDS_TOKEN = 'b'.repeat(64)
 const CUTOVER_TOKEN = 'c'.repeat(64)
 
-function freshDeps(db: ProviderNeutralDatabase) {
+function freshDeps(db: PersistenceDb) {
   let seq = 0
   return {
     cutoverStore: createCutoverStore(db),
@@ -163,7 +157,7 @@ describeEachProviderHttpApplication(
     dbVersion: 1,
   },
   (scope) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(() => {
       db = scope.harness.db
     })
@@ -221,7 +215,8 @@ describeEachProviderHttpApplication(
           password: 'longEnoughPassword',
         })
         const endpointId = ulid()
-        await db.insert(webhookEndpoints).values({
+        const { webhookEndpoints, webhookTriggers, webhookDeliveries } = tablesOf(db)
+        await insertOne(db, webhookEndpoints, {
           id: endpointId,
           name: 'cutover gate endpoint',
           provider: 'gitlab',
@@ -237,7 +232,7 @@ describeEachProviderHttpApplication(
             .limit(1)
         )[0]!
         const triggerId = ulid()
-        await db.insert(webhookTriggers).values({
+        await insertOne(db, webhookTriggers, {
           id: triggerId,
           name: 'cutover gate ci-fix',
           endpointId,
@@ -263,7 +258,7 @@ describeEachProviderHttpApplication(
           raw: {},
         }
         const deliveryId = ulid()
-        await db.insert(webhookDeliveries).values({
+        await insertOne(db, webhookDeliveries, {
           id: deliveryId,
           endpointId,
           eventUuid: event.eventUuid,
@@ -292,6 +287,7 @@ describeEachProviderHttpApplication(
         // 退役：T104 后 code-round fire 无论 cutover phase 一律落
         // skipped-trigger-invalid 留痕，绝不启动任务。
         const triggerId = await fireCodeRoundDelivery()
+        const { webhookTriggerFires, tasks } = tablesOf(db)
         const fires = await db
           .select()
           .from(webhookTriggerFires)
@@ -346,6 +342,7 @@ describeEachProviderHttpApplication(
         })
         expect(claim?.missionId).toBe(result.missionId)
 
+        const { legacyCodeWorkItemLinks } = tablesOf(db)
         const links = await db
           .select()
           .from(legacyCodeWorkItemLinks)
@@ -415,6 +412,7 @@ describeEachProviderHttpApplication(
         )
         expect(first.ok && second.ok).toBe(true)
         if (first.ok && second.ok) expect(second.missionId).toBe(first.missionId)
+        const { legacyCodeWorkItemLinks } = tablesOf(db)
         const links = await db.select().from(legacyCodeWorkItemLinks)
         expect(links).toHaveLength(1)
       })
@@ -492,6 +490,7 @@ describeEachProviderHttpApplication(
         )
         expect(clashing.ok).toBe(false)
         if (!clashing.ok) expect(clashing.code).toBe('mr-owned-by-another-mission')
+        const { legacyCodeWorkItemLinks } = tablesOf(db)
         // 拒绝路径不留 legacy link 半行。
         expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
       })
@@ -512,6 +511,7 @@ describeEachProviderHttpApplication(
         )
         expect(result.ok).toBe(false)
         if (!result.ok) expect(result.code).toBe('mr-not-found')
+        const { legacyCodeWorkItemLinks } = tablesOf(db)
         expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
       })
     })

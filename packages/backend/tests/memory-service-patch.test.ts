@@ -11,11 +11,11 @@
 //   * source_* / approved_* / supersedes_* columns frozen
 //   * tag order changes alone are NOT a "change" (tags are a set)
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { memories } from '../src/db/schema'
 import {
   composeMemoryCatalogOperations,
   type MemoryCatalogTestHooks,
@@ -25,7 +25,7 @@ import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthor
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { MemoryPatchRequest, MemoryWsMessage } from '@agent-workflow/shared'
 
-function memoryCatalogOf(db: ProviderNeutralDatabase, testHooks?: MemoryCatalogTestHooks) {
+function memoryCatalogOf(db: PersistenceDb, testHooks?: MemoryCatalogTestHooks) {
   return composeMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
@@ -43,7 +43,7 @@ function captureBroadcasts(): { msgs: MemoryWsMessage[]; stop: () => void } {
 }
 
 async function seedCandidate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   overrides: Partial<{
     scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
     scopeId: string | null
@@ -62,7 +62,7 @@ async function seedCandidate(
 }
 
 describeEachProvider('patchMemory — RFC-045', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
     resetBroadcastersForTests()
@@ -199,6 +199,7 @@ describeEachProvider('patchMemory — RFC-045', (harness) => {
 
   test('source_* + distill_* + supersedes_id columns are frozen across PATCH', async () => {
     const seed = await seedCandidate(db, { title: 'orig' })
+    const { memories } = tablesOf(db)
     const beforeRows = (await db.select().from(memories).where(eq(memories.id, seed.id))) as Array<{
       sourceKind: string
       sourceEventId: string | null

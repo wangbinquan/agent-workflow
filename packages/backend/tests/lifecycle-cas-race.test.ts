@@ -4,6 +4,8 @@
 // the helper. The CAS predicate `WHERE id = ? AND status = expectedFrom`
 // guarantees only one of two concurrent writers can succeed.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,33 +13,33 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   ConcurrentNodeRunTransition,
   setNodeRunStatus,
   transitionNodeRunStatus,
 } from '../src/services/lifecycle'
 import { IllegalNodeRunTransition } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   taskId: string
   cleanup: () => void
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-cas-'))
 
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -58,7 +60,7 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   status:
     | 'pending'
@@ -73,7 +75,8 @@ async function seedRun(
     | 'exhausted',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n',
@@ -102,6 +105,7 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
     })
     expect(r.from).toBe('pending')
     expect(r.to).toBe('running')
+    const { nodeRuns } = tablesOf(h.db)
     const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
     expect(after.status).toBe('running')
     expect(after.startedAt).toBe(12345)
@@ -120,6 +124,7 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
       err = e
     }
     expect(err instanceof IllegalNodeRunTransition).toBe(true)
+    const { nodeRuns } = tablesOf(h.db)
     // Row still done.
     const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
     expect(after.status).toBe('done')
@@ -173,6 +178,7 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
 
   test('transitionNodeRunStatus: CAS lost race — status changes between select and update', async () => {
     const id = await seedRun(h.db, h.taskId, 'running')
+    const { nodeRuns } = tablesOf(h.db)
     // To exercise the CAS path, monkey-patch the db `update` to first mutate
     // the row's status before the helper's UPDATE lands. We do this by
     // racing: kick off a transition (which will SELECT status=running,
@@ -236,6 +242,7 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
       allowTerminal: true, // not strictly needed here (source is non-terminal)
       reason: 'fixup',
     })
+    const { nodeRuns } = tablesOf(h.db)
     const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
     expect(after.status).toBe('done')
   })

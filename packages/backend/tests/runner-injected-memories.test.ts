@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-046 — locks the runner's persistence path for
 // `node_runs.injected_memories_json`:
@@ -19,15 +21,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous seeding under pure-id freshness
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -54,20 +55,21 @@ function makeAgent(): Agent {
   } as Agent
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc046-runner-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -90,12 +92,13 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
 }
 
 async function insertNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-  overrides: Partial<typeof nodeRuns.$inferInsert> = {},
+  overrides: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: 'n1',
@@ -123,7 +126,8 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-async function readJson(db: ProviderNeutralDatabase, nodeRunId: string): Promise<string | null> {
+async function readJson(db: PersistenceDb, nodeRunId: string): Promise<string | null> {
+  const { nodeRuns } = tablesOf(db)
   const row = (
     await db
       .select({ json: nodeRuns.injectedMemoriesJson })
@@ -141,7 +145,8 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
   afterEach(() => h.cleanup())
 
   test('R1: approved global memory present → JSON snapshot written to column', async () => {
-    await h.db.insert(memories).values({
+    const { memories } = tablesOf(h.db)
+    await insertOne(h.db, memories, {
       id: 'mem_g1',
       scopeType: 'global',
       scopeId: null,

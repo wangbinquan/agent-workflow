@@ -1,24 +1,22 @@
 // RFC-359 W4-B3 —— 评审侧的任务关系解析：一份实现，两个 provider 共用（取 SQLite 的单次成员查询形态）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import {
-  type ProviderNeutralDatabase,
-  taskVisibilitySubjectOf,
-  visibleTaskIdsFor,
-} from '@/db/query'
-import { taskCollaborators } from '@/db/schema'
+import { taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
 import type { ReviewTaskAccessPort } from '../application/ports/reviewTaskAccess'
 import type { ReviewActor } from '../public/types'
 
-export function createReviewTaskAccessPort(db: ProviderNeutralDatabase): ReviewTaskAccessPort {
+export function createReviewTaskAccessPort(db: PersistenceDb): ReviewTaskAccessPort {
   return {
     canManageReviewers(actor, taskOwnerUserId) {
       return hasResourceAclBypass(actor) || taskOwnerUserId === actor.user.id
     },
     async resolveRelationship(actor, taskId, taskOwnerUserId) {
+      const { taskCollaborators } = tablesOf(db)
       const memberships = await db
         .select({ role: taskCollaborators.role })
         .from(taskCollaborators)

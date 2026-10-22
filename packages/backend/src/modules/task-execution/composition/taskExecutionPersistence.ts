@@ -1,5 +1,5 @@
 import { createNodeRunSeqBackfillStore } from '../infrastructure/nodeRunSeqBackfillStore'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -52,7 +52,7 @@ import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSes
  * 没有存在理由了。
  */
 function createRecoveryAdministration(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskLifecycle: Pick<DrizzleTaskRuntimeLifecyclePersistence, 'trySet' | 'trySetWithGuard'>,
 ) {
   const nodeLifecycle = new DrizzleNodeRunLifecyclePersistence(db)
@@ -127,7 +127,7 @@ export interface TaskExecutionPersistenceDependencies {
 }
 
 export function createTaskRuntimeLifecyclePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   dependencies: TaskExecutionPersistenceDependencies = {},
 ): DrizzleTaskRuntimeLifecyclePersistence {
   return new DrizzleTaskRuntimeLifecyclePersistence(
@@ -137,7 +137,7 @@ export function createTaskRuntimeLifecyclePersistence(
 }
 
 export function createTaskExecutionPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   dependencies: TaskExecutionPersistenceDependencies = {},
 ): TaskExecutionPersistence {
   const effects = new DrizzleTaskExecutionEffectPersistence(db)

@@ -15,13 +15,14 @@
 // (RFC-132 retired the legacy quick-channel outcome contract; its unified
 // equivalents are locked by rfc128-p5-d-autodispatch.test.ts.)
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { clarifyRounds, nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
@@ -46,7 +47,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // ---------------------------------------------------------------------------
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { id?: string; definition?: WorkflowDefinition } = {},
 ): Promise<{ taskId: string }> {
   const taskId = opts.id ?? `task_${Math.random().toString(36).slice(2, 8)}`
@@ -72,7 +73,8 @@ async function seedTask(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -80,7 +82,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -102,7 +104,7 @@ async function seedTask(
 }
 
 async function seedCrossClarifyTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     id?: string
     questionerNodeIds?: string[]
@@ -160,7 +162,8 @@ async function seedCrossClarifyTask(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -168,7 +171,7 @@ async function seedCrossClarifyTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -234,7 +237,7 @@ for (const kind of ['self', 'cross'] as const) {
   describeEachProvider(
     `RFC-217 T9 baseline — createClarifyRound symmetric invariants (kind=${kind})`,
     (harness) => {
-      async function seedAndCreate(db: ProviderNeutralDatabase): Promise<{
+      async function seedAndCreate(db: PersistenceDb): Promise<{
         taskId: string
         round: Awaited<ReturnType<typeof createClarifyRound>>['round']
         intermediaryNodeRunId: string
@@ -243,7 +246,8 @@ for (const kind of ['self', 'cross'] as const) {
         const events: Array<{ type: string }> = []
         if (kind === 'self') {
           const { taskId } = await seedTask(db)
-          await db.insert(nodeRuns).values({
+          const { nodeRuns } = tablesOf(db)
+          await insertOne(db, nodeRuns, {
             id: 'nr_sym_src',
             taskId,
             nodeId: 'designer',
@@ -266,7 +270,8 @@ for (const kind of ['self', 'cross'] as const) {
           return { taskId, round, intermediaryNodeRunId, events }
         }
         const { taskId } = await seedCrossClarifyTask(db)
-        await db.insert(nodeRuns).values({
+        const { nodeRuns } = tablesOf(db)
+        await insertOne(db, nodeRuns, {
           id: 'nr_sym_src',
           taskId,
           nodeId: 'questioner',
@@ -295,6 +300,7 @@ for (const kind of ['self', 'cross'] as const) {
         expect(round.kind).toBe(kind)
         expect(round.status).toBe('awaiting_human')
         expect(round.terminatedAs).toBeNull()
+        const { clarifyRounds, nodeRuns } = tablesOf(db)
         const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round.id)))[0]
         expect(row?.kind).toBe(kind)
         expect(row?.taskId).toBe(taskId)
@@ -324,7 +330,8 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
   test('agent-single: session row carries source agent + shard NULL; clarify node_run awaiting_human', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_source_1',
       taskId,
       nodeId: 'designer',
@@ -355,7 +362,8 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
   test('agent-multi shard child: session row carries shardKey + parent_node_run_id', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_multi',
       taskId,
       nodeId: 'designer',
@@ -421,7 +429,8 @@ describeEachProvider(
     test('deleting the task row cascades away its clarify rounds', async () => {
       const db = harness.db
       const { taskId } = await seedTask(db)
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, tasks, clarifyRounds } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_cleanup_src',
         taskId,
         nodeId: 'designer',
@@ -458,8 +467,9 @@ describeEachProvider(
     test('node_run_outputs row presence is the trigger for the GENERAL aging cutoff (sanity probe)', async () => {
       const db = harness.db
       const { taskId } = await seedTask(db)
+      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
       // A done run with outputs — this is what scheduler keys on for cutoff
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'nr_with_outputs',
         taskId,
         nodeId: 'designer',
@@ -467,7 +477,7 @@ describeEachProvider(
         retryIndex: 0,
         iteration: 0,
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: 'nr_with_outputs',
         portName: 'plan',
         content: 'done output',
@@ -489,7 +499,8 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
   test('first session: iteration=0 + row carries source / target / loopIter', async () => {
     const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -520,7 +531,8 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
   test('same (node, loopIter): iteration increments to 1 after another mint', async () => {
     const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -556,7 +568,8 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
   test('loop_iter isolation: same node, different loopIter → both start at iteration=0', async () => {
     const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -596,7 +609,8 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
       crossClarifyNodeIds: ['cc_a', 'cc_b'],
       questionerNodeIds: ['questioner'],
     })
-    await db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -645,7 +659,8 @@ describeEachProvider(
         crossClarifyNodeIds: ['cc_alpha', 'cc_zeta'],
         questionerNodeIds: ['questioner_alpha', 'questioner_zeta'],
       })
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, clarifyRounds } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: 'nr_designer_prior',
         taskId,
         nodeId: 'designer',
@@ -659,7 +674,7 @@ describeEachProvider(
         ['questioner_zeta', 'cc_zeta'],
       ] as const) {
         const runId = `nr_${qid}`
-        await db.insert(nodeRuns).values({
+        await insertOne(db, nodeRuns, {
           id: runId,
           taskId,
           nodeId: qid,
@@ -722,6 +737,7 @@ describeEachProvider(
         crossClarifyNodeIds: ['cc_stop', 'cc_continue'],
         questionerNodeIds: ['questioner_a', 'questioner_b'],
       })
+      const { nodeRuns } = tablesOf(db)
       await db.insert(nodeRuns).values([
         {
           id: 'nr_qa',

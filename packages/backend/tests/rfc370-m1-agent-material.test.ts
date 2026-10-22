@@ -1,7 +1,7 @@
 import { composeHostedTaskMaterialReferences } from '@/modules/task-execution/composition/crewstationTaskRunSelection'
 import { expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
@@ -91,7 +91,7 @@ function fixture(
     listFiles: unavailable,
   }
   const preparation = createHostedAgentInvocationPreparation({
-    db: {} as ProviderNeutralDatabase,
+    db: {} as PersistenceDb,
     fence: {
       current: () => ({ epoch: 1, leaseId: 'lease', instanceId: 'instance' }),
       assertHeld: unavailable,

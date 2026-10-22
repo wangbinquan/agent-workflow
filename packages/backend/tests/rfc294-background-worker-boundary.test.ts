@@ -7,6 +7,9 @@
 // before a crash is not launched twice by the next daemon.  The final block
 // protects the narrow task participant consumed by the integration worker.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -15,8 +18,7 @@ import { ulid } from 'ulid'
 import type { StartTask } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { scheduledTasks, webhookMrControlEffects } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
 import { createMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
@@ -42,9 +44,10 @@ function guards(): MrLaunchGuardCoordinator {
   } as unknown as MrLaunchGuardCoordinator
 }
 
-async function seedEffect(db: ProviderNeutralDatabase, id: string): Promise<void> {
+async function seedEffect(db: PersistenceDb, id: string): Promise<void> {
   const now = Date.now()
-  await db.insert(webhookMrControlEffects).values({
+  const { webhookMrControlEffects } = tablesOf(db)
+  await insertOne(db, webhookMrControlEffects, {
     id,
     deliveryId: `delivery-${id}`,
     endpointId: 'endpoint-rfc294',
@@ -60,12 +63,11 @@ async function seedEffect(db: ProviderNeutralDatabase, id: string): Promise<void
   })
 }
 
-async function effectRow(db: ProviderNeutralDatabase, id: string) {
-  return await db
-    .select()
-    .from(webhookMrControlEffects)
-    .where(eq(webhookMrControlEffects.id, id))
-    .get()
+async function effectRow(db: PersistenceDb, id: string) {
+  const { webhookMrControlEffects } = tablesOf(db)
+  return await firstRow(
+    db.select().from(webhookMrControlEffects).where(eq(webhookMrControlEffects.id, id)),
+  )
 }
 
 describeEachProvider('RFC-294 托管后台兼容（双引擎）', (harness) => {
@@ -93,6 +95,7 @@ describeEachProvider('RFC-294 托管后台兼容（双引擎）', (harness) => {
       expect(firstDaemonCalls).toBe(1)
       expect(await effectRow(db, effectId)).toMatchObject({ status: 'retryable', attemptCount: 1 })
 
+      const { webhookMrControlEffects } = tablesOf(db)
       // No wall-clock sleep: advancing the durable due field models the next
       // daemon starting after the retry deadline.
       await db
@@ -169,7 +172,8 @@ describeEachProvider('RFC-294 托管后台兼容（双引擎）', (harness) => {
         },
       )
       const now = Date.now()
-      await db.insert(scheduledTasks).values({
+      const { scheduledTasks } = tablesOf(db)
+      await insertOne(db, scheduledTasks, {
         id: 'schedule-restart',
         name: 'schedule-restart',
         ownerUserId: owner.id,

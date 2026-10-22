@@ -5,13 +5,14 @@
 // id 被占用与同名冲突、改名与更新的双 OCC 围栏（updatedAt + aclRevision），以及「不是系统 builtin 的行
 // 一律按 id 被占用拒绝」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDigitalEmployeeAgentTemplateRepository } from '@/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -44,7 +45,7 @@ async function codeOf(fn: () => Promise<unknown>): Promise<string> {
 
 describeEachProvider('RFC-359 W4-D22 —— 数字员工岗位模版目录', (harness) => {
   test('建 builtin：系统 owner + public + builtin，重复 id 与同名都按占用拒绝', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const repository = createDigitalEmployeeAgentTemplateRepository(db)
     const id = ulid()
     const name = `tpl-${id.slice(-8).toLowerCase()}`
@@ -68,7 +69,7 @@ describeEachProvider('RFC-359 W4-D22 —— 数字员工岗位模版目录', (ha
   })
 
   test('改名与更新都过 updatedAt + aclRevision 双 OCC；陈旧围栏一律拒绝', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const repository = createDigitalEmployeeAgentTemplateRepository(db)
     const id = ulid()
     const name = `tpl-${id.slice(-8).toLowerCase()}`
@@ -119,10 +120,11 @@ describeEachProvider('RFC-359 W4-D22 —— 数字员工岗位模版目录', (ha
   })
 
   test('不是系统 builtin 的行按 id 被占用拒绝（不泄漏它是谁的）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const repository = createDigitalEmployeeAgentTemplateRepository(db)
     const id = ulid()
-    await db.insert(agents).values({
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, {
       id,
       name: `user-agent-${id.slice(-8).toLowerCase()}`,
       description: '',

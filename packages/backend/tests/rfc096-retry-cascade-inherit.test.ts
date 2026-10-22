@@ -49,6 +49,8 @@
 // retryNode guarantees the production-minted placeholder id sorts strictly
 // above every seeded id (fresh time component).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -61,8 +63,6 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
-
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -115,13 +115,14 @@ function singleNodeDef(): WorkflowDefinition {
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc096-retry',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 't-rfc096-retry',
     id: taskId,
     workflowId,
@@ -143,6 +144,7 @@ async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<str
 // 等任务离开 pending/running 再让测试结束，避免后台写竞速 afterEach 清理。
 async function waitForTerminalTask(db: DbClient, taskId: string): Promise<void> {
   for (let i = 0; i < 400; i++) {
+    const { tasks } = tablesOf(db)
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return
     await Bun.sleep(25)
@@ -170,7 +172,8 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
 
     // Target (user-picked) row on 'up' — preSnapshot null ⇒ rollback no-op.
     const upRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: upRunId,
       taskId,
       nodeId: 'up',
@@ -184,7 +187,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // RFC-354: 'down' rounds 0 / 1 are rounds of ONE loop generation (a
     // top-level row only ever has round 0) — the generation row must exist for
     // the frame column's foreign key.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: 'loop-gen-1',
       taskId,
       nodeId: 'loop',
@@ -196,7 +199,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     })
     // 'down' row set — three generations, ids strictly increasing (monotonic):
     // (1) stale failed row of round 0.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'down',
@@ -213,7 +216,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // iteration / reviewIteration / preSnapshot differ from every other row so
     // each inherited field discriminates the pick.
     const downTopId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: downTopId,
       taskId,
       nodeId: 'down',
@@ -231,7 +234,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // parentNodeRunId='fanout-parent-run-1', iteration=0, reviewIteration=7,
     // shardKey='src/a.ts', preSnapshot='stash-child'). RFC-354: the child hangs
     // off the fan-out GENERATION row's frame, which therefore has to exist.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: 'fanout-parent-run-1',
       taskId,
       nodeId: 'fan',
@@ -242,7 +245,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
       finishedAt: Date.now() - 440,
     })
     const downChildId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: downChildId,
       taskId,
       nodeId: 'down',
@@ -263,7 +266,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // time component than every seeded id (no same-ms random-order flake).
     await Bun.sleep(2)
     await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
-      taskId: taskId,
+      taskId,
       nodeRunId: upRunId,
       cascade: true,
     })
@@ -312,7 +315,8 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     const taskId = await seedTask(h, twoNodeDef('inner'))
 
     const upRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: upRunId,
       taskId,
       nodeId: 'up',
@@ -322,7 +326,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
       startedAt: Date.now() - 900,
       finishedAt: Date.now() - 800,
     })
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'inner',
@@ -336,7 +340,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
       startedAt: Date.now() - 700,
       finishedAt: Date.now() - 650,
     })
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'inner',
@@ -351,7 +355,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
 
     await Bun.sleep(2)
     await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
-      taskId: taskId,
+      taskId,
       nodeRunId: upRunId,
       cascade: true,
     })
@@ -388,7 +392,8 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     const taskId = await seedTask(h, singleNodeDef())
 
     const upTopId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: upTopId,
       taskId,
       nodeId: 'up',
@@ -401,7 +406,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // Legacy pathological shape (mintable by the OLD pickers themselves, see
     // design §3.2 对抗检视 2b): a child row whose retryIndex exceeds every
     // top-level row.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: ulid(),
       taskId,
       nodeId: 'up',
@@ -416,7 +421,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
 
     await Bun.sleep(2)
     await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
-      taskId: taskId,
+      taskId,
       nodeRunId: upTopId,
       cascade: true,
     })

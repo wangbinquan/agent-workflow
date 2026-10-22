@@ -1,10 +1,12 @@
 // RFC-359 W47 —— one node-run mint program, driven by the existing sync/async entries.
 // The callers retain transaction ownership.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { eq } from 'drizzle-orm'
 
-import { nodeRunSeqAllocations, nodeRuns, tasks } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   driveAsyncProgram,
   transactionStep,
@@ -33,7 +35,7 @@ export interface NodeRunMintParticipantInTx {
  * （`executionMergeRecovery.ts`），判据见 `domain/nodeRunSupersession.ts`。
  */
 export function* nodeRunMintProgram(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: NodeRunMintInput,
 ): Generator<TransactionProgramStep, string, void> {
   const record = buildNodeRunMintRecord(input)
@@ -44,13 +46,15 @@ export function* nodeRunMintProgram(
     const container =
       record.containerRunId === null
         ? undefined
-        : yield* transactionStep(() =>
-            tx
-              .select({ nodeId: nodeRuns.nodeId, scopePath: nodeRuns.scopePath })
-              .from(nodeRuns)
-              .where(eq(nodeRuns.id, record.containerRunId!))
-              .get(),
-          )
+        : yield* transactionStep(() => {
+            const { nodeRuns } = tablesOf(tx)
+            return first(
+              tx
+                .select({ nodeId: nodeRuns.nodeId, scopePath: nodeRuns.scopePath })
+                .from(nodeRuns)
+                .where(eq(nodeRuns.id, record.containerRunId!)),
+            )
+          })
     scopePath =
       container === undefined
         ? ''
@@ -63,24 +67,28 @@ export function* nodeRunMintProgram(
     record,
     record.lineageSlotPathJson !== null
       ? undefined
-      : yield* transactionStep(() =>
-          tx
-            .select({
-              lineageSlotPathJson: tasks.lineageSlotPathJson,
-              workflowVersion: tasks.workflowVersion,
-            })
-            .from(tasks)
-            .where(eq(tasks.id, record.taskId))
-            .get(),
-        ),
+      : yield* transactionStep(() => {
+          const { tasks } = tablesOf(tx)
+          return first(
+            tx
+              .select({
+                lineageSlotPathJson: tasks.lineageSlotPathJson,
+                workflowVersion: tasks.workflowVersion,
+              })
+              .from(tasks)
+              .where(eq(tasks.id, record.taskId)),
+          )
+        }),
   )
-  const allocation = yield* transactionStep(() =>
-    tx
-      .insert(nodeRunSeqAllocations)
-      .values({ taskId: record.taskId, nodeRunId: record.id, allocatedAt: Date.now() })
-      .returning({ seq: nodeRunSeqAllocations.seq })
-      .get(),
-  )
+  const allocation = yield* transactionStep(() => {
+    const { nodeRunSeqAllocations } = tablesOf(tx)
+    return first(
+      tx
+        .insert(nodeRunSeqAllocations)
+        .values({ taskId: record.taskId, nodeRunId: record.id, allocatedAt: Date.now() })
+        .returning({ seq: nodeRunSeqAllocations.seq }),
+    )
+  })
   if (allocation === undefined) throw new Error('node-run-seq-allocation-missing')
   const values = {
     ...record,
@@ -89,13 +97,14 @@ export function* nodeRunMintProgram(
     lineageSlotPathJson: lineage.lineageSlotPathJson,
     seq: allocation.seq,
   }
-  yield* transactionStep(() => tx.insert(nodeRuns).values(values).run())
+  yield* transactionStep(() => {
+    const { nodeRuns } = tablesOf(tx)
+    return insertOne(tx, nodeRuns, values)
+  })
   return values.id
 }
 
-export function createNodeRunMintParticipantInTx(
-  tx: DatabaseTransaction,
-): NodeRunMintParticipantInTx {
+export function createNodeRunMintParticipantInTx(tx: PersistenceTx): NodeRunMintParticipantInTx {
   return Object.freeze({
     async mint(input: NodeRunMintInput) {
       return driveAsyncProgram(nodeRunMintProgram(tx, input), (step) => step())

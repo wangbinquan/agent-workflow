@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import {
   intentWorkflowInvalidMessage,
@@ -36,20 +39,10 @@ import type {
   IntentApplyOperations,
   IntentApplyReceipt,
 } from '@/modules/intent/application/ports/intentApplyOperations'
-import {
-  intentApplyJournal,
-  intentDraftResolutions,
-  intentDrafts,
-  intentProvenance,
-  intentSessions,
-} from '@/db/schema'
 import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx, PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
@@ -108,7 +101,7 @@ export interface IntentApplyEngine extends IntentApplyOperations {
 }
 
 export interface IntentApplyEngineDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly resources: IntentApplyResourceBinding
   readonly artifacts: IntentApplyArtifactLifecycle
   /** RFC-358 §7 —— 提交期图校验。缺省不拦（既有测试装配保持原样）。 */
@@ -123,18 +116,18 @@ export interface IntentApplyEngineDependencies {
  * 谎话**：那个参数类型归根到底是
  * `Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]`，而中立会话在
  * PostgreSQL 上交出的正是驱动 `db.transaction` 回调里的那个句柄本身
- * （`createPostgresqlDatabaseSession` 只把同一个对象标注成 `DatabaseTransaction`）——
+ * （`createPostgresqlDatabaseSession` 只把同一个对象标注成 `PersistenceTx`）——
  * 运行期逐字相同。
  *
  * 目标类型从**已经注入的那个会话**上取（而不是另开一条深取 import）：窄化的收件人变了，
- * 这里就跟着变，不会留下一个自说自话的别名。退役条件：资源会话协议改吃 `DatabaseTransaction`，
+ * 这里就跟着变，不会留下一个自说自话的别名。退役条件：资源会话协议改吃 `PersistenceTx`，
  * 两套 apply 引擎合一时随之消失。
  */
 type IntentApplyCatalogTransaction = Parameters<
   IntentApplyResourceSession['createTransactionAttempt']
 >[0]
 
-function catalogTransaction(transaction: DatabaseTransaction): IntentApplyCatalogTransaction {
+function catalogTransaction(transaction: PersistenceTx): IntentApplyCatalogTransaction {
   return transaction as unknown as IntentApplyCatalogTransaction
 }
 
@@ -174,47 +167,50 @@ export function createIntentApplyEngine(
     const log = request.log ?? createLogger('intentApply')
     const journalId = nextId()
     const claim = await databaseSessionFor(dependencies.db).transaction(async (transaction) => {
-      const session = await transaction
-        .select()
-        .from(intentSessions)
-        .where(eq(intentSessions.id, input.sessionId))
-        .get()
+      const { intentSessions, intentApplyJournal, intentDrafts, intentDraftResolutions } =
+        tablesOf(transaction)
+      const session = await first(
+        transaction.select().from(intentSessions).where(eq(intentSessions.id, input.sessionId)),
+      )
       assertIntentSessionClaimable(session, actor.user.id)
-      const existing = await transaction
-        .select()
-        .from(intentApplyJournal)
-        .where(
-          and(
-            eq(intentApplyJournal.sessionId, input.sessionId),
-            eq(intentApplyJournal.clientMutationId, input.clientMutationId),
+      const existing = await first(
+        transaction
+          .select()
+          .from(intentApplyJournal)
+          .where(
+            and(
+              eq(intentApplyJournal.sessionId, input.sessionId),
+              eq(intentApplyJournal.clientMutationId, input.clientMutationId),
+            ),
           ),
-        )
-        .get()
+      )
       if (existing !== undefined) return { kind: 'replay' as const, existing, session }
       assertIntentSessionReady(session)
-      const draft = await transaction
-        .select()
-        .from(intentDrafts)
-        .where(
-          and(
-            eq(intentDrafts.sessionId, input.sessionId),
-            eq(intentDrafts.revision, input.draftRevision),
+      const draft = await first(
+        transaction
+          .select()
+          .from(intentDrafts)
+          .where(
+            and(
+              eq(intentDrafts.sessionId, input.sessionId),
+              eq(intentDrafts.revision, input.draftRevision),
+            ),
           ),
-        )
-        .get()
+      )
       const committable = requireCommittableDraft({
         draft,
         session,
         confirmedDraftHash: input.draftHash,
       })
-      const resolution = await transaction
-        .select({ reason: intentDraftResolutions.reason })
-        .from(intentDraftResolutions)
-        .where(eq(intentDraftResolutions.draftId, committable.id))
-        .get()
+      const resolution = await first(
+        transaction
+          .select({ reason: intentDraftResolutions.reason })
+          .from(intentDraftResolutions)
+          .where(eq(intentDraftResolutions.draftId, committable.id)),
+      )
       assertIntentDraftUnresolved(resolution?.reason)
       const recordedAt = now()
-      await transaction.insert(intentApplyJournal).values({
+      await insertOne(transaction, intentApplyJournal, {
         id: journalId,
         sessionId: input.sessionId,
         clientMutationId: input.clientMutationId,
@@ -236,6 +232,7 @@ export function createIntentApplyEngine(
     const artifacts: IntentApplyRecoveryArtifact[] = []
     const recordArtifact = async (artifact: IntentApplyArtifact): Promise<void> => {
       const nextArtifacts = [...artifacts, artifact]
+      const { intentApplyJournal } = tablesOf(dependencies.db)
       await dependencies.db
         .update(intentApplyJournal)
         .set({ preparedArtifactsJson: JSON.stringify(nextArtifacts), updatedAt: now() })
@@ -243,6 +240,7 @@ export function createIntentApplyEngine(
       artifacts.push(artifact)
     }
     const settleFailed = async (error: unknown): Promise<void> => {
+      const { intentApplyJournal } = tablesOf(dependencies.db)
       await dependencies.db
         .update(intentApplyJournal)
         .set({
@@ -263,6 +261,7 @@ export function createIntentApplyEngine(
       const cleanup = compensationErrors
         .map((item) => (item instanceof Error ? item.message : String(item)))
         .join('; ')
+      const { intentApplyJournal } = tablesOf(dependencies.db)
       await dependencies.db
         .update(intentApplyJournal)
         .set({
@@ -354,22 +353,22 @@ export function createIntentApplyEngine(
 
       const transactionResult = await databaseSessionFor(dependencies.db).transaction(
         async (transaction) => {
-          const cas = await transaction
-            .update(intentApplyJournal)
-            .set({ state: 'applying', updatedAt: now() })
-            .where(
-              and(eq(intentApplyJournal.id, journalId), eq(intentApplyJournal.state, 'prepared')),
-            )
-            .returning({ id: intentApplyJournal.id })
-            .get()
+          const { intentApplyJournal, intentSessions, intentProvenance } = tablesOf(transaction)
+          const cas = await first(
+            transaction
+              .update(intentApplyJournal)
+              .set({ state: 'applying', updatedAt: now() })
+              .where(
+                and(eq(intentApplyJournal.id, journalId), eq(intentApplyJournal.state, 'prepared')),
+              )
+              .returning({ id: intentApplyJournal.id }),
+          )
           if (cas === undefined) {
             throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
           }
-          const sessionRow = await transaction
-            .select()
-            .from(intentSessions)
-            .where(eq(intentSessions.id, input.sessionId))
-            .get()
+          const sessionRow = await first(
+            transaction.select().from(intentSessions).where(eq(intentSessions.id, input.sessionId)),
+          )
           const baseline = {
             claimSession: claim.session,
             claimDraftId: claim.draft.id,
@@ -389,7 +388,7 @@ export function createIntentApplyEngine(
             const operation = requireOpForPlan(bundle.ops[index], plan)
             await attempt.participant.authorizeAndCommit(authority, plan)
             applied.push(appliedEntryOf(operation))
-            await transaction.insert(intentProvenance).values({
+            await insertOne(transaction, intentProvenance, {
               resourceType: operation.resourceType,
               resourceId: operation.resourceId,
               commitId: journalId,
@@ -435,6 +434,7 @@ export function createIntentApplyEngine(
       await resourceSession.rollForwardCommitted()
       const complete = await dependencies.artifacts.rollForward(artifacts, log)
       if (!complete) {
+        const { intentApplyJournal } = tablesOf(dependencies.db)
         await dependencies.db
           .update(intentApplyJournal)
           .set({

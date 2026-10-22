@@ -1,5 +1,5 @@
 // RFC-389 — one system-maintenance graph for both database providers.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { createEventsArchiveMaintenanceCommand } from './eventsArchiveMaintenance'
 import type { MaintenanceSystemOperations } from './maintenanceJobRunner'
@@ -8,7 +8,7 @@ const MAINTENANCE_RETENTION_SLICE_ROWS = 1_000
 const CLEANUP_COOLDOWN_MS = 25
 
 export function composeMaintenanceSystemOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly eventsArchiveStore: Parameters<typeof createEventsArchiveMaintenanceCommand>[0]['store']
   readonly eventsArchiveContent?: Parameters<
     typeof createEventsArchiveMaintenanceCommand

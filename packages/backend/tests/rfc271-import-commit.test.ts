@@ -15,6 +15,9 @@
 // 覆盖不变量：I6（CAS prepared→applying 之后、任何 commit 内核之前的二次校验 —— reuse 目标的 revalidateInTx）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -25,8 +28,7 @@ import { ulid } from 'ulid'
 import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { mcps, resourceBundleApplies, users, workgroups } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
@@ -37,7 +39,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const box = createSecretBoxFromKey(randomBytes(32))
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s)
 
 // 六类写权限齐全的普通用户。**默认给全**是因为绝大多数用例断言的不是权限，
@@ -246,19 +248,16 @@ danglingCallRefs: []
   ])
 
 const dirs: string[] = []
-function deps(db: ProviderNeutralDatabase) {
+function deps(db: PersistenceDb) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc271-commit-'))
   dirs.push(appHome)
   return { db, appHome, box }
 }
 
-const seedMcp = async (
-  db: ProviderNeutralDatabase,
-  owner: string,
-  name: string,
-): Promise<string> => {
+const seedMcp = async (db: PersistenceDb, owner: string, name: string): Promise<string> => {
   const id = ulid()
-  await db.insert(mcps).values({
+  const { mcps } = tablesOf(db)
+  await insertOne(db, mcps, {
     id,
     name,
     description: 'local original',
@@ -273,13 +272,10 @@ const seedMcp = async (
   return id
 }
 
-const seedWorkgroup = async (
-  db: ProviderNeutralDatabase,
-  owner: string,
-  name: string,
-): Promise<string> => {
+const seedWorkgroup = async (db: PersistenceDb, owner: string, name: string): Promise<string> => {
   const id = ulid()
-  await db.insert(workgroups).values({
+  const { workgroups } = tablesOf(db)
+  await insertOne(db, workgroups, {
     id,
     name,
     description: 'local original',
@@ -302,11 +298,12 @@ const seedWorkgroup = async (
 }
 
 const seedUser = async (
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   status: 'active' | 'disabled' | 'invited',
 ): Promise<void> => {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -343,7 +340,8 @@ describeEachProvider(
           decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
         })
         expect(receipt.applied).toHaveLength(1)
-        const row = await db.select().from(mcps).get()
+        const { mcps, resourceBundleApplies } = tablesOf(db)
+        const row = await first(db.select().from(mcps))
         if (row === undefined) throw new Error('expected imported MCP row')
         expect(row?.name).toBe('tools')
         // 「谁导入的整体所有资源权限就归谁」。
@@ -360,7 +358,7 @@ describeEachProvider(
         // 测试助手做同一次翻译）。所以这里比的是**同一份回执的两种命名**：把持久化那份翻一次再比，
         // 断言仍然是「回给调用方的，与落进 journal 供重放的，是同一份」。
         const persisted = JSON.parse(
-          (await db.select().from(resourceBundleApplies).get())!.receiptJson!,
+          (await first(db.select().from(resourceBundleApplies)))!.receiptJson!,
         ) as Record<string, unknown> & {
           applied: (Record<string, unknown> & { operationId: string })[]
         }
@@ -387,7 +385,8 @@ describeEachProvider(
         })
         // 先手工塞一条 committed journal，模拟「上次成功但响应丢了」。
         const receiptValue = { journalId: 'J1', applied: [] }
-        await db.insert(resourceBundleApplies).values({
+        const { resourceBundleApplies } = tablesOf(db)
+        await insertOne(db, resourceBundleApplies, {
           id: 'J1',
           scope: 'package',
           key: importId,
@@ -437,7 +436,8 @@ describeEachProvider(
           importId,
           now: Date.now() - 60 * 60 * 1000,
         })
-        await db.insert(resourceBundleApplies).values({
+        const { resourceBundleApplies } = tablesOf(db)
+        await insertOne(db, resourceBundleApplies, {
           id: 'OTHER-SCOPE',
           scope: 'intent',
           key: importId,
@@ -494,8 +494,9 @@ describeEachProvider(
           (e: unknown) => e as { code?: string },
         )
         expect(err?.code).toBe('package-decision-not-allowed')
+        const { mcps } = tablesOf(db)
         // 别人那一行一个字节没变。
-        expect((await db.select().from(mcps).where(eq(mcps.id, foreign)).get())?.description).toBe(
+        expect((await first(db.select().from(mcps).where(eq(mcps.id, foreign))))?.description).toBe(
           'local original',
         )
       })
@@ -532,6 +533,7 @@ describeEachProvider(
           code: 'package-write-forbidden',
           details: { missingPermissions: ['mcps:create'] },
         })
+        const { resourceBundleApplies } = tablesOf(db)
         expect(await db.select().from(resourceBundleApplies)).toHaveLength(0)
       })
 
@@ -566,6 +568,7 @@ describeEachProvider(
         const actor = actorOf('u1')
         const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
 
+        const { mcps } = tablesOf(db)
         // 预检之后、提交之前，目标被改了。
         await db
           .update(mcps)
@@ -602,7 +605,8 @@ describeEachProvider(
           name: 'tools',
           action: 'reuse',
         })
-        expect((await db.select().from(resourceBundleApplies).get())?.state).toBe('committed')
+        const { resourceBundleApplies, mcps } = tablesOf(db)
+        expect((await first(db.select().from(resourceBundleApplies)))?.state).toBe('committed')
         // 也没有多建一行。
         expect(await db.select().from(mcps)).toHaveLength(1)
       })
@@ -612,6 +616,7 @@ describeEachProvider(
         const pkg = await parseResourcePackage(packageZip())
         const actor = actorOf('u1')
         const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+        const { mcps } = tablesOf(db)
         await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target))
 
         const err = await commitResourcePackageForTest(deps(db), actor, {
@@ -642,7 +647,8 @@ describeEachProvider(
           name: 'tools',
           action: 'update',
         })
-        expect((await db.select().from(mcps).where(eq(mcps.id, target)).get())?.description).toBe(
+        const { mcps } = tablesOf(db)
+        expect((await first(db.select().from(mcps).where(eq(mcps.id, target))))?.description).toBe(
           'from package',
         )
       })
@@ -655,6 +661,7 @@ describeEachProvider(
         const hiddenDb = harness.database(0).db
         const absentDb = harness.database(1).db
         const target = await seedMcp(hiddenDb, 'u-other', 'private-tools')
+        const { mcps } = tablesOf(hiddenDb)
         await hiddenDb.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, target))
         const zip = agentWithExternalMcpPackageZip(target)
         const actor = actorOf('u1')
@@ -711,6 +718,7 @@ describeEachProvider(
         })
 
         expect(receipt.applied).toHaveLength(0)
+        const { workgroups } = tablesOf(db)
         expect(await db.select().from(workgroups)).toHaveLength(1)
       })
 
@@ -746,7 +754,8 @@ describeEachProvider(
         })
 
         expect(receipt.root).toMatchObject({ resourceType: 'workgroup', action: 'create' })
-        expect((await db.select().from(workgroups).get())?.leaderMemberId).toBeNull()
+        const { workgroups } = tablesOf(db)
+        expect((await first(db.select().from(workgroups)))?.leaderMemberId).toBeNull()
       })
 
       test('overwrite 工作组仍拒绝映射到非 active 用户', async () => {
@@ -895,7 +904,8 @@ describeEachProvider(
           ],
         })
 
-        const row = await db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
+        const { mcps } = tablesOf(db)
+        const row = await first(db.select().from(mcps).where(eq(mcps.name, 'tools-copy')))
         expect(JSON.parse(row?.config ?? '{}')).toMatchObject({ env: { TOKEN: 'local-secret' } })
         expect(receipt.skippedSecrets).toBeUndefined()
         expect(receipt.root?.name).toBe('tools-copy')
@@ -920,7 +930,8 @@ describeEachProvider(
           ],
         })
 
-        const row = await db.select().from(mcps).where(eq(mcps.name, 'tools-copy')).get()
+        const { mcps, resourceBundleApplies } = tablesOf(db)
+        const row = await first(db.select().from(mcps).where(eq(mcps.name, 'tools-copy')))
         // 这一行必须真的存在：`row` 为空时下面两条（TOKEN 缺席 / 不含占位符）会**空转变绿**，
         // 正是 RFC-359 双引擎里「未 await 的 .get()」那种假绿。
         expect(row).toBeDefined()
@@ -930,11 +941,12 @@ describeEachProvider(
         expect(receipt.skippedSecrets).toEqual([
           { resourceType: 'mcp', resourceName: 'tools-copy', field: 'config.env.TOKEN' },
         ])
-        const replayed = await db
-          .select({ receiptJson: resourceBundleApplies.receiptJson })
-          .from(resourceBundleApplies)
-          .where(eq(resourceBundleApplies.id, receipt.journalId))
-          .get()
+        const replayed = await first(
+          db
+            .select({ receiptJson: resourceBundleApplies.receiptJson })
+            .from(resourceBundleApplies)
+            .where(eq(resourceBundleApplies.id, receipt.journalId)),
+        )
         expect(JSON.parse(replayed?.receiptJson ?? '{}').skippedSecrets).toEqual(
           receipt.skippedSecrets,
         )

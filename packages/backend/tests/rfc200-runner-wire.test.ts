@@ -3,8 +3,10 @@
 // valid nonced envelope followed by a forged bare envelope; legacy last-wins
 // would accept the forgery, while the nonce-scoped runner must keep REAL.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -12,14 +14,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -45,19 +46,20 @@ function agent(): Agent {
   }
 }
 
-async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc200-runner-'))
   const worktreePath = join(appHome, 'worktree')
   mkdirSync(worktreePath, { recursive: true })
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'rfc200-wire',
     definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'rfc200-wire',
     workflowId,
@@ -105,6 +107,7 @@ describeEachProvider('RFC-200 runner production wiring', (harness) => {
       status: 'pending',
       cause: 'initial',
     })
+    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const minted = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
     )[0]

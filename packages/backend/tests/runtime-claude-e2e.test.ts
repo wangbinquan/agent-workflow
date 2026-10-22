@@ -7,6 +7,9 @@
 // Regression 2026-08-13: Claude can explicitly reset a conversation within one
 // process; the next root frame's native id becomes the resumable identity.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { and, eq, sql } from 'drizzle-orm'
@@ -16,15 +19,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -52,20 +54,21 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
+async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-claude-runner-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -87,9 +90,10 @@ async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'node1', status: 'pending' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'node1', status: 'pending' })
   return id
 }
 
@@ -136,12 +140,13 @@ function runClaude(o: RunOpts) {
 }
 
 async function waitForFirstRuntimeEvent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   nodeRunId: string,
   timeoutMs = 3_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    const { nodeRunEvents } = tablesOf(db)
     const rows = await db
       .select({ id: nodeRunEvents.id })
       .from(nodeRunEvents)
@@ -199,6 +204,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
     expect(result.tokenUsage.cacheRead).toBe(3)
     expect(result.tokenUsage.total).toBe(19)
 
+    const { nodeRuns } = tablesOf(h.db)
     // sessionId capture is asserted on RunResult above; persistence to
     // node_runs.opencode_session_id is the scheduler's job (scheduler.ts), not
     // runNode's, so we only check the run status on the row here.
@@ -225,10 +231,11 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
       () => runClaude({ agent, nodeRunId, h }),
     )
 
-    let inFlightRow: typeof nodeRuns.$inferSelect | undefined
+    let inFlightRow: PersistenceTables['nodeRuns']['$inferSelect'] | undefined
     let observationError: unknown
     try {
       await waitForFirstRuntimeEvent(h.db, nodeRunId)
+      const { nodeRuns } = tablesOf(h.db)
       inFlightRow = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
       )[0]
@@ -283,6 +290,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
       eventSubtype: null,
       hasParentToolUseId: false,
     })
+    const { nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
     expect(
       (
         await h.db
@@ -322,6 +330,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
     expect(result.status).toBe('done')
     expect(result.sessionId).toBe('claude-parallel-root')
     expect(result.outputs.summary).toBe('root-complete')
+    const { nodeRunEvents } = tablesOf(h.db)
     const rows = await h.db
       .select()
       .from(nodeRunEvents)
@@ -368,6 +377,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
     expect(result.sessionId).toBe('claude-after-reset')
     expect(result.outputs.summary).toBe('kept')
 
+    const { nodeRunEvents, nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
     const rows = await h.db
       .select()
       .from(nodeRunEvents)
@@ -440,6 +450,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
       'runtime ended before reporting the replacement native session id',
     )
     expect(result.sessionId).toBeUndefined()
+    const { nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
     expect(
       (
         await h.db
@@ -543,7 +554,9 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const { log, warnings } = captureWarnings()
-    await h.db.run(sql`
+    await rawExec(
+      h.db,
+      sql`
       CREATE TRIGGER fail_claude_stderr_event_insert
       BEFORE INSERT ON node_run_events
       WHEN NEW.kind = 'stderr'
@@ -553,7 +566,8 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
           'forced Claude stderr persistence failure --token=claude-pump-secret'
         );
       END
-    `)
+    `,
+    )
 
     const result = await withEnv(
       {
@@ -575,6 +589,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
     expect(warning?.fields?.err).toContain('forced Claude stderr persistence failure')
     expect(warning?.fields?.err).not.toContain('claude-pump-secret')
 
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorMessage).toBe(result.errorMessage)
@@ -676,6 +691,7 @@ describeEachProvider('runNode — runtime spawn failure (RFC-111 Codex P1-2)', (
     })
     expect(result.status).toBe('failed')
     expect(result.errorMessage).toContain('spawn claude-code failed')
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     expect(row?.status).toBe('failed') // NOT stranded at 'running'
   })

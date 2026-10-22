@@ -13,13 +13,13 @@
 // （`createInMemoryDb`），PG 侧那份 `launchAgent` 编排此前**没有任何行为用例**。
 //
 // 合并两份编排（§5hn 批次一）之前，这条必须是绿的——它是「合并没有改变用户可见行为」的基线。
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { AGENT_HOST_INPUT_KEY, AGENT_HOST_WORKFLOW_ID } from '@/services/agentLaunch'
-import { tasks } from '@/db/schema'
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -167,6 +167,7 @@ describeEachProviderHttpApplication(
       )
       expect(comparable.snapshotEdgeCount, '宿主快照边扫成 0 ⇒ 比较面失效').toBeGreaterThan(0)
 
+      const { tasks } = tablesOf(scope.harness.db)
       const row = (
         await scope.harness.db
           .select()

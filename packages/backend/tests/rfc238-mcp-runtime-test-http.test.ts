@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -7,7 +8,6 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { runtimes } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
@@ -42,6 +42,7 @@ const SCOPE_OPTIONS = {
 async function harness(scope: ProviderHttpApplicationScope): Promise<{ app: Hono }> {
   const db = scope.harness.db
   await seedBuiltinRuntimes(new DrizzleRuntimeRegistryPersistence(db))
+  const { runtimes } = tablesOf(db)
   // 中立面没有 bun:sqlite 的同步终结符——这里改成 await（原来是同步收尾）。
   await db.update(runtimes).set({ model: 'openai/test-model' }).where(eq(runtimes.name, 'opencode'))
   let runIndex = 0

@@ -13,22 +13,15 @@
 //   · `EmployeeReactionRoundQueryPort`（digital-employee）—— 原本 development-automation
 //     直接查 OS 的私表，读它冻结的 planJson，并按 `state === 'completed'` 过滤。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  developmentApprovalSagas,
-  developmentMissionLinks,
-  developmentMissions,
-  developmentMrClaims,
-  developmentStepRuns,
-  employeeCases,
-  employeeReactionRounds,
-  users,
-} from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
@@ -67,9 +60,10 @@ describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读',
     })
     const fence = composeIdentityAccess(db).authorityFence
 
+    const { users } = tablesOf(db)
     // 直接写库而不是走命令：这里要锁的是「围栏读到的是**已提交的**行」，
     // 与是哪条命令写的无关——WS 发帧路径正是在通知丢失时靠它兜底的。
-    db.update(users).set({ status: 'disabled', accessRevision: 7 }).run()
+    queryWrite(db.update(users).set({ status: 'disabled', accessRevision: 7 }))
     expect(fence.readAuthorityFence(user.id)).toEqual({ status: 'disabled', accessRevision: 7 })
   })
 
@@ -81,8 +75,9 @@ describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读',
 })
 
 describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (harness) => {
-  const seedMission = async (db: ProviderNeutralDatabase, id: string, terminal: boolean) => {
-    await db.insert(developmentMissions).values({
+  const seedMission = async (db: PersistenceDb, id: string, terminal: boolean) => {
+    const { developmentMissions } = tablesOf(db)
+    await insertOne(db, developmentMissions, {
       id,
       status: terminal ? 'completed' : 'running',
       repositoryId: 'repo-1',
@@ -108,8 +103,9 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
    * 审批 saga 行挂在 step run 上，step run 又挂在 mission 上。这里把这条外键链一次性
    * 补齐——本组断言只关心「未决审批计数」，链上的业务语义不参与。
    */
-  const seedStepRun = async (db: ProviderNeutralDatabase, id: string, missionId: string) => {
-    await db.insert(developmentStepRuns).values({
+  const seedStepRun = async (db: PersistenceDb, id: string, missionId: string) => {
+    const { developmentStepRuns } = tablesOf(db)
+    await insertOne(db, developmentStepRuns, {
       id,
       missionId,
       employeeId: 'employee-1',
@@ -127,11 +123,12 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
   }
 
   const seedApproval = async (
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     input: { id: string; missionId: string; latestStatus: string },
   ) => {
     const stepRunId = await seedStepRun(db, `step-${input.id}`, input.missionId)
-    await db.insert(developmentApprovalSagas).values({
+    const { developmentApprovalSagas } = tablesOf(db)
+    await insertOne(db, developmentApprovalSagas, {
       id: input.id,
       missionId: input.missionId,
       stepRunId,
@@ -151,7 +148,8 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
     const db = harness.db
     await seedMission(db, 'parent-1', false)
     await seedMission(db, 'child-1', false)
-    await db.insert(developmentMrClaims).values({
+    const { developmentMrClaims, developmentMissionLinks } = tablesOf(db)
+    await insertOne(db, developmentMrClaims, {
       id: 'claim-1',
       codeHostEndpointRef: 'endpoint-1',
       stableProjectRef: 'project-1',
@@ -162,7 +160,7 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
       createdAt: 2,
     })
 
-    await db.insert(developmentMissionLinks).values({
+    await insertOne(db, developmentMissionLinks, {
       id: 'link-1',
       parentMissionId: 'parent-1',
       parentStepRunId: await seedStepRun(db, 'step-link-1', 'parent-1'),
@@ -231,7 +229,8 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
 
 describeEachProvider('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', (harness) => {
   /** case 行是轮次行的外键前提；这里只填必填列，业务语义不参与本组断言。 */
-  const seedCase = async (db: ProviderNeutralDatabase, caseId: string) => {
+  const seedCase = async (db: PersistenceDb, caseId: string) => {
+    const { employeeCases } = tablesOf(db)
     await db
       .insert(employeeCases)
       .values({
@@ -250,7 +249,7 @@ describeEachProvider('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', 
   }
 
   const seedRound = async (
-    db: ProviderNeutralDatabase,
+    db: PersistenceDb,
     round: {
       id: string
       caseId: string
@@ -261,7 +260,8 @@ describeEachProvider('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', 
     },
   ) => {
     await seedCase(db, round.caseId)
-    await db.insert(employeeReactionRounds).values({
+    const { employeeReactionRounds } = tablesOf(db)
+    await insertOne(db, employeeReactionRounds, {
       id: round.id,
       caseId: round.caseId,
       caseRevision: 1,

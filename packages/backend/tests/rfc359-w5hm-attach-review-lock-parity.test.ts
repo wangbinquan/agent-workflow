@@ -14,11 +14,12 @@
 //
 // 合一之前这条在 PostgreSQL 上是**红**的（缺口真实存在的证据）；
 // 合一之后两个引擎都必须绿。重入面的逐条勘察见 plan §5hm 第 1 步。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import type { TaskDriverLifecyclePort } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
@@ -38,15 +39,16 @@ const silentLog: TaskExecutionTopologyLogger = {
   child: () => silentLog,
 }
 
-async function seedTerminalTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTerminalTask(db: PersistenceDb): Promise<string> {
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
   })
   const taskId = `task_${ulid()}`
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,

@@ -13,7 +13,6 @@
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -32,7 +31,6 @@ describe('RFC-357 shared page scenario — real PostgreSQL', () => {
   realTest(
     'the whole scenario holds, byte for byte the same expectations as SQLite',
     async () => {
-      let restoreProvider: (() => void) | undefined
       const runtime = createPostgresqlDatabaseRuntime({
         config: {
           provider: 'postgresql',
@@ -63,14 +61,12 @@ describe('RFC-357 shared page scenario — real PostgreSQL', () => {
 
         // 进程级 provider 选择必须还原：一个 bun 进程会跑多个测试文件，
         // 留着 postgresql 投影会渗进后面的文件（跨文件污染在本仓有前科）。
-        restoreProvider = selectDatabaseSchemaProvider('postgresql')
         const db = createPostgresqlDatabaseClient(runtime)
         await seedRfc357Page(db)
         await expectRfc357PageScenario(
           createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
         )
       } finally {
-        restoreProvider?.()
         await runtime.close?.()
       }
     },

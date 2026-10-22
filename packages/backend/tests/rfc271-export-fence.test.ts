@@ -11,6 +11,8 @@
 // 所以这里测的是**行为**，不是源码里有没有那几个字段名：源码断言挡不住「字段解析了
 // 但没参与比对」这类失败。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,9 +20,8 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, mcps, plugins, skills, users, workflows, workgroups } from '../src/db/schema'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 
@@ -38,10 +39,11 @@ const codeOf = async (p: Promise<unknown>): Promise<string | undefined> =>
   )
 
 async function seed(
-  db: ProviderNeutralDatabase,
-): Promise<{ db: ProviderNeutralDatabase; appHome: string; agentId: string; mcpId: string }> {
+  db: PersistenceDb,
+): Promise<{ db: PersistenceDb; appHome: string; agentId: string; mcpId: string }> {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc271-fence-'))
-  await db.insert(users).values({
+  const { users, agents, mcps } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'alice',
     displayName: 'A',
@@ -52,7 +54,7 @@ async function seed(
     updatedAt: 1,
   } as never)
   const agentId = ulid()
-  await db.insert(agents).values({
+  await insertOne(db, agents, {
     id: agentId,
     name: 'auditor',
     description: '',
@@ -71,7 +73,7 @@ async function seed(
     aclRevision: 3,
   } as never)
   const mcpId = ulid()
-  await db.insert(mcps).values({
+  await insertOne(db, mcps, {
     id: mcpId,
     name: 'gh',
     description: '',
@@ -224,7 +226,8 @@ describeEachProvider(
     test('ACL 漂移产出逐字节相同的包 ⇒ 旧 fence 应当放行', async () => {
       const { db, appHome } = await seed(harness.db)
       const wfId = ulid()
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: wfId,
         name: 'wf-acl',
         description: '',
@@ -265,7 +268,8 @@ describeEachProvider(
     test('内容漂移（version）仍然 409', async () => {
       const { db, appHome } = await seed(harness.db)
       const wfId = ulid()
-      await db.insert(workflows).values({
+      const { workflows } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: wfId,
         name: 'wf',
         description: '',
@@ -291,7 +295,8 @@ describeEachProvider(
     test('workgroup 同形（只要 expectedVersion；多给 ACL 维 ⇒ 拒绝）', async () => {
       const { db, appHome } = await seed(harness.db)
       const wgId = ulid()
-      await db.insert(workgroups).values({
+      const { workgroups } = tablesOf(db)
+      await insertOne(db, workgroups, {
         id: wgId,
         name: 'squad',
         description: '',
@@ -344,12 +349,13 @@ describeEachProvider(
     // 缺目录此后是 `resource-package-skill-tree-invalid`（合一前 SQLite 侧静默产出零文件条目，
     // 见 `tests/rfc359-w8-package-skill-tree-conformance.test.ts` 差异②）。本组用例锁的是三维
     // fence，不是空目录行为，所以按生产形态把目录补齐。
-    const seedSkill = async (db: ProviderNeutralDatabase, appHome: string): Promise<string> => {
+    const seedSkill = async (db: PersistenceDb, appHome: string): Promise<string> => {
       const id = ulid()
       const files = join(appHome, 'skills', id, 'files')
       mkdirSync(files, { recursive: true })
       writeFileSync(join(files, 'SKILL.md'), '---\nname: helper\n---\n\nhelper body\n')
-      await db.insert(skills).values({
+      const { skills } = tablesOf(db)
+      await insertOne(db, skills, {
         id,
         name: 'helper',
         description: '',
@@ -421,9 +427,10 @@ describeEachProvider(
 )
 
 describeEachProvider('AC-12 · plugin 用 configHash（含安装态，不只是配置文本）', (harness) => {
-  const seedPlugin = async (db: ProviderNeutralDatabase): Promise<string> => {
+  const seedPlugin = async (db: PersistenceDb): Promise<string> => {
     const id = ulid()
-    await db.insert(plugins).values({
+    const { plugins } = tablesOf(db)
+    await insertOne(db, plugins, {
       id,
       name: 'fmt',
       description: '',
@@ -463,6 +470,7 @@ describeEachProvider('AC-12 · plugin 用 configHash（含安装态，不只是�
   test('**只改 enabled** 也要让 hash 变 —— 安装/启用态属于导出语义的一部分', async () => {
     const { db, appHome } = await seed(harness.db)
     const id = await seedPlugin(db)
+    const { plugins } = tablesOf(db)
     // 先拿到当前 hash（用一次成功导出证明它是对的）。
     const before = expectTokenOf('plugin', {
       ...((await db.select().from(plugins)).find((r) => r.id === id) as Record<string, unknown>),

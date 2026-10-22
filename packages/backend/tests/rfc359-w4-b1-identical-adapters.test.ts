@@ -5,22 +5,15 @@
 // 回滚目标投影（taskRollbackQueries）。这里锁的是合一后的行为在两个引擎上一致，且 provider 名不再出现在
 // 这三份实现里。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunOutputs,
-  nodeRuns,
-  taskCollaborators,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import { DrizzleTaskRollbackQueries } from '@/modules/task-execution/infrastructure/taskRollbackQueries'
@@ -28,11 +21,8 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  id: string,
-  role: 'admin' | 'user',
-): Promise<void> {
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user'): Promise<void> {
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -47,9 +37,10 @@ async function seedUser(
     .onConflictDoNothing()
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const id = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: id,
     description: '',
@@ -61,7 +52,7 @@ async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   workflowId: string,
   over: {
     readonly status:
@@ -79,7 +70,8 @@ async function seedTask(
   },
 ): Promise<string> {
   const id = `t_${ulid()}`
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -122,7 +114,8 @@ describeEachProvider('RFC-359 W4-B1 —— 任务总览计数一份实现', (har
     await seedTask(db, wf, { status: 'done', ownerUserId: owner, finishedAt: since - 1 }) // 窗口外
     await seedTask(db, wf, { status: 'failed', ownerUserId: other, finishedAt: since + 5 })
     const collaborated = await seedTask(db, wf, { status: 'running', ownerUserId: other })
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId: collaborated,
       userId: owner,
       role: 'collaborator',
@@ -160,6 +153,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
     const taskId = await seedTask(db, wf, { status: 'running' })
     const runA = ulid()
     const runB = ulid()
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     await db.insert(nodeRuns).values([
       { id: runA, taskId, nodeId: 'a', status: 'done', retryIndex: 0, iteration: 0 },
       {
@@ -218,6 +212,7 @@ describeEachProvider('RFC-359 W4-B1 —— 回滚目标投影一份实现', (har
     const db = harness.db
     const wf = await seedWorkflow(db)
     const multi = await seedTask(db, wf, { status: 'running', repoCount: 2 })
+    const { taskRepos } = tablesOf(db)
     await db.insert(taskRepos).values([
       {
         taskId: multi,
@@ -261,7 +256,7 @@ test('源码锁：三份实现里不再出现 provider 名，且 sqlite / postgr
     'taskRollbackQueries.ts',
   ]) {
     const source = readFileSync(resolve(root, file), 'utf8')
-    expect(source).toContain("from '@/db/query'")
+    expect(source).toContain("from '@/platform/persistence/persistenceDb'")
     expect(source).not.toMatch(/DbClient|PostgresqlDatabaseClient/u)
   }
   for (const gone of [

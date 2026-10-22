@@ -10,12 +10,13 @@
 //
 // 这套断言两个引擎各跑一遍读面的核心判据：启动工作流可见性、调用目标按名解析、agent 注入闭包
 // 展开与依赖缺失，以及闭包冻结的产物在两个引擎上逐字相同。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
@@ -33,7 +34,7 @@ function actorOf(userId: string, role: 'admin' | 'user' = 'user'): Actor {
   } as unknown as Actor
 }
 
-function bindingFor(db: ProviderNeutralDatabase) {
+function bindingFor(db: PersistenceDb) {
   return createTaskExecutionResourceBinding(
     db,
     composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
@@ -52,7 +53,7 @@ function pairFor(actor: Actor): {
 const EMPTY_DEFINITION = { $schema_version: 4, inputs: [], nodes: [], edges: [] }
 
 async function seedWorkflow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly name: string
     readonly ownerUserId: string
@@ -61,7 +62,8 @@ async function seedWorkflow(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: input.name,
     definition: JSON.stringify(input.definition ?? EMPTY_DEFINITION),
@@ -74,11 +76,12 @@ async function seedWorkflow(
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: { readonly name: string; readonly dependsOn?: readonly string[] },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name: input.name,
     description: '',
@@ -93,7 +96,7 @@ async function seedAgent(
 
 describeEachProvider('RFC-359 W4-D27 —— 任务执行资源快照', (harness) => {
   test('启动工作流：owner 能读到自己的私有工作流，别人读不到（同一条可见性判据）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const workflowId = await seedWorkflow(db, {
       name: `wf-${ulid().slice(-8).toLowerCase()}`,
       ownerUserId: OWNER,
@@ -117,7 +120,7 @@ describeEachProvider('RFC-359 W4-D27 —— 任务执行资源快照', (harness)
   })
 
   test('agent 注入：dependsOn 闭包按广度展开，缺失依赖按具名失败收场', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const leaf = await seedAgent(db, { name: `leaf-${ulid().slice(-6).toLowerCase()}` })
     const root = await seedAgent(db, {
       name: `root-${ulid().slice(-6).toLowerCase()}`,
@@ -151,7 +154,7 @@ describeEachProvider('RFC-359 W4-D27 —— 任务执行资源快照', (harness)
   })
 
   test('闭包冻结：调用节点按名解析目标，产物在两个引擎上逐字相同', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const childName = `child-${ulid().slice(-8).toLowerCase()}`
     const childId = await seedWorkflow(db, {
       name: childName,
@@ -184,7 +187,7 @@ describeEachProvider('RFC-359 W4-D27 —— 任务执行资源快照', (harness)
   })
 
   test('没有调用节点的工作流不冻结闭包（两个引擎同样返回 null）', async () => {
-    const db = harness.db as unknown as ProviderNeutralDatabase
+    const db = harness.db as unknown as PersistenceDb
     const rootId = await seedWorkflow(db, {
       name: `plain-${ulid().slice(-8).toLowerCase()}`,
       ownerUserId: OWNER,
@@ -207,7 +210,7 @@ test('源码锁：资源快照只剩一份读面 + 一份绑定，四个 provide
   const reader = read(
     'modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts',
   )
-  expect(reader).toContain('tx: DatabaseTransaction')
+  expect(reader).toContain('tx: PersistenceTx')
   expect(reader).toContain('canViewResourceForTx(tx, actor')
   expect(reader).not.toMatch(/: DbTxSync|PostgresqlDatabaseClient/)
 

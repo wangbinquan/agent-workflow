@@ -1,13 +1,14 @@
 // Run with RFC349_DATABASE_URL pointed at an empty disposable PostgreSQL 17+
 // database. This is the real-driver acceptance path; ordinary unit runs skip it.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
-import { agents } from '@/db/schema'
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
 import { createDatabaseMigrationRunner } from '@/modules/system-operations/application/databaseMigrationRunner'
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
@@ -146,8 +147,9 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         ).toMatchObject({ disposition: 'ARCHIVE_THEN_OMIT', rowCount: 1 })
 
         const liveDb = createPostgresqlDatabaseClient(runtime)
-        await liveDb.insert(agents).values({ id: 'agent-rfc349', name: 'RFC 349 Agent' }).run()
-        expect(await liveDb.select({ id: agents.id }).from(agents).all()).toContainEqual({
+        const { agents } = tablesOf(liveDb)
+        await insertOne(liveDb, agents, { id: 'agent-rfc349', name: 'RFC 349 Agent' })
+        expect(await liveDb.select({ id: agents.id }).from(agents)).toContainEqual({
           id: 'agent-rfc349',
         })
         expect(await runner.status('dbm_real_postgresql_01')).toMatchObject({

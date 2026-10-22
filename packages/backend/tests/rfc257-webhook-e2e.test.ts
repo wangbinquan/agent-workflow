@@ -7,6 +7,8 @@
 // 夹具只把库句柄换成 harness 现建的那一个。唯一仍是两份实现的是「任务源终止参与者」，
 // 按 `harness.capabilities.isolation` 取生产上同一侧的那份（同
 // `rfc359-w8-source-termination-conformance` 的姿势），否则 PG 上跑的是 SQLite 那台机器。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createHmac } from 'node:crypto'
 import { Hono } from 'hono'
@@ -16,17 +18,6 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from './helpers/userFixture'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
-import {
-  eventDeliveries,
-  eventRecords,
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookTriggerFires,
-  webhookTriggers,
-  workflows,
-} from '../src/db/schema'
 import {
   createWebhookDispatcher,
   renderedLaunchPayload,
@@ -90,7 +81,8 @@ async function seedFixture(providerHarness: ProviderHarness) {
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, webhookEndpoints, webhookTriggers, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'fix-wf',
     description: '',
@@ -101,7 +93,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(webhookEndpoints).values({
+  await insertOne(db, webhookEndpoints, {
     id: 'ep-1',
     name: 'gl',
     provider: 'gitlab',
@@ -109,7 +101,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     secretEnc: box.seal(SECRET),
     enabled: true,
   })
-  await db.insert(webhookTriggers).values({
+  await insertOne(db, webhookTriggers, {
     id: 'tr-1',
     name: '修到绿',
     endpointId: 'ep-1',
@@ -147,7 +139,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
       if (failLaunchNames.has(renderedName))
         throw new Error(`fixture launch failed: ${renderedName}`)
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: taskId,
         name: renderedName,
         workflowId,
@@ -308,7 +300,15 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
   describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路）', () => {
     test('同一 Webhook 命中两条规则：每条订阅独立投递，一条启动失败不吞掉另一条', async () => {
       const h = await seedFixture(harness)
-      await h.db.insert(webhookTriggers).values({
+      const {
+        webhookTriggers,
+        webhookTriggerFires,
+        tasks,
+        eventRecords,
+        eventDeliveries,
+        webhookDeliveries,
+      } = tablesOf(h.db)
+      await insertOne(h.db, webhookTriggers, {
         id: 'tr-2',
         name: '第二处理人',
         endpointId: 'ep-1',
@@ -388,6 +388,7 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
 
       // 异步分发推进到 matched + fires launched + 真 tasks 行
       const fire = await waitFor(async () => {
+        const { webhookTriggerFires } = tablesOf(h.db)
         const rows = await h.db
           .select()
           .from(webhookTriggerFires)
@@ -396,6 +397,7 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
       })
       expect(fire.outcome).toBe('launched')
       expect(fire.streamKey).toBe('platform/api|mr:42')
+      const { webhookDeliveries, tasks, webhookTriggerFires } = tablesOf(h.db)
       const delivery = (
         await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
       )[0]
@@ -438,6 +440,9 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
 
     test('RFC-303 protected MR open launches once; close is control-only and durably cancels it', async () => {
       const h = await seedFixture(harness)
+      const { webhookTriggers, webhookMrControlEffects, webhookTriggerFires, tasks } = tablesOf(
+        h.db,
+      )
       await h.db
         .update(webhookTriggers)
         .set({
@@ -504,6 +509,13 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
 
     test('RFC-303 GitHub protected PR open launches once; merged close is control-only', async () => {
       const h = await seedFixture(harness)
+      const {
+        webhookEndpoints,
+        webhookTriggers,
+        webhookMrControlEffects,
+        webhookTriggerFires,
+        tasks,
+      } = tablesOf(h.db)
       await h.db
         .update(webhookEndpoints)
         .set({ provider: 'github' })

@@ -3,26 +3,13 @@
 // 端点 / 连接事实读取、演示种子幂等落库、代码工作区读取（未启动 run 两个引擎都排最前）、轮次尝试投影
 // （bigint 列回 number 不回字符串）、RFC-310 cutover 状态 upsert 与 legacy link、数字员工工作区持久化。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  codeAiAttempts,
-  codeHostConnections,
-  codeRoundStages,
-  developmentMissions,
-  employeeCases,
-  employeeReactionRounds,
-  legacyCodeWorkItemLinks,
-  nodeRuns,
-  repoCapabilityConfig,
-  taskRepos,
-  tasks,
-  users,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CapabilityTemplateRecord } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityParamRead } from '@/modules/code-capability/infrastructure/capabilityParamRead'
 import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
@@ -38,9 +25,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_b5a_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -83,8 +71,9 @@ function template(
   }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
-  await db.insert(tasks).values({
+async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -145,8 +134,10 @@ describeEachProvider(
       await persistence.delete('tpl-b')
       expect(await persistence.load('tpl-b')).toBeNull()
 
+      const { repoCapabilityConfig, cachedRepos, codeHostConnections, codeRoundStages } =
+        tablesOf(db)
       // 仓库能力格 → 模板参数三元组。
-      await db.insert(repoCapabilityConfig).values({
+      await insertOne(db, repoCapabilityConfig, {
         id: ulid(),
         repoId: 'repo-b5a',
         capability: 'mr-review',
@@ -166,7 +157,7 @@ describeEachProvider(
 
       // 端点 / 连接事实读取。
       const endpoints = createRepoEndpointRead(db)
-      await db.insert(cachedRepos).values({
+      await insertOne(db, cachedRepos, {
         id: 'repo-b5a',
         urlHash: 'b5a00001',
         urlRedacted: 'https://gitlab.invalid/g/p',
@@ -176,7 +167,7 @@ describeEachProvider(
       })
       expect(await endpoints.readRepoUrl('repo-b5a')).toBe('https://gitlab.invalid/g/p')
       expect(await endpoints.readRepoUrl('nope')).toBeNull()
-      await db.insert(codeHostConnections).values({
+      await insertOne(db, codeHostConnections, {
         provider: 'gitlab',
         baseUrl: 'https://gitlab.invalid/api/v4',
         repositoryUrlPrefixesJson: '["https://gitlab.invalid/"]',
@@ -269,6 +260,7 @@ describeEachProvider(
           },
         ],
       })
+      const { taskRepos, nodeRuns, codeAiAttempts } = tablesOf(db)
       await db.insert(taskRepos).values([
         {
           taskId: 'task-b5a',
@@ -322,7 +314,10 @@ describeEachProvider(
       expect(await read.findNodeRun('missing')).toBeNull()
 
       const attempts = createRoundAttemptsRead(db)
-      const attempt = (id: string, over: Partial<typeof codeAiAttempts.$inferInsert>) => ({
+      const attempt = (
+        id: string,
+        over: Partial<PersistenceTables['codeAiAttempts']['$inferInsert']>,
+      ) => ({
         id,
         roundId: 'round-b5a',
         stageName: 'review-shard',
@@ -381,7 +376,14 @@ describeEachProvider(
         flippedAt: NOW + 1,
         generation: 'g1',
       })
-      await db.insert(developmentMissions).values({
+      const {
+        developmentMissions,
+        legacyCodeWorkItemLinks,
+        employeeCases,
+        cachedRepos,
+        employeeReactionRounds,
+      } = tablesOf(db)
+      await insertOne(db, developmentMissions, {
         id: 'm-b5a',
         status: 'working',
         repositoryId: 'repo-1',
@@ -415,7 +417,7 @@ describeEachProvider(
       })
 
       const workspaces = createEmployeeWorkspacePersistence(db)
-      await db.insert(employeeCases).values({
+      await insertOne(db, employeeCases, {
         id: 'case-b5a',
         name: 'case',
         employeeId: 'employee-1',
@@ -429,7 +431,7 @@ describeEachProvider(
         updatedAt: NOW,
       })
       expect(await workspaces.workspace('case-b5a')).toBeNull()
-      await db.insert(cachedRepos).values({
+      await insertOne(db, cachedRepos, {
         id: 'crepo-b5a',
         urlHash: 'b5a00002',
         localPath: '/tmp/b5a/crepo',
@@ -456,7 +458,7 @@ describeEachProvider(
       expect(await workspaces.repositoryLocalPath('crepo-b5a')).toBe('/tmp/b5a/crepo')
       expect(await workspaces.repositoryLocalPath('nope')).toBeNull()
 
-      await db.insert(employeeReactionRounds).values({
+      await insertOne(db, employeeReactionRounds, {
         id: 'round-b5a',
         caseId: 'case-b5a',
         caseRevision: 1,

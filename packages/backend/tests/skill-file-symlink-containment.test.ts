@@ -5,7 +5,7 @@
 // Design-gate round 3 caught this while adversarially reviewing RFC-170.
 
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,7 +25,7 @@ import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastr
 import { ValidationError } from '../src/util/errors'
 
 describeEachProvider('readSkillFile symlink containment', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let outsideDir: string
   let fsOpts: SkillFsOptions

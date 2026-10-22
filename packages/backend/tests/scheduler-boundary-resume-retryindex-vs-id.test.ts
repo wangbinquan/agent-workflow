@@ -16,6 +16,8 @@
 // RED until resumeTask is changed to pick the latest-non-done run per node by id
 // order (the isFresherNodeRun authority), matching the scheduler.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
@@ -24,7 +26,6 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runGit, gitStashSnapshot, rollbackToSnapshot } from '../src/util/git'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
 
@@ -54,7 +55,8 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -122,14 +124,15 @@ describe('resumeTask freshest-row selection locks isFresherNodeRun id-order (NOT
 
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       name: 'fixture-task',
       id: taskId,
       workflowId,
@@ -152,7 +155,7 @@ describe('resumeTask freshest-row selection locks isFresherNodeRun id-order (NOT
     expect(idB > idA).toBe(true)
 
     // Row A: OLDER id, FAILED, higher retryIndex, pre-snapshot = shaX ('X').
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: idA,
       taskId,
       nodeId: 'a1',
@@ -167,7 +170,7 @@ describe('resumeTask freshest-row selection locks isFresherNodeRun id-order (NOT
     })
     // Row B: NEWER id (clarify-style rerun), interrupted, retryIndex 0,
     // pre-snapshot = shaY ('Y'). This is the freshest row by id authority.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: idB,
       taskId,
       nodeId: 'a1',

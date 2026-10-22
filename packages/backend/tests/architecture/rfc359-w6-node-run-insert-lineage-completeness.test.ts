@@ -44,7 +44,7 @@ const REQUIRED_COLUMNS = ['continuationSlotKey', 'lineageSlotPathJson'] as const
  * 键是 `file:line`，与 W7 的账本同形（那条账本里也记着「行号会因上方编辑而漂」的摩擦）。
  */
 const NODE_RUN_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:92 continuationSlotKey+ lineageSlotPathJson+',
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:102 continuationSlotKey+ lineageSlotPathJson+',
 ]
 
 function sourceFiles(dir: string): string[] {
@@ -97,24 +97,36 @@ function localConstKeys(name: string, source: ts.SourceFile): Set<string> {
  * （`...record`）不算「显式写了这一列」——铸行记录里那两列可以是 null，正是这条守卫要防的。
  */
 export function nodeRunInsertSites(text: string, rel: string): string[] {
-  if (!text.includes('insert(nodeRuns)')) return []
+  if (!text.includes('nodeRuns')) return []
   const source = ts.createSourceFile('probe.ts', text, ts.ScriptTarget.Latest, true)
   const out: string[] = []
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'values'
-    ) {
-      const receiver = node.expression.expression
+    if (ts.isCallExpression(node)) {
+      let argument: ts.Expression | undefined
+      let found = false
       if (
-        ts.isCallExpression(receiver) &&
-        ts.isPropertyAccessExpression(receiver.expression) &&
-        receiver.expression.name.text === 'insert' &&
-        receiver.arguments.length === 1 &&
-        receiver.arguments[0]!.getText(source) === 'nodeRuns'
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'insertOne' &&
+        node.arguments[1]?.getText(source) === 'nodeRuns'
       ) {
-        const argument = node.arguments[0]
+        found = true
+        argument = node.arguments[2]
+      } else if (
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === 'values'
+      ) {
+        const receiver = node.expression.expression
+        if (
+          ts.isCallExpression(receiver) &&
+          ts.isPropertyAccessExpression(receiver.expression) &&
+          receiver.expression.name.text === 'insert' &&
+          receiver.arguments[0]?.getText(source) === 'nodeRuns'
+        ) {
+          found = true
+          argument = node.arguments[0]
+        }
+      }
+      if (found) {
         const keys =
           argument === undefined
             ? new Set<string>()
@@ -173,6 +185,15 @@ describe('RFC-359 W6 —— insert(nodeRuns) 的 lineage 两列完整性', () =>
   })
 
   test('判据自证：对象字面量 / 一层局部常量 / 只展开不写列，三种形状各判一次', () => {
+    expect(
+      nodeRunInsertSites(
+        'insertOne(tx, nodeRuns, { id, continuationSlotKey, lineageSlotPathJson })',
+        'p.ts',
+      ),
+    ).toEqual(['p.ts:1 continuationSlotKey+ lineageSlotPathJson+'])
+    expect(nodeRunInsertSites('insertOne(tx, nodeRuns, { id })', 'p.ts')).toEqual([
+      'p.ts:1 continuationSlotKey- lineageSlotPathJson-',
+    ])
     const direct = `x.insert(nodeRuns).values({ id, continuationSlotKey, lineageSlotPathJson }).run()`
     expect(nodeRunInsertSites(direct, 'p.ts')).toEqual([
       'p.ts:1 continuationSlotKey+ lineageSlotPathJson+',

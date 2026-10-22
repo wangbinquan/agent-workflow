@@ -21,6 +21,8 @@
 // 确定性说明：全部 git 操作为本地 init/add/commit（无网络、无 stash），无
 // sleep/轮询；节点顺序由显式边保证。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -28,9 +30,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -110,7 +111,7 @@ process.exit(0)
 `
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -150,12 +151,9 @@ async function createHarness(provider: ProviderHarness, slug: string): Promise<H
   }
 }
 
-async function seedAgent(
-  db: ProviderNeutralDatabase,
-  name: string,
-  outputs: string[],
-): Promise<void> {
-  await db.insert(agents).values({
+async function seedAgent(db: PersistenceDb, name: string, outputs: string[]): Promise<void> {
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -174,12 +172,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'audit-s04-task',
     id: taskId,
     workflowId,
@@ -219,6 +218,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 }
 
 async function readGitDiffPaths(h: Harness, wrapperRunId: string): Promise<string[]> {
+  const { nodeRunOutputs } = tablesOf(h.db)
   const rows = await h.db
     .select()
     .from(nodeRunOutputs)
@@ -297,6 +297,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -402,6 +403,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 

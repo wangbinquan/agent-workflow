@@ -1,10 +1,11 @@
 // The real Task core persists transported runtime facts while still running;
 // presentation-only observation failures do not change the business result.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Agent } from '@agent-workflow/shared'
-import { tasks, workflows, nodeRuns, nodeRunEvents } from '@/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
@@ -31,14 +32,15 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           taskId = ulid(),
           nodeRunId = ulid(),
           workflowId = ulid()
-        await db.insert(workflows).values({
+        const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+        await insertOne(db, workflows, {
           id: workflowId,
           name: 'inventory',
           definition: '{}',
           createdAt: 1,
           updatedAt: 1,
         })
-        await db.insert(tasks).values({
+        await insertOne(db, tasks, {
           id: taskId,
           workflowId,
           name: 'inventory',
@@ -51,7 +53,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           inputs: '{}',
           startedAt: 1,
         })
-        await db.insert(nodeRuns).values({
+        await insertOne(db, nodeRuns, {
           id: nodeRunId,
           taskId,
           nodeId: 'n1',

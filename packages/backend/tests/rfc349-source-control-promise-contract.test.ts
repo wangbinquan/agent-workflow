@@ -35,7 +35,9 @@ describe('RFC-349 source-control Promise contract', () => {
     const neutral = read(
       'packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts',
     )
-    expect(neutral).toContain('type { ProviderNeutralDatabase }')
+    expect(neutral).toMatch(
+      /import type \{[^}]*PersistenceDb[^}]*\} from '@\/platform\/persistence\/persistenceDb'/,
+    )
     expect(neutral).not.toContain('PostgresqlDatabaseClient')
     expect(neutral).not.toMatch(/\bas\s+(?:unknown\s+as\s+)?DbClient\b/)
     expect(neutral).not.toContain('dbTxSync')

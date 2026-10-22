@@ -21,11 +21,10 @@
 //   expected to be deleted WITH it — but only after the provenance equivalent
 //   reproduces the same fire/skip decisions (B18). They are the before-photo.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { pickFreshestReviewRun } from '@/modules/collaboration/infrastructure/review'
-import type { nodeRuns } from '../src/db/schema'
-
-type Row = typeof nodeRuns.$inferSelect
+type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 // Helpers read only (id, retryIndex, status, parentNodeRunId).
 function row(opts: {

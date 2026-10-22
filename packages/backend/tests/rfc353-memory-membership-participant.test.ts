@@ -21,12 +21,13 @@
 //
 // 先红后绿：在补出 participant 之前，②「顺序」这一条必红——SQLite 今天按插入顺序返回。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { memories } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   fusedProvenanceStamp,
   memoriesToMarkFused,
@@ -59,27 +60,25 @@ interface SeedRow {
  * 造记忆行。**插入顺序故意与 id 的字典序相反**——SQLite 无 ORDER BY 的 SELECT
  * 按 rowid（即插入顺序）返回，只有这样才能把「顺序判据」的差异逼出来。
  */
-async function seed(db: ProviderNeutralDatabase, rows: readonly SeedRow[]): Promise<void> {
+async function seed(db: PersistenceDb, rows: readonly SeedRow[]): Promise<void> {
   for (const row of rows) {
-    await db
-      .insert(memories)
-      .values({
-        id: row.id,
-        scopeType: 'global',
-        scopeId: null,
-        title: `m ${row.id}`,
-        bodyMd: 'body',
-        status: row.status,
-        sourceKind: 'manual',
-        tags: '[]',
-        version: 1,
-        fusedIntoSkillId: row.skillId,
-        fusedIntoSkill: row.skillId === null ? null : 'skill-name',
-        fusedIntoSkillVersion: row.version,
-        fusedAt: row.version === null ? null : 1_700_000_000_000,
-        createdAt: 1_700_000_000_000,
-      })
-      .run()
+    const { memories } = tablesOf(db)
+    await insertOne(db, memories, {
+      id: row.id,
+      scopeType: 'global',
+      scopeId: null,
+      title: `m ${row.id}`,
+      bodyMd: 'body',
+      status: row.status,
+      sourceKind: 'manual',
+      tags: '[]',
+      version: 1,
+      fusedIntoSkillId: row.skillId,
+      fusedIntoSkill: row.skillId === null ? null : 'skill-name',
+      fusedIntoSkillVersion: row.version,
+      fusedAt: row.version === null ? null : 1_700_000_000_000,
+      createdAt: 1_700_000_000_000,
+    })
   }
 }
 
@@ -225,7 +224,8 @@ describeEachProvider('RFC-353 T1 — 真数据库与纯函数逐字一致', (har
           .inTransaction(tx)
           .unfuseAboveVersion({ skillId: 'skl_1', aboveVersion: 1 }),
     )
-    const rows = await db.select().from(memories).all()
+    const { memories } = tablesOf(db)
+    const rows = await db.select().from(memories)
     const byId = new Map(rows.map((r) => [r.id, r]))
     for (const id of ['m_b', 'm_c', 'm_d']) {
       const row = byId.get(id)!
@@ -319,7 +319,8 @@ describeEachProvider('RFC-353 T6 — 真数据库的融合成员关系', (harnes
           }),
     )
     expect(marked).toEqual(['m_1'])
-    const rows = await db.select().from(memories).all()
+    const { memories } = tablesOf(db)
+    const rows = await db.select().from(memories)
     const byId = new Map(rows.map((r) => [r.id, r]))
     const stamp = fusedProvenanceStamp({
       skillId: 'skl_9',

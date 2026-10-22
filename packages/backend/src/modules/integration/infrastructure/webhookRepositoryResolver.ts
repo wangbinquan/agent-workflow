@@ -1,8 +1,9 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WebhookEndpointRow } from '@/services/webhook/dispatcherTypes'
 import type { RepoResolution } from '@/services/webhook/webhookDispatch'
@@ -79,19 +80,24 @@ async function resolveWithLookup(
  * 现在改名成中立的 `createWebhookRepositoryResolver` 并删掉别名：**是改名不是新增**，
  * 导出符号数从 2 降到 1，`rfc294-*` 那两本账只降不升。
  */
-export function createWebhookRepositoryResolver(db: ProviderNeutralDatabase, secretBox: SecretBox) {
+export function createWebhookRepositoryResolver(db: PersistenceDb, secretBox: SecretBox) {
   return async (
     event: CodeHostEvent,
     endpoint: Pick<WebhookEndpointRow, 'preferredCloneProtocol'>,
     autoRegister: boolean,
   ): Promise<RepoResolution> =>
     await resolveWithLookup(
-      async (urlHash) =>
-        (await db
-          .select({ id: cachedRepos.id, urlEnc: cachedRepos.urlEnc })
-          .from(cachedRepos)
-          .where(eq(cachedRepos.urlHash, urlHash))
-          .get()) ?? null,
+      async (urlHash) => {
+        const { cachedRepos } = tablesOf(db)
+        return (
+          (await first(
+            db
+              .select({ id: cachedRepos.id, urlEnc: cachedRepos.urlEnc })
+              .from(cachedRepos)
+              .where(eq(cachedRepos.urlHash, urlHash)),
+          )) ?? null
+        )
+      },
       secretBox,
       event,
       endpoint,

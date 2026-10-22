@@ -1,4 +1,6 @@
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-329 PR-B —— `pendingRows` 与 `pendingCount` 是同一个判定（AC-8）。
 //
@@ -14,12 +16,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 import { describe, expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { tasks, users, workflows, workgroupAssignments, workgroupTaskState } from '../src/db/schema'
 import type { WorkgroupOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { composeTestWorkgroupTaskRoom, roomDocument } from './helpers/workgroupTaskRoom'
 
 const NOW = 1_788_278_400_000
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -104,6 +105,7 @@ async function seed(
   specs: ReadonlyArray<TaskSpec>,
   explicitLineage = false,
 ): Promise<void> {
+  const { users, workflows, tasks, workgroupTaskState, workgroupAssignments } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'bob', 'admin'].map((id) => ({
       id,
@@ -114,9 +116,9 @@ async function seed(
       updatedAt: NOW,
     })),
   )
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
   for (const spec of specs) {
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       ...(explicitLineage
         ? {
             executionLineageId: spec.id,
@@ -143,12 +145,14 @@ async function seed(
       workgroupConfigJson: JSON.stringify(config()),
     })
     if (spec.gateStatus !== null) {
-      await db
-        .insert(workgroupTaskState)
-        .values({ taskId: spec.id, gateStatus: spec.gateStatus, updatedAt: NOW })
+      await insertOne(db, workgroupTaskState, {
+        taskId: spec.id,
+        gateStatus: spec.gateStatus,
+        updatedAt: NOW,
+      })
     }
     for (let i = 0; i < spec.cardsForAlice; i++) {
-      await db.insert(workgroupAssignments).values({
+      await insertOne(db, workgroupAssignments, {
         id: `${spec.id}-card-${i}`,
         taskId: spec.id,
         assigneeMemberId: 'm-alice',
@@ -301,7 +305,8 @@ describeEachProvider(
           ],
           true,
         )
-        await db.insert(tasks).values({
+        const { tasks } = tablesOf(db)
+        await insertOne(db, tasks, {
           executionLineageId: 'broken',
           lineageSlotPathJson: JSON.stringify([
             { stableNodeKey: 'task-root', frozenOccurrenceKey: 'broken', workflowRevision: null },

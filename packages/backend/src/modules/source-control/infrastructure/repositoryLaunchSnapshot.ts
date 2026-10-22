@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createRepositoryLaunchSnapshot,
   readRepositoryPreparationFactsFromJournal,
@@ -10,7 +10,7 @@ import { composeRepositoryWorkspaceStore } from './repositoryWorkspaceStore'
 /** Binds the caller's existing live transaction; never opens a second scope. */
 export function createRepositoryLaunchSnapshotInTx(
   input: Omit<Parameters<typeof createRepositoryLaunchSnapshot>[0], 'journal' | 'store'> & {
-    readonly transaction: ProviderNeutralDatabase
+    readonly transaction: PersistenceDb
   },
 ) {
   return createRepositoryLaunchSnapshot({
@@ -20,7 +20,7 @@ export function createRepositoryLaunchSnapshotInTx(
   })
 }
 export function readRepositoryPreparationFacts(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   reference: FrozenRepositoryPreparationRef,
 ) {
   return readRepositoryPreparationFactsFromJournal(

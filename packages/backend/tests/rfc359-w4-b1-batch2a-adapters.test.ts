@@ -2,6 +2,8 @@
 // 节点激活快照读取、任务工件路径查询、动态工作流状态持久化、RFC-354 frame 回填存储、
 // 人工门 continuation 的 effect 检视（ready / 无 claimed intent 两条路径）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -9,19 +11,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { PLATFORM_INPUTS_DIR } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { OwnershipToken } from '@/modules/task-execution/domain/ownership'
-import {
-  agents,
-  clarifyRounds,
-  maintenanceState,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionIntents,
-  tasks,
-  workflows,
-  workgroupTaskState,
-} from '@/db/schema'
 import { FRAME_BACKFILL_MARKER_KEY } from '@/modules/task-execution/application/frameBackfillJob'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleDynamicWorkflowPersistence } from '@/modules/task-execution/infrastructure/dynamicWorkflowPersistence'
@@ -34,12 +25,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  db: PersistenceDb,
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -47,7 +39,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -70,6 +62,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 节点激活快照读取', (ha
     const taskId = await seedTask(db)
     const runA = ulid()
     const runB = ulid()
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     await db.insert(nodeRuns).values([
       { id: runA, taskId, nodeId: 'n', status: 'done', retryIndex: 0, iteration: 0 },
       {
@@ -108,9 +101,15 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 任务工件路径查询', (ha
       platformInputPathsJson: JSON.stringify([`${PLATFORM_INPUTS_DIR}/spec.md`]),
     })
     const runId = ulid()
-    await db
-      .insert(nodeRuns)
-      .values({ id: runId, taskId, nodeId: 'n', status: 'done', retryIndex: 0, iteration: 0 })
+    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
+      id: runId,
+      taskId,
+      nodeId: 'n',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+    })
     await db.insert(nodeRunOutputs).values([
       {
         nodeRunId: runId,
@@ -133,9 +132,10 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 动态工作流状态持久化
   test('loadTask / loadAgent / 等待确认 run / 计数 / saveState 在两个引擎上同形', async () => {
     const db = harness.db
     const taskId = await seedTask(db, { workgroupConfigJson: '{"k":1}' })
-    await db.insert(workgroupTaskState).values({ taskId, dwStateJson: null, updatedAt: 1 })
+    const { workgroupTaskState, agents, nodeRuns } = tablesOf(db)
+    await insertOne(db, workgroupTaskState, { taskId, dwStateJson: null, updatedAt: 1 })
     const agentId = `agent_${ulid()}`
-    await db.insert(agents).values({
+    await insertOne(db, agents, {
       id: agentId,
       name: `dw-${agentId.slice(-6)}`,
       description: '',
@@ -182,6 +182,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— frame 回填存储', (harness)
     await store.writeMarker('v1')
     await store.writeMarker('v2')
     expect(await store.readMarker()).toBe('v2')
+    const { maintenanceState, nodeRuns, clarifyRounds } = tablesOf(db)
     expect(
       (
         await db
@@ -208,7 +209,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— frame 回填存储', (harness)
     expect(framed).toMatchObject({ containerRunId: container, scopePath: 'loop/0' })
 
     // clarify 轮次：中介 run 已有帧、轮次还没有 ⇒ 对齐；已对齐的不再计数。
-    await db.insert(clarifyRounds).values({
+    await insertOne(db, clarifyRounds, {
       id: ulid(),
       taskId,
       kind: 'self',
@@ -232,7 +233,8 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 人工门 continuation 的 eff
     const persistence = createTaskExecutionPersistence(db)
     const gate = new DrizzleGateContinuationEffectPersistence(db, persistence.effects)
     const intentId = `intent_${ulid()}`
-    await db.insert(taskExecutionIntents).values({
+    const { taskExecutionIntents } = tablesOf(db)
+    await insertOne(db, taskExecutionIntents, {
       id: intentId,
       taskId,
       kind: 'launch',
@@ -266,7 +268,7 @@ test('源码锁：五份实现里不再出现 provider 名，孪生已删除', (
     'frameBackfillStore.ts',
   ]) {
     const source = readFileSync(resolve(root, file), 'utf8')
-    expect(source).toContain("from '@/db/query'")
+    expect(source).toContain("from '@/platform/persistence/persistenceDb'")
     expect(source).not.toMatch(/DbClient|PostgresqlDatabaseClient|dbTxSync\(|db\.transaction\(/u)
   }
   for (const stem of [

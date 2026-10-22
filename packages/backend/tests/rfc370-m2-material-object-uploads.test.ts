@@ -3,9 +3,9 @@
 // and execution, scope = task). The AW pin is temporary: once CS acknowledges
 // the material version, the execution's publications are released. Replaces
 // the deleted per-owner `hosted_material_object_uploads` journal.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedObjectPublications } from '@/db/schema'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import {
   createHostedMaterialObjectUploads,
@@ -49,11 +49,13 @@ describeEachProvider('RFC-370 hosted skill material objects', (harness) => {
       parent: (state: string) => {
         parent = state
       },
-      rows: () =>
-        harness.db
+      rows: () => {
+        const { hostedObjectPublications } = tablesOf(harness.db)
+        return harness.db
           .select()
           .from(hostedObjectPublications)
-          .where(eq(hostedObjectPublications.owner, HOSTED_MATERIAL_OWNER)),
+          .where(eq(hostedObjectPublications.owner, HOSTED_MATERIAL_OWNER))
+      },
     }
   }
 

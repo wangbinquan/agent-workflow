@@ -9,7 +9,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
@@ -18,7 +18,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function adminToken(db: ProviderNeutralDatabase): Promise<string> {
+async function adminToken(db: PersistenceDb): Promise<string> {
   const user = await createUser(db, {
     username: 'root',
     displayName: 'Root',

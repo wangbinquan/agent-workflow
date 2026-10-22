@@ -1,5 +1,5 @@
 import { isAbsolute, join, posix } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
@@ -11,7 +11,7 @@ import {
 import { inspectEvidenceFile, scanEvidenceTree } from '../infrastructure/local/evidenceFileFacts'
 
 export function composeCrewStationDevelopmentEvidence(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly objects: CrewStationStreamObjectStorage
   readonly publications: HostedObjectPublications
   readonly helper: WorkspaceHelper

@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { validateProgramFixture } from '@/modules/execution-contract/application/validateProgramFixture'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -10,7 +12,6 @@ import {
   renderUserPrompt,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import { agents as agentRows, nodeRuns, tasks, workflows } from '@/db/schema'
 import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
@@ -620,7 +621,8 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
 
     test('human-review projection reads the frozen host input and durable review receipt', async () => {
       const db = harness.db
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: 'review-projection-workflow',
         name: 'review projection workflow',
         description: '',
@@ -630,7 +632,7 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
         createdAt: 1,
         updatedAt: 1,
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: 'review-projection-task',
         // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
         ...taskLineage('review-projection-task'),
@@ -657,7 +659,7 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
         'planning',
       )
 
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'review-projection-run',
         taskId: 'review-projection-task',
         nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
@@ -784,15 +786,16 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
       const planner = templates.find(
         (agent) => agent.frontmatterExtra.digitalEmployeeTemplate === 'implementation-planning',
       )!
+      const { agents } = tablesOf(db)
       await db
-        .update(agentRows)
+        .update(agents)
         .set({
           frontmatterExtra: JSON.stringify({
             digitalEmployeeTemplate: 'code-writing',
             schemaVersion: 1,
           }),
         })
-        .where(eq(agentRows.id, codeWriter.id))
+        .where(eq(agents.id, codeWriter.id))
       const service = new ExecutionContractService({
         registrations: developmentExecutionContractRegistrations,
         resources: createExecutionContractResourceAdapter(
@@ -1044,7 +1047,7 @@ process.stdout.write(JSON.stringify({
  * PostgreSQL 的对等物是另一支 composition」。**那个理由已经过期**：§5hl 的端口化把
  * `DigitalEmployeeExecutionDependencies` 里的 `db` 字段整个去掉了，依赖面现在收的是
  * `tasks` / `readModels` / `resourceUsage` / `executionMetadata` / `humanReview` 五个端口，
- * 库读收在中立的 `composeDatabaseDigitalEmployeeExecutionPorts(db: ProviderNeutralDatabase)` 里
+ * 库读收在中立的 `composeDatabaseDigitalEmployeeExecutionPorts(db: PersistenceDb)` 里
  * ——而这两条用例**本来就在装它**。也就是说合一早已发生，只是注释和账本没跟上。
  *
  * **记一条教训**：「为什么这条还是单引擎」的理由写进注释之后**会过期**，而过期的方向是
@@ -1054,7 +1057,8 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
   test('a failed reviewed execution reports the task failure before derived plan validation', async () => {
     const db = provider.db
     const taskId = 'reviewed-execution-failed-before-output'
-    await db.insert(tasks).values({
+    const { tasks } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'reviewed execution pre-spawn failure',
       workflowId: 'digital-employee-host-reviewed',
@@ -1106,7 +1110,8 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
   test('daemon-restart interruptions remain pending while automatic recovery is available', async () => {
     const db = provider.db
     const taskId = 'employee-execution-recovering-after-daemon-restart'
-    await db.insert(tasks).values({
+    const { tasks } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: taskId,
       name: 'recovering employee execution',
       workflowId: 'digital-employee-host',
@@ -1142,7 +1147,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
     // `.run()` 在 SQLite 上是同步的、在 PostgreSQL 上返回 Promise——漏了 await，这次写入
     // 就可能还没落库，下面那次 inspect 读到的仍是 `autoRecoverySuspended: false`，于是
     // 期望 failed 却拿到 pending（2026-09-22 在 CI 的 PG 臂上实撞，SQLite 臂一直绿）。
-    await db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId)).run()
+    await db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId))
     expect(await execution.inspect(taskId)).toEqual({
       kind: 'failed',
       errorClass: 'infrastructure',

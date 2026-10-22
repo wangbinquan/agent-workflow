@@ -5,18 +5,20 @@
 // 坏 JSON ⇒ 422 workflow-definition-corrupt，PG 上没有任何 API 路径能移除它。删除路径现在两侧都只用
 // 原始行的 ACL 身份与版本；PG 同时补齐 SQLite 一直有的两道删除守卫（非终态任务引用 / 定时任务引用）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { scheduledTasks, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workflowAuthorityFor, workflowCatalogFor } from './helpers/workflowCatalog'
 
 const OWNER = 'u_t6_owner'
 
-async function seedOwner(db: ProviderNeutralDatabase): Promise<void> {
+async function seedOwner(db: PersistenceDb): Promise<void> {
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -31,12 +33,11 @@ async function seedOwner(db: ProviderNeutralDatabase): Promise<void> {
     .onConflictDoNothing()
 }
 
-async function seedCorruptWorkflow(
-  db: ProviderNeutralDatabase,
-): Promise<{ id: string; name: string }> {
+async function seedCorruptWorkflow(db: PersistenceDb): Promise<{ id: string; name: string }> {
   const id = `wf_${ulid()}`
   const name = `broken-${id.slice(-6)}`
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name,
     description: '',
@@ -59,7 +60,8 @@ function deletion(name: string, expectedVersion = 1) {
   }
 }
 
-async function workflowExists(db: ProviderNeutralDatabase, id: string): Promise<boolean> {
+async function workflowExists(db: PersistenceDb, id: string): Promise<boolean> {
+  const { workflows } = tablesOf(db)
   return (
     (await db.select({ id: workflows.id }).from(workflows).where(eq(workflows.id, id))).length > 0
   )
@@ -95,7 +97,8 @@ describeEachProvider('RFC-359 T6 —— 定义损坏的工作流可删（P0-6）
     await seedOwner(db)
     const { id, name } = await seedCorruptWorkflow(db)
     const taskId = `t6_${ulid()}`
-    await db.insert(tasks).values({
+    const { tasks } = tablesOf(db)
+    await insertOne(db, tasks, {
       id: taskId,
       name: taskId,
       workflowId: id,
@@ -123,7 +126,8 @@ describeEachProvider('RFC-359 T6 —— 定义损坏的工作流可删（P0-6）
     await seedOwner(db)
     const { id, name } = await seedCorruptWorkflow(db)
     const scheduleId = `sched_${ulid()}`
-    await db.insert(scheduledTasks).values({
+    const { scheduledTasks } = tablesOf(db)
+    await insertOne(db, scheduledTasks, {
       id: scheduleId,
       name: 'nightly',
       ownerUserId: OWNER,

@@ -7,22 +7,24 @@
 // L3-4). This file pins the rewrite: range deletes in bounded batches, a
 // per-run incremental high-water scan, and a per-tick row budget.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import { readMaintenanceNumber } from '@/platform/persistence/maintenanceState'
 import { asc, count, max } from 'drizzle-orm'
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
   const now = 1_788_278_400_000
+  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -57,7 +59,7 @@ async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
       ownerUserId: 'u1',
     })
     .onConflictDoNothing()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: runId,
     taskId,
     nodeId: 'n1',
@@ -82,11 +84,13 @@ async function insertEvents(
       kind: 'stderr' as const,
       payload: payloadOf(i + j),
     }))
+    const { nodeRunEvents } = tablesOf(db)
     await db.insert(nodeRunEvents).values(batch)
   }
 }
 
 async function eventCount(db: Db): Promise<number> {
+  const { nodeRunEvents } = tablesOf(db)
   const rows = await db.select({ n: count(nodeRunEvents.id) }).from(nodeRunEvents)
   return rows[0]?.n ?? 0
 }
@@ -155,6 +159,7 @@ describeEachProvider('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳
       expect(await eventCount(db)).toBe(10)
 
       const watermark = await readMaintenanceNumber(db, 'events_archive_high_water')
+      const { nodeRunEvents } = tablesOf(db)
       const maxRow = await db.select({ m: max(nodeRunEvents.id) }).from(nodeRunEvents)
       // 水位走到了最后一个已扫过的 id(不是停在 0,也不能超过表里最大 id)。
       expect(watermark).toBeGreaterThan(0)
@@ -202,6 +207,7 @@ describeEachProvider('RFC-311 — events archiver at backlog scale', (provider) 
         expect(archived[0]!.payload).toBe('line-0')
         expect(archived.at(-1)!.payload).toBe('line-34999')
 
+        const { nodeRunEvents } = tablesOf(db)
         // DB retains the newest tail — seamless continuation for the reader.
         const remaining = await db
           .select({ payload: nodeRunEvents.payload })
@@ -227,6 +233,7 @@ describeEachProvider('RFC-311 — events archiver at backlog scale', (provider) 
 
       const first = await archiveEvents(db, { eventsArchiveThresholds: thresholds }, logsDir)
       expect(first.perGroupArchived).toBe(400)
+      const { nodeRunEvents } = tablesOf(db)
       // 实现门 P1-7(变异 #16:把 highWater 写死 0 使增量扫描失效,4 条仍全绿)——
       // 断言它推进到「本轮见过的最大 id」,而不是只查非空。
       const maxIdRow = await db.select({ maxId: max(nodeRunEvents.id) }).from(nodeRunEvents)

@@ -1,9 +1,9 @@
 // RFC-349 — the PostgreSQL code metrics adapter must feed the exact existing
 // adoption/run projection without leaking a provider handle into public APIs.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   createCodeMetricsQuery,
   DEFAULT_METRICS_WINDOW_MS,
@@ -33,7 +33,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions.push({ sql: query, parameters })
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -61,10 +64,6 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     executions,
   }
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL code metrics adapter', () => {
   test('preserves adoption disagreements and run outcomes through PostgreSQL rows', async () => {

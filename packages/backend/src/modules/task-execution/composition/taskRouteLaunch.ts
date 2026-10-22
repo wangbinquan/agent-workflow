@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskAutomationWorkStartProvider as bindTaskAutomationWorkStartProvider } from '../application/adapters/event-automation-adapter'
 import { findTaskAutomationReceipt } from '../infrastructure/taskRouteLaunchOperations'
 
@@ -36,7 +36,7 @@ type TaskAutomationWorkStartProviderInput = Parameters<
 
 export function createTaskAutomationWorkStartProvider(
   input: Omit<TaskAutomationWorkStartProviderInput, 'receiptFor'> & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
   },
 ): ReturnType<typeof bindTaskAutomationWorkStartProvider> {
   return bindTaskAutomationWorkStartProvider({

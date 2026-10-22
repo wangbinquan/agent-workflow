@@ -13,6 +13,8 @@
 //   5. 终态 onTerminal 回调（DA 侧 wake hint 的注入缝）。
 // 真子进程面 = mock-opencode（bun 子进程、真 spawn/env/cwd/stdout 链）。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow, queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -32,7 +34,6 @@ import {
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks } from '../src/db/schema'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 import { AGENT_RESULT_PORT } from '../src/modules/development-automation/domain/agentEnvelope'
 import {
@@ -261,9 +262,10 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     expect(snap.taskStatus).toBe('done')
     expect(snap.resultText).toBe(frame)
 
+    const { tasks } = tablesOf(h.db)
     // separate-writer/disposable：工作区就是传入目录（无 worktree 拷贝）、
     // space_kind='internal'、终态后目录健在（borrowed）、未提交 overlay 未损。
-    const row = h.db.select().from(tasks).where(eq(tasks.id, launched.executionRef)).get()!
+    const row = firstRow(h.db.select().from(tasks).where(eq(tasks.id, launched.executionRef)))!
     expect(row.workflowId).toBe(DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID)
     expect(row.catalogVisibility).toBe('internal')
     expect(row.worktreePath).toBe(h.workspacePath)
@@ -398,11 +400,13 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     // 等子进程真的跑起来（pending → running），再取消。
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline) {
-      const row = h.db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, launched.executionRef))
-        .get()
+      const { tasks } = tablesOf(h.db)
+      const row = firstRow(
+        h.db
+          .select({ status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.id, launched.executionRef)),
+      )
       if (row?.status === 'running') break
       await Bun.sleep(25)
     }
@@ -430,10 +434,13 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     )
     expect(launched.ok).toBe(true)
     if (!launched.ok) return
+    const { tasks } = tablesOf(h.db)
     // 模拟 daemon 崩溃残留：行退回 running + 死 pid（重启后无 owner），
     // 然后跑**真实**的 boot 修复入口 reapOrphanRuns——DE host 行走的就是
     // 普通任务的 interrupted 收敛，没有专用逻辑。
-    h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, launched.executionRef)).run()
+    queryWrite(
+      h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, launched.executionRef)),
+    )
     const { reapOrphanRuns } = await import('../src/services/orphans')
     await reapOrphanRuns(taskRecoveryOperations(h.db))
     const snap = await r.fetchOutcome(launched.executionRef)

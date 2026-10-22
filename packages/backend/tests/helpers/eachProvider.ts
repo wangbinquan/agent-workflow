@@ -14,18 +14,17 @@
 // 每个用例前 TRUNCATE 全部业务表并把迁移种下的行原样种回（与 `createInMemoryDb` 的快照语义
 // 对齐，含 auth_login_policy 的 bootstrap 标记）。
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { queryRows } from '@/platform/persistence/queryHelpers'
+import { buildLogicalSchemaContract, persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
 import { SQL } from 'bun'
 import { randomUUID } from 'node:crypto'
-import { getTableName, isTable } from 'drizzle-orm'
-import { getTableConfig } from 'drizzle-orm/sqlite-core'
+import { getTableName, type Table } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient, registerLegacyDaemonTestFixture } from '@/db/client'
 import type { DatabaseConfig } from '@agent-workflow/shared'
-import * as schema from '@/db/schema'
-import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isPostgresqlSerializationFailure } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import {
@@ -41,6 +40,8 @@ import {
   createPostgresqlDatabaseRuntime,
   type InstrumentedPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,
+  type PostgresqlReservedConnection,
+  type PostgresqlTransactionConnection,
 } from '@/platform/persistence/postgresqlRuntime'
 import { MIGRATIONS } from '../migration-freeze'
 import {
@@ -125,7 +126,7 @@ export type ProviderApplicationBinding =
 
 export interface ProviderDatabaseHarness {
   /** provider-中立客户端：两个引擎上是同一套 drizzle query builder。 */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly session: DatabaseSession
   readonly capabilities: EngineCapabilities
   /** Bootstrap-only test composition; the runtime and client share the original recorded pool. */
@@ -367,7 +368,7 @@ export function bindDescribeEachProviderLifecycle(
 }
 
 interface HarnessState {
-  db?: ProviderNeutralDatabase
+  db?: PersistenceDb
   applicationBinding?: ProviderApplicationBinding
   session?: DatabaseSession
   record?: () => StatementRecording
@@ -444,7 +445,7 @@ function clearState(state: HarnessState): void {
 }
 
 /** SQLite 的计划文本：`EXPLAIN QUERY PLAN` 的 detail 列逐行拼起来。 */
-function sqliteExplain(db: ProviderNeutralDatabase, statement: RecordedStatement): string {
+function sqliteExplain(db: PersistenceDb, statement: RecordedStatement): string {
   const raw = (
     db as unknown as {
       $client: {
@@ -494,7 +495,6 @@ function registerSqlite(
   databaseCount: number,
 ): void {
   const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
-  let restoreProvider: (() => void) | undefined
   const restoreDatabase = (state: HarnessState) => {
     const db = createInMemoryDb(
       options.sqliteMigrationsFolder ?? MIGRATIONS,
@@ -514,23 +514,17 @@ function registerSqlite(
     }
   }
   beforeEach(() => {
-    // 进程级 schema 投影是全局的：显式选 sqlite，用完还原，不依赖 describe 的先后顺序。
-    restoreProvider = selectDatabaseSchemaProvider('sqlite')
     try {
       for (const state of states) {
         restoreDatabase(state)
       }
     } catch (error) {
-      restoreProvider?.()
-      restoreProvider = undefined
       states.forEach(clearState)
       throw error
     }
   }, databaseCount * SQLITE_DATABASE_RESET_TIMEOUT_MS)
   // 纯同步清理，不建库、不连库——与 PG 泳道的 `afterEach` 同口径，不给预算。
   afterEach(() => {
-    restoreProvider?.()
-    restoreProvider = undefined
     states.forEach(clearState)
   })
   body(harnessView(states))
@@ -650,11 +644,10 @@ async function resetToSnapshot(
   }
 }
 
-type SchemaTable = Parameters<typeof getTableConfig>[0]
+type SchemaTable = Table
 
 /** 迁移刚种下的行：按外键拓扑顺序从 SQLite 内存库整表复制到 PostgreSQL。 */
-async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<void> {
-  const restoreForRead = selectDatabaseSchemaProvider('sqlite')
+async function seedFromSqliteSnapshot(target: PersistenceDb): Promise<void> {
   const source = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
   const pending: Array<{
     name: string
@@ -663,45 +656,44 @@ async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<
     refs: string[]
   }> = []
   try {
-    for (const candidate of Object.values(schema)) {
-      if (!isTable(candidate)) continue
-      const table = candidate as SchemaTable
-      const rows = source.select().from(table).all() as Record<string, unknown>[]
+    const sourceTables = tablesOf(source)
+    const targetTables = tablesOf(target)
+    for (const definition of persistenceSchema.tables) {
+      const table = sourceTables[definition.schemaSymbol]
+      const rows = queryRows(source.select().from(table)) as Record<string, unknown>[]
       if (rows.length === 0) continue
-      const refs = getTableConfig(table).foreignKeys.map((fk) =>
-        getTableName(fk.reference().foreignTable),
-      )
-      pending.push({ name: getTableName(table), table, rows, refs })
+      const refs = definition.foreignKeys.map((key) => key.foreignTable)
+      pending.push({
+        name: getTableName(table),
+        table: targetTables[definition.schemaSymbol],
+        rows,
+        refs,
+      })
     }
   } finally {
-    restoreForRead()
+    source.$client.close()
   }
-  const restoreForWrite = selectDatabaseSchemaProvider('postgresql')
-  try {
-    const seeded = new Set<string>()
-    const names = new Set(pending.map((entry) => entry.name))
-    while (pending.length > 0) {
-      let progressed = false
-      for (const entry of [...pending]) {
-        const ready = entry.refs.every(
-          (ref) => ref === entry.name || seeded.has(ref) || !names.has(ref),
-        )
-        if (!ready) continue
-        for (let offset = 0; offset < entry.rows.length; offset += 200) {
-          await target.insert(entry.table).values(entry.rows.slice(offset, offset + 200))
-        }
-        seeded.add(entry.name)
-        pending.splice(pending.indexOf(entry), 1)
-        progressed = true
+  const seeded = new Set<string>()
+  const names = new Set(pending.map((entry) => entry.name))
+  while (pending.length > 0) {
+    let progressed = false
+    for (const entry of [...pending]) {
+      const ready = entry.refs.every(
+        (ref) => ref === entry.name || seeded.has(ref) || !names.has(ref),
+      )
+      if (!ready) continue
+      for (let offset = 0; offset < entry.rows.length; offset += 200) {
+        await target.insert(entry.table).values(entry.rows.slice(offset, offset + 200))
       }
-      if (!progressed) {
-        throw new Error(
-          `seed tables form a foreign-key cycle: ${pending.map((entry) => entry.name).join(', ')}`,
-        )
-      }
+      seeded.add(entry.name)
+      pending.splice(pending.indexOf(entry), 1)
+      progressed = true
     }
-  } finally {
-    restoreForWrite()
+    if (!progressed) {
+      throw new Error(
+        `seed tables form a foreign-key cycle: ${pending.map((entry) => entry.name).join(', ')}`,
+      )
+    }
   }
 }
 
@@ -758,17 +750,51 @@ function recordingRuntime(
         },
       } as never
     }
-  const recordingPool = {
-    ...pool,
-    unsafe: wrap(pool.unsafe.bind(pool) as never),
-    reserve: async (poolOptions?: { readonly signal?: AbortSignal }) => {
-      const connection = await pool.reserve(poolOptions)
-      return {
-        ...connection,
-        unsafe: wrap(connection.unsafe.bind(connection) as never),
-        release: () => connection.release(),
+  const boundary = (statement: string): void => {
+    for (const sink of sinks) sink.push({ sql: statement, params: 0, rows: 0, values: [] })
+  }
+  const wrapTransaction = (
+    connection: PostgresqlTransactionConnection,
+  ): PostgresqlTransactionConnection => ({
+    unsafe: wrap(connection.unsafe.bind(connection) as never),
+    async savepoint(body) {
+      try {
+        const value = await connection.savepoint(async (nested) => {
+          boundary('SAVEPOINT')
+          return await body(wrapTransaction(nested))
+        })
+        boundary('RELEASE SAVEPOINT')
+        return value
+      } catch (error) {
+        boundary('ROLLBACK TO SAVEPOINT')
+        throw error
       }
     },
+  })
+  const wrapReserved = (
+    connection: PostgresqlReservedConnection,
+  ): PostgresqlReservedConnection => ({
+    unsafe: wrap(connection.unsafe.bind(connection) as never),
+    release: () => connection.release(),
+    close: connection.close?.bind(connection),
+    async begin(body) {
+      try {
+        const value = await connection.begin(async (transaction) => {
+          boundary('BEGIN')
+          return await body(wrapTransaction(transaction))
+        })
+        boundary('COMMIT')
+        return value
+      } catch (error) {
+        boundary('ROLLBACK')
+        throw error
+      }
+    },
+  })
+  const recordingPool = {
+    unsafe: wrap(pool.unsafe.bind(pool) as never),
+    reserve: async (poolOptions?: { readonly signal?: AbortSignal }) =>
+      wrapReserved(await pool.reserve(poolOptions)),
     close: (closeOptions?: { readonly timeout?: number }) => pool.close(closeOptions),
   }
   return { ...runtime, providerPool: () => recordingPool } as InstrumentedPostgresqlDatabaseRuntime
@@ -908,7 +934,6 @@ async function createPostgresqlHarnessDatabase(
         '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
         `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'active', 1, 1)`,
     )
-    // createPostgresqlDatabaseClient 会把进程级投影切到 postgresql 且不还原；afterAll 统一还原。
     // 客户端拿到的是**带录制的**连接池：连接池对象是冻结的（Proxy 无法为不可写属性返回
     // 别的值），所以走对象字面量重建，而不是 Proxy。
     const applicationRuntime = recordingRuntime(runtime, sinks)
@@ -1226,8 +1251,6 @@ function registerPostgresql(
   const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
   const databases: PostgresqlHarnessDatabase[] = []
   const createdDatabaseNames: string[] = []
-  let providerBefore: ReturnType<typeof currentDatabaseSchemaProvider> | undefined
-  let restoreProvider: (() => void) | undefined
   let initialization: Promise<void> | undefined
   let cleanup: Promise<void> | undefined
   let fileDatabase:
@@ -1243,7 +1266,6 @@ function registerPostgresql(
 
   const initializeDatabases = (): Promise<void> =>
     runProviderHarnessLifecycle(lifecycle, 'beforeAll.setup', async (phase): Promise<void> => {
-      providerBefore = currentDatabaseSchemaProvider()
       try {
         // 本文件自己的库：数据 / DDL 锁 / advisory lock 三样都随之与别的文件分开
         // （见 createPostgresqlFileDatabase 头注）。
@@ -1288,7 +1310,6 @@ function registerPostgresql(
           restoreUrlEnv = undefined
           await fileDatabase?.drop()
           fileDatabase = undefined
-          if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
         }
         throw error
       }
@@ -1307,7 +1328,6 @@ function registerPostgresql(
         if (databases.length !== databaseCount) {
           throw new Error('PostgreSQL harness 未完成装配（beforeAll 失败）')
         }
-        restoreProvider = selectDatabaseSchemaProvider('postgresql')
         try {
           for (const [index, database] of databases.entries()) {
             const { client, raw, snapshot, sinks } = database
@@ -1339,8 +1359,6 @@ function registerPostgresql(
             }
           }
         } catch (error) {
-          restoreProvider?.()
-          restoreProvider = undefined
           databases.forEach(({ sinks }) => sinks.clear())
           states.forEach(clearState)
           throw error
@@ -1350,8 +1368,6 @@ function registerPostgresql(
   )
 
   afterEach(() => {
-    restoreProvider?.()
-    restoreProvider = undefined
     databases.forEach(({ sinks }) => sinks.clear())
     states.forEach(clearState)
   })
@@ -1373,7 +1389,6 @@ function registerPostgresql(
           await fileDatabase?.drop()
           fileDatabase = undefined
         })
-        if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
       }
     })
   // 同上：拆库同样是真库操作，单库路径此前也吃 5s 默认值。

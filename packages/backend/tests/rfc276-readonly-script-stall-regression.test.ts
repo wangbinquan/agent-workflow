@@ -11,6 +11,8 @@
 // 修复：新增 merge_state 事件 'discard-readonly'（isolating → merged，零 delta
 // 直达代终点，不经 pending-merge 以免 entry replay 把只读写入合回 canonical），
 // runOneScriptAttempt 在 done 落库前触发它。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,7 +23,6 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -78,14 +79,15 @@ function scriptDef(readonly: boolean): WorkflowDefinition {
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: `wf-${workflowId}`,
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc276-readonly-script',
     id: taskId,
     workflowId,
@@ -119,6 +121,7 @@ describe('RFC-276 regression · readonly script in a real git worktree settles i
       maxConcurrentNodes: 1,
       maxConcurrentScriptNodes: 1,
     })
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     // 回归前：failed + 「scheduler stalled … no ready nodes in scope」。
     expect(task.status).toBe('done')
@@ -139,6 +142,7 @@ describe('RFC-276 regression · readonly script in a real git worktree settles i
       maxConcurrentNodes: 1,
       maxConcurrentScriptNodes: 1,
     })
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(task.status).toBe('done')
     const run = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))[0]!

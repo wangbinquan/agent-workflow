@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { DatabaseConfig } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { openDb } from '@/db/client'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -39,7 +39,7 @@ interface Input {
 const file = process.argv[2]
 if (file === undefined) throw new Error('missing worker input')
 const input = JSON.parse(readFileSync(file, 'utf8')) as Input
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let close: () => Promise<void>
 if (input.provider.kind === 'sqlite') {
   const opened = openDb({

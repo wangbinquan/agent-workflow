@@ -7,12 +7,14 @@
 // impossible phase → quarantine (skill version_state) + retire; missing handler
 // → lock freed + counted; orphan locks GC'd last.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test, beforeEach } from 'bun:test'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { skills, skillOperationLocks } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   advancePhase,
   beginOperation,
@@ -27,23 +29,21 @@ import { describeEachProvider } from './helpers/eachProvider'
 const FS = { appHome: '/tmp/aw-recovery-driver-noop' } // handlers here are spies; no real FS
 
 describeEachProvider('recoverSkillOperations — boot driver', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
 
   async function seedSkill(name: string): Promise<string> {
     const id = ulid()
-    await db
-      .insert(skills)
-      .values({ id, name, managedPath: `skills/${name}/files` })
-      .run()
+    const { skills } = tablesOf(db)
+    await insertOne(db, skills, { id, name, managedPath: `skills/${name}/files` })
     return id
   }
   async function locksFor(skillId: string): Promise<number> {
-    return (await db.select().from(skillOperationLocks).all()).filter(
-      (l) => l.lockedSkillId === skillId,
-    ).length
+    const { skillOperationLocks } = tablesOf(db)
+    return (await db.select().from(skillOperationLocks)).filter((l) => l.lockedSkillId === skillId)
+      .length
   }
   async function plant(
     skillId: string,
@@ -102,7 +102,8 @@ describeEachProvider('recoverSkillOperations — boot driver', (harness) => {
     await plant(skillId, 'delete', 'fs-versioned')
     const rep = await recoverSkillOperations(db, FS, {})
     expect(rep.quarantined).toBe(1)
-    const skill = await db.select().from(skills).where(eq(skills.id, skillId)).get()
+    const { skills } = tablesOf(db)
+    const skill = await first(db.select().from(skills).where(eq(skills.id, skillId)))
     expect(skill?.versionState).toBe('quarantined')
     expect(await getActiveOp(db, skillId)).toBeNull()
     expect(await locksFor(skillId)).toBe(0)
@@ -117,18 +118,19 @@ describeEachProvider('recoverSkillOperations — boot driver', (harness) => {
         rollForwardFs: () => {},
         recoverDb: async (tx, op, dir) => {
           dbCalls.push(dir)
+          const { skills } = tablesOf(tx)
           await tx
             .update(skills)
             .set({ description: `recovered:${op.opId}` })
             .where(eq(skills.id, skillId))
-            .run()
         },
       },
     }
     await recoverSkillOperations(db, FS, registry)
     expect(dbCalls).toEqual(['rollforward'])
+    const { skills } = tablesOf(db)
     expect(
-      (await db.select().from(skills).where(eq(skills.id, skillId)).get())?.description,
+      (await first(db.select().from(skills).where(eq(skills.id, skillId))))?.description,
     ).toContain('recovered:')
   })
 
@@ -144,8 +146,9 @@ describeEachProvider('recoverSkillOperations — boot driver', (harness) => {
 
   test('orphan locks (op already done) are GC-cleared after active recovery', async () => {
     const skillId = await seedSkill('orphan')
+    const { skillOperationLocks } = tablesOf(db)
     // A lock whose op is inactive — simulate a crash that left it behind.
-    await db.insert(skillOperationLocks).values({ lockedSkillId: skillId, opId: ulid() }).run()
+    await insertOne(db, skillOperationLocks, { lockedSkillId: skillId, opId: ulid() })
     const rep = await recoverSkillOperations(db, FS, {})
     expect(rep.orphanLocksCleared).toBe(1)
     expect(await locksFor(skillId)).toBe(0)

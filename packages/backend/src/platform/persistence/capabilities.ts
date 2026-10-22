@@ -21,7 +21,6 @@
 //     `ascNullsFirst` / `descNullsLast` 现在是全仓唯一的渲染处。
 //   · LIKE 大小写：`rfc349-provider-search-case-parity`（SQLite ASCII 不敏感 / PG 敏感 ⇒ ilike）
 //   · LIKE 转义符：本轮对账 P1-28（SQLite 无默认转义符 / PG 默认是 `\`；两侧都显式带 ESCAPE 才一致）
-//   · 裸行数值归一：RFC-357 `taskListPage/projection.ts`（PG 的 int8 经驱动回来是字符串）
 //   · 错误分类：`postgresqlSerializationRetry.ts` 的 `errno` 判据——Bun.SQL 把 SQLSTATE 放在
 //     `errno`，`code` 恒为 ERR_POSTGRES_SERVER_ERROR。本轮对账 F-I-13 发现
 //     `isPostgresqlUniqueViolation` 只看 `code`，在真 PG 上恒为 false ⇒ 并发同名拿 500 而非 409。
@@ -35,16 +34,17 @@
 // 8 并发满速冲突率 81.2%；READ COMMITTED + 聚合根 FOR UPDATE 后 0%。所以矩阵给的是行锁，
 // 不是隔离级别。
 
+import { rawExec, rawFirst } from '@/platform/persistence/queryHelpers'
 import { sql, type SQL, type SQLWrapper } from 'drizzle-orm'
-import { SQLiteSyncDialect, type SQLiteColumn, type SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
+import type { Column, Table } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 import { postgresqlSerializationFailureCode } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 import { SQL_IN_CHUNK } from '@/util/sqlChunk'
-import type { DatabaseTransaction } from './databaseTransaction'
 
 /** SQLite 的绑定参数预算：保守值，见 `EngineCapabilities.batchInsertMax` 的注释。 */
 const SQLITE_MAX_BIND_PARAMETERS = 32_766
@@ -114,19 +114,14 @@ export interface EngineCapabilities {
    * 这三张事件表的 `id` 就是 `INTEGER PRIMARY KEY AUTOINCREMENT`、即 rowid 别名，
    * `webhook_trigger_fires` 的 `id` 是 ULID 主键，按主键删与按 rowid 删选中的是同一批行）。
    */
-  deleteByCandidates(table: SQLiteTable, idColumn: SQLiteColumn, candidates: SQL): SQL
+  deleteByCandidates(table: Table, idColumn: Column, candidates: SQL): SQL
 
   /**
    * 锁住聚合根，供「读—改—写」用。PG 渲染 `SELECT … FOR UPDATE`；SQLite no-op（已独占）。
    * **写法纪律**：读—改—写中间不锁的形状在 SQLite 上碰巧正确、在 PG 上是竞态——合一时必须改成
    * 先调这个，不能原样搬。
    */
-  lockAggregateRoot(
-    tx: DatabaseTransaction,
-    table: SQLiteTable,
-    idColumn: SQLiteColumn,
-    id: string,
-  ): Promise<void>
+  lockAggregateRoot(tx: PersistenceTx, table: Table, idColumn: Column, id: string): Promise<void>
 
   /**
    * RFC-370 v3 — hold an aggregate root against **transitions** for the rest of the
@@ -136,12 +131,7 @@ export interface EngineCapabilities {
    * first calls `lockAggregateRoot` (FOR UPDATE) waits until every holder has committed.
    * SQLite: no-op (BEGIN IMMEDIATE is already exclusive).
    */
-  holdAggregateRoot(
-    tx: DatabaseTransaction,
-    table: SQLiteTable,
-    idColumn: SQLiteColumn,
-    id: string,
-  ): Promise<void>
+  holdAggregateRoot(tx: PersistenceTx, table: Table, idColumn: Column, id: string): Promise<void>
 
   /**
    * 队列式认领的锁子句，追加在 SELECT 末尾。PG：`for update skip locked`（多 worker 各拿各的、
@@ -150,16 +140,16 @@ export interface EngineCapabilities {
   claimLockClause(): SQL
 
   /** 事务级 advisory lock，跨进程协调用。PG：`pg_advisory_xact_lock`；SQLite no-op。 */
-  advisoryLock(tx: DatabaseTransaction, key: string): Promise<void>
+  advisoryLock(tx: PersistenceTx, key: string): Promise<void>
   /**
    * RFC-370 v3 — the shared twin of `advisoryLock` on the same key. Shared holders never
    * wait for each other; an exclusive `advisoryLock` waits until every shared holder has
    * committed, and later shared requests queue behind a waiting exclusive one (FIFO, so
    * the exclusive side cannot starve). PG: `pg_advisory_xact_lock_shared`; SQLite no-op.
    */
-  advisoryLockShared(tx: DatabaseTransaction, key: string): Promise<void>
+  advisoryLockShared(tx: PersistenceTx, key: string): Promise<void>
   /** A live original report snapshot fences recovery without blocking another process. */
-  tryAdvisoryLock(tx: DatabaseTransaction, key: string): Promise<boolean>
+  tryAdvisoryLock(tx: PersistenceTx, key: string): Promise<boolean>
 
   /**
    * 手写 SQL 里 `FROM <table>` 之后的索引提示。SQLite：`INDEXED BY "<index>"`（让聚合扫覆盖索引而不是
@@ -171,7 +161,7 @@ export interface EngineCapabilities {
    * 擦除凭据之后回收物理存储：SQLite 要 `secure_delete` + WAL truncate + `VACUUM`，否则旧页面里的密文
    * 还留在文件上；PG 由 autovacuum 负责，daemon 侧 no-op。**不能在事务里调**（VACUUM 拒绝事务内执行）。
    */
-  reclaimScrubbedStorage(db: DatabaseTransaction): Promise<void>
+  reclaimScrubbedStorage(db: PersistenceTx): Promise<void>
 
   /**
    * 两个值里取大的那个。PG 是 `GREATEST(a, b)`，SQLite 是 `MAX(a, b)`——同一个语义、两个关键字，
@@ -179,6 +169,8 @@ export interface EngineCapabilities {
    * 典型用途：`onConflictDoUpdate` 里让游标只前进不后退（`MAX(旧值, excluded.新值)`）。
    */
   greatest(left: SQLWrapper, right: SQLWrapper): SQL
+  /** 子串第一次出现的字符位置：从 1 起，未命中为 0，任一输入为 NULL 则返回 NULL。 */
+  instr(value: SQLWrapper | string | null, needle: SQLWrapper | string | null): SQL<number | null>
 
   /**
    * RFC-359 W6-T24 —— 取 JSON 文档**顶层某个成员的字符串值**。
@@ -217,9 +209,6 @@ export interface EngineCapabilities {
   /** 把用户输入变成安全的 LIKE 模式；两侧都显式带 ESCAPE，消灭默认转义符差异。 */
   likeEscape(term: string): { readonly pattern: string; readonly escape: string }
 
-  /** 裸 SQL 行里的数值列归一（PG 的 int8 经驱动是字符串）；非数值抛错而不是静默 NaN。 */
-  numericFromRawRow(value: unknown, field: string): number
-
   /** 驱动错误 → 与引擎无关的分类。 */
   classifyError(error: unknown): EngineErrorClass
 
@@ -235,7 +224,7 @@ export interface EngineCapabilities {
    * PG 无法同步网络读，返回 undefined——调用方退回本进程缓存等替代面。返回 null 表示查到了但没有行。
    * 只给确实必须在当前 tick 判定的路径（RFC-305 的 WS 出站授权围栏）；别的读一律走异步。
    */
-  readRowSync(db: ProviderNeutralDatabase, query: SQL): Record<string, unknown> | null | undefined
+  readRowSync(db: PersistenceDb, query: SQL): Record<string, unknown> | null | undefined
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,14 +276,6 @@ function escapeLikeTerm(term: string): string {
 
 function likeEscape(term: string): { readonly pattern: string; readonly escape: string } {
   return { pattern: `%${escapeLikeTerm(term)}%`, escape: LIKE_ESCAPE }
-}
-
-function numericFromRawRow(value: unknown, field: string): number {
-  const parsed = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`raw row carried a non-numeric ${field}: ${String(value)}`)
-  }
-  return parsed
 }
 
 /** 沿 `cause` 链取某个字段（drizzle 会把驱动错误包成 DrizzleQueryError，原错误在 cause）。 */
@@ -355,8 +336,9 @@ function classifySqliteError(error: unknown): EngineErrorClass {
   return 'other'
 }
 
+let sqliteCapabilities: EngineCapabilities | undefined
 export function createSqliteCapabilities(): EngineCapabilities {
-  return Object.freeze({
+  return (sqliteCapabilities ??= Object.freeze({
     provider: 'sqlite',
     isolation: 'exclusive',
     maxBindParameters: SQLITE_MAX_BIND_PARAMETERS,
@@ -382,6 +364,7 @@ export function createSqliteCapabilities(): EngineCapabilities {
     },
     indexHint: (indexName) => sql`INDEXED BY ${sql.identifier(indexName)}`,
     greatest: (left, right) => sql`max(${left}, ${right})`,
+    instr: (value, needle) => sql<number | null>`instr(${value}, ${needle})`.mapWith(Number),
     jsonMemberText: (document, member) => {
       // 三个都是 SQLite 内建 C 函数，逐行调用很便宜——这段与 RFC-357 落地时的查询文本
       // 逐字相同（只把 `IN ('text', 'string')` 收成 `= 'text'`：那个双拼法当初是因为
@@ -396,9 +379,9 @@ export function createSqliteCapabilities(): EngineCapabilities {
       ELSE NULL END`
     },
     async reclaimScrubbedStorage(db) {
-      await db.run(sql`PRAGMA secure_delete = ON`)
-      await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
-      await db.run(sql`VACUUM`)
+      await rawExec(db, sql`PRAGMA secure_delete = ON`)
+      await rawExec(db, sql`PRAGMA wal_checkpoint(TRUNCATE)`)
+      await rawExec(db, sql`VACUUM`)
     },
     jsonPathText: (document, path) => {
       const literal = sql.raw("'$." + path.join('.') + "'")
@@ -415,7 +398,6 @@ export function createSqliteCapabilities(): EngineCapabilities {
     likeCaseInsensitive: (column, pattern, escape) =>
       sql`${column} like ${pattern} escape ${escape}`,
     likeEscape,
-    numericFromRawRow,
     classifyError: classifySqliteError,
     uniqueViolationTarget: (error) =>
       classifySqliteError(error) === 'unique-violation'
@@ -428,7 +410,7 @@ export function createSqliteCapabilities(): EngineCapabilities {
         .get(...(compiled.params as never[]))
       return (row as Record<string, unknown> | null | undefined) ?? null
     },
-  } satisfies EngineCapabilities)
+  } satisfies EngineCapabilities))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -470,8 +452,9 @@ export function postgresqlUniqueViolationConstraint(error: unknown): string | un
   return undefined
 }
 
+let postgresqlCapabilities: EngineCapabilities | undefined
 export function createPostgresqlCapabilities(): EngineCapabilities {
-  return Object.freeze({
+  return (postgresqlCapabilities ??= Object.freeze({
     provider: 'postgresql',
     isolation: 'read-committed',
     maxBindParameters: POSTGRESQL_MAX_BIND_PARAMETERS,
@@ -480,26 +463,28 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     deleteByCandidates: (table, idColumn, candidates) =>
       sql`with candidates as (${candidates}) delete from ${table} using candidates where ${idColumn} = candidates.id returning ${idColumn} as ${sql.identifier('id')}`,
     async lockAggregateRoot(tx, table, idColumn, id) {
-      await tx.run(sql`select 1 from ${table} where ${idColumn} = ${id} for update`)
+      await rawExec(tx, sql`select 1 from ${table} where ${idColumn} = ${id} for update`)
     },
     async holdAggregateRoot(tx, table, idColumn, id) {
-      await tx.run(sql`select 1 from ${table} where ${idColumn} = ${id} for key share`)
+      await rawExec(tx, sql`select 1 from ${table} where ${idColumn} = ${id} for key share`)
     },
     claimLockClause: () => sql`for update skip locked`,
     async advisoryLock(tx, key) {
-      await tx.run(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
+      await rawExec(tx, sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
     },
     async advisoryLockShared(tx, key) {
-      await tx.run(sql`select pg_advisory_xact_lock_shared(hashtextextended(${key}, 0))`)
+      await rawExec(tx, sql`select pg_advisory_xact_lock_shared(hashtextextended(${key}, 0))`)
     },
     async tryAdvisoryLock(tx, key) {
-      const row = (await tx.get(
+      const row = (await rawFirst(
+        tx,
         sql`select pg_try_advisory_xact_lock(hashtextextended(${key}, 0)) as acquired`,
       )) as { acquired?: boolean } | undefined
       return row?.acquired === true
     },
     indexHint: () => sql``,
     greatest: (left, right) => sql`greatest(${left}, ${right})`,
+    instr: (value, needle) => sql<number | null>`strpos(${value}, ${needle})`.mapWith(Number),
     jsonMemberText: (document, member) => {
       // **嵌套 CASE，不是 `AND`**：PostgreSQL 不保证 `AND` 的子表达式求值顺序（planner 按
       // 代价重排），只有 `CASE` 保证「合法性判据为假时不去做那次 `::jsonb`」。写成
@@ -535,7 +520,6 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     likeCaseInsensitive: (column, pattern, escape) =>
       sql`${column} ilike ${pattern} escape ${escape}`,
     likeEscape,
-    numericFromRawRow,
     classifyError: (error) => {
       if (postgresqlSerializationFailureCode(error) !== undefined) return 'serialization'
       if (postgresqlUniqueViolationConstraint(error) !== undefined) return 'unique-violation'
@@ -546,5 +530,5 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     uniqueViolationTarget: (error) => postgresqlUniqueViolationConstraint(error),
     // 网络驱动没有同步读；围栏类调用方退回本进程缓存（RFC-349 V1 的既有形态）。
     readRowSync: () => undefined,
-  } satisfies EngineCapabilities)
+  } satisfies EngineCapabilities))
 }

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import type { MemoryResourceScopeAccessParticipant } from '../src/modules/memory/application/ports/resourceScopeAccess'
 import { composeResourceScopeAccessParticipant } from '../src/modules/resource-catalog/composition/resourceScopeAuthorization'
-import type { DatabaseTransaction } from '../src/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 const root = join(import.meta.dir, '..')
 
@@ -12,7 +12,7 @@ const root = join(import.meta.dir, '..')
 // RFC-359 W4-D4 把 participant 收成一份中立实现（两个 provider 共用），本锁随之改指中立文件。
 describe('RFC-349 Resource Catalog T4 resource-scope access participant', () => {
   test('Memory receives the exact async access participant bound to the neutral transaction', () => {
-    const participant: MemoryResourceScopeAccessParticipant<DatabaseTransaction> =
+    const participant: MemoryResourceScopeAccessParticipant<PersistenceTx> =
       composeResourceScopeAccessParticipant()
     expect(Object.isFrozen(participant)).toBe(true)
   })

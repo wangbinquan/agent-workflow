@@ -181,6 +181,6 @@ test('源码锁：临时上传与 writer cutover 不再有 provider 专属文件
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update/i)
-    expect(source).toContain('ProviderNeutralDatabase')
+    expect(source).toContain('PersistenceDb')
   }
 })

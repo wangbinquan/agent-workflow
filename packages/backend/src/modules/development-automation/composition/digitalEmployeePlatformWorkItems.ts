@@ -9,7 +9,7 @@ import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { EmployeePlatformWorkItemPersistence } from '../application/ports/employeePlatformWorkItemPersistence'
@@ -2246,7 +2246,7 @@ type DevelopmentEmployeePlatformWorkItemsBootstrapInput = Omit<
 /** 一份装配，两个 provider 共用（RFC-359 W4-D13）。 */
 export function composeDevelopmentEmployeePlatformWorkItems(
   input: DevelopmentEmployeePlatformWorkItemsBootstrapInput & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
   },
 ): ReturnType<typeof composeDevelopmentEmployeePlatformWorkItemsFromPersistence> {
   const { db, ...composition } = input

@@ -1,10 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks } from '@/db/schema'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 import { composeStreamTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -44,8 +45,9 @@ describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
         return
       }
       await seedTask(harness.db, taskId)
+      const { tasks, nodeRuns } = tablesOf(harness.db)
       await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
-      await harness.db.insert(nodeRuns).values({
+      await insertOne(harness.db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: DESIGNER,

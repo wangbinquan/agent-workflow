@@ -16,14 +16,15 @@
 //         resource's resolved name (no name/existence oracle); the closure
 //         endpoint likewise never discloses an invisible dependency's name.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, mcps, plugins, skills } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -36,7 +37,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string }
   bob: { id: string; token: string }
@@ -94,23 +95,25 @@ const AGENT_BODY = {
 
 /** Insert a minimal managed skill row (id + name) owned by `ownerUserId`. */
 async function seedSkill(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   name: string,
   visibility: 'public' | 'private',
   ownerUserId: string,
 ): Promise<void> {
-  await db.insert(skills).values({ id, name, visibility, ownerUserId })
+  const { skills } = tablesOf(db)
+  await insertOne(db, skills, { id, name, visibility, ownerUserId })
 }
 
 /** Insert a minimal enabled plugin row (id + name) owned by `ownerUserId`. */
 async function seedPlugin(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   name: string,
   ownerUserId: string,
 ): Promise<void> {
-  await db.insert(plugins).values({
+  const { plugins } = tablesOf(db)
+  await insertOne(db, plugins, {
     id,
     name,
     spec: `${name}@1`,
@@ -224,6 +227,7 @@ describeEachProviderHttpApplication(
         },
         { ownerUserId: h.alice.id },
       )
+      const { mcps } = tablesOf(h.db)
       await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
       const res = await createAgentHttp(h, h.bob.token, { name: 'wrapper', mcp: [m.id] })
       expect(res.status).toBe(422)
@@ -238,6 +242,7 @@ describeEachProviderHttpApplication(
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'dep' })
       expect(depRes.status).toBe(201)
       const dep = (await depRes.json()) as AgentDto
+      const { agents } = tablesOf(h.db)
       await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
       const aRes = await createAgentHttp(h, h.bob.token, {
         name: 'consumer',
@@ -277,6 +282,7 @@ describeEachProviderHttpApplication(
         },
         { ownerUserId: h.alice.id },
       )
+      const { mcps } = tablesOf(h.db)
       await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
       const aRes = await createAgentHttp(h, h.bob.token, { name: 'c2' })
       expect(aRes.status).toBe(201)
@@ -322,6 +328,7 @@ describeEachProviderHttpApplication(
         },
         { ownerUserId: h.alice.id },
       )
+      const { mcps } = tablesOf(h.db)
       await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
       const res = await createAgentHttp(h, h.bob.token, { name: 'leaker', mcp: [m.id] })
       expect(res.status).toBe(422)
@@ -348,6 +355,7 @@ describeEachProviderHttpApplication(
         },
         { ownerUserId: h.alice.id },
       )
+      const { mcps } = tablesOf(h.db)
       await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
       const res = await createAgentHttp(h, h.bob.token, { name: 'leaker2', mcp: [m.id] })
       expect(res.status).toBe(422)
@@ -427,6 +435,7 @@ describeEachProviderHttpApplication(
         },
         { ownerUserId: h.alice.id },
       )
+      const { mcps } = tablesOf(h.db)
       await h.db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
       await seedPlugin(h.db, 'PRIVATE_PLUGIN_ID', 'private-plugin-name', h.alice.id)
       const created = await createAgentHttp(h, h.bob.token, {
@@ -439,14 +448,14 @@ describeEachProviderHttpApplication(
       const consumer = (await created.json()) as AgentDto
 
       await h.db
-        .update(skills)
+        .update(tablesOf(h.db).skills)
         .set({ visibility: 'private' })
-        .where(eq(skills.id, 'PRIVATE_SKILL_ID'))
+        .where(eq(tablesOf(h.db).skills.id, 'PRIVATE_SKILL_ID'))
       await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcp.id))
       await h.db
-        .update(plugins)
+        .update(tablesOf(h.db).plugins)
         .set({ visibility: 'private' })
-        .where(eq(plugins.id, 'PRIVATE_PLUGIN_ID'))
+        .where(eq(tablesOf(h.db).plugins.id, 'PRIVATE_PLUGIN_ID'))
 
       const closure = await req(h.app, h.bob.token, `/api/agents/${consumer.id}/closure`)
       expect(closure.status).toBe(200)
@@ -486,14 +495,20 @@ describeEachProviderHttpApplication(
       // alice owns a PUBLIC agent `hidden-dep`; bob depends on it, then alice hides it.
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-dep' })
       const dep = (await depRes.json()) as AgentDto
-      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      await h.db
+        .update(tablesOf(h.db).agents)
+        .set({ visibility: 'public' })
+        .where(eq(tablesOf(h.db).agents.id, dep.id))
       const parentRes = await createAgentHttp(h, h.bob.token, {
         name: 'parent',
         dependsOn: [dep.id],
       })
       expect(parentRes.status).toBe(201)
       const parentAgent = (await parentRes.json()) as AgentDto
-      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      await h.db
+        .update(tablesOf(h.db).agents)
+        .set({ visibility: 'private' })
+        .where(eq(tablesOf(h.db).agents.id, dep.id))
 
       const closure = await req(h.app, h.bob.token, `/api/agents/${parentAgent.id}/closure`)
       expect(closure.status).toBe(200)
@@ -527,19 +542,22 @@ describeEachProviderHttpApplication(
     test('dangling refs behind a masked dependency are not re-exposed as missing rows', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-corrupt-dep' })
       const dep = (await depRes.json()) as AgentDto
-      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      await h.db
+        .update(tablesOf(h.db).agents)
+        .set({ visibility: 'public' })
+        .where(eq(tablesOf(h.db).agents.id, dep.id))
       const parentRes = await createAgentHttp(h, h.bob.token, {
         name: 'parent-with-masked-child',
         dependsOn: [dep.id],
       })
       const parent = (await parentRes.json()) as AgentDto
       await h.db
-        .update(agents)
+        .update(tablesOf(h.db).agents)
         .set({
           dependsOn: JSON.stringify(['secret-dangling-ref']),
           visibility: 'private',
         })
-        .where(eq(agents.id, dep.id))
+        .where(eq(tablesOf(h.db).agents.id, dep.id))
 
       const closure = await req(h.app, h.bob.token, `/api/agents/${parent.id}/closure`)
       expect(closure.status).toBe(200)
@@ -578,7 +596,10 @@ describeEachProviderHttpApplication(
         description: 'preview secret description',
       })
       const dep = (await depRes.json()) as AgentDto
-      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      await h.db
+        .update(tablesOf(h.db).agents)
+        .set({ visibility: 'private' })
+        .where(eq(tablesOf(h.db).agents.id, dep.id))
 
       const preview = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
         method: 'POST',
@@ -605,6 +626,7 @@ describeEachProviderHttpApplication(
     test('a private existing draft id is indistinguishable from a missing one', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'preview-private-root' })
       const dep = (await depRes.json()) as AgentDto
+      const { agents } = tablesOf(h.db)
       await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
 
       const hidden = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
@@ -640,6 +662,7 @@ describeEachProviderHttpApplication(
     test('a workgroup member referencing a private agent → 422 acl-missing-refs (id NOT persisted)', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-secret' })
       const dep = (await depRes.json()) as AgentDto
+      const { agents } = tablesOf(h.db)
       await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
       const res = await req(h.app, h.bob.token, '/api/workgroups', {
         method: 'POST',
@@ -657,6 +680,7 @@ describeEachProviderHttpApplication(
     test('a public agent member is stored by resolved id', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-public' })
       const dep = (await depRes.json()) as AgentDto
+      const { agents } = tablesOf(h.db)
       await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
       const res = await req(h.app, h.bob.token, '/api/workgroups', {
         method: 'POST',

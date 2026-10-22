@@ -13,22 +13,16 @@
 // dispatched entry) survive below as HAND-SEEDED pre-upgrade leftovers — the dispatch gate must
 // keep protecting them through the migration window.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  clarifyRounds,
-  nodeRuns,
-  nodeRunOutputs,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import { readFileSync } from 'node:fs'
 import { dispatchTaskQuestions, resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import {
@@ -113,13 +107,10 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  _deferred = true,
-): Promise<void> {
+async function seedTask(db: PersistenceDb, taskId: string, _deferred = true): Promise<void> {
   const def = liveDef()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -127,7 +118,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -147,13 +138,14 @@ async function seedTask(
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   over: { status?: string; iteration?: number; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -163,14 +155,14 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
+    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
 
 /** Insert an answered clarify round (self or cross). */
 async function seedAnsweredRound(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     kind: 'self' | 'cross'
@@ -190,7 +182,8 @@ async function seedAnsweredRound(
   })
   const roundId = ulid()
   const status = opts.status ?? 'answered'
-  await db.insert(clarifyRounds).values({
+  const { clarifyRounds } = tablesOf(db)
+  await insertOne(db, clarifyRounds, {
     id: roundId,
     taskId,
     kind: opts.kind,
@@ -224,13 +217,10 @@ interface EntrySeed {
   stagedAt?: number | null
 }
 
-async function insertEntry(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  e: EntrySeed,
-): Promise<string> {
+async function insertEntry(db: PersistenceDb, taskId: string, e: EntrySeed): Promise<string> {
   const id = ulid()
-  await db.insert(taskQuestions).values({
+  const { taskQuestions } = tablesOf(db)
+  await insertOne(db, taskQuestions, {
     id,
     taskId,
     originNodeRunId: e.originNodeRunId,
@@ -254,10 +244,12 @@ async function insertEntry(
   return id
 }
 
-function entryRow(db: ProviderNeutralDatabase, id: string) {
+function entryRow(db: PersistenceDb, id: string) {
+  const { taskQuestions } = tablesOf(db)
   return db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
 }
-function runRow(db: ProviderNeutralDatabase, id: string) {
+function runRow(db: PersistenceDb, id: string) {
+  const { nodeRuns } = tablesOf(db)
   return db.select().from(nodeRuns).where(eq(nodeRuns.id, id))
 }
 
@@ -876,6 +868,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         answers: [ans('q1'), ans('q2')],
         actor,
       })
+      const { taskQuestions, clarifyRounds } = tablesOf(db)
       const afterSubmit = await db
         .select()
         .from(taskQuestions)
@@ -937,6 +930,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         actor,
       })
       const rerunNodeRunId = res.dispatch.reruns[0]!.nodeRunId
+      const { nodeRuns, clarifyRounds } = tablesOf(db)
       // mint present (pending, clarify-answer, on the asking node).
       const rerun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunNodeRunId)))[0]
       expect(rerun?.status).toBe('pending')
@@ -1005,6 +999,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         'clarify-question-already-sealed',
         'clarify-seal-empty',
       ]).toContain(loserCode!)
+      const { nodeRuns } = tablesOf(db)
       // Exactly ONE clarify-answer rerun on P — no double mint.
       const reruns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
         (r) => r.nodeId === P && r.rerunCause === 'clarify-answer',
@@ -1034,6 +1029,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       // q1 control-sealed-undispatched → dispatchable; the round is still awaiting (quick-finalizable).
       await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
+      const { taskQuestions, nodeRuns } = tablesOf(db)
       const q1 = (
         await db
           .select()
@@ -1108,6 +1104,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         ],
         actor,
       })
+      const { clarifyRounds } = tablesOf(db)
       const sess = (
         await db
           .select()

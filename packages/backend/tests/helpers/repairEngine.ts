@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createClarifyRepairParticipant,
   createReviewRepairParticipant,
@@ -93,7 +93,7 @@ function actorFor(userId: string | null): Actor {
 }
 
 export function createRepairEngine(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: RepairEngineOptions = {},
 ): RepairEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-repair-engine-'))

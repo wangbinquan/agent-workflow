@@ -1,10 +1,10 @@
 // Explicit graph requests enter the existing durable Case inbox; no second scheduler.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { employeeCases, employeeCaseInbox, employeeReactionRounds } from '@/db/schema'
 import { createGraphCaseIntake } from '@/modules/development-automation/application/graph-development/caseIntake'
 import { GRAPH_EVENT_SOURCE } from '@/modules/development-automation/application/graph-development/employeeType'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -60,6 +60,7 @@ describeEachProvider('RFC-396 durable Case work requests', (harness) => {
       subject: { typeId: 'graph-development.case', subjectRef: caseId },
       subscriber: { kind: 'employee-case', subscriberRef: caseId },
     })
+    const { employeeCases, employeeReactionRounds, employeeCaseInbox } = tablesOf(harness.db)
     await harness.db
       .update(employeeCases)
       .set({

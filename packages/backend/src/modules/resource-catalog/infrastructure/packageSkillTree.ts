@@ -4,7 +4,7 @@
 // `postgresqlResourcePackageArtifacts.ts` 里的 `readPostgresqlPackageSkillTree`——同一个端口
 // （`application/package/ports.ts` 的 `ResourcePackageSkillTree`）、同一张 `skills` 表、同一棵
 // appHome 下的技能目录，却是两台机器。判为**真重复**：两侧的 DB 读法（`getSkillById`）本来就已经
-// 吃 `ProviderNeutralDatabase`，剩下全是文件系统语义，没有任何一处需要按引擎分叉。
+// 吃 `PersistenceDb`，剩下全是文件系统语义，没有任何一处需要按引擎分叉。
 //
 // 合一按**强侧抬齐**，五条差异逐条有实测来源
 // （`tests/rfc359-w8-package-skill-tree-conformance.test.ts` 在两个旧实现上先跑出来的红）：
@@ -35,7 +35,7 @@
 
 import { parseSkillMarkdown } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 
 import type { ResourcePackageSkillTree } from '../application/package/ports'
@@ -50,7 +50,7 @@ export { assertRegularDirectory, collectSkillFiles } from './local/fileSkillPack
 
 /** 读一个托管技能的可打包文件树。两个 provider 共用；差异与取舍见文件头。 */
 export async function readPackageSkillTree(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   skillId: string,
   content: SkillPackageContentReader = createFileSkillPackageContentReader(appHome),

@@ -19,6 +19,8 @@
 // All git is offline via a `file://` bare repo (mirrors start-task-url.test.ts);
 // no `RUN_GIT_NETWORK` dependency.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import {
   afterEach,
@@ -49,7 +51,6 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { eq as eqOp } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, taskRepos as taskReposTable, tasks as tasksTable } from '../src/db/schema'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
@@ -300,7 +301,7 @@ async function buildHarness(): Promise<Harness> {
 
   const app = (
     await openTestApplication(
-      { provider: 'sqlite', db: db },
+      { provider: 'sqlite', db },
       {
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
         token: TOKEN,
@@ -382,8 +383,9 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(body.inputs.refs).toBe('inputs/refs/a.txt\ninputs/refs/b.txt')
     // Provenance: the URL is preserved (file:// has no credentials → redaction is a no-op).
     expect(body.repoUrl).toBe(h.bareUrl)
+    const { cachedRepos } = tablesOf(h.db)
     // Exactly one cache row was minted (resolved once).
-    expect(h.db.select().from(cachedRepos).all().length).toBe(1)
+    expect(queryRows(h.db.select().from(cachedRepos)).length).toBe(1)
   })
 
   test('F1: invalid workflow + url upload → workflow-invalid BEFORE any clone (no cache row, no task)', async () => {
@@ -401,10 +403,11 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('workflow-invalid')
+    const { cachedRepos, tasks } = tablesOf(h.db)
     // The decisive assertion: validation ran BEFORE resolve/clone, so the repo
     // cache was never touched and no task row exists.
-    expect(h.db.select().from(cachedRepos).all().length).toBe(0)
-    expect(h.db.select().from(tasksTable).all().length).toBe(0)
+    expect(queryRows(h.db.select().from(cachedRepos)).length).toBe(0)
+    expect(queryRows(h.db.select().from(tasks)).length).toBe(0)
   })
 
   test('F3 (parity): a bad ref on a url upload → structured error, no task row', async () => {
@@ -422,8 +425,9 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     const res = await postMultipart(h.app, fd)
     expect(res.status).toBeGreaterThanOrEqual(400)
     expect(res.status).toBeLessThan(500)
+    const { tasks } = tablesOf(h.db)
     // No half-created task.
-    expect(h.db.select().from(tasksTable).all().length).toBe(0)
+    expect(queryRows(h.db.select().from(tasks)).length).toBe(0)
   })
 
   test('RFC-199: stale exact version is rejected before cache/worktree/branch materialization', async () => {
@@ -457,8 +461,9 @@ describe('RFC-107 — URL launch + multipart upload', () => {
       code: 'workflow-version-mismatch',
       details: { expectedVersion: before!.version, currentVersion: before!.version + 1 },
     })
-    expect(h.db.select().from(tasksTable).all()).toHaveLength(0)
-    expect(h.db.select().from(cachedRepos).all()).toHaveLength(0)
+    const { tasks, cachedRepos } = tablesOf(h.db)
+    expect(queryRows(h.db.select().from(tasks))).toHaveLength(0)
+    expect(queryRows(h.db.select().from(cachedRepos))).toHaveLength(0)
 
     // The captured visible workflow row rejects the stale guard before URL
     // resolution. No cache repository exists in which a task branch could be
@@ -525,9 +530,10 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('upload-max-count')
+    const { cachedRepos, tasks } = tablesOf(h.db)
     // Decisive: the upload was rejected before the repo was resolved/cloned.
-    expect(h.db.select().from(cachedRepos).all().length).toBe(0)
-    expect(h.db.select().from(tasksTable).all().length).toBe(0)
+    expect(queryRows(h.db.select().from(cachedRepos)).length).toBe(0)
+    expect(queryRows(h.db.select().from(tasks)).length).toBe(0)
   })
 
   test('F2: url + upload + workingBranch → worktree is actually on that branch', async () => {
@@ -599,20 +605,22 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(body.id).toBeTruthy()
     expect(body.code).toBeUndefined()
 
+    const { taskRepos, tasks } = tablesOf(h.db)
     // 两份都真的物化了（D14 同仓多份），且上传物落在**任务根**下的固定目录，
     // 不在任何成员仓里——所以它不会变成某个仓的未跟踪改动。
     // 直接读库——这个夹具的 app 只挂了启动路由。
-    const rows = h.db
-      .select()
-      .from(taskReposTable)
-      .where(eqOp(taskReposTable.taskId, body.id))
-      .orderBy(taskReposTable.repoIndex)
-      .all()
+    const rows = queryRows(
+      h.db
+        .select()
+        .from(taskRepos)
+        .where(eqOp(taskRepos.taskId, body.id))
+        .orderBy(taskRepos.repoIndex),
+    )
     expect(rows.map((r) => r.mountPath)).toEqual(['r0', 'r1'])
     // D14: 同一个源仓挂了两份 ⇒ 两条不同的隔离分支（第二份带 `-2` 后缀）。
     expect(new Set(rows.map((r) => r.branch)).size).toBe(2)
 
-    const taskRow = h.db.select().from(tasksTable).where(eqOp(tasksTable.id, body.id)).get()
+    const taskRow = first(h.db.select().from(tasks).where(eqOp(tasks.id, body.id)))
     const root = taskRow!.worktreePath
     // 上传物在 `<任务根>/.agent-workflow/inputs/<targetDir>/…` 下（targetDir 由
     // 输入定义给出），这里只断言它确实落在这个保留目录内。
@@ -694,7 +702,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     })
     const app = (
       await openTestApplication(
-        { provider: 'sqlite', db: db },
+        { provider: 'sqlite', db },
         {
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: TOKEN,
@@ -882,8 +890,7 @@ describe('RFC-107 — launchTestTask preResolvedSource (resolve-once + redaction
       { workflowId: wf.id, name: 'unit', repoUrl: credentialedUrl, inputs: { topic: 'hi' } },
       {
         db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,

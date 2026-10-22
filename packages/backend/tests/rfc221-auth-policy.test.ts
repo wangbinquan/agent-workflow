@@ -4,6 +4,9 @@
 // and completion marker commit together, and login-policy writes are
 // transactionally constrained by enabled providers.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -12,7 +15,6 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { hashPassword } from '../src/auth/passwords'
 import { createInMemoryDb } from '../src/db/client'
-import { authLoginPolicy, oidcProviders, userSessions, users } from '../src/db/schema'
 import {
   createPasswordLoginSession,
   getAuthMethodDiscovery,
@@ -99,27 +101,25 @@ describe('RFC-221 auth policy service', () => {
       passwordLoginEnabled: true,
       daemonTokenEnabled: false,
     })
-    ready
-      .insert(oidcProviders)
-      .values({
-        id: 'provider-discovery',
-        slug: 'corp',
-        displayName: 'Corporate SSO',
-        issuerUrl: 'https://idp.example.test',
-        clientId: 'client',
-        clientSecretEnc: 'sealed',
-        scopes: 'openid',
-        provisioning: 'invite',
-        allowedEmailDomainsJson: '[]',
-        iconUrl: null,
-        enabled: true,
-        userinfoRequestStyle: 'get_bearer',
-        trustEmailVerified: false,
-        createdAt: 1,
-        updatedAt: 1,
-        schemaVersion: 1,
-      })
-      .run()
+    const { oidcProviders } = tablesOf(ready)
+    insertOne(ready, oidcProviders, {
+      id: 'provider-discovery',
+      slug: 'corp',
+      displayName: 'Corporate SSO',
+      issuerUrl: 'https://idp.example.test',
+      clientId: 'client',
+      clientSecretEnc: 'sealed',
+      scopes: 'openid',
+      provisioning: 'invite',
+      allowedEmailDomainsJson: '[]',
+      iconUrl: null,
+      enabled: true,
+      userinfoRequestStyle: 'get_bearer',
+      trustEmailVerified: false,
+      createdAt: 1,
+      updatedAt: 1,
+      schemaVersion: 1,
+    })
     await setPasswordLoginEnabled(ready, false)
     expect(await getAuthMethodDiscovery(ready, true)).toEqual({
       mode: 'ready',
@@ -178,7 +178,8 @@ describe('RFC-221 auth policy service', () => {
         passwordHash: 'prepared',
       }),
     ).rejects.toMatchObject({ code: 'bootstrap-already-complete' })
-    const humans = db.select().from(users).where(eq(users.role, 'admin')).all()
+    const { users } = tablesOf(db)
+    const humans = queryRows(db.select().from(users).where(eq(users.role, 'admin')))
     expect(humans.filter((row) => row.id !== '__system__')).toHaveLength(1)
   })
 
@@ -188,26 +189,25 @@ describe('RFC-221 auth policy service', () => {
       async () => await setPasswordLoginEnabled(db, false),
       'password-login-requires-enabled-oidc',
     )
-    db.insert(oidcProviders)
-      .values({
-        id: 'provider-1',
-        slug: 'corp',
-        displayName: 'Corporate SSO',
-        issuerUrl: 'https://idp.example.test',
-        clientId: 'client',
-        clientSecretEnc: 'sealed',
-        scopes: 'openid',
-        provisioning: 'invite',
-        allowedEmailDomainsJson: '[]',
-        iconUrl: null,
-        enabled: true,
-        userinfoRequestStyle: 'get_bearer',
-        trustEmailVerified: false,
-        createdAt: 1,
-        updatedAt: 1,
-        schemaVersion: 1,
-      })
-      .run()
+    const { oidcProviders } = tablesOf(db)
+    insertOne(db, oidcProviders, {
+      id: 'provider-1',
+      slug: 'corp',
+      displayName: 'Corporate SSO',
+      issuerUrl: 'https://idp.example.test',
+      clientId: 'client',
+      clientSecretEnc: 'sealed',
+      scopes: 'openid',
+      provisioning: 'invite',
+      allowedEmailDomainsJson: '[]',
+      iconUrl: null,
+      enabled: true,
+      userinfoRequestStyle: 'get_bearer',
+      trustEmailVerified: false,
+      createdAt: 1,
+      updatedAt: 1,
+      schemaVersion: 1,
+    })
     expect((await setPasswordLoginEnabled(db, false)).passwordLoginEnabled).toBe(false)
     expect((await setPasswordLoginEnabled(db, true)).passwordLoginEnabled).toBe(true)
   })
@@ -228,26 +228,25 @@ describe('RFC-221 auth policy service', () => {
       role: 'admin',
       password: 'password123',
     })
-    db.insert(oidcProviders)
-      .values({
-        id: 'provider-1',
-        slug: 'corp',
-        displayName: 'Corporate SSO',
-        issuerUrl: 'https://idp.example.test',
-        clientId: 'client',
-        clientSecretEnc: 'sealed',
-        scopes: 'openid',
-        provisioning: 'invite',
-        allowedEmailDomainsJson: '[]',
-        iconUrl: null,
-        enabled: true,
-        userinfoRequestStyle: 'get_bearer',
-        trustEmailVerified: false,
-        createdAt: 1,
-        updatedAt: 1,
-        schemaVersion: 1,
-      })
-      .run()
+    const { oidcProviders, userSessions, users } = tablesOf(db)
+    insertOne(db, oidcProviders, {
+      id: 'provider-1',
+      slug: 'corp',
+      displayName: 'Corporate SSO',
+      issuerUrl: 'https://idp.example.test',
+      clientId: 'client',
+      clientSecretEnc: 'sealed',
+      scopes: 'openid',
+      provisioning: 'invite',
+      allowedEmailDomainsJson: '[]',
+      iconUrl: null,
+      enabled: true,
+      userinfoRequestStyle: 'get_bearer',
+      trustEmailVerified: false,
+      createdAt: 1,
+      updatedAt: 1,
+      schemaVersion: 1,
+    })
     await setPasswordLoginEnabled(db, false)
     await expectCode(
       async () =>
@@ -257,14 +256,18 @@ describe('RFC-221 auth policy service', () => {
         }),
       'password-login-disabled',
     )
-    expect(db.select().from(userSessions).all()).toHaveLength(0)
-    expect(db.select().from(users).where(eq(users.id, user.id)).get()?.lastLoginAt).toBeNull()
+    expect(queryRows(db.select().from(userSessions))).toHaveLength(0)
+    expect(first(db.select().from(users).where(eq(users.id, user.id)))?.lastLoginAt).toBeNull()
   })
 
   test('historical in-memory fixtures are ready unless bootstrap is explicit', async () => {
     const ready = createInMemoryDb(MIGRATIONS)
     const required = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-    expect(ready.select().from(authLoginPolicy).get()?.bootstrapCompletedAt).toBe(0)
-    expect(required.select().from(authLoginPolicy).get()?.bootstrapCompletedAt).toBeNull()
+    expect(first(ready.select().from(tablesOf(ready).authLoginPolicy))?.bootstrapCompletedAt).toBe(
+      0,
+    )
+    expect(
+      first(required.select().from(tablesOf(required).authLoginPolicy))?.bootstrapCompletedAt,
+    ).toBeNull()
   })
 })

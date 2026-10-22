@@ -14,15 +14,16 @@
 // existing tests in ws.test.ts cover broadcast semantics. This file owns
 // the upgrade-time auth surface.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Server } from 'bun'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
-import { users } from '../src/db/schema'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { buildWebSocketAdapter } from '../src/ws/server'
@@ -33,7 +34,7 @@ import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
 const DAEMON_TOKEN = 'd'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   server: AnyServer
   baseUrl: string
   cleanup: () => Promise<void>
@@ -75,12 +76,10 @@ async function buildHarness(harness: ProviderDatabaseHarness): Promise<Harness> 
   }
 }
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'admin',
-): Promise<string> {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'admin'): Promise<string> {
   const id = ulid()
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id.slice(-6)}`,
     displayName: 'Test User',

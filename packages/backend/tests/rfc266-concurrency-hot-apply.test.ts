@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { loadConfig } from '@/config'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -36,7 +36,7 @@ afterEach(() => {
 })
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /**
    * 池的 scope key **按 provider 不同**（SQLite 用 db，PG 用 provider runtime），所以判据不能
    * 拿 `h.db` 当 key——那只在 SQLite 上成立，在 PG 上取到的是另一个命名空间里的空池，

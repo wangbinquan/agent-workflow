@@ -1,7 +1,7 @@
 // RFC-359 W12 — one composition for all code-history read surfaces. Both
 // database clients supply the same readers and application projections.
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCodeMatrixQuery,
   createCodeDeliveryChainQuery,
@@ -36,7 +36,7 @@ export interface CodeHistoryQueries {
   readonly templateUpstream: TemplateUpstreamOperations
 }
 
-export function composeCodeHistoryQueries(db: ProviderNeutralDatabase): CodeHistoryQueries {
+export function composeCodeHistoryQueries(db: PersistenceDb): CodeHistoryQueries {
   return Object.freeze({
     matrix: createCodeMatrixQuery(createCapabilityMatrixRead(db)),
     workItems: createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(db)),

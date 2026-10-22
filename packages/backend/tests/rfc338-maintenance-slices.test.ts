@@ -1,6 +1,9 @@
 // RFC-338 D5 / AC-2 — owner adapters expose bounded, replay-safe slices so
 // foreground writers get a lock handoff between maintenance batches.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryWrite, queryRows, first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,19 +11,6 @@ import { join } from 'node:path'
 
 import { createInMemoryDb, openDb, type DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import {
-  employeeInputUploads,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  missionInputUploads,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  tokenAudit,
-  tokenDeleteSnapshot,
-  webhookDeliveries,
-  workflows,
-} from '@/db/schema'
 import { createEmployeeInputUploadPersistence } from '@/modules/digital-employee/infrastructure/inputUploadStore'
 import { createUploadSessionPersistence } from '@/modules/development-automation/infrastructure/uploadSessionStore'
 import { createActionTemplatePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'
@@ -117,12 +107,13 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc338-event-count-'))
     try {
-      await db.insert(workflows).values({
+      const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: 'event-count-workflow',
         name: 'event-count-workflow',
         definition: '{"nodes":[],"edges":[],"inputs":[]}',
       })
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         id: 'event-count-task',
         name: 'event-count-task',
         workflowId: 'event-count-workflow',
@@ -136,7 +127,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
         startedAt: 1,
         finishedAt: 2,
       })
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: 'event-count-run',
         taskId: 'event-count-task',
         nodeId: 'node',
@@ -212,7 +203,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       observeTransactionMs: (ms) => transactions.push(ms),
     })
     try {
-      await db.insert(tokenAudit).values({
+      const { tokenAudit } = tablesOf(db)
+      await insertOne(db, tokenAudit, {
         id: 'timed-audit',
         patId: 'pat',
         userId: 'user',
@@ -221,7 +213,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
         createdAt: 1,
       })
       dbTxSync(db, (tx) => {
-        tx.delete(tokenAudit).run()
+        const { tokenAudit } = tablesOf(tx)
+        queryWrite(tx.delete(tokenAudit))
       })
       expect(statements.length).toBeGreaterThanOrEqual(2)
       expect(statements.every((ms) => Number.isFinite(ms) && ms >= 0)).toBe(true)
@@ -258,7 +251,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
         busyTimeoutMs: 0,
         slowQueryMs: 0,
       })
-      expect(secondary.select().from(tokenAudit).all()).toEqual([])
+      const { tokenAudit } = tablesOf(secondary)
+      expect(queryRows(secondary.select().from(tokenAudit))).toEqual([])
     } finally {
       if (inTransaction) sqlite.exec('ROLLBACK')
       ;(secondary as unknown as { $client?: { close(): void } } | undefined)?.$client?.close()
@@ -270,6 +264,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
   test('token audit advances a versioned phase cursor and deletes at most one batch', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const old = 1_000
+    const { tokenAudit, tokenDeleteSnapshot } = tablesOf(db)
     await db.insert(tokenAudit).values(
       Array.from({ length: 3 }, (_, index) => ({
         id: `audit-${index}`,
@@ -326,6 +321,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
   describeEachProvider('provider', (harness) => {
     test('webhook delivery GC releases the write lock between bounded body and row batches', async () => {
       const db = harness.db
+      const { webhookDeliveries } = tablesOf(db)
       await db.insert(webhookDeliveries).values(
         Array.from({ length: 3 }, (_, index) => ({
           id: `delivery-${index}`,
@@ -366,7 +362,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
   describeEachProvider('provider', (harness) => {
     test('retention sweep persists its table phase between bounded predicate-rechecking deletes', async () => {
       const db = harness.db
-      await db.insert(memoryDistillJobs).values({
+      const { memoryDistillJobs, memoryDistillEvents } = tablesOf(db)
+      await insertOne(db, memoryDistillJobs, {
         id: 'distill-job',
         debounceKey: 'key',
         sourceKind: 'review',
@@ -431,13 +428,14 @@ describe('RFC-338 bounded maintenance owner slices', () => {
 
       expect(await development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
       expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
-      expect(await db.select().from(missionInputUploads).all()).toHaveLength(1)
-      expect(await db.select().from(employeeInputUploads).all()).toHaveLength(1)
+      const { missionInputUploads, employeeInputUploads } = tablesOf(db)
+      expect(await db.select().from(missionInputUploads)).toHaveLength(1)
+      expect(await db.select().from(employeeInputUploads)).toHaveLength(1)
 
       expect(await development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
       expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
-      expect(await db.select().from(missionInputUploads).all()).toHaveLength(0)
-      expect(await db.select().from(employeeInputUploads).all()).toHaveLength(0)
+      expect(await db.select().from(missionInputUploads)).toHaveLength(0)
+      expect(await db.select().from(employeeInputUploads)).toHaveLength(0)
     })
   })
 
@@ -450,7 +448,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })
-    await primary.insert(tokenAudit).values({
+    const { tokenAudit } = tablesOf(primary)
+    await insertOne(primary, tokenAudit, {
       id: 'expired-audit',
       patId: 'pat',
       userId: 'user',
@@ -483,7 +482,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       })
       // This write uses the request-serving connection while the maintenance
       // Worker is independently waiting on its short busy timeout.
-      await primary.insert(tokenAudit).values({
+      await insertOne(primary, tokenAudit, {
         id: 'foreground-write',
         patId: 'pat',
         userId: 'user',
@@ -527,7 +526,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       slowQueryMs: 0,
       busyTimeoutMs: 1_000,
     })
-    await primary.insert(tokenAudit).values({
+    const { tokenAudit } = tablesOf(primary)
+    await insertOne(primary, tokenAudit, {
       id: 'foreground-race',
       patId: 'pat',
       userId: 'user',
@@ -551,8 +551,9 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       const startedAt = performance.now()
       expect(() =>
         dbTxSync(primary, (tx) => {
-          expect(tx.select().from(tokenAudit).get()?.statusCode).toBe(201)
-          tx.update(tokenAudit).set({ statusCode: 202 }).run()
+          const { tokenAudit } = tablesOf(tx)
+          expect(firstRow(tx.select().from(tokenAudit))?.statusCode).toBe(201)
+          queryWrite(tx.update(tokenAudit).set({ statusCode: 202 }))
         }),
       ).not.toThrow()
       expect(performance.now() - startedAt).toBeLessThan(1_000)
@@ -575,7 +576,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       slowQueryMs: 0,
       busyTimeoutMs: 1_000,
     })
-    await primary.insert(tokenAudit).values({
+    const { tokenAudit } = tablesOf(primary)
+    await insertOne(primary, tokenAudit, {
       id: 'foreground-race',
       patId: 'pat',
       userId: 'user',

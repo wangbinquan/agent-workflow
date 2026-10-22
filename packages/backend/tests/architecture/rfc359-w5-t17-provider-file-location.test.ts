@@ -38,11 +38,8 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │  「这个数不等于分叉数」，而每一刀都在重新推导同一份分类；把结论钉在账本旁边，下一刀直接接。
   // │  分类判据：**看这份实现在生产里跑在什么句柄上、它的孪生在哪**，不看文件名。
   // │
-  // │  ⚠️ 先记一条会反复骗人的事实：`PostgresqlDatabaseClient`（`platform/persistence/
-  // │  postgresqlDatabaseClient.ts:35`）**不是** PG 专用客户端，它是 drizzle 的 **sqlite-proxy**
-  // │  ——`SqliteRemoteDatabase<schema> & { $provider; $generationId }`，结构上就是
-  // │  `ProviderNeutralDatabase` 的子类型（`db/query.ts:20`），查询构建器两侧同一套。
-  // │  所以「这个文件吃 PostgresqlDatabaseClient」**不构成**它是真分叉的证据，只说明签名没放宽。
+  // │  RFC-395 I-b：PostgresqlDatabaseClient 是原生 bun-sql；两侧结构上实现 PersistenceDb。
+  // │  文件签名使用 provider 具名类型只说明入口归属，是否分叉仍须核对业务实现和孪生。
   // │
   // │  ① **真分叉（两侧各写一份业务逻辑，会漂）—— 3 条，是本模块剩下的全部靶心**
   // │     `aggregateAdapters/postgresqlResourcePackageMutation{Arms,Participants}.ts` +
@@ -85,7 +82,7 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │  ② **命名债（已经跑在中立句柄上，只是顶着旧名字；零行为风险）—— 4 条**
   // │     · W12 已将 `composition/postgresqlClassicCatalogs.ts` 合到中立 `classicCatalogs.ts`；四个被调方
   // │       (`composeAgentCatalog` / `composeSkillCatalog` / `composeDatabaseWorkflowCatalog` /
-  // │       `createSkillContentAvailability`) 全吃 `ProviderNeutralDatabase` 或纯文件系统。
+  // │       `createSkillContentAvailability`) 全吃 `PersistenceDb` 或纯文件系统。
   // │       `cli/start.ts` / `server.ts` 原来展开的同一串装配也已删除，三个根共用完整 bundle。
   // │     · W12 已将 resource-package 的 `resources`/`reads`/`readSkillTree` 三个字段合到
   // │       `composition/resourcePackageProvider.ts`，两个 provider 共用一个工厂；
@@ -94,7 +91,7 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │     · `sqlitePackageResourceRows.ts` **已销账**（RFC-359 §5dw）：它的两个 `*InTx` 只服务
   // │       legacy 提交路径，随 apply 引擎合一一起退役，整个文件删掉。
   // │     · `sqliteResourceGrantRepository.ts` 的 `listWritableGrantedResourceIds` 早就吃
-  // │       `ProviderNeutralDatabase`。
+  // │       `PersistenceDb`。
   // │     **改名不在本刀**：会牵动 5–7 份 architecture ledger，波尾单独一刀做。
   // │
   // │  ③ **机制本质不同（不该合，只该有对拍）—— 3 条**

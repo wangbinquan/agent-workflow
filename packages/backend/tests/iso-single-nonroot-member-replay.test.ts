@@ -8,13 +8,14 @@
 // Real group fixtures follow rfc248-materialize-group; the crash window and
 // discarded iso follow rfc130-crash-replay. Both DB providers run these cases.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -103,9 +104,8 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
     } as unknown as TaskMechanicsState
     async function isolate() {
       const runId = ulid()
-      await db
-        .insert(nodeRuns)
-        .values({ id: runId, taskId: task.id, nodeId: 'A', status: 'running' })
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, { id: runId, taskId: task.id, nodeId: 'A', status: 'running' })
       const handle = await createIsoUnderLock({
         binding,
         writeSem,
@@ -118,6 +118,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       return { runId, handle }
     }
     async function row(runId: string) {
+      const { nodeRuns } = tablesOf(db)
       return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     }
     return { task, binding, writeSem, state, isolate, row }
@@ -223,13 +224,16 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           runtimeCalls++
           for (const mount of shape.mounts)
             writeFileSync(join(iso.containerPath, mount, 'a.txt'), 'from fake runtime\n')
+          const { nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
           await harness.db
             .update(nodeRuns)
             .set({ status: 'done', finishedAt: Date.now() })
             .where(eq(nodeRuns.id, runId))
-          await harness.db
-            .insert(nodeRunOutputs)
-            .values({ nodeRunId: runId, portName: 'summary', content: 'ok' })
+          await insertOne(harness.db, nodeRunOutputs, {
+            nodeRunId: runId,
+            portName: 'summary',
+            content: 'ok',
+          })
         }
         await runtime(handle)
         const crash = new Error('injected crash after mark-pending-merge, before merge-back')
@@ -271,6 +275,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           appHome,
           defaultNodeRetries: 0,
         })
+        const { tasks, nodeRuns } = tablesOf(harness.db)
         const task = (await harness.db.select().from(tasks).where(eq(tasks.id, f.task.id)))[0]!
         expect(task.errorMessage).toBeNull()
         expect(task.status).toBe('done')

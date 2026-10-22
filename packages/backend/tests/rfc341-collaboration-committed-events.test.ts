@@ -1,15 +1,9 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  collaborationGateOperations,
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-  taskQuestions,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import {
   collaborationCommittedEventCodec,
@@ -42,7 +36,8 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_001_734_000
 
-async function dispatchCollaboration(db: ProviderNeutralDatabase): Promise<void> {
+async function dispatchCollaboration(db: PersistenceDb): Promise<void> {
+  const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
     .set({ mode: 'dispatchable', epoch: 2, changedAt: NOW, changeRef: 'rfc341-test' })
@@ -52,7 +47,6 @@ async function dispatchCollaboration(db: ProviderNeutralDatabase): Promise<void>
         eq(committedEventFamilyCutovers.epoch, 1),
       ),
     )
-    .run()
 }
 
 function reviewEnvelope(): CommittedEventEnvelopeV1 {
@@ -84,7 +78,7 @@ function reviewEnvelope(): CommittedEventEnvelopeV1 {
 }
 
 async function appendReviewOpen(input: {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   operationRef: string
   ordinal?: number
 }): Promise<CommittedEventRef> {
@@ -174,25 +168,23 @@ describeEachProvider('RFC-341 collaboration committed-event contracts', (harness
     const db = harness.db
     try {
       await dispatchCollaboration(db)
-      await db
-        .insert(tasks)
-        .values({
-          id: 'task-question-rollback',
-          name: 'task-question-rollback',
-          workflowId: 'workflow-question-rollback',
-          workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-          repoPath: '/tmp/rfc341',
-          worktreePath: '/tmp/rfc341',
-          baseBranch: 'main',
-          branch: 'agent-workflow/task-question-rollback',
-          status: 'running',
-          inputs: '{}',
-          startedAt: NOW,
-          executionLineageId: 'task-question-rollback',
-          lineageSlotPathJson:
-            '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-question-rollback","workflowRevision":null}]',
-        })
-        .run()
+      const { tasks, taskQuestions, collaborationGateOperations, committedEvents } = tablesOf(db)
+      await insertOne(db, tasks, {
+        id: 'task-question-rollback',
+        name: 'task-question-rollback',
+        workflowId: 'workflow-question-rollback',
+        workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+        repoPath: '/tmp/rfc341',
+        worktreePath: '/tmp/rfc341',
+        baseBranch: 'main',
+        branch: 'agent-workflow/task-question-rollback',
+        status: 'running',
+        inputs: '{}',
+        startedAt: NOW,
+        executionLineageId: 'task-question-rollback',
+        lineageSlotPathJson:
+          '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-question-rollback","workflowRevision":null}]',
+      })
       if (harness.capabilities.isolation === 'exclusive') {
         await harness.executeFixtureDdl(`
       CREATE TRIGGER rfc341_fail_collaboration_event
@@ -225,9 +217,9 @@ describeEachProvider('RFC-341 collaboration committed-event contracts', (harness
           now: NOW + 1,
         }),
       ).rejects.toThrow()
-      expect(await db.select().from(taskQuestions).all()).toEqual([])
-      expect(await db.select().from(collaborationGateOperations).all()).toEqual([])
-      expect(await db.select().from(committedEvents).all()).toEqual([])
+      expect(await db.select().from(taskQuestions)).toEqual([])
+      expect(await db.select().from(collaborationGateOperations)).toEqual([])
+      expect(await db.select().from(committedEvents)).toEqual([])
     } finally {
       if (harness.capabilities.isolation !== 'exclusive') {
         await harness.executeFixtureDdl(
@@ -367,13 +359,13 @@ describeEachProvider('RFC-341 collaboration committed-event contracts', (harness
     await dispatcher.drain(32)
     expect(projected.at(-1)).toBe('0:collaboration.human-gate-opened.v1')
     expect(projected).toHaveLength(3)
+    const { committedEventDeliveries } = tablesOf(db)
     expect(
       (
         await db
           .select()
           .from(committedEventDeliveries)
           .where(eq(committedEventDeliveries.state, 'accepted'))
-          .all()
       ).length,
     ).toBeGreaterThan(0)
   })

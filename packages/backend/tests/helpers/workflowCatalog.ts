@@ -1,14 +1,14 @@
 // RFC-359 —— 双引擎测试用的工作流目录装配：一份中立装配，两个 provider 共用；用例体本身看不见 provider。
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { WorkflowCatalogModule } from '@/modules/resource-catalog/public/operations'
 import type { WorkflowOperationContext } from '@/modules/resource-catalog/public/participants'
 
-export function workflowCatalogFor(db: ProviderNeutralDatabase): WorkflowCatalogModule {
+export function workflowCatalogFor(db: PersistenceDb): WorkflowCatalogModule {
   return composeDatabaseWorkflowCatalog({
     db,
     resourceCatalog: composeResourceCatalogFor({ db }),

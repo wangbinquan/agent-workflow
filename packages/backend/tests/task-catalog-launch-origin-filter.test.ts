@@ -20,6 +20,8 @@
 // 修法：来源→存储值的映射进 domain（`taskListOriginMatches`，单一事实源），两个
 // provider 的列表查询都按它下推到 SQL；目录源只做校验与透传。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
@@ -31,9 +33,8 @@ import {
 import { describe, expect, test } from 'bun:test'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, users, workflows } from '@/db/schema'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { ValidationError } from '@/util/errors'
@@ -58,7 +59,7 @@ describe('launch-origin filter maps to the stored column, once', () => {
   })
 })
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 /**
  * 五个根各占一种 `launch_origin`，外加一个**定时任务的子执行**——它继承父的
@@ -66,7 +67,8 @@ type Db = ProviderNeutralDatabase
  * 猜不对的那一行。
  */
 async function seed(db: Db): Promise<void> {
-  await db.insert(users).values({
+  const { users, workflows, tasks } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
     displayName: 'admin',
@@ -75,7 +77,7 @@ async function seed(db: Db): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -96,7 +98,7 @@ async function seed(db: Db): Promise<void> {
   let startedAt = 1_788_278_400_000
   for (const row of rows) {
     startedAt += 1
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: row.id,
       name: row.id,
       workflowId: 'wf1',
@@ -141,7 +143,7 @@ async function seed(db: Db): Promise<void> {
 
 async function idsFor(db: Db, origin: TaskListOrigin | undefined): Promise<string[]> {
   const items = await taskListItemsProjection(
-    { db: db, owners: composeOwnerIdentityQueries(db) },
+    { db, owners: composeOwnerIdentityQueries(db) },
     origin === undefined ? {} : { origin },
   )
   return items.map((item) => item.id).sort()

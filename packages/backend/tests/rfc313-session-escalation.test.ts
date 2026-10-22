@@ -10,6 +10,8 @@
 //   ③ 链中途崩溃只归零链长、**不**消耗升级预算（崩溃是别无选择，不是主动放弃）。
 // 形状判定本身的真值表在 packages/shared/tests/rfc313-retry-shape.test.ts。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { RETRY_ATTEMPT_CAP_CEILING } from '../src/platform/contracts/retryAttemptCap'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -19,7 +21,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { countAgentTextEvents } from '../src/modules/task-execution/composition/nodeMechanics'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
@@ -61,7 +62,8 @@ function buildHarness(): Harness {
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'rfc-313',
@@ -79,14 +81,15 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -138,11 +141,13 @@ function resumeFlags(argvLogPath: string): boolean[] {
 }
 
 async function attemptsOf(h: Harness, taskId: string) {
+  const { nodeRuns } = tablesOf(h.db)
   const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   return rows.sort((a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0))
 }
 
 async function payloadsOf(h: Harness, nodeRunId: string): Promise<string[]> {
+  const { nodeRunEvents } = tablesOf(h.db)
   const rows = await h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
   return rows.map((r) => r.payload)
 }
@@ -178,6 +183,7 @@ describe('RFC-313 会话升级', () => {
     // ① attempt 序列的形状：首发新会话 → 接续 → **升级换会话** → 接续。
     expect(resumeFlags(h.argvLog)).toEqual([false, true, false, true])
 
+    const { tasks } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
 
@@ -349,14 +355,15 @@ describe('RFC-313 会话升级', () => {
       kind: 'text' as const,
       payload,
     })
+    const { nodeRunEvents } = tablesOf(h.db)
     // 只有框架审计行 ⇒ 模型其实一个字没说 ⇒ 计数必须是 0
-    await h.db.insert(nodeRunEvents).values(ev('[rfc313/session-restart] {"rfc":"RFC-313"}'))
-    await h.db.insert(nodeRunEvents).values(ev('[rfc042/envelope-followup] {"rfc":"RFC-042"}'))
-    await h.db.insert(nodeRunEvents).values(ev('[rfc049/port-validation-followup] {"port":"x"}'))
+    await insertOne(h.db, nodeRunEvents, ev('[rfc313/session-restart] {"rfc":"RFC-313"}'))
+    await insertOne(h.db, nodeRunEvents, ev('[rfc042/envelope-followup] {"rfc":"RFC-042"}'))
+    await insertOne(h.db, nodeRunEvents, ev('[rfc049/port-validation-followup] {"port":"x"}'))
     expect(await countAgentTextEvents(nodePersistence(h.db), runId)).toBe(0)
 
     // 模型真说了话就必须算上（防止过滤写成把所有 text 都吃掉）
-    await h.db.insert(nodeRunEvents).values(ev('I finished the audit but forgot the envelope.'))
+    await insertOne(h.db, nodeRunEvents, ev('I finished the audit but forgot the envelope.'))
     expect(await countAgentTextEvents(nodePersistence(h.db), runId)).toBe(1)
   })
 

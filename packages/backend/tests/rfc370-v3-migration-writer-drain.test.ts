@@ -14,8 +14,9 @@
 //   with keys derived from the freeze;
 // - it leaves paused / closed / failed parents alone and writes nothing to the
 //   (write-frozen) database.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { hostedTaskWorkspaces } from '@/db/schema'
 import { createCrewStationExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/crewStationExecutionAuthority'
 import type { HostedExecutionControlRecord } from '@/modules/system-operations/application/ports/hostedExecutionControl'
 import { createHostedMigrationDrain } from '@/modules/source-control/infrastructure/crewstation/workspaceLifecycle'
@@ -181,7 +182,8 @@ describeEachProvider('RFC-370 V7 migration writer drain', (harness) => {
       task: Partial<BusinessTask>,
     ) => {
       const businessTaskId = `cs-${owner}`
-      await harness.db.insert(hostedTaskWorkspaces).values({
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      await insertOne(harness.db, hostedTaskWorkspaces, {
         taskId: owner,
         requestKey: `aw-task:installation:${owner}`,
         businessTaskId,
@@ -266,6 +268,7 @@ describeEachProvider('RFC-370 V7 migration writer drain', (harness) => {
     await f.register('task-failed', 'ready', { state: 'failed' })
     await f.register('task-closed', 'closed', { state: 'closed' })
     const starting = await f.register('task-starting', 'creating', { state: 'creating' })
+    const { hostedTaskWorkspaces } = tablesOf(harness.db)
     const before = await harness.db.select().from(hostedTaskWorkspaces)
     // A starting container counts as remaining; it is paused once it runs.
     expect(await f.drain(stop, new AbortController().signal)).toEqual({ remaining: 1 })

@@ -22,15 +22,16 @@
 //      pending 残留。收割后 resumeTask 可从 interrupted 恢复（完整恢复闭环见
 //      rfc097-pending-orphan-reap.test.ts）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
@@ -40,27 +41,28 @@ import { createTaskExecutionPersistence } from '../src/modules/task-execution/co
 const ulid = monotonicFactory()
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   tmp: string
   cleanup: () => void
 }
 
-function buildHarness(db: ProviderNeutralDatabase): Harness {
+function buildHarness(db: PersistenceDb): Harness {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-gap5-orphans-'))
   return { db, tmp, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
 }
 
-async function seedTask(db: ProviderNeutralDatabase, status: string): Promise<string> {
+async function seedTask(db: PersistenceDb, status: string): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -73,7 +75,7 @@ async function seedTask(db: ProviderNeutralDatabase, status: string): Promise<st
     worktreePath: '/tmp/wt',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
-    status: status as typeof tasks.$inferInsert.status,
+    status: status as PersistenceTables['tasks']['$inferInsert']['status'],
     inputs: '{}',
     startedAt: Date.now() - 60_000,
   })
@@ -81,13 +83,14 @@ async function seedTask(db: ProviderNeutralDatabase, status: string): Promise<st
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  status: typeof nodeRuns.$inferInsert.status,
+  status: PersistenceTables['nodeRuns']['$inferInsert']['status'],
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -99,7 +102,8 @@ async function seedRun(
   return id
 }
 
-async function runStatus(db: ProviderNeutralDatabase, id: string): Promise<string | undefined> {
+async function runStatus(db: PersistenceDb, id: string): Promise<string | undefined> {
+  const { nodeRuns } = tablesOf(db)
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]?.status
 }
 
@@ -130,6 +134,7 @@ describeEachProvider(
       // as an orphan and flipped. After fix: expect(r.runs).toBe(0).
       expect(r.runs).toBe(1)
 
+      const { tasks } = tablesOf(h.db)
       const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       expect(t?.status).toBe('awaiting_human') // task untouched (status filter is task-side only)
       expect(t?.errorSummary).toBeNull()
@@ -158,6 +163,7 @@ describeEachProvider(
       expect(r.runs).toBe(1)
       expect(await runStatus(h.db, runId)).toBe('interrupted')
 
+      const { tasks } = tablesOf(h.db)
       const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       expect(t?.status).toBe('interrupted')
       expect(t?.errorSummary).toBe('daemon-restart')

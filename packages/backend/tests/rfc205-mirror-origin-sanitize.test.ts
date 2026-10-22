@@ -13,13 +13,13 @@ import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { runGit } from '../src/util/git'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let tmp: string
 let appHome: string
 

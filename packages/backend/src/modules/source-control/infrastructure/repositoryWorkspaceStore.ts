@@ -8,23 +8,16 @@
 // WHERE 里」（形状与实测见 `repositoryWorkspaceSqlStore.referencedFacetCounts`）之后两个引擎
 // 各自都能上提成 semi/anti join，索引提示随之退场——两个引擎都自选到了覆盖索引。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows, rawExec, type RawRowCodecs } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  memories,
-  repoGroupNodes,
-  repoGroups,
-  scheduledTasks,
-  taskRepos,
-  tasks,
-} from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   affectedRows,
   databaseSessionFor,
   engineOf,
-  type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type {
   RepositoryCredentialSealingMutation,
@@ -41,32 +34,47 @@ import {
 
 const REPOSITORY_GROUP_GRAPH_LOCK = 'source-control:repository-groups'
 
-function executor(db: ProviderNeutralDatabase): RepositoryWorkspaceSqlExecutor {
+function executor(db: PersistenceDb): RepositoryWorkspaceSqlExecutor {
   return {
-    async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
-      return (await db.all(query)) as readonly T[]
+    db,
+    async all<T extends Record<string, unknown>>(
+      query: SQLWrapper,
+      codecs?: RawRowCodecs<T>,
+    ): Promise<readonly T[]> {
+      return await rawRows<T>(db, query, codecs)
     },
     async run(query): Promise<number> {
-      return affectedRows(await db.run(query))
+      return affectedRows(await rawExec(db, query))
     },
     async cachedRepoFacets(input) {
+      const { cachedRepos } = tablesOf(db)
       // 每格一条标量子查询：`exists` 回到 WHERE 子句里，两个 planner 都会把它上提成
       // semi/anti join；外层是一行常量，所以每格只求值一次。为什么不是一次聚合扫描、
       // 也不是预聚合 + LEFT JOIN，见 `repositoryWorkspaceSqlStore.referencedFacetCounts`。
-      const rows = await db.all<{
+      const rows = await rawRows<{
         all_count: number
         explicit_count: number
         legacy_count: number
         scheduled_count: number
         attention_count: number
-      }>(sql`
+      }>(
+        db,
+        sql`
         SELECT
           (SELECT count(*) FROM ${cachedRepos}) AS all_count,
           (SELECT count(*) FROM ${cachedRepos} WHERE ${input.explicit}) AS explicit_count,
           (SELECT count(*) FROM ${cachedRepos} WHERE ${input.legacyOnly}) AS legacy_count,
           (SELECT count(*) FROM ${cachedRepos} WHERE ${input.scheduledOnly}) AS scheduled_count,
           (SELECT count(*) FROM ${cachedRepos} WHERE ${input.attention}) AS attention_count
-      `)
+      `,
+        {
+          all_count: 'int',
+          explicit_count: 'int',
+          legacy_count: 'int',
+          scheduled_count: 'int',
+          attention_count: 'int',
+        },
+      )
       return (
         rows[0] ?? {
           all_count: 0,
@@ -81,10 +89,11 @@ function executor(db: ProviderNeutralDatabase): RepositoryWorkspaceSqlExecutor {
 }
 
 async function insertGroupNodes(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   nodes: readonly RepositoryGroupNodeRecord[],
 ): Promise<void> {
-  for (const node of nodes) await tx.insert(repoGroupNodes).values(node)
+  const { repoGroupNodes } = tablesOf(tx)
+  for (const node of nodes) await insertOne(tx, repoGroupNodes, node)
 }
 
 function graphVersionsMatch(
@@ -97,22 +106,26 @@ function graphVersionsMatch(
 }
 
 async function applySealingMutation(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   mutation: RepositoryCredentialSealingMutation,
 ): Promise<void> {
   for (const update of mutation.cachedRepoUpdates) {
+    const { cachedRepos } = tablesOf(tx)
     await tx.update(cachedRepos).set(update.patch).where(eq(cachedRepos.id, update.id))
   }
   for (const update of mutation.taskRepoUpdates) {
+    const { taskRepos } = tablesOf(tx)
     await tx
       .update(taskRepos)
       .set(update.patch)
       .where(and(eq(taskRepos.taskId, update.taskId), eq(taskRepos.repoIndex, update.repoIndex)))
   }
   for (const update of mutation.taskUpdates) {
+    const { tasks } = tablesOf(tx)
     await tx.update(tasks).set(update.patch).where(eq(tasks.id, update.id))
   }
   for (const update of mutation.scheduleUpdates) {
+    const { scheduledTasks } = tablesOf(tx)
     await tx
       .update(scheduledTasks)
       .set({ launchPayload: update.launchPayload })
@@ -126,13 +139,14 @@ export class DrizzleRepositoryWorkspaceStore
 {
   readonly runtimeIdentity: object
 
-  constructor(private readonly db: ProviderNeutralDatabase) {
+  constructor(private readonly db: PersistenceDb) {
     super(executor(db), engineOf(db))
     this.runtimeIdentity = db as object
   }
 
   async deleteCachedRepoAndDetachGroups(id: string): Promise<void> {
     await databaseSessionFor(this.db).transaction(async (tx) => {
+      const { repoGroupNodes, cachedRepos } = tablesOf(tx)
       await tx
         .update(repoGroupNodes)
         .set({
@@ -167,13 +181,14 @@ export class DrizzleRepositoryWorkspaceStore
   ): Promise<'created' | 'name-conflict'> {
     return await databaseSessionFor(this.db).transaction(async (tx) => {
       await engineOf(tx).advisoryLock(tx, REPOSITORY_GROUP_GRAPH_LOCK)
+      const { repoGroups } = tablesOf(tx)
       const duplicates = await tx
         .select({ id: repoGroups.id })
         .from(repoGroups)
         .where(sql`lower(${repoGroups.name}) = lower(${group.name})`)
         .limit(1)
       if (duplicates.length > 0) return 'name-conflict'
-      await tx.insert(repoGroups).values(group)
+      await insertOne(tx, repoGroups, group)
       await insertGroupNodes(tx, nodes)
       return 'created'
     })
@@ -193,6 +208,7 @@ export class DrizzleRepositoryWorkspaceStore
   }): Promise<RepositoryGroupWriteResult> {
     return await databaseSessionFor(this.db).transaction(async (tx) => {
       await engineOf(tx).advisoryLock(tx, REPOSITORY_GROUP_GRAPH_LOCK)
+      const { repoGroups, repoGroupNodes } = tablesOf(tx)
       const graphVersions = await tx
         .select({ id: repoGroups.id, version: repoGroups.version })
         .from(repoGroups)
@@ -244,6 +260,7 @@ export class DrizzleRepositoryWorkspaceStore
   }): Promise<RepositoryGroupDeleteResult> {
     return await databaseSessionFor(this.db).transaction(async (tx) => {
       await engineOf(tx).advisoryLock(tx, REPOSITORY_GROUP_GRAPH_LOCK)
+      const { repoGroups, memories, repoGroupNodes, scheduledTasks } = tablesOf(tx)
       const graphVersions = await tx
         .select({ id: repoGroups.id, version: repoGroups.version })
         .from(repoGroups)
@@ -309,8 +326,6 @@ export class DrizzleRepositoryWorkspaceStore
   }
 }
 
-export function composeRepositoryWorkspaceStore(
-  db: ProviderNeutralDatabase,
-): RepositoryWorkspaceStore {
+export function composeRepositoryWorkspaceStore(db: PersistenceDb): RepositoryWorkspaceStore {
   return new DrizzleRepositoryWorkspaceStore(db)
 }

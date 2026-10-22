@@ -1,15 +1,12 @@
 // RFC-359: asynchronous transaction shell over the shared terminalization sequence.
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
 import type { TaskExecutionIntentTerminalPersistence } from '../application/terminalizeExecutionIntent'
 import { taskExecutionIntentTerminalSequence } from './taskExecutionIntentTerminalSequence'
 
 export class DrizzleTaskExecutionIntentTerminalPersistence implements TaskExecutionIntentTerminalPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async terminalize(
     input: Parameters<TaskExecutionIntentTerminalPersistence['terminalize']>[0],
@@ -36,7 +33,7 @@ export class DrizzleTaskExecutionIntentTerminalPersistence implements TaskExecut
  * 换事务原语这一刀只负责搬形态，不负责改判据。
  */
 export async function terminalizeTaskExecutionIntentsUncheckedInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: Parameters<TaskExecutionIntentTerminalPersistence['terminalize']>[0],
 ): Promise<void> {
   await driveAsyncProgram(taskExecutionIntentTerminalSequence(tx, input, 'unchecked'), (step) =>
@@ -46,7 +43,7 @@ export async function terminalizeTaskExecutionIntentsUncheckedInTx(
 
 /** 事务内参与者，供更大的原子（恢复、源终止、人工门决定）在自己的事务里调用。 */
 export async function terminalizeTaskExecutionIntentsInTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: Parameters<TaskExecutionIntentTerminalPersistence['terminalize']>[0],
 ): Promise<void> {
   await driveAsyncProgram(

@@ -1,19 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import {
-  docVersions,
-  nodeRuns,
-  reviewComments,
-  reviewNodeReviewers,
-  taskCollaborators,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
 import {} from '@/modules/collaboration/composition/decisionCommands'
 import { replaceReviewNodeReviewers } from '../src/modules/collaboration/public/commands'
 import {
@@ -37,6 +29,7 @@ function actor(id: string) {
 async function fixture(scope: ProviderHttpApplicationScope) {
   const db = scope.harness.db
   const now = 1_789_000_000_000
+  const { users, workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
   await db.insert(users).values(
     ['owner', 'reviewer', 'other'].map((id) => ({
       id,
@@ -48,12 +41,12 @@ async function fixture(scope: ProviderHttpApplicationScope) {
       updatedAt: now,
     })),
   )
-  await db.insert(workflows).values({
+  await insertOne(db, workflows, {
     id: 'wf',
     name: 'Workflow',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: 'task',
     name: 'Task',
     workflowId: 'wf',
@@ -280,6 +273,7 @@ describeEachProviderHttpApplication(
         taskId: 'task',
         body: { nodes: [{ reviewNodeId: 'review-a', reviewerUserIds: ['reviewer'] }] },
       })
+      const { reviewComments, taskCollaborators } = tablesOf(db)
       await db.insert(reviewComments).values([
         {
           id: 'comment',
@@ -403,7 +397,7 @@ describeEachProviderHttpApplication(
       })
       expect(selection.status).toBe(403)
 
-      await db.insert(taskCollaborators).values({
+      await insertOne(db, taskCollaborators, {
         taskId: 'task',
         userId: 'other',
         role: 'observer',
@@ -476,6 +470,7 @@ describeEachProviderHttpApplication(
       expect(replacedBody.nodes.find((node) => node.reviewNodeId === 'review-b')).toMatchObject({
         reviewers: [],
       })
+      const { taskCollaborators, tasks, reviewNodeReviewers } = tablesOf(db)
       expect(await db.select().from(taskCollaborators)).toEqual([])
 
       const forbidden = await request(reviewerToken)
@@ -507,6 +502,7 @@ describeEachProviderHttpApplication(
           body: { nodes: [{ reviewNodeId: 'worker', reviewerUserIds: ['reviewer'] }] },
         }),
       ).rejects.toMatchObject({ code: 'review-reviewers-node-invalid' })
+      const { users } = tablesOf(db)
       await db.update(users).set({ status: 'disabled' }).where(eq(users.id, 'reviewer'))
       await expect(
         replaceReviewNodeReviewers(context, {

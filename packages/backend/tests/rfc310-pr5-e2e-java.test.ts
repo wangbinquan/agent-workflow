@@ -13,6 +13,8 @@
 // requirement title）→ watching + mr-care wait。mock 侧断言 MR 与分支真实
 // 存在——平台从不 force push、从不 merge。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { afterAll, beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
@@ -43,11 +45,10 @@ import {
   bindChangeCandidateParticipant,
 } from '../src/modules/source-control/composition'
 import { composeDevelopmentMrEffects } from '../src/modules/integration/composition/codeHostEffects'
-import { cachedRepos } from '../src/db/schema'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 setDefaultTimeout(240_000)
 
@@ -119,12 +120,13 @@ async function startLaneWorld(): Promise<void> {
 }
 
 /** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
-async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
+async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
   launches.length = 0
   outcomes.clear()
   fx = await buildPr3Fixture({ db })
   const repoPath = repoCachePath
-  await fx.db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(fx.db)
+  await insertOne(fx.db, cachedRepos, {
     id: 'repo-1',
     urlHash: 'e2ejava1',
     localPath: repoPath,

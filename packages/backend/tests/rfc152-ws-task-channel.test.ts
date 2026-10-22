@@ -18,15 +18,16 @@
 //    means adding a ws/registry.ts spec; scattering a new branch into
 //    server.ts goes red here.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Server } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { createUser } from './helpers/userFixture'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
@@ -39,7 +40,7 @@ type AnyServer = Server<unknown>
 const DAEMON_TOKEN = 'd'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   server: AnyServer
   baseUrl: string
   taskId: string
@@ -75,14 +76,15 @@ async function buildHarness(harness: ProviderDatabaseHarness): Promise<Harness> 
   const adminToken = (await createSession({ db, userId: admin.id })).token
 
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf-gate',
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'gated-task',
     workflowId: 'wf-gate',

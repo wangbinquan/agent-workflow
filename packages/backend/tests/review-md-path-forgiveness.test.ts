@@ -14,21 +14,15 @@
 // (resolvePortContentDetailed) and packages/backend/src/services/review.ts
 // (dispatchReviewNode upstream port resolve).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  agents as agentsTable,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -37,7 +31,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 describeEachProvider(
   'dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     let appHome: string
     let worktree: string
 
@@ -60,7 +54,8 @@ describeEachProvider(
       const frontmatter = opts.declareMarkdownFileKind
         ? JSON.stringify({ outputKinds: { design: 'markdown_file' } })
         : '{}'
-      await db.insert(agentsTable).values({
+      const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, agents, {
         id: agentId,
         name: 'designer',
         description: '',
@@ -91,7 +86,7 @@ describeEachProvider(
         edges: [],
       }
       const workflowId = ulid()
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -100,7 +95,7 @@ describeEachProvider(
       })
 
       const taskId = ulid()
-      await db.insert(tasks).values({
+      await insertOne(db, tasks, {
         name: 'fixture-task',
         id: taskId,
         workflowId,
@@ -121,7 +116,7 @@ describeEachProvider(
       const absPath = join(worktree, 'docs', 'test_design.md')
 
       const designerRunId = ulid()
-      await db.insert(nodeRuns).values({
+      await insertOne(db, nodeRuns, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -132,7 +127,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await db.insert(nodeRunOutputs).values({
+      await insertOne(db, nodeRunOutputs, {
         nodeRunId: designerRunId,
         portName: 'design',
         content: absPath,
@@ -157,6 +152,7 @@ describeEachProvider(
       })
       expect(result.kind).toBe('awaiting_review')
 
+      const { docVersions } = tablesOf(db)
       const dvs = await db.select().from(docVersions)
       expect(dvs.length).toBe(1)
       const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')
@@ -180,6 +176,7 @@ describeEachProvider(
       })
       expect(result.kind).toBe('awaiting_review')
 
+      const { docVersions } = tablesOf(db)
       const dvs = await db.select().from(docVersions)
       expect(dvs.length).toBe(1)
       const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')

@@ -1,5 +1,5 @@
 import type { AclResourceType, ResourceVisibility } from '@agent-workflow/shared'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /** ACL identity tables whose aggregate writer remains outside resource-catalog. */
 export type ForeignResourceAclType = Extract<
@@ -40,7 +40,7 @@ export interface ResourceAclIdentityPersistence {
   readonly type: ForeignResourceAclType
   getRevision(resourceId: string): Promise<number>
   loadForMutation(
-    transaction: DatabaseTransaction,
+    transaction: PersistenceTx,
     resourceId: string,
   ): Promise<ResourceAclIdentityMutation | undefined>
 }

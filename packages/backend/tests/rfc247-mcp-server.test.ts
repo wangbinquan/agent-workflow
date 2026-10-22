@@ -14,7 +14,7 @@
 // (1) and (2) structurally impossible without a second Hono route root.
 
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { describe, expect, test } from 'bun:test'
 import { type Permission, type WorkflowInput } from '@agent-workflow/shared'
@@ -61,7 +61,7 @@ const AGENT_BODY = {
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   /** 应用自己装配好的那一份——dispatcher 与「同一枚 token 打 REST」都用它。 */
   app: Hono
   identityAccess: IdentityAccessRuntime

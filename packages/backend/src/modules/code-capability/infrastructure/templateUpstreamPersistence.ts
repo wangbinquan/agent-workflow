@@ -1,9 +1,9 @@
 // RFC-349 — atomic adapter for capability-template upstream sync. RFC-359 W4-B5：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { capabilityTemplates } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   TemplateUpstreamPersistence,
@@ -11,7 +11,8 @@ import type {
 } from '../application/ports/templateUpstreamPersistence'
 
 /** 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。 */
-function fields() {
+function fields(db: object) {
+  const { capabilityTemplates } = tablesOf(db)
   return {
     id: capabilityTemplates.id,
     name: capabilityTemplates.name,
@@ -33,15 +34,14 @@ function fields() {
   }
 }
 
-export function createTemplateUpstreamPersistence(
-  db: ProviderNeutralDatabase,
-): TemplateUpstreamPersistence {
+export function createTemplateUpstreamPersistence(db: PersistenceDb): TemplateUpstreamPersistence {
   const load = async (
-    handle: ProviderNeutralDatabase,
+    handle: PersistenceDb,
     templateId: string,
   ): Promise<TemplateUpstreamRecord | null> => {
+    const { capabilityTemplates } = tablesOf(handle)
     const [row] = await handle
-      .select(fields())
+      .select(fields(handle))
       .from(capabilityTemplates)
       .where(eq(capabilityTemplates.id, templateId))
       .limit(1)
@@ -60,6 +60,7 @@ export function createTemplateUpstreamPersistence(
         // changes between the two SELECTs. (SQLite's exclusive transaction has
         // no second writer; the engine capability is a no-op there.)
         const engine = engineOf(tx)
+        const { capabilityTemplates } = tablesOf(tx)
         await engine.lockAggregateRoot(tx, capabilityTemplates, capabilityTemplates.id, templateId)
         const local = await load(tx, templateId)
         if (local === null) return null

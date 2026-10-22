@@ -6,12 +6,13 @@
 // 不调 apply；③ 两个 eligible → 跳（no-single-eligible）；④ 已隔离任务 → 跳；⑤ apply 抛错
 // → 跳、不计 repaired。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
 import { runAutoRepairOnce } from '../src/services/autoRepair'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
@@ -40,12 +41,13 @@ function mkOption(id: string, autoApplyEligible: boolean, available: boolean): R
   }
 }
 
-async function seedTaskWithAlert(db: ProviderNeutralDatabase, rule = 'S4'): Promise<string> {
+async function seedTaskWithAlert(db: PersistenceDb, rule = 'S4'): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -58,7 +60,7 @@ async function seedTaskWithAlert(db: ProviderNeutralDatabase, rule = 'S4'): Prom
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await db.insert(lifecycleAlerts).values({
+  await insertOne(db, lifecycleAlerts, {
     id: ulid(),
     taskId,
     rule,

@@ -11,13 +11,13 @@
 // 复用 rfc187-workgroup-e2e.test.ts 的 scenario-opencode harness（RFC-186 首绿
 // 后的 stub 缝封锁模式）；writeFiles 步骤 mixin 为本 RFC 新增。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, users, workgroupAssignments, workgroupMessages } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -81,6 +81,7 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
       const leadId = await seedAgent(h.db, 'wg-lead')
       const worker1Id = await seedAgent(h.db, 'wg-w1')
       const worker2Id = await seedAgent(h.db, 'wg-w2')
+      const { users, tasks, workgroupAssignments, workgroupMessages } = tablesOf(h.db)
       // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
       // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
       await h.db

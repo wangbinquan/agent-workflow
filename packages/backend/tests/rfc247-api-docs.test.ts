@@ -13,7 +13,7 @@ import { Hono } from 'hono'
 import type { Config } from '@agent-workflow/shared'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { registerRoute, resetRouteMetaRegistry } from '../src/routes/registry'
@@ -31,7 +31,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 async function realApp(
   scope: ProviderHttpApplicationScope,
   config?: Partial<Config>,
-): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
+): Promise<{ db: PersistenceDb; app: Hono }> {
   // RFC-359 AC-6：配置覆盖走 `open({ config })`——应用读的是作用域现建的那个 configPath，
   // 用例自己往别处写一份 config.json 会被整份绕开（`providerHttpApplicationScope` 有记）。
   const opened = await scope.open(config === undefined ? undefined : { config })

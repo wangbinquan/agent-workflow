@@ -2,6 +2,8 @@
 // 两个引擎各跑一遍：可见性阶梯（bypass ⇒ 全部；private 权限 ⇒ public + 自有 + 被授权；无 private 权限 ⇒ 仅 public）、
 // grant 读端口三法、概览计数、摘要查询的搜索（`instr(lower(…))` 两方言同一句）与 after 游标。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -11,8 +13,7 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/application/demoResourceCatalogSeed'
 import { createResourceCatalogSummaryReadPort } from '@/modules/resource-catalog/infrastructure/catalogQuery'
 import { createDemoResourceCatalogSeedPersistence } from '@/modules/resource-catalog/infrastructure/demoResourceCatalogSeed'
@@ -26,9 +27,10 @@ import * as neutralAclReads from '@/modules/resource-catalog/infrastructure/aclR
 import * as sqliteAclReads from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedUser(db: ProviderNeutralDatabase, role: 'admin' | 'user'): Promise<string> {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user'): Promise<string> {
   const id = `u_b2b_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -64,7 +66,7 @@ function publicOnlyActor(userId: string): Actor {
 }
 
 /** 用演示种子造两个 agent（种子恒 public），再把其中一个改成某 owner 的 private。 */
-async function seedAgents(db: ProviderNeutralDatabase, owner: string, tag: string) {
+async function seedAgents(db: PersistenceDb, owner: string, tag: string) {
   const participant = createDemoResourceCatalogSeedParticipant(
     createDemoResourceCatalogSeedPersistence(db),
   )
@@ -105,6 +107,7 @@ async function seedAgents(db: ProviderNeutralDatabase, owner: string, tag: strin
   const privateId = `a_${ulid()}`
   await seedOne(publicId, `${tag}-public`)
   await seedOne(privateId, `${tag}-private`)
+  const { agents } = tablesOf(db)
   await db
     .update(agents)
     .set({ visibility: 'private', ownerUserId: owner })
@@ -121,7 +124,8 @@ describeEachProvider('RFC-359 W4-B2b —— 可见性阶梯与 grant 读端口',
     const admin = await seedUser(db, 'admin')
     const tag = `t${ulid().slice(-5).toLowerCase()}`
     const { privateId } = await seedAgents(db, owner, tag)
-    await db.insert(resourceGrants).values({
+    const { resourceGrants } = tablesOf(db)
+    await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: privateId,
       userId: grantee,

@@ -1,5 +1,5 @@
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { assertNotBuiltin, excludeBuiltinAgents } from '@/services/systemResources'
@@ -35,7 +35,7 @@ export interface AgentCatalogAdapterCompositionDependencies {
 }
 
 export interface AgentCatalogCompositionDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly persistence: AgentPersistenceSemantics
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly importQueries: AgentImportQueries
@@ -110,7 +110,7 @@ export function composeAgentCatalog(
  * （RFC-294 §3.1 的 offered 边只允许 bootstrap → composition）。
  */
 export function composeDatabaseAgentCatalog(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly resourceInventory: AgentResourceInventorySource
   readonly runtimeProfiles: AgentRuntimeProfileLookup

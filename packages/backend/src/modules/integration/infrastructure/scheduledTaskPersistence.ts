@@ -1,19 +1,17 @@
 // RFC-359 W4-D1 —— 定时任务持久化：一份实现，两个 provider 共用。多语句写走统一事务原语；
 // 资源快照在同一个写事务里加载（Integration owner 持有事务，Resource Catalog 把 ACL / 内容读绑定到它）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { OwnerIdentitySchema, type UserPublic } from '@agent-workflow/shared'
 import { and, asc, count, eq, inArray, isNotNull, lte, or, sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { resourceGrants, scheduledTasks, users } from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
 } from '@/modules/resource-catalog/public/types'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import type {
   IntegrationTriggerAuthorityPair,
@@ -24,7 +22,7 @@ import type {
 /** Infrastructure-private bridge: the resource snapshot joins the schedule write tx. */
 export interface IntegrationTriggerTransactionLoader {
   loadAuthorized(
-    tx: DatabaseTransaction,
+    tx: PersistenceTx,
     pair: IntegrationTriggerAuthorityPair,
     requests: readonly IntegrationTriggerResourceRequest[],
   ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]>
@@ -32,7 +30,7 @@ export interface IntegrationTriggerTransactionLoader {
 
 const OWNER_BATCH_SIZE = 200
 
-function toPublicUser(row: typeof users.$inferSelect): UserPublic {
+function toPublicUser(row: PersistenceTables['users']['$inferSelect']): UserPublic {
   return {
     id: row.id,
     username: row.username,
@@ -43,18 +41,24 @@ function toPublicUser(row: typeof users.$inferSelect): UserPublic {
 }
 
 export function createScheduledTaskPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   resources: IntegrationTriggerTransactionLoader,
 ): ScheduledTaskPersistencePort {
   const session = databaseSessionFor(db)
-  const get = async (id: string): Promise<ScheduledTaskRecord | null> =>
-    (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1))[0] ?? null
+  const get = async (id: string): Promise<ScheduledTaskRecord | null> => {
+    const { scheduledTasks } = tablesOf(db)
+    return (
+      (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1))[0] ?? null
+    )
+  }
 
   const persistence: ScheduledTaskPersistencePort = {
     async list() {
+      const { scheduledTasks } = tablesOf(db)
       return await db.select().from(scheduledTasks)
     },
     async countVisible(actor) {
+      const { scheduledTasks, resourceGrants } = tablesOf(db)
       const rows = await db
         .select({ value: count() })
         .from(scheduledTasks)
@@ -81,6 +85,7 @@ export function createScheduledTaskPersistence(
     },
     get,
     async loadGrantLevel(resourceId, userId) {
+      const { resourceGrants } = tablesOf(db)
       return (
         (
           await db
@@ -98,6 +103,7 @@ export function createScheduledTaskPersistence(
       )
     },
     async listGrantedResourceIds(userId) {
+      const { resourceGrants } = tablesOf(db)
       const rows = await db
         .select({ resourceId: resourceGrants.resourceId })
         .from(resourceGrants)
@@ -112,6 +118,7 @@ export function createScheduledTaskPersistence(
       for (let offset = 0; offset < wanted.length; offset += OWNER_BATCH_SIZE) {
         const batch = wanted.slice(offset, offset + OWNER_BATCH_SIZE)
         if (batch.length === 0) continue
+        const { users } = tablesOf(db)
         const rows = await db
           .select({ id: users.id, username: users.username, displayName: users.displayName })
           .from(users)
@@ -128,7 +135,8 @@ export function createScheduledTaskPersistence(
         const snapshots = await resources.loadAuthorized(tx, input.authority, [input.request])
         const snapshot = snapshots[0]
         if (snapshot === undefined) throw new Error('integration-trigger-snapshot-missing')
-        await tx.insert(scheduledTasks).values(input.finish(snapshot))
+        const { scheduledTasks } = tablesOf(tx)
+        await insertOne(tx, scheduledTasks, input.finish(snapshot))
       })
       const created = await get(input.record.id)
       if (created === null) throw new Error('scheduled task disappeared right after insert')
@@ -136,6 +144,7 @@ export function createScheduledTaskPersistence(
     },
     async updateAtomically(input) {
       await session.transaction(async (tx) => {
+        const { scheduledTasks } = tablesOf(tx)
         const fresh = (
           await tx.select().from(scheduledTasks).where(eq(scheduledTasks.id, input.id)).limit(1)
         )[0]
@@ -165,12 +174,14 @@ export function createScheduledTaskPersistence(
     async delete(id) {
       const existing = await get(id)
       if (existing === null) return null
+      const { scheduledTasks } = tablesOf(db)
       await db.delete(scheduledTasks).where(eq(scheduledTasks.id, id))
       return existing
     },
     async loadAcl(resourceId) {
       const row = await get(resourceId)
       if (row === null) return null
+      const { resourceGrants, users } = tablesOf(db)
       const grants = await db
         .select({ userId: resourceGrants.userId, level: resourceGrants.level })
         .from(resourceGrants)
@@ -191,6 +202,7 @@ export function createScheduledTaskPersistence(
     },
     async replaceAclAtomically(input) {
       await session.transaction(async (tx) => {
+        const { scheduledTasks, users, resourceGrants } = tablesOf(tx)
         const current = (
           await tx
             .select({
@@ -266,6 +278,7 @@ export function createScheduledTaskPersistence(
     },
     async pollAndClaim(input) {
       if (input.limit <= 0) return []
+      const { scheduledTasks } = tablesOf(db)
       const due = await db
         .select()
         .from(scheduledTasks)
@@ -318,6 +331,7 @@ export function createScheduledTaskPersistence(
     },
     async recordSuccess(input) {
       await session.transaction(async (tx) => {
+        const { scheduledTasks } = tablesOf(tx)
         await tx
           .update(scheduledTasks)
           .set({ consecutiveFailures: 0, updatedAt: input.recordedAt })
@@ -341,6 +355,7 @@ export function createScheduledTaskPersistence(
     },
     async recordFailure(input) {
       return await session.transaction(async (tx) => {
+        const { scheduledTasks } = tablesOf(tx)
         const result = await tx
           .update(scheduledTasks)
           .set({
@@ -372,13 +387,16 @@ export function createScheduledTaskPersistence(
       })
     },
     async updateHealedPayload(input) {
-      const patch: Partial<typeof scheduledTasks.$inferInsert> = { updatedAt: input.updatedAt }
+      const patch: Partial<PersistenceTables['scheduledTasks']['$inferInsert']> = {
+        updatedAt: input.updatedAt,
+      }
       if (input.launchPayload !== undefined) patch.launchPayload = input.launchPayload
       if (input.disableError !== undefined) {
         patch.enabled = false
         patch.nextRunAt = null
         patch.lastError = input.disableError
       }
+      const { scheduledTasks } = tablesOf(db)
       await db.update(scheduledTasks).set(patch).where(eq(scheduledTasks.id, input.id))
     },
   }

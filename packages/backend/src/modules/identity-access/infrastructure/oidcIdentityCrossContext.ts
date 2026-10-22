@@ -9,16 +9,13 @@
 // 与旧 SQLite 版的语义对齐点（取两者中更完整的一边）：用户名冲突不再漏成裸驱动错误而是 `username-taken`；
 // 绑定邀请用户时用户不存在报 `user-not-found`；解绑在一笔事务里判存在再删。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { UserIdentity } from '@agent-workflow/shared'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { authLoginPolicy, oidcProviders, userIdentities, users } from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { storeUserAccessRecord } from './userAccessRecordIndex'
 import { syncOidcProfileTransaction } from '../application/commands/syncOidcProfile'
@@ -48,7 +45,7 @@ import {
 } from './userAccessPersistence'
 
 export interface OidcIdentityCompositionInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** 缺席时只有读与解绑可用；需要账户参与者的路径报 `identity-access-runtime-not-composed`。 */
   readonly identityAccess?: OidcIdentityProfileAccess
   readonly onIdentityDeleted?: () => void | Promise<void>
@@ -64,7 +61,7 @@ function identityKey(providerId: string, subject: string): string {
   return `${providerId}\u0000${subject}`
 }
 
-function mapUser(row: typeof users.$inferSelect): UserAccessRecord {
+function mapUser(row: PersistenceTables['users']['$inferSelect']): UserAccessRecord {
   return {
     id: row.id,
     username: row.username,
@@ -297,10 +294,11 @@ function profileCommand(input: CreateOidcIdentityInput) {
 }
 
 async function loadState(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: CreateOidcIdentityInput,
 ): Promise<LoadedOidcState> {
   const loadedUsers = new Map<string, UserAccessRecord>()
+  const { users, userIdentities, oidcProviders } = tablesOf(tx)
   const byId = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0]
   if (byId !== undefined) loadedUsers.set(byId.id, mapUser(byId))
   if (input.email !== null) {
@@ -361,8 +359,8 @@ function identityRecord(input: CreateOidcIdentityInput): OidcIdentityRecord {
 }
 
 function mapIdentity(row: {
-  readonly identity: typeof userIdentities.$inferSelect
-  readonly provider: typeof oidcProviders.$inferSelect | null
+  readonly identity: PersistenceTables['userIdentities']['$inferSelect']
+  readonly provider: PersistenceTables['oidcProviders']['$inferSelect'] | null
 }): UserIdentity {
   return {
     id: row.identity.id,
@@ -445,6 +443,7 @@ export function composeOidcIdentityOperations(
 
   const operations: OidcIdentityOperations = {
     async listIdentitiesForUser(userId) {
+      const { userIdentities, oidcProviders } = tablesOf(db)
       const rows = await db
         .select({ identity: userIdentities, provider: oidcProviders })
         .from(userIdentities)
@@ -453,6 +452,7 @@ export function composeOidcIdentityOperations(
       return rows.map(mapIdentity)
     },
     async findByProviderSubject(providerId, subject) {
+      const { userIdentities } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -474,6 +474,7 @@ export function composeOidcIdentityOperations(
       const identityInput = { ...userInput.identity, userId, now }
       try {
         return await session.serializable(async (tx) => {
+          const { authLoginPolicy, users } = tablesOf(tx)
           const policy = (
             await tx
               .select({ oidcDefaultRole: authLoginPolicy.oidcDefaultRole })
@@ -558,6 +559,7 @@ export function composeOidcIdentityOperations(
     },
     async unlinkIdentity(identityId) {
       const deleted = await session.transaction(async (tx) => {
+        const { userIdentities } = tablesOf(tx)
         const row = (
           await tx
             .select({ id: userIdentities.id })

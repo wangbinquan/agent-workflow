@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isVisibleToAudienceSnapshot } from '@/services/resourceAcl'
 import { developmentAdapterContentSchema } from '../domain/developmentAdapterDefinition'
 import {
@@ -102,6 +102,6 @@ function catalog(store: DevelopmentToolConnectionStore) {
 }
 
 // RFC-359 AC-1（plan §5ft）：store 合一之后这里也只剩一份——两个 bootstrap 根装的是同一个。
-export function composeDevelopmentToolConnectionCatalog(db: ProviderNeutralDatabase) {
+export function composeDevelopmentToolConnectionCatalog(db: PersistenceDb) {
   return catalog(createDevelopmentToolConnectionStore(db))
 }

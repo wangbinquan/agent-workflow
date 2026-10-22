@@ -5,6 +5,8 @@
 // 461f299f4 的 PG CI 暴露：外层事务内必须用回调 tx 观察未提交行；root client
 // 经连接池只能读到旧已提交版本。回滚后仍用原 root client 验证整行恢复。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import {
   WORKFLOW_SCHEMA_VERSION,
@@ -15,8 +17,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import {
@@ -47,9 +48,10 @@ function emptyDefinition(
   return { $schema_version: version, inputs: [], nodes: [], edges: [] }
 }
 
-async function storedRow(db: ProviderNeutralDatabase, definition: string) {
+async function storedRow(db: PersistenceDb, definition: string) {
   const id = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: '  Legacy  工作流  ',
     description: '描述\nsecond line',
@@ -66,7 +68,8 @@ async function storedRow(db: ProviderNeutralDatabase, definition: string) {
   return readRow(db, id)
 }
 
-async function readRow(db: ProviderNeutralDatabase, id: string) {
+async function readRow(db: PersistenceDb, id: string) {
+  const { workflows } = tablesOf(db)
   const row = (await db.select().from(workflows).where(eq(workflows.id, id)).limit(1))[0]
   if (row === undefined) throw new Error(`workflow codec fixture row missing: ${id}`)
   return row
@@ -88,9 +91,10 @@ function wireError(error: DomainError): unknown {
   return JSON.parse(JSON.stringify({ status: error.status, ...error.toPayload() }))
 }
 
-async function owner(db: ProviderNeutralDatabase): Promise<DirectAuthenticatedAuthority> {
+async function owner(db: PersistenceDb): Promise<DirectAuthenticatedAuthority> {
   const id = ulid()
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -104,7 +108,7 @@ async function owner(db: ProviderNeutralDatabase): Promise<DirectAuthenticatedAu
   }) as unknown as DirectAuthenticatedAuthority
 }
 
-function repositoryFor(db: ProviderNeutralDatabase, now: () => number) {
+function repositoryFor(db: PersistenceDb, now: () => number) {
   const catalog = composeResourceCatalogFor({ db })
   return createWorkflowRepository({
     db,

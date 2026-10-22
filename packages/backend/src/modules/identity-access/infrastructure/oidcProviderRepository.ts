@@ -2,10 +2,11 @@
 // 写路径走统一原语的 `serializable`（PG：SERIALIZABLE + 序列化失败重试；SQLite：独占事务），
 // slug 撞库由引擎能力矩阵归类 + 约束名核对，不再各写一套驱动错误形状。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, ne } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { authLoginPolicy, oidcProviders, userIdentities } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   InsertOidcProviderRecord,
@@ -15,7 +16,9 @@ import type {
   PatchOidcProviderRecord,
 } from '../application/ports/oidcProviderPersistence'
 
-function mapRow(row: typeof oidcProviders.$inferSelect): OidcProviderPersistenceRecord {
+function mapRow(
+  row: PersistenceTables['oidcProviders']['$inferSelect'],
+): OidcProviderPersistenceRecord {
   return { ...row }
 }
 
@@ -24,7 +27,7 @@ function failed<T>(code: Exclude<OidcProviderWriteResult<T>, { readonly ok: true
 }
 
 /** 是否为 `oidc_providers.slug` 的唯一约束冲突（其它唯一约束不算）。 */
-function isSlugUniqueError(db: ProviderNeutralDatabase, error: unknown): boolean {
+function isSlugUniqueError(db: PersistenceDb, error: unknown): boolean {
   if (engineOf(db).classifyError(error) !== 'unique-violation') return false
   let current: unknown = error
   for (let depth = 0; depth < 5 && current !== null && typeof current === 'object'; depth += 1) {
@@ -47,19 +50,22 @@ function isSlugUniqueError(db: ProviderNeutralDatabase, error: unknown): boolean
 }
 
 export class DrizzleOidcProviderRepository implements OidcProviderRepository {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async list(): Promise<ReadonlyArray<OidcProviderPersistenceRecord>> {
+    const { oidcProviders } = tablesOf(this.db)
     return (await this.db.select().from(oidcProviders)).map(mapRow)
   }
 
   async listEnabled(): Promise<ReadonlyArray<OidcProviderPersistenceRecord>> {
+    const { oidcProviders } = tablesOf(this.db)
     return (await this.db.select().from(oidcProviders).where(eq(oidcProviders.enabled, true))).map(
       mapRow,
     )
   }
 
   async findById(id: string): Promise<OidcProviderPersistenceRecord | null> {
+    const { oidcProviders } = tablesOf(this.db)
     const row = (
       await this.db.select().from(oidcProviders).where(eq(oidcProviders.id, id)).limit(1)
     )[0]
@@ -67,6 +73,7 @@ export class DrizzleOidcProviderRepository implements OidcProviderRepository {
   }
 
   async findBySlug(slug: string): Promise<OidcProviderPersistenceRecord | null> {
+    const { oidcProviders } = tablesOf(this.db)
     const row = (
       await this.db.select().from(oidcProviders).where(eq(oidcProviders.slug, slug)).limit(1)
     )[0]
@@ -78,6 +85,7 @@ export class DrizzleOidcProviderRepository implements OidcProviderRepository {
   ): Promise<OidcProviderWriteResult<OidcProviderPersistenceRecord>> {
     try {
       return await databaseSessionFor(this.db).serializable(async (transaction) => {
+        const { oidcProviders } = tablesOf(transaction)
         const duplicate = (
           await transaction
             .select({ id: oidcProviders.id })
@@ -86,7 +94,7 @@ export class DrizzleOidcProviderRepository implements OidcProviderRepository {
             .limit(1)
         )[0]
         if (duplicate !== undefined) return failed('oidc-slug-taken')
-        await transaction.insert(oidcProviders).values(record)
+        await insertOne(transaction, oidcProviders, record)
         return { ok: true as const, value: record }
       })
     } catch (error) {
@@ -102,6 +110,7 @@ export class DrizzleOidcProviderRepository implements OidcProviderRepository {
   }): Promise<OidcProviderWriteResult<OidcProviderPersistenceRecord>> {
     try {
       return await databaseSessionFor(this.db).serializable(async (transaction) => {
+        const { oidcProviders, authLoginPolicy, userIdentities } = tablesOf(transaction)
         const current = (
           await transaction
             .select()
@@ -170,6 +179,7 @@ export class DrizzleOidcProviderRepository implements OidcProviderRepository {
     readonly force: boolean
   }): Promise<OidcProviderWriteResult<undefined>> {
     return await databaseSessionFor(this.db).serializable(async (transaction) => {
+      const { oidcProviders, authLoginPolicy, userIdentities } = tablesOf(transaction)
       const current = (
         await transaction
           .select()

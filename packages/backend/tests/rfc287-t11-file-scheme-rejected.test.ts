@@ -11,6 +11,8 @@
 // 后台自动保鲜是**第二条独立通道**：它按 last_fetched_at 自己选行、不经任何启动
 // 校验。漏掉它，一个再也不能被启动的 file:// 镜像仍会被 daemon 定时 fetch。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -18,7 +20,6 @@ import { StartTaskSchema } from '@agent-workflow/shared'
 import { selectDueRepos } from '@/services/submoduleRefresh'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { cachedRepos } from '@/db/schema'
 import { ulid } from 'ulid'
 
 function startBody(repoUrl: string): Record<string, unknown> {
@@ -68,7 +69,8 @@ describeEachProvider('RFC-287 T11 ② — 后台自动保鲜也不再碰 file://
     for (const [i, r] of rows.entries()) {
       const id = ulid()
       ids.set(id, r.keep)
-      await db.insert(cachedRepos).values({
+      const { cachedRepos } = tablesOf(db)
+      await insertOne(db, cachedRepos, {
         id,
         // ULID 前 8 位在同一毫秒内相同——用序号做 url_hash，否则撞唯一约束。
         urlHash: `h${String(i)}`,
@@ -185,7 +187,8 @@ describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (
     const { refreshCachedRepo } = await import('@/services/gitRepoCache')
     const db = harness.db
     const id = ulid()
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id,
       urlHash: 'h_' + id,
       urlRedacted: null,
@@ -210,7 +213,8 @@ describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (
     const { refreshCachedRepo } = await import('@/services/gitRepoCache')
     const db = harness.db
     const id = ulid()
-    await db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id,
       urlHash: 'h_' + id,
       urlRedacted: 'file:///srv/private/repo',

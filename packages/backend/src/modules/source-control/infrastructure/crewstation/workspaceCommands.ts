@@ -16,12 +16,12 @@
 // its own operation id (`<id>:image-upgraded`), after the parent was upgraded
 // to the release's image (§10 V21). A replay or recovery of the original id
 // follows that retry.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedWorkspaceCommands } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   isParentNotRunningError,
@@ -90,7 +90,7 @@ interface CommandOutcome {
   readonly helper: WorkspaceHelperOutcome | null
 }
 
-type Row = typeof hostedWorkspaceCommands.$inferSelect
+type Row = PersistenceTables['hostedWorkspaceCommands']['$inferSelect']
 
 const DEFAULT_TIMEOUT_MS = 86_400_000
 const CANCEL_SUFFIX = ':cancel'
@@ -123,7 +123,7 @@ function relativeToVolume(path: string): string {
 }
 
 export function createHostedWorkspaceCommands(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly api: CrewStationBusinessExecution
   readonly workspaces: { ensure(taskId: string): Promise<{ readonly businessTaskId: string }> }
@@ -139,26 +139,31 @@ export function createHostedWorkspaceCommands(input: {
   const imageUpgrades = input.imageUpgrades ?? NO_HOSTED_IMAGE_UPGRADES
   const inFlight = new Set<string>()
 
-  const fenced = async <T>(work: (tx: ProviderNeutralDatabase, epoch: number) => Promise<T>) => {
+  const fenced = async <T>(work: (tx: PersistenceDb, epoch: number) => Promise<T>) => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
       return work(tx, lease.epoch)
     })
   }
-  const read = async (executionId: string): Promise<Row | null> =>
-    (
-      await input.db
-        .select()
-        .from(hostedWorkspaceCommands)
-        .where(eq(hostedWorkspaceCommands.executionId, executionId))
-        .limit(1)
-    )[0] ?? null
+  const read = async (executionId: string): Promise<Row | null> => {
+    const { hostedWorkspaceCommands } = tablesOf(input.db)
+    return (
+      (
+        await input.db
+          .select()
+          .from(hostedWorkspaceCommands)
+          .where(eq(hostedWorkspaceCommands.executionId, executionId))
+          .limit(1)
+      )[0] ?? null
+    )
+  }
   const patch = (
     executionId: string,
-    values: Partial<typeof hostedWorkspaceCommands.$inferInsert>,
+    values: Partial<PersistenceTables['hostedWorkspaceCommands']['$inferInsert']>,
   ) =>
     fenced(async (tx, epoch) => {
+      const { hostedWorkspaceCommands } = tablesOf(tx)
       await tx
         .update(hostedWorkspaceCommands)
         .set({ ...values, epoch, updatedAt: now() })
@@ -426,6 +431,7 @@ export function createHostedWorkspaceCommands(input: {
       timeoutSeconds: Math.min(86_400, Math.max(1, Math.ceil(timeoutMs / 1_000))),
     })
     await fenced(async (tx, epoch) => {
+      const { hostedWorkspaceCommands } = tablesOf(tx)
       await tx
         .insert(hostedWorkspaceCommands)
         .values({
@@ -481,6 +487,7 @@ export function createHostedWorkspaceCommands(input: {
       return { value: await observe<T>(row, {}) }
     },
     async hasUnsettledCommands(businessTaskId) {
+      const { hostedWorkspaceCommands } = tablesOf(input.db)
       const rows = await input.db
         .select({ executionId: hostedWorkspaceCommands.executionId })
         .from(hostedWorkspaceCommands)
@@ -495,6 +502,7 @@ export function createHostedWorkspaceCommands(input: {
     },
     async reconcile(signal) {
       const lease = input.fence.current()
+      const { hostedWorkspaceCommands } = tablesOf(input.db)
       // Never-acknowledged commands whose caller is gone (an earlier owner,
       // or a caller of this process that gave up on an unknown submission).
       const orphans = (
@@ -513,6 +521,7 @@ export function createHostedWorkspaceCommands(input: {
       )
       if (orphans.length > 0)
         await fenced(async (tx, epoch) => {
+          const { hostedWorkspaceCommands } = tablesOf(tx)
           await tx
             .update(hostedWorkspaceCommands)
             .set({ state: 'abandoned', epoch, updatedAt: now() })

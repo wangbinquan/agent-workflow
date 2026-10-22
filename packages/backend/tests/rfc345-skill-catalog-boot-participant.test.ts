@@ -91,7 +91,7 @@ describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
     ]) {
       expect(adapter).toContain(`input.${port} ?? createFileSkill`)
     }
-    expect(adapter).toContain('ProviderNeutralDatabase')
+    expect(adapter).toContain('PersistenceDb')
     expect(adapter).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient|createSqlite|fallback/)
 
     expect(

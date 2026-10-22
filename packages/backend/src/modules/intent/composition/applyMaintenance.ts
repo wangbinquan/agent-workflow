@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger, type Logger } from '@/util/log'
 import {
   createIntentApplyJournalConvergence,
@@ -11,7 +11,7 @@ import { composeIntentApplyArtifactLifecycle } from './apply'
 
 /** Recovery-only composition (both providers); it never constructs apply resources. */
 export function composeIntentApplyConvergence(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
   readonly artifacts?: IntentApplyArtifactLifecycle

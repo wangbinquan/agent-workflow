@@ -1,8 +1,8 @@
 import type { Actor } from '../../src/auth/actor'
-// RFC-359 AC-6：`db` 放宽到 `ProviderNeutralDatabase`，装配也换成中立那一份
+// RFC-359 AC-6：`db` 放宽到 `PersistenceDb`，装配也换成中立那一份
 // （`composeResourceCatalogFor` / `composeScheduledTaskRuntimeFor`——`composeSqlite*` 本来就只是
 // 它们的装配别名，函数体逐字相同）。定时任务这一族的三个测试文件全卡在这个夹具上。
-import type { ProviderNeutralDatabase } from '../../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeIdentityAccess,
   type IdentityAccessRuntime,
@@ -36,7 +36,7 @@ export function integrationTriggerResourceBinding() {
   return composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin })
 }
 
-export function taskExecutionResourceBinding(db: ProviderNeutralDatabase) {
+export function taskExecutionResourceBinding(db: PersistenceDb) {
   return createTaskExecutionResourceBinding(db, {
     inTransaction(tx, pair) {
       return composeTaskExecutionResourceBinding(taskExecutionResourceDependencies).inTransaction(
@@ -47,7 +47,7 @@ export function taskExecutionResourceBinding(db: ProviderNeutralDatabase) {
   })
 }
 
-export function scheduledTaskRuntime(db: ProviderNeutralDatabase) {
+export function scheduledTaskRuntime(db: PersistenceDb) {
   const resourceCatalog = composeResourceCatalogFor({ db })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
@@ -66,7 +66,7 @@ export function scheduledTaskRuntime(db: ProviderNeutralDatabase) {
 }
 
 export function integrationTriggerResourceAuthority(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   runtime = scheduledTaskRuntime(db),
 ): IntegrationTriggerResourceAuthority {
@@ -83,7 +83,7 @@ export function integrationTriggerResourceAuthority(
   })
 }
 
-export function integrationTriggerOptions(db: ProviderNeutralDatabase, actor: Actor) {
+export function integrationTriggerOptions(db: PersistenceDb, actor: Actor) {
   const runtime = scheduledTaskRuntime(db)
   return Object.freeze({
     operations: runtime.operations,
@@ -99,7 +99,7 @@ type CreateScheduledTaskOptions = Omit<
 >
 
 export function createScheduledTaskWithIntegrationTriggerResources(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateScheduledTaskInput,
   options: CreateScheduledTaskOptions,
 ) {
@@ -117,7 +117,7 @@ type UpdateScheduledTaskOptions = Omit<
 >
 
 export function updateScheduledTaskWithIntegrationTriggerResources(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: UpdateScheduledTaskInput,
   options: UpdateScheduledTaskOptions,
@@ -129,35 +129,35 @@ export function updateScheduledTaskWithIntegrationTriggerResources(
   })
 }
 
-export function listScheduledTasks(db: ProviderNeutralDatabase) {
+export function listScheduledTasks(db: PersistenceDb) {
   return listScheduledTasksService(scheduledTaskRuntime(db).operations)
 }
 
 export function listScheduledTaskItems(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Parameters<typeof listScheduledTaskItemsService>[1],
 ) {
   return listScheduledTaskItemsService(scheduledTaskRuntime(db).operations, actor)
 }
 
-export function getScheduledTask(db: ProviderNeutralDatabase, id: string) {
+export function getScheduledTask(db: PersistenceDb, id: string) {
   return getScheduledTaskService(scheduledTaskRuntime(db).operations, id)
 }
 
-export function getScheduledTaskRow(db: ProviderNeutralDatabase, id: string) {
+export function getScheduledTaskRow(db: PersistenceDb, id: string) {
   return getScheduledTaskRowService(scheduledTaskRuntime(db).operations, id)
 }
 
-export function deleteScheduledTask(db: ProviderNeutralDatabase, id: string) {
+export function deleteScheduledTask(db: PersistenceDb, id: string) {
   return deleteScheduledTaskService(scheduledTaskRuntime(db).operations, id)
 }
 
-export function healScheduledLaunchPayloads(db: ProviderNeutralDatabase) {
+export function healScheduledLaunchPayloads(db: PersistenceDb) {
   return healScheduledLaunchPayloadsService(scheduledTaskRuntime(db).operations)
 }
 
 export function fireSchedule(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   row: Parameters<typeof fireScheduleService>[1],
   buildLaunch: Parameters<typeof fireScheduleService>[2],
   now: number,
@@ -177,7 +177,7 @@ export function fireSchedule(
 }
 
 export function runScheduleNow(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   buildLaunch: Parameters<typeof runScheduleNowService>[2],
   identityAccess: Parameters<typeof runScheduleNowService>[3],
@@ -193,7 +193,7 @@ export function runScheduleNow(
 }
 
 export function withIntegrationTriggerResources<T extends IdentityAccessRuntime>(
-  _db: ProviderNeutralDatabase,
+  _db: PersistenceDb,
   identityAccess: T,
 ): T &
   Readonly<{
@@ -208,7 +208,7 @@ export function withIntegrationTriggerResources<T extends IdentityAccessRuntime>
 }
 
 export function integrationTriggerWebhookAuthorityDependencies(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   identityAccess: IdentityAccessRuntime,
 ) {
   return Object.freeze({

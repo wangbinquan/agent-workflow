@@ -19,6 +19,9 @@
 // 全程吃库；apply 引擎与资源目录合一成中立实现之后，同一份 body 在 SQLite 与 PostgreSQL
 // 上各跑一遍。末尾那条纯内存的负向锁不需要库，但留在同一个 describe 里跑两遍无害。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -32,8 +35,7 @@ import {
   WORKFLOW_SCHEMA_VERSION,
   type IntentResourceType,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { intentDrafts, intentSessions, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
@@ -53,7 +55,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 
 const OWNER = 'user_owner_rfc291e2e_00000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 
 const actor: Actor = {
@@ -77,12 +79,11 @@ async function installDraft(
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  const session = await db
-    .select()
-    .from(intentSessions)
-    .where(eq(intentSessions.id, sessionId))
-    .get()
-  await db.insert(intentDrafts).values({
+  const { intentSessions, intentDrafts } = tablesOf(db)
+  const session = await first(
+    db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)),
+  )
+  await insertOne(db, intentDrafts, {
     id: draftId,
     sessionId,
     revision: 1,
@@ -119,7 +120,8 @@ function filePluginFixture(): string {
 
 /** Re-run the dump exactly like the turn engine does, from the session row. */
 async function dumpFromSession(sessionId: string) {
-  const row = await db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
+  const { intentSessions } = tablesOf(db)
+  const row = await first(db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)))
   const manifest = JSON.parse(row?.contextManifestJson ?? '[]') as IntentContextManifest
   return buildIntentDump({
     db,
@@ -136,7 +138,8 @@ async function dumpFromSession(sessionId: string) {
 async function seedFixture(harness: ProviderHarness): Promise<void> {
   db = harness.db
   appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e2e-'))
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: OWNER,
     username: 'owner',
     displayName: 'Owner',
@@ -144,7 +147,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })

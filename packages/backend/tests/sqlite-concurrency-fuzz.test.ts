@@ -34,6 +34,8 @@
 //     for catching invariant-violating compositions of operations but not
 //     SQLite engine concurrency bugs (those are the engine's problem).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import fc from 'fast-check'
@@ -41,9 +43,8 @@ import { ulid } from 'ulid'
 
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   INVARIANT_RULES,
   runLifecycleInvariants,
@@ -112,7 +113,7 @@ function actionArb(): fc.Arbitrary<Action> {
   )
 }
 
-async function seedRoot(db: ProviderNeutralDatabase): Promise<string> {
+async function seedRoot(db: PersistenceDb): Promise<string> {
   const taskId = `task_${ulid()}`
   const wfId = `wf_${ulid()}`
   const def = JSON.stringify({
@@ -125,7 +126,8 @@ async function seedRoot(db: ProviderNeutralDatabase): Promise<string> {
     edges: [],
     outputs: [],
   })
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'fuzz',
     definition: def,
@@ -133,7 +135,7 @@ async function seedRoot(db: ProviderNeutralDatabase): Promise<string> {
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fuzz-task',
     workflowId: wfId,
@@ -149,8 +151,9 @@ async function seedRoot(db: ProviderNeutralDatabase): Promise<string> {
   return taskId
 }
 
-async function applyAction(db: ProviderNeutralDatabase, taskId: string, a: Action): Promise<void> {
+async function applyAction(db: PersistenceDb, taskId: string, a: Action): Promise<void> {
   if (a.kind === 'set_status') {
+    const { tasks } = tablesOf(db)
     await db
       .update(tasks)
       .set({
@@ -160,7 +163,8 @@ async function applyAction(db: ProviderNeutralDatabase, taskId: string, a: Actio
       .where(eq(tasks.id, taskId))
     return
   }
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id: `nr_${ulid()}`,
     taskId,
     nodeId: 'agent_1',
@@ -175,7 +179,8 @@ async function applyAction(db: ProviderNeutralDatabase, taskId: string, a: Actio
   })
 }
 
-async function readStatus(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function readStatus(db: PersistenceDb, taskId: string): Promise<string> {
+  const { tasks } = tablesOf(db)
   const row = (
     await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
   )[0]
@@ -198,8 +203,9 @@ describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', 
         let nodeRunRetryCounter = 0
         for (const a of actions) {
           if (a.kind === 'add_node_run') {
+            const { nodeRuns } = tablesOf(db)
             // Rewrite with a fresh retry_index so the schema accepts it.
-            await db.insert(nodeRuns).values({
+            await insertOne(db, nodeRuns, {
               id: `nr_${ulid()}`,
               taskId,
               nodeId: 'agent_1',
@@ -249,7 +255,8 @@ describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', 
         let nodeRunRetryCounter = 0
         for (const a of actions) {
           if (a.kind === 'add_node_run') {
-            await db.insert(nodeRuns).values({
+            const { nodeRuns } = tablesOf(db)
+            await insertOne(db, nodeRuns, {
               id: `nr_${ulid()}`,
               taskId,
               nodeId: 'agent_1',
@@ -310,7 +317,8 @@ describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', 
     // done node_run" — finding that pattern is exactly what surfaced
     // when this anchor was first written without the out_1 row.
     for (const nodeId of ['agent_1', 'out_1']) {
-      await db.insert(nodeRuns).values({
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: `nr_${ulid()}`,
         taskId,
         nodeId,

@@ -9,9 +9,10 @@
 // stored them on the workflow definition, this PR wires them through the
 // API contract.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { listReviewSummaries } from '@/modules/collaboration/infrastructure/review'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -21,12 +22,13 @@ interface SeedOptions {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SeedOptions,
-): Promise<{ db: ProviderNeutralDatabase; taskId: string }> {
+): Promise<{ db: PersistenceDb; taskId: string }> {
   const wfId = 'wf_test_1'
   const taskId = 'task_test_1'
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'Test Workflow',
     description: '',
@@ -36,7 +38,7 @@ async function seed(
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -55,7 +57,7 @@ async function seed(
   let i = 0
   for (const rn of opts.reviewNodes) {
     const runId = `nr_${i}`
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: rn.nodeId,
@@ -65,7 +67,7 @@ async function seed(
       status: rn.status ?? 'awaiting_review',
       startedAt: 1000,
     })
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: `dv_${i}`,
       taskId,
       reviewNodeId: rn.nodeId,

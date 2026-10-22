@@ -3,6 +3,9 @@
 // strings in the DB and (un)marshaled at this boundary. Routes upstream see
 // pure JS objects.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first, queryWrite } from '@/platform/persistence/queryHelpers'
 import type {
   Agent,
   AgentSkillRef,
@@ -14,24 +17,10 @@ import type {
 import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  mcps,
-  plugins,
-  runtimes,
-  scheduledTasks,
-  skills,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import type { DbTxSync } from '@/db/txSync'
-import {
-  affectedRows,
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { resolveResourceAccessForTx } from '../resourceAclTransaction'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import {
@@ -95,9 +84,9 @@ import {
 export { exposedFrontmatterExtra }
 import { continueResourceCommit, finishSynchronousResourceCommit } from '../resourceCommitSequence'
 
-type AgentRow = typeof agents.$inferSelect
+type AgentRow = PersistenceTables['agents']['$inferSelect']
 
-const agentReferenceResolver = (db: ProviderNeutralDatabase) => ({
+const agentReferenceResolver = (db: PersistenceDb) => ({
   resolveUsableById: (
     actor: Actor | null,
     type: Parameters<typeof resolveRefsUsableById>[2],
@@ -108,10 +97,9 @@ const agentReferenceResolver = (db: ProviderNeutralDatabase) => ({
     assertNoMissingRefs(missing),
 })
 
-const agentResourceInventorySource = (
-  db: ProviderNeutralDatabase,
-): AgentResourceInventorySource => ({
+const agentResourceInventorySource = (db: PersistenceDb): AgentResourceInventorySource => ({
   async load() {
+    const { skills, mcps, plugins } = tablesOf(db)
     const [agentRows, skillRows, mcpRows, pluginRows] = await Promise.all([
       listAgents(db),
       db
@@ -163,13 +151,15 @@ const agentResourceInventorySource = (
   filterVisible: (actor, type, rows) => filterVisibleRows(db, actor, type, [...rows]),
 })
 
-export async function listAgents(db: ProviderNeutralDatabase): Promise<Agent[]> {
+export async function listAgents(db: PersistenceDb): Promise<Agent[]> {
+  const { agents } = tablesOf(db)
   const rows = await db.select().from(agents)
   return rows.map(rowToAgent)
 }
 
 /** Fetch an agent by its canonical resource id. */
-export async function getAgentById(db: ProviderNeutralDatabase, id: string): Promise<Agent | null> {
+export async function getAgentById(db: PersistenceDb, id: string): Promise<Agent | null> {
+  const { agents } = tablesOf(db)
   const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)
   const row = rows[0]
   return row ? rowToAgent(row) : null
@@ -180,7 +170,8 @@ export async function getAgentById(db: ProviderNeutralDatabase, id: string): Pro
  * execution continues to use the async resolver above; both share rowToAgent.
  */
 export function getAgentByIdSync(db: DbClient, id: string): Agent | null {
-  const row = db.select().from(agents).where(eq(agents.id, id)).get()
+  const { agents } = tablesOf(db)
+  const row = first(db.select().from(agents).where(eq(agents.id, id)))
   return row === undefined ? null : rowToAgent(row)
 }
 
@@ -190,8 +181,9 @@ export function getAgentByIdSync(db: DbClient, id: string): Agent | null {
  * name-only/corrupt snapshot returns `null` and callers fail closed. The R4-1
  * quarantine sentinel likewise resolves to no row.
  */
-export function snapshotNodeAgentWhere(node: unknown): SQL | null {
+export function snapshotNodeAgentWhere(db: object, node: unknown): SQL | null {
   const rec = node as Record<string, unknown>
+  const { agents } = tablesOf(db)
   if (typeof rec.agentId === 'string' && rec.agentId.length > 0) return eq(agents.id, rec.agentId)
   return null
 }
@@ -223,7 +215,7 @@ export interface PreparedAgentCreate {
 }
 
 export async function prepareAgentCreate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateAgent,
   opts?: {
     ownerUserId?: string
@@ -252,6 +244,7 @@ export async function prepareAgentCreate(
     opts?.builtin === true
       ? initialBuiltinResourceAcl(ownerUserId)
       : initialPrivateResourceAcl(ownerUserId)
+  const { agents } = tablesOf(db)
   const existing = await db
     .select({ id: agents.id })
     .from(agents)
@@ -382,7 +375,7 @@ type AgentRefCheck = (
 
 /** One ordered write body, shared by synchronous bundle participants and awaited transactions. */
 function commitAgentCreate(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   p: PreparedAgentCreate,
   checkRefs: AgentRefCheck,
 ): void | Promise<void> {
@@ -403,31 +396,30 @@ function commitAgentCreate(
         p.matchedManagedSkillIds,
       ),
     ),
-    () =>
-      continueResourceCommit(
-        tx
-          .insert(agents)
-          .values({
-            id,
-            name: input.name,
-            // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
-            ...agentContentPersistenceValues(input, fmExtra, {
-              skills: skillRefs,
-              dependsOn: dependsOnIds,
-              mcp: mcpIds,
-              plugins: pluginIds,
-            }),
-            // RFC-231: user resources are private; framework built-ins stay public.
-            ...initialAcl,
-            // RFC-104: built-in marker — only platform-owned seeders pass builtin:true;
-            // never set via any HTTP path (CreateAgentSchema omits it).
-            builtin: p.builtin,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .run(),
+    () => {
+      const { agents } = tablesOf(tx)
+      return continueResourceCommit(
+        insertOne(tx, agents, {
+          id,
+          name: input.name,
+          // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
+          ...agentContentPersistenceValues(input, fmExtra, {
+            skills: skillRefs,
+            dependsOn: dependsOnIds,
+            mcp: mcpIds,
+            plugins: pluginIds,
+          }),
+          // RFC-231: user resources are private; framework built-ins stay public.
+          ...initialAcl,
+          // RFC-104: built-in marker — only platform-owned seeders pass builtin:true;
+          // never set via any HTTP path (CreateAgentSchema omits it).
+          builtin: p.builtin,
+          createdAt: now,
+          updatedAt: now,
+        }),
         () => {},
-      ),
+      )
+    },
   )
 }
 
@@ -438,7 +430,7 @@ export function commitAgentCreateInTx(tx: DbTxSync, p: PreparedAgentCreate): voi
 }
 
 export async function createAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: CreateAgent,
   opts?: {
     ownerUserId?: string
@@ -472,7 +464,7 @@ export interface PreparedAgentUpdate {
   id: string
   actor: Actor | null | undefined
   fence: { expectedUpdatedAt: number; expectedAclRevision: number } | undefined
-  set: Partial<typeof agents.$inferInsert>
+  set: Partial<PersistenceTables['agents']['$inferInsert']>
   mcpIds: string[] | undefined
   pluginIds: string[] | undefined
   dependsOnIds: string[] | undefined
@@ -481,7 +473,7 @@ export interface PreparedAgentUpdate {
 }
 
 export async function prepareAgentUpdate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   patch: UpdateAgent,
   actor?: Actor | null,
@@ -584,7 +576,7 @@ export async function prepareAgentUpdate(
     })
   }
 
-  const set: Partial<typeof agents.$inferInsert> = {}
+  const set: Partial<PersistenceTables['agents']['$inferInsert']> = {}
   if (patch.description !== undefined) set.description = patch.description
   if (patch.outputs !== undefined) set.outputs = JSON.stringify(patch.outputs)
   if (patch.inputs !== undefined) set.inputs = serializeAgentInputs(patch.inputs) // RFC-166
@@ -691,7 +683,7 @@ export async function prepareAgentUpdate(
 
 /** The update steps keep their original read/check/write order in either transaction mode. */
 function commitAgentUpdate(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   p: PreparedAgentUpdate,
   checkRefs: AgentRefCheck,
   requireRevision: (
@@ -703,10 +695,11 @@ function commitAgentUpdate(
   const { id, actor, fence, set, mcpIds, pluginIds, dependsOnIds, skillRefs } = p
   const resolvedRefs = { matchedManagedSkillIds: p.matchedManagedSkillIds }
   const revisionFenced = fence !== undefined && actor !== undefined && actor !== null
+  const { agents } = tablesOf(tx)
   return continueResourceCommit(
     revisionFenced
       ? requireRevision(id, actor, fence)
-      : tx.select().from(agents).where(eq(agents.id, id)).get(),
+      : first(tx.select().from(agents).where(eq(agents.id, id))),
     (currentRow) => {
       if (currentRow === undefined) {
         throw new NotFoundError('agent-not-found', 'agent not found')
@@ -735,11 +728,14 @@ function commitAgentUpdate(
                 eq(agents.aclRevision, fence.expectedAclRevision),
               )
             : eq(agents.id, id)
-          return continueResourceCommit(tx.update(agents).set(set).where(where).run(), (result) => {
-            // RFC-359 W9：本地的 `changesOf` 退役，判据统一走中立的 `affectedRows`（两个引擎都读
-            // `changes`，缺失按 0 计 ⇒ 判据失真时「恰好一行」失败得大声）。共享提交体在执行完成后再读取这一判据。
-            if (revisionFenced && affectedRows(result) !== 1) throw staleAgentError(id)
-          })
+          return continueResourceCommit(
+            queryWrite(tx.update(agents).set(set).where(where)),
+            (result) => {
+              // RFC-359 W9：本地的 `changesOf` 退役，判据统一走中立的 `affectedRows`（两个引擎都读
+              // `changes`，缺失按 0 计 ⇒ 判据失真时「恰好一行」失败得大声）。共享提交体在执行完成后再读取这一判据。
+              if (revisionFenced && affectedRows(result) !== 1) throw staleAgentError(id)
+            },
+          )
         },
       )
     },
@@ -758,7 +754,7 @@ export function commitAgentUpdateInTx(tx: DbTxSync, p: PreparedAgentUpdate): voi
 }
 
 export async function updateAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   patch: UpdateAgent,
   actor?: Actor | null,
@@ -784,7 +780,7 @@ export async function updateAgent(
 }
 
 export async function deleteAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   actor: Actor,
   fence?: { expectedUpdatedAt: number; expectedAclRevision: number },
@@ -816,6 +812,7 @@ export async function deleteAgent(
     // Canonical-id fence: a rename cannot retarget this operation. A concurrent
     // delete is reported as the same non-enumerating 404 as an absent id.
     if (fence === undefined) {
+      const { agents } = tablesOf(tx)
       const [fenceRow] = await tx
         .select({ id: agents.id })
         .from(agents)
@@ -840,6 +837,7 @@ export async function deleteAgent(
         `agent '${name}' has a task launch in progress; retry after it completes`,
       )
     }
+    const { workflows, agents, tasks, scheduledTasks } = tablesOf(tx)
     const wfRows = await tx
       .select({
         id: workflows.id,
@@ -944,7 +942,7 @@ export async function deleteAgent(
 }
 
 export async function renameAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   input: RenameAgent,
   opts?: {
@@ -973,6 +971,7 @@ export async function renameAgent(
   // at this exact row.
   try {
     await databaseSessionFor(db).transaction(async (tx) => {
+      const { agents } = tablesOf(tx)
       // Canonical-id fence: the row selected by the URL cannot be retargeted by
       // a concurrent rename.
       const current =
@@ -999,7 +998,7 @@ export async function renameAgent(
       }
 
       // RFC-359 W9：CAS 判据从 bun:sqlite 独有的 `.run().changes` 换成中立的 `affectedRows`
-      // ——`.run()` 在 PG（drizzle sqlite-proxy，异步）上回的是**没被 await 的 Promise**，
+      // ——`.run()` 在 PG（原生 drizzle bun-sql，异步）上回的是**没被 await 的 Promise**，
       // `changes` 恒为 undefined，于是「恰好一行」的围栏静默恒假。
       const result = await tx
         .update(agents)
@@ -1092,7 +1091,8 @@ function requireAgentMutationRevision(
   // 「不想就不填」的选项，而这里恰恰是最不该猜的地方。
   need: 'edit' | 'govern',
 ): AgentRow {
-  const current = tx.select().from(agents).where(eq(agents.id, id)).get()
+  const { agents } = tablesOf(tx)
+  const current = first(tx.select().from(agents).where(eq(agents.id, id)))
   return assertAgentMutationAllowed(
     id,
     current,
@@ -1108,12 +1108,13 @@ function requireAgentMutationRevision(
  * 下一个人很容易抄成漏 await 的形状（同 `sqliteIntentApplyOperations.ts` 的房规）。
  */
 async function requireAgentMutationRevisionTx(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   id: string,
   actor: Actor,
   expected: { expectedUpdatedAt: number; expectedAclRevision: number },
   need: 'edit' | 'govern',
 ): Promise<AgentRow> {
+  const { agents } = tablesOf(tx)
   const [current] = await tx.select().from(agents).where(eq(agents.id, id)).limit(1)
   return assertAgentMutationAllowed(
     id,
@@ -1194,12 +1195,13 @@ function assertBranchPortsDeclared(
 }
 
 async function validateRuntimeReference(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string | null | undefined,
   previous?: string | null,
 ): Promise<void> {
   if (name === null || name === undefined) return
-  const row = await db.select().from(runtimes).where(eq(runtimes.name, name)).get()
+  const { runtimes } = tablesOf(db)
+  const row = await first(db.select().from(runtimes).where(eq(runtimes.name, name)))
   if (row === undefined) {
     throw new ValidationError('runtime-not-found', `agent references unknown runtime: ${name}`, {
       notFound: [name],
@@ -1221,12 +1223,10 @@ async function validateRuntimeReference(
 // RFC-223 (PR-1): references are stored + validated BY ID. Callers resolve
 // id-or-name → id (application agent-reference resolver) before this guard; an entry that is
 // still a name here never matched a row and is reported as missing.
-async function validateMcpReferences(
-  db: ProviderNeutralDatabase,
-  ids: readonly string[],
-): Promise<void> {
+async function validateMcpReferences(db: PersistenceDb, ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return
   const unique = Array.from(new Set(ids))
+  const { mcps } = tablesOf(db)
   const rows = await db.select({ id: mcps.id }).from(mcps).where(inArray(mcps.id, unique))
   const known = new Set(rows.map((r) => r.id))
   const missing = unique.filter((n) => !known.has(n))
@@ -1245,12 +1245,10 @@ async function validateMcpReferences(
  * `plugin-not-found` (422) with the missing names, or `plugin-disabled` (422)
  * when a referenced plugin exists but has `enabled=false`.
  */
-async function validatePluginReferences(
-  db: ProviderNeutralDatabase,
-  ids: readonly string[],
-): Promise<void> {
+async function validatePluginReferences(db: PersistenceDb, ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return
   const unique = Array.from(new Set(ids))
+  const { plugins } = tablesOf(db)
   const rows = await db
     .select({ id: plugins.id, enabled: plugins.enabled })
     .from(plugins)
@@ -1301,7 +1299,7 @@ export interface ClosureRefNameMaps {
  * fall back to the id (best-effort, never silently dropped).
  */
 export async function loadClosureRefNames(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   closure: Agent[],
   visibleAgentIds: ReadonlySet<string>,
@@ -1315,6 +1313,7 @@ export async function loadClosureRefNames(
     for (const id of a.mcp ?? []) mcpIds.add(id)
     for (const id of a.plugins ?? []) pluginIds.add(id)
   }
+  const { skills, mcps, plugins } = tablesOf(db)
   const [skillRows, mcpRows, pluginRows] = await Promise.all([
     skillIds.size > 0
       ? db

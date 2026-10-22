@@ -13,14 +13,15 @@
 // Fix = revive-by-re-mint at engine entry (like the DAG revives a terminal row) + an
 // auto-resume sweep that recognises this second wedge shape.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 // RFC-359 W4-D19c-tail：判据 + 复活都改指生产那份（中立回合驱动）。合一时这两样**都没带过来**
 // ——auto-resume 那一半还在，但唤醒后驱动只铸普通 `wg-leader-round`，而 Q&A 注入只发生在澄清
@@ -66,11 +67,11 @@ describe('RFC-187 T13 — isKilledClarifyContinuation', () => {
   })
 })
 
-type TaskInsert = typeof tasks.$inferInsert
-type NodeRunInsert = typeof nodeRuns.$inferInsert
+type TaskInsert = PersistenceTables['tasks']['$inferInsert']
+type NodeRunInsert = PersistenceTables['nodeRuns']['$inferInsert']
 
 async function seedWedged(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: {
     taskStatus: TaskInsert['status']
     runStatus: NodeRunInsert['status']
@@ -79,8 +80,9 @@ async function seedWedged(
 ): Promise<string> {
   const taskId = ulid()
   const wfId = ulid()
-  await db.insert(workflows).values({ id: wfId, name: `wf-${taskId}`, definition: '{}' })
-  await db.insert(tasks).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: `wf-${taskId}`, definition: '{}' })
+  await insertOne(db, tasks, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -99,7 +101,7 @@ async function seedWedged(
     startedAt: Date.now(),
     workgroupId: 'wg1',
   })
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: ulid(),
     taskId,
     nodeId: '__wg_leader__',
@@ -113,7 +115,7 @@ async function seedWedged(
 }
 
 describeEachProvider('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', (harness) => {
-  const sweep = async (db: ProviderNeutralDatabase) => {
+  const sweep = async (db: PersistenceDb) => {
     const resumed: string[] = []
     const res = await autoResumeInterruptedTasks({
       operations: createTaskExecutionPersistence(db).recoveryAdministration,

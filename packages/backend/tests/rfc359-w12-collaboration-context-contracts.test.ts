@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -11,8 +12,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { collaborationGateOperations, taskQuestions, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCollaborationCommandContext,
   createCollaborationCommandContextFromPersistence,
@@ -62,7 +62,7 @@ import type { DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskE
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 
-function composeCapabilities(db: ProviderNeutralDatabase, appHome: string) {
+function composeCapabilities(db: PersistenceDb, appHome: string) {
   const memory = composeMemoryOperationsFor({
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
@@ -97,7 +97,7 @@ type SelectedRouteContext =
 // Checked by backend tsc, never invoked: no fabricated result or driver is needed
 // to prove that the production factories and their consumers reject missing ports.
 function constructionTypeContracts(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   pgDb: PostgresqlDatabaseClient,
   persistence: CollaborationCommandDependencies,
   capabilities: Capabilities,
@@ -471,6 +471,7 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
     expect(
       await requireCollaborationTaskExecutionReadModels(reads).statusProjection.find(taskId),
     ).toEqual({ taskId, status: 'awaiting_human', errorSummary: null })
+    const { collaborationGateOperations, taskQuestions } = tablesOf(db)
     expect(await db.select().from(collaborationGateOperations)).toEqual([])
     expect(await db.select().from(taskQuestions)).toEqual([])
   })
@@ -514,6 +515,7 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
       actorUserId: 'u1',
       now: 1_700_000_000_000,
     })
+    const { tasks, taskQuestions, collaborationGateOperations } = tablesOf(db)
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
       'awaiting_human',
     )

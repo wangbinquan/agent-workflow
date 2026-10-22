@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {
   describeEachProviderHttpApplication,
@@ -91,7 +91,7 @@ describe('RFC-222 C-1 — readDeleteBody', () => {
 // C-2 / C-3 — endpoint matrix
 // ---------------------------------------------------------------------------
 interface H {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   token: string
 }

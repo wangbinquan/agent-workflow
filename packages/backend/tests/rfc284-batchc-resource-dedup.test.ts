@@ -13,12 +13,12 @@
 //     ws/registry 对上游 aclBypassShortCircuit 的正确性依赖就此消除）。
 // T11 §2.5 skill 唯一性：ownerScopedNameWhere 三态（占用/他人同名不占用/
 //     NULL-owner 域隔离）+ isOwnerNameUniqueViolation 对新旧两代错误文案的识别。
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import { agents, resourceGrants, skills } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
 import { findAgentsReferencingIdInJsonColumn } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
@@ -39,7 +39,9 @@ import { isSkillNameOccupiedForOwner } from '../src/modules/resource-catalog/inf
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
-function agentRow(overrides: Partial<typeof agents.$inferInsert>): typeof agents.$inferInsert {
+function agentRow(
+  overrides: Partial<PersistenceTables['agents']['$inferInsert']>,
+): PersistenceTables['agents']['$inferInsert'] {
   return {
     id: ulid(),
     name: `a-${ulid().slice(-8)}`,
@@ -51,7 +53,7 @@ function agentRow(overrides: Partial<typeof agents.$inferInsert>): typeof agents
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
-  } as typeof agents.$inferInsert
+  } as PersistenceTables['agents']['$inferInsert']
 }
 
 function findArrayReferences(
@@ -75,6 +77,7 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
     const corrupt = agentRow({ name: 'corrupt', mcp: '"M1"广告[', plugins: '{"P1"广告' })
     // LIKE 命中（子串 "P1" 在场）但形状不是数组 → matcher 拒
     const shapeMiss = agentRow({ name: 'shape', plugins: '{"x":"P1"}' })
+    const { agents } = tablesOf(db)
     await db.insert(agents).values([hit, miss, corrupt, shapeMiss])
 
     const mcpRefs = await findArrayReferences(db, agents.mcp, 'M1')
@@ -106,15 +109,17 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
       name: 'proj',
       skills: '[{"kind":"project","skillId":"S1"}]',
     })
+    const { agents } = tablesOf(db)
     await db.insert(agents).values([hit, likeTrap, projectKind])
     const refs = await findAgentsUsingManagedSkill(
       {
-        find: (skillId) =>
-          findAgentsReferencingIdInJsonColumn(db, {
+        find: (skillId) => {
+          return findAgentsReferencingIdInJsonColumn(db, {
             column: agents.skills,
             id: skillId,
             matches: matchesManagedSkillReference,
-          }),
+          })
+        },
       },
       'S1',
     )
@@ -126,15 +131,19 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
     const hit = agentRow({ name: 'hit', dependsOn: '["A1","A2"]' })
     // "A1x" 含子串 A1 但整串不等 → 不误报（LIKE `%"A1"%` 也不命中该行，属双保险）
     const near = agentRow({ name: 'near', dependsOn: '["A1x"]' })
+    const { agents } = tablesOf(db)
     await db.insert(agents).values([hit, near])
     expect(
       await findAgentsDependingOn(
         {
-          findDependents: async (agentId) =>
-            (await findArrayReferences(db, agents.dependsOn, agentId)).map(({ id, name }) => ({
-              id,
-              name,
-            })),
+          findDependents: async (agentId) => {
+            return (await findArrayReferences(db, agents.dependsOn, agentId)).map(
+              ({ id, name }) => ({
+                id,
+                name,
+              }),
+            )
+          },
         },
         'A1',
       ),
@@ -234,8 +243,8 @@ describe('rfc284 批C T9 §2.2 — scheduled 引用扫描单点', () => {
 describe('rfc284 批C T10 §2.3 — grant 单点等价', () => {
   test('listResourceGrantUserIds 与 InTx 双形态、跨类型隔离', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const { users, resourceGrants } = tablesOf(db)
     // FK：user_id → users.id（cascade），先立最小用户行
-    const { users } = await import('../src/db/schema')
     await db.insert(users).values(
       ['u1', 'u2', 'u3', 'u4'].map(
         (id) =>
@@ -258,7 +267,7 @@ describe('rfc284 批C T10 §2.3 — grant 单点等价', () => {
         userId,
         addedBy: 'test',
         addedAt: 0,
-      }) as typeof resourceGrants.$inferInsert
+      }) as PersistenceTables['resourceGrants']['$inferInsert']
     await db.insert(resourceGrants).values([
       g('workflow', 'W1', 'u1'),
       g('workflow', 'W1', 'u2'),
@@ -272,7 +281,7 @@ describe('rfc284 批C T10 §2.3 — grant 单点等价', () => {
       expect(listResourceGrantUserIdsInTx(tx, 'mcp', 'W1')).toEqual(['u4'])
     })
     // where 形状可组合（canView 点查在用）——直接消费不抛即可
-    expect(grantsOfResourceWhere('workflow', 'W1')).toBeDefined()
+    expect(grantsOfResourceWhere(db, 'workflow', 'W1')).toBeDefined()
   })
 })
 
@@ -369,6 +378,7 @@ describe('rfc284 批C T10 §2.4 — 快照式可见性全矩阵（迁移快照�
 describe('rfc284 批C T11 — skill 唯一性三态 + 错误识别收编', () => {
   test('占用/他人同名不占用/NULL-owner 域隔离', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const { skills } = tablesOf(db)
     await db.insert(skills).values([
       {
         id: ulid(),
@@ -377,7 +387,7 @@ describe('rfc284 批C T11 — skill 唯一性三态 + 错误识别收编', () =>
         contentVersion: 1,
         createdAt: 0,
         updatedAt: 0,
-      } as typeof skills.$inferInsert,
+      } as PersistenceTables['skills']['$inferInsert'],
       {
         id: ulid(),
         name: 'sysdup',
@@ -385,7 +395,7 @@ describe('rfc284 批C T11 — skill 唯一性三态 + 错误识别收编', () =>
         contentVersion: 1,
         createdAt: 0,
         updatedAt: 0,
-      } as typeof skills.$inferInsert,
+      } as PersistenceTables['skills']['$inferInsert'],
     ])
     expect(await isSkillNameOccupiedForOwner(db, 'dup', 'u1')).toBe(true) // 占用
     expect(await isSkillNameOccupiedForOwner(db, 'dup', 'u2')).toBe(false) // 他人域自由

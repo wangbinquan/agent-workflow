@@ -1,27 +1,30 @@
 // RFC-359 W4-B5 —— 数字员工工作区持久化：一份实现，两个 provider 共用。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, desc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { cachedRepos, employeeCaseWorkspaces, employeeRoundWorkspaceStates } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   EmployeeCaseWorkspaceRow,
   EmployeeRoundWorkspaceStateRow,
   EmployeeWorkspacePersistence,
 } from '../application/ports/employeeWorkspacePersistence'
 
-const workspaceRow = (row: typeof employeeCaseWorkspaces.$inferSelect): EmployeeCaseWorkspaceRow =>
-  row
+const workspaceRow = (
+  row: PersistenceTables['employeeCaseWorkspaces']['$inferSelect'],
+): EmployeeCaseWorkspaceRow => row
 
 const roundRow = (
-  row: typeof employeeRoundWorkspaceStates.$inferSelect,
+  row: PersistenceTables['employeeRoundWorkspaceStates']['$inferSelect'],
 ): EmployeeRoundWorkspaceStateRow => row
 
 export function createEmployeeWorkspacePersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): EmployeeWorkspacePersistence {
   return {
     async workspace(caseId) {
+      const { employeeCaseWorkspaces } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -32,9 +35,11 @@ export function createEmployeeWorkspacePersistence(
       return row === undefined ? null : workspaceRow(row)
     },
     async insertWorkspace(row) {
-      await db.insert(employeeCaseWorkspaces).values(row)
+      const { employeeCaseWorkspaces } = tablesOf(db)
+      await insertOne(db, employeeCaseWorkspaces, row)
     },
     async repositoryLocalPath(cachedRepoId) {
+      const { cachedRepos } = tablesOf(db)
       const row = (
         await db
           .select({ localPath: cachedRepos.localPath })
@@ -45,6 +50,7 @@ export function createEmployeeWorkspacePersistence(
       return row?.localPath ?? null
     },
     async latestRoundState(roundId) {
+      const { employeeRoundWorkspaceStates } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -56,6 +62,7 @@ export function createEmployeeWorkspacePersistence(
       return row === undefined ? null : roundRow(row)
     },
     async roundState(roundId, attemptOrdinal) {
+      const { employeeRoundWorkspaceStates } = tablesOf(db)
       const row = (
         await db
           .select()
@@ -71,11 +78,13 @@ export function createEmployeeWorkspacePersistence(
       return row === undefined ? null : roundRow(row)
     },
     async insertRoundState(row, conflict) {
+      const { employeeRoundWorkspaceStates } = tablesOf(db)
       const statement = db.insert(employeeRoundWorkspaceStates).values(row)
       if (conflict === 'ignore') await statement.onConflictDoNothing()
       else await statement
     },
     async upsertRoundState(row) {
+      const { employeeRoundWorkspaceStates } = tablesOf(db)
       await db
         .insert(employeeRoundWorkspaceStates)
         .values(row)
@@ -95,6 +104,7 @@ export function createEmployeeWorkspacePersistence(
         })
     },
     async updateRoundState(input) {
+      const { employeeRoundWorkspaceStates } = tablesOf(db)
       await db
         .update(employeeRoundWorkspaceStates)
         .set(input.patch)

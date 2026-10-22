@@ -48,6 +48,7 @@
 // **当场漏一行、重一行**——`w8src-punct` 再也没出现过，`w8srcalower` 出现两次。对备份 / 迁移
 // 而言那不是「顺序不好看」，是**静默丢数据**。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 // 值 import，不是 `import type`：下面 SQLite 那一支要真开一条写连接去模拟「冻结窗漏了个写手」。
 // 因此本文件在 `rfc359-w5-t19f-test-engine-hardcoding.test.ts` 的账本里占一格——**它不是**那条
@@ -61,7 +62,6 @@ import { join } from 'node:path'
 
 import { eq } from 'drizzle-orm'
 
-import { users } from '@/db/schema'
 import type {
   CanonicalLogicalRow,
   CanonicalLogicalValue,
@@ -202,6 +202,7 @@ const RICH_ID = ORDERED_IDS[0]!
 const RICH_EPOCH = 9_007_199_254_740_993n
 
 async function seedUsers(harness: ProviderHarness): Promise<void> {
+  const { users } = tablesOf(harness.db)
   await harness.db.insert(users).values(
     ORDERED_IDS.map((id, index) => ({
       id,
@@ -250,6 +251,7 @@ describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness
     try {
       const snapshot = await opened.source.preflight()
       expect(snapshot.databaseFingerprint.length).toBeGreaterThan(8)
+      const { users } = tablesOf(harness.db)
       const seen = await harness.db.select({ id: users.id }).from(users)
       expect(snapshot.tableRows.users).toBe(seen.length)
       expect(snapshot.totalRows).toBeGreaterThanOrEqual(seen.length)
@@ -441,6 +443,7 @@ describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness
           'changed after the migration freeze',
         )
       } else {
+        const { users } = tablesOf(harness.db)
         // PostgreSQL：读出跑在一条 REPEATABLE READ 快照里，并发写**看不见**也不该翻围栏；
         // 围栏守的是「这一代还是不是 active 的契约代」。
         await harness.db

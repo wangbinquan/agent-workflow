@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 AC-1 —— 执行合同资源读取**只有一份实现**，两个引擎跑同一组判据。
@@ -15,14 +17,13 @@ import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-exe
 //      ——**用户看到的错误码取决于你用哪种数据库**。
 //
 // 下面 A / B 两条用例就是当时的红，现在两个引擎上都必须是同一个答案。合一后只剩
-// `createExecutionContractResourceAdapter(db: ProviderNeutralDatabase)` 一个入口，
+// `createExecutionContractResourceAdapter(db: PersistenceDb)` 一个入口，
 // 旧的 `createPostgresqlExecutionContractResourceAdapter` 已删除。
 
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { agents, workflows } from '@/db/schema'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -53,7 +54,8 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
     readonly revision: number
   }> {
     const id = ulid()
-    await h.db.insert(agents).values({
+    const { agents } = tablesOf(h.db)
+    await insertOne(h.db, agents, {
       id,
       name: 'Implementer',
       description: 'seeded by rfc359-execution-contract-resource-adapter',
@@ -73,9 +75,14 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
 
   async function seedWorkflow(definition: string, version = 4): Promise<string> {
     const id = ulid()
-    await h.db
-      .insert(workflows)
-      .values({ id, name: 'Contract workflow', description: 'w', definition, version })
+    const { workflows } = tablesOf(h.db)
+    await insertOne(h.db, workflows, {
+      id,
+      name: 'Contract workflow',
+      description: 'w',
+      definition,
+      version,
+    })
     return id
   }
 

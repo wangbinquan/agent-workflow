@@ -3,11 +3,12 @@
 // 语义沿 RFC-310 的 SQLite store：幂等键命中即返回既有行；resolveForCase 逐个 id 校验归属 / 状态 / 过期；
 // delete 只删本人的 pending 行（单语句 returning 判 404）；sweepExpired 每片只删一个有界批次。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { employeeInputUploads } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   EmployeeInputUploadPersistence,
@@ -19,7 +20,9 @@ export const EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT = 1_000
 
 export type { EmployeeInputUploadRecord } from '../application/ports/inputUploadStore'
 
-function recordOf(row: typeof employeeInputUploads.$inferSelect): EmployeeInputUploadRecord {
+function recordOf(
+  row: PersistenceTables['employeeInputUploads']['$inferSelect'],
+): EmployeeInputUploadRecord {
   return {
     id: row.id,
     actorUserId: row.actorUserId,
@@ -34,25 +37,27 @@ function recordOf(row: typeof employeeInputUploads.$inferSelect): EmployeeInputU
   }
 }
 
-function actorWhere(actorUserId: string | null) {
+function actorWhere(db: object, actorUserId: string | null) {
+  const { employeeInputUploads } = tablesOf(db)
   return actorUserId === null
     ? isNull(employeeInputUploads.actorUserId)
     : eq(employeeInputUploads.actorUserId, actorUserId)
 }
 
 export function createEmployeeInputUploadPersistence(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): EmployeeInputUploadPersistence {
   return {
     async create(input) {
       if (input.idempotencyKey !== null) {
+        const { employeeInputUploads } = tablesOf(db)
         const existing = (
           await db
             .select()
             .from(employeeInputUploads)
             .where(
               and(
-                actorWhere(input.actorUserId),
+                actorWhere(db, input.actorUserId),
                 eq(employeeInputUploads.uploadIdempotencyKey, input.idempotencyKey),
               ),
             )
@@ -74,7 +79,8 @@ export function createEmployeeInputUploadPersistence(
         createdAt: input.now,
         claimedAt: null,
       }
-      await db.insert(employeeInputUploads).values(row)
+      const { employeeInputUploads } = tablesOf(db)
+      await insertOne(db, employeeInputUploads, row)
       return recordOf(row)
     },
 
@@ -89,6 +95,7 @@ export function createEmployeeInputUploadPersistence(
           )
         }
         seen.add(id)
+        const { employeeInputUploads } = tablesOf(db)
         const row = (
           await db
             .select()
@@ -115,12 +122,13 @@ export function createEmployeeInputUploadPersistence(
     },
 
     async delete(id, actorUserId) {
+      const { employeeInputUploads } = tablesOf(db)
       const deleted = await db
         .delete(employeeInputUploads)
         .where(
           and(
             eq(employeeInputUploads.id, id),
-            actorWhere(actorUserId),
+            actorWhere(db, actorUserId),
             eq(employeeInputUploads.state, 'pending'),
           ),
         )
@@ -131,6 +139,7 @@ export function createEmployeeInputUploadPersistence(
     },
 
     async sweepExpired(now, limit = EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT) {
+      const { employeeInputUploads } = tablesOf(db)
       const expired = await db
         .select({ id: employeeInputUploads.id })
         .from(employeeInputUploads)

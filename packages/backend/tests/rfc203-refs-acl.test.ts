@@ -8,24 +8,19 @@
 //      绝不进 payload（404 同形隐藏纪律的一致延伸）；
 //   3. 可见即列名：public / 本人 / admin 视角下引用名单完整；
 //   4. 计划（schedule）走成员私有规则（owner / tasks:read:all），非 ACL 表。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import {
-  agents as agentsTable,
-  scheduledTasks,
-  users,
-  workflows,
-  workgroups,
-} from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { deleteWorkgroup } from '../src/services/workgroups'
@@ -43,12 +38,9 @@ function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   })
 }
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  id: string,
-  role: 'admin' | 'user',
-): Promise<void> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user'): Promise<void> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id}`,
     displayName: id,
@@ -59,7 +51,7 @@ async function seedUser(
   })
 }
 
-function mcpBinding(db: ProviderNeutralDatabase, actor: Actor): McpServiceBinding {
+function mcpBinding(db: PersistenceDb, actor: Actor): McpServiceBinding {
   const catalog = composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -114,7 +106,8 @@ describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => 
       ),
       'utf8',
     )
-    const fences = src.match(/where\(eq\(agents\.id, id\)\)\.get\(\)/g) ?? []
+    const fences =
+      src.match(/first\(tx\.select\(\)\.from\(agents\)\.where\(eq\(agents\.id, id\)\)\)/g) ?? []
     expect(fences.length).toBeGreaterThanOrEqual(2)
     // delete fence stays after the async disclosure-grant prefetch.
     expect(src.indexOf('fenceRow')).toBeGreaterThan(src.indexOf('listGrantedResourceIds'))
@@ -122,7 +115,7 @@ describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => 
 })
 
 describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   const owner = actorOfUser('u-owner', 'user')
   const admin = actorOfUser('u-admin', 'admin')
 
@@ -134,7 +127,8 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
   })
 
   async function seedWorkflowUsing(agentId: string, visibility: 'public' | 'private') {
-    await db.insert(workflows).values({
+    const { workflows } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: ulid(),
       name: `wf-${visibility}`,
       definition: JSON.stringify({
@@ -202,17 +196,18 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
       { name: 'same-ref', ...AGENT_BASE },
       { ownerUserId: 'u-other' },
     )
+    const { agents } = tablesOf(db)
     // LIKE prefilter intentionally sees this row, while the authoritative
     // JSON-array exact matcher rejects it. The two rows share a display name,
     // so a name-based second filter would incorrectly re-introduce this
     // private row and disclose its existence through hiddenCount.
     await db
-      .update(agentsTable)
+      .update(agents)
       .set({
         dependsOn: JSON.stringify({ coarseMatchOnly: target.id }),
         visibility: 'private',
       })
-      .where(eq(agentsTable.id, coarseOnly.id))
+      .where(eq(agents.id, coarseOnly.id))
 
     try {
       await deleteAgent(db, target.id, owner)
@@ -245,16 +240,14 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
       ...AGENT_BASE,
       mcp: [mcp.id],
     })
-    await db
-      .update(agentsTable)
-      .set({ visibility: 'public' })
-      .where(eq(agentsTable.id, publicUser.id))
+    const { agents } = tablesOf(db)
+    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, publicUser.id))
     // 他人私有代理也引用 m1
     await createAgent(db, { name: 'priv-user', ...AGENT_BASE, mcp: [mcp.id] })
     await db
-      .update(agentsTable)
+      .update(agents)
       .set({ ownerUserId: 'u-other', visibility: 'private' })
-      .where(eq(agentsTable.name, 'priv-user'))
+      .where(eq(agents.name, 'priv-user'))
 
     try {
       await deleteMcp(binding, mcp.id)
@@ -273,7 +266,8 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
 
   test('workgroup-scheduled-referenced：他人计划只计数；tasks:read:all 全可见', async () => {
     const workgroupId = ulid()
-    await db.insert(workgroups).values({
+    const { workgroups, scheduledTasks } = tablesOf(db)
+    await insertOne(db, workgroups, {
       id: workgroupId,
       name: 'wg1',
       description: '',
@@ -283,7 +277,7 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
       createdAt: 1,
       updatedAt: 1,
     })
-    await db.insert(scheduledTasks).values({
+    await insertOne(db, scheduledTasks, {
       id: ulid(),
       name: 'their-nightly',
       ownerUserId: 'u-other',

@@ -6,6 +6,8 @@
 // 且 errorMessage 文案与 RFC-145 之前逐字节相同（机器地位取消、人读价值保留）。
 // supersede 双列的写侧断言在 reviews-iterate-mints-new-run（T4 锁更新时并入）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -14,7 +16,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -59,7 +60,8 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
 
   test('无信封输出 → 行落 failureCode=envelope-missing，errorMessage 文案零变更', async () => {
     const agentId = ulid()
-    await h.db.insert(agents).values({
+    const { agents, workflows, tasks, nodeRuns } = tablesOf(h.db)
+    await insertOne(h.db, agents, {
       id: agentId,
       name: 'a',
       description: '',
@@ -79,14 +81,14 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await h.db.insert(workflows).values({
+    await insertOne(h.db, workflows, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await h.db.insert(tasks).values({
+    await insertOne(h.db, tasks, {
       id: taskId,
       name: 'fixture',
       workflowId,

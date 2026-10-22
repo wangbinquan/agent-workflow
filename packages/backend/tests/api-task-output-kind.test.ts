@@ -6,6 +6,8 @@
 //   - NULL column (legacy row / undeclared kind) surfaces as null,
 //   - value (content) is unchanged alongside kind.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   taskNodeRunsProjection,
   loadTaskProjection,
@@ -17,62 +19,54 @@ import { taskExecutionKind } from '@agent-workflow/shared'
 import { CODE_ROUND_NODE_ID, synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
+async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  await db
-    .insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  await db
-    .insert(tasks)
-    .values({
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-      // Materialize precisely the values the old SQLite 0210 trigger produced.
-      executionLineageId: taskId,
-      lineageSlotPathJson: JSON.stringify([
-        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-      ]),
-    })
-    .run()
+  await insertOne(db, tasks, {
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+    // Materialize precisely the values the old SQLite 0210 trigger produced.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
+  })
   return { taskId }
 }
 
-async function seedRun(db: ProviderNeutralDatabase, taskId: string, nodeId = 'n'): Promise<string> {
+async function seedRun(db: PersistenceDb, taskId: string, nodeId = 'n'): Promise<string> {
   const id = ulid()
-  await db
-    .insert(nodeRuns)
-    .values({ id, taskId, nodeId, status: 'done', startedAt: Date.now() })
-    .run()
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId, status: 'done', startedAt: Date.now() })
   return id
 }
 
 describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     resetBroadcastersForTests()
     db = harness.db
@@ -84,16 +78,14 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
   test('persisted kind string surfaces verbatim; content unchanged', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     const runId = await seedRun(db, taskId)
-    await db
-      .insert(nodeRunOutputs)
-      .values({
-        nodeRunId: runId,
-        portName: 'doc',
-        content: 'out/report.md',
-        kind: 'markdown_file',
-      })
-      .run()
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const { nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: runId,
+      portName: 'doc',
+      content: 'out/report.md',
+      kind: 'markdown_file',
+    })
+    const res = await taskNodeRunsProjection({ db }, taskId)
     const out = res.outputs.find((o) => o.port === 'doc')
     expect(out).toBeDefined()
     expect(out?.kind).toBe('markdown_file')
@@ -103,17 +95,21 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
   test('NULL kind (legacy / undeclared) surfaces as null', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     const runId = await seedRun(db, taskId)
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: runId, portName: 'summary', content: 'all good', kind: null })
-      .run()
-    const res = await taskNodeRunsProjection({ db: db }, taskId)
+    const { nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, nodeRunOutputs, {
+      nodeRunId: runId,
+      portName: 'summary',
+      content: 'all good',
+      kind: null,
+    })
+    const res = await taskNodeRunsProjection({ db }, taskId)
     expect(res.outputs.find((o) => o.port === 'summary')?.kind).toBeNull()
   })
 
   test('RFC-395 II-pre: historical code-round rows retain their task, node and outcome projections', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     const codeRoundId = ulid()
+    const { tasks, nodeRunOutputs } = tablesOf(db)
     await db
       .update(tasks)
       .set({
@@ -128,7 +124,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
       })
       .where(eq(tasks.id, taskId))
     const runId = await seedRun(db, taskId, CODE_ROUND_NODE_ID)
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: runId,
       portName: 'round_summary',
       content: 'historical result',

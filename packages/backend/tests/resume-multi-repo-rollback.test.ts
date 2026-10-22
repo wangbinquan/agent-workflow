@@ -16,6 +16,8 @@
 //   5. assert the file reverts to the snapshot-time body (rollback applied
 //      the stash) — proves the helper followed the right code path.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
@@ -27,7 +29,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { getTask } from '@/services/task'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { nodeRuns, tasks as tasksTbl, workflows } from '../src/db/schema'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
@@ -57,7 +58,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: 'wf-rb',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -111,14 +113,15 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     // body and restore the snapshot-time body.
     writeFileSync(join(task.worktreePath, 'data.txt'), 'POST-MUTATION\n')
 
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: 'nr-single',
       taskId: task.id,
       nodeId: 'fake-node',
       status: 'failed',
       preSnapshot: snapSha,
     })
-    await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
+    await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, task.id))
 
     await createResumeEngine(h.db, {
       appHome: h.appHome,
@@ -165,7 +168,8 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     writeFileSync(join(r0.worktreePath, 'data.txt'), 'MUTATED-A\n')
     writeFileSync(join(r1.worktreePath, 'data.txt'), 'MUTATED-B\n')
 
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: 'nr-multi',
       taskId: task.id,
       nodeId: 'fake-node',
@@ -175,7 +179,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         [r1.worktreeDirName]: shaB,
       }),
     })
-    await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
+    await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, task.id))
 
     await createResumeEngine(h.db, {
       appHome: h.appHome,
@@ -205,6 +209,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
     )
+    const { nodeRuns, tasks } = tablesOf(h.db)
     // Garbage in repos_json AND provide a legacy single-stash fallback. The
     // helper logs a warn and falls through to the single-stash branch,
     // which rolls `task.worktreePath` (the parent dir — not a git repo
@@ -212,7 +217,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     // BUT the helper swallows that failure with a warn so resumeTask
     // proceeds to flip task → pending. This test simply asserts that
     // resumeTask does NOT throw on malformed JSON — defense-in-depth.
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: 'nr-malformed',
       taskId: task.id,
       nodeId: 'fake-node',
@@ -220,7 +225,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       preSnapshotReposJson: '{not valid json',
       preSnapshot: '', // empty sha → helper short-circuits on legacy path
     })
-    await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
+    await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, task.id))
 
     // Should NOT throw.
     await createResumeEngine(h.db, {

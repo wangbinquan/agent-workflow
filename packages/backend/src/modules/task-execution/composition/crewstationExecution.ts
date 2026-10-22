@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { CrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
@@ -28,7 +28,7 @@ const SETTLEMENT_INTERVAL_MS = 60_000
 
 /** Bind logical child executions to the physical volume owning their workspace. */
 export function createCrewStationExecutionWorkspaces(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly locate: (reference: string) => { readonly taskId: string }
   readonly workspaces: {
     ensure(taskId: string): Promise<{ readonly businessTaskId: string }>
@@ -39,6 +39,7 @@ export function createCrewStationExecutionWorkspaces(input: {
   // their parent's physical workspace. Resolve that owner before allocating a
   // platform parent; never create an empty child volume for a parent cwd.
   const owner = async (taskId: string) => {
+    const { tasks } = tablesOf(input.db)
     const task = (
       await input.db
         .select({ workspaceRef: tasks.worktreePath })
@@ -87,7 +88,7 @@ export function createCachedHostedCapabilities(
 
 export function composeCrewStationExecutionOwner(
   input: {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly fence: CrewStationMutationFence
     readonly api: CrewStationBusinessExecution
     readonly objects: CrewStationObjectStorage
@@ -266,7 +267,7 @@ export function composeCrewStationExecutionOwner(
 /** The maintenance Worker releases Intent scratch only after every hosted
  * execution that may still write it has settled; it never adopts them. */
 export function composeCrewStationIntentScratchRelease(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly api: CrewStationBusinessExecution
   readonly helper: WorkspaceHelper

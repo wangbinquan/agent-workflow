@@ -1,3 +1,6 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   legacyShapedReactionWiring,
@@ -8,16 +11,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  employeeAttentionBindings,
-  employeeCaseMembers,
-  employeeCases,
-  employeeOsOutbox,
-  employeeReactionRounds,
-  employeeToolRegistrationRevisions,
-  eventSubscriptions,
-  users,
-} from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 import {
   developmentEmployeeRuntimeCodec,
@@ -74,23 +67,21 @@ describe('RFC-310 stateful employee Case runtime', () => {
   describeEachProvider('metering persistence', (harness) => {
     test('Case metering receipts increment usage exactly once', async () => {
       const db = harness.db
-      await db
-        .insert(employeeCases)
-        .values({
-          id: 'case-metering',
-          name: 'Case metering',
-          employeeId: 'employee-metering',
-          employeeRevision: 1,
-          typeId: 'development',
-          typeRevision: 10,
-          primaryContextId: 'context-metering',
-          executionPolicyRevision: 1,
-          state: 'active',
-          currentWorkItemRef: 'analyze-implement',
-          createdAt: 1,
-          updatedAt: 1,
-        })
-        .run()
+      const { employeeCases } = tablesOf(db)
+      await insertOne(db, employeeCases, {
+        id: 'case-metering',
+        name: 'Case metering',
+        employeeId: 'employee-metering',
+        employeeRevision: 1,
+        typeId: 'development',
+        typeRevision: 10,
+        primaryContextId: 'context-metering',
+        executionPolicyRevision: 1,
+        state: 'active',
+        currentWorkItemRef: 'analyze-implement',
+        createdAt: 1,
+        updatedAt: 1,
+      })
       const store = createRuntimePersistence(db)
       const receipt = {
         sourceRef: 'task:execution-metering',
@@ -553,11 +544,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
 
       const planned = await module.runtime!.worker.planOneReaction()
-      const plannedRound = await db
-        .select()
-        .from(employeeReactionRounds)
-        .where(eq(employeeReactionRounds.id, planned!))
-        .get()
+      const { employeeReactionRounds, employeeCases, employeeToolRegistrationRevisions } =
+        tablesOf(db)
+      const plannedRound = await first(
+        db.select().from(employeeReactionRounds).where(eq(employeeReactionRounds.id, planned!)),
+      )
       expect(plannedRound?.caseId).toBe(healthy.caseRef.id)
       expect(
         JSON.parse((await module.runtime!.queries.getCase(invalid.caseRef.id)).projectionJson).case,
@@ -591,11 +582,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
         [legacyMaterialRef],
       )
-      const legacyPlatformRecoveryRow = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, legacyPlatformRecovery.caseRef.id))
-        .get())!
+      const legacyPlatformRecoveryRow = (await first(
+        db
+          .select()
+          .from(employeeCases)
+          .where(eq(employeeCases.id, legacyPlatformRecovery.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -608,15 +600,15 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now,
         })
         .where(eq(employeeCases.id, legacyPlatformRecovery.caseRef.id))
-        .run()
       const legacyRecoveredRound = await module.runtime!.worker.planOneReaction()
       expect(legacyRecoveredRound).not.toBeNull()
       const legacyRecoveredPlan = JSON.parse(
-        (await db
-          .select({ planJson: employeeReactionRounds.planJson })
-          .from(employeeReactionRounds)
-          .where(eq(employeeReactionRounds.id, legacyRecoveredRound!))
-          .get())!.planJson,
+        (await first(
+          db
+            .select({ planJson: employeeReactionRounds.planJson })
+            .from(employeeReactionRounds)
+            .where(eq(employeeReactionRounds.id, legacyRecoveredRound!)),
+        ))!.planJson,
       )
       expect(legacyRecoveredPlan).toMatchObject({
         workItemRef: 'prepare-materials',
@@ -641,11 +633,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         executionOptions: {},
       })
       now += 1
-      const recoverableRow = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, recoverable.caseRef.id))
-        .get())!
+      const recoverableRow = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, recoverable.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -654,17 +644,17 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now,
         })
         .where(eq(employeeCases.id, recoverable.caseRef.id))
-        .run()
-      const frozenToolRevision = (await db
-        .select()
-        .from(employeeToolRegistrationRevisions)
-        .where(
-          and(
-            eq(employeeToolRegistrationRevisions.toolId, analyzeToolRef.id),
-            eq(employeeToolRegistrationRevisions.revision, analyzeToolRef.revision),
+      const frozenToolRevision = (await first(
+        db
+          .select()
+          .from(employeeToolRegistrationRevisions)
+          .where(
+            and(
+              eq(employeeToolRegistrationRevisions.toolId, analyzeToolRef.id),
+              eq(employeeToolRegistrationRevisions.revision, analyzeToolRef.revision),
+            ),
           ),
-        )
-        .get())!
+      ))!
       await db
         .delete(employeeToolRegistrationRevisions)
         .where(
@@ -673,7 +663,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
             eq(employeeToolRegistrationRevisions.revision, analyzeToolRef.revision),
           ),
         )
-        .run()
       expect(await module.runtime!.worker.planOneReaction()).toBeNull()
       expect(
         JSON.parse((await module.runtime!.queries.getCase(recoverable.caseRef.id)).projectionJson)
@@ -684,7 +673,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         blockReason: expect.stringContaining('employee-tool-binding-unavailable'),
       })
 
-      await db.insert(employeeToolRegistrationRevisions).values(frozenToolRevision).run()
+      await insertOne(db, employeeToolRegistrationRevisions, frozenToolRevision)
       now += 1
       const recoveredRound = await module.runtime!.worker.planOneReaction()
       expect(recoveredRound).not.toBeNull()
@@ -1623,11 +1612,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
       ).toHaveLength(4)
 
       await drainWorker(runtime.worker)
-      const parentRow = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, launched.caseRef.id))
-        .get())!
+      const {
+        employeeCases,
+        employeeAttentionBindings,
+        employeeOsOutbox,
+        eventSubscriptions,
+        employeeReactionRounds,
+        users,
+        employeeCaseMembers,
+      } = tablesOf(db)
+      const parentRow = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, launched.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -1637,7 +1633,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now + 1,
         })
         .where(eq(employeeCases.id, launched.caseRef.id))
-        .run()
       const delegationRound = await runtime.worker.planOneReaction()
       expect(delegationRound).not.toBeNull()
       expect(await runtime.worker.runOneOutbox()).toBe('completed')
@@ -1694,16 +1689,17 @@ describe('RFC-310 stateful employee Case runtime', () => {
       // Regression: an Attention can become desired again before its older
       // unsubscribe effect runs. The reactivation must retain ownership of the
       // live subscription, and the stale effect must not cancel it afterwards.
-      const pipelineAttentionBeforeReactivation = (await db
-        .select()
-        .from(employeeAttentionBindings)
-        .where(
-          and(
-            eq(employeeAttentionBindings.caseId, launched.caseRef.id),
-            eq(employeeAttentionBindings.eventTypeId, 'development.pipeline-check-due'),
+      const pipelineAttentionBeforeReactivation = (await first(
+        db
+          .select()
+          .from(employeeAttentionBindings)
+          .where(
+            and(
+              eq(employeeAttentionBindings.caseId, launched.caseRef.id),
+              eq(employeeAttentionBindings.eventTypeId, 'development.pipeline-check-due'),
+            ),
           ),
-        )
-        .get())!
+      ))!
       expect(pipelineAttentionBeforeReactivation.state).toBe('active')
       expect(pipelineAttentionBeforeReactivation.eventSubscriptionId).not.toBeNull()
       const pipelineSubscriptionId = pipelineAttentionBeforeReactivation.eventSubscriptionId!
@@ -1712,25 +1708,21 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .update(employeeAttentionBindings)
         .set({ state: 'cancel-requested', updatedAt: now })
         .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
-        .run()
-      await db
-        .insert(employeeOsOutbox)
-        .values({
-          id: `attention-race-unsubscribe:${launched.caseRef.id}`,
-          caseId: launched.caseRef.id,
-          kind: 'event-unsubscribe',
-          payloadJson: JSON.stringify({
-            bindingId: pipelineAttentionBeforeReactivation.id,
-            subscriptionId: pipelineSubscriptionId,
-          }),
-          dedupeKey: `attention-race-unsubscribe:${launched.caseRef.id}`,
-          state: 'pending',
-          attemptCount: 0,
-          nextAttemptAt: delayedUnsubscribeAt,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(db, employeeOsOutbox, {
+        id: `attention-race-unsubscribe:${launched.caseRef.id}`,
+        caseId: launched.caseRef.id,
+        kind: 'event-unsubscribe',
+        payloadJson: JSON.stringify({
+          bindingId: pipelineAttentionBeforeReactivation.id,
+          subscriptionId: pipelineSubscriptionId,
+        }),
+        dedupeKey: `attention-race-unsubscribe:${launched.caseRef.id}`,
+        state: 'pending',
+        attemptCount: 0,
+        nextAttemptAt: delayedUnsubscribeAt,
+        createdAt: now,
+        updatedAt: now,
+      })
 
       let reactivatedPipelineAttention: typeof pipelineAttentionBeforeReactivation = {
         ...pipelineAttentionBeforeReactivation,
@@ -1738,22 +1730,24 @@ describe('RFC-310 stateful employee Case runtime', () => {
       }
       for (let step = 0; step < 12 && reactivatedPipelineAttention.state !== 'desired'; step += 1) {
         expect(await runtime.worker.runOneOutbox()).toBe('completed')
-        reactivatedPipelineAttention = (await db
-          .select()
-          .from(employeeAttentionBindings)
-          .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
-          .get())!
+        reactivatedPipelineAttention = (await first(
+          db
+            .select()
+            .from(employeeAttentionBindings)
+            .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id)),
+        ))!
       }
       expect(reactivatedPipelineAttention).toMatchObject({
         state: 'desired',
         eventSubscriptionId: pipelineSubscriptionId,
       })
       await drainWorker(runtime.worker)
-      const activePipelineAttention = (await db
-        .select()
-        .from(employeeAttentionBindings)
-        .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
-        .get())!
+      const activePipelineAttention = (await first(
+        db
+          .select()
+          .from(employeeAttentionBindings)
+          .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id)),
+      ))!
       expect(activePipelineAttention).toMatchObject({
         state: 'active',
         eventSubscriptionId: pipelineSubscriptionId,
@@ -1761,11 +1755,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
       now = delayedUnsubscribeAt
       await drainWorker(runtime.worker)
       expect(
-        await db
-          .select({ state: eventSubscriptions.state })
-          .from(eventSubscriptions)
-          .where(eq(eventSubscriptions.id, pipelineSubscriptionId))
-          .get(),
+        await first(
+          db
+            .select({ state: eventSubscriptions.state })
+            .from(eventSubscriptions)
+            .where(eq(eventSubscriptions.id, pipelineSubscriptionId)),
+        ),
       ).toEqual({ state: 'active' })
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
       expect(projection.channels).toEqual(
@@ -1835,11 +1830,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-QUORUM' },
       })
       await drainWorker(runtime.worker)
-      const quorumParentRow = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, quorumLaunched.caseRef.id))
-        .get())!
+      const quorumParentRow = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, quorumLaunched.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -1849,7 +1842,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now + 1,
         })
         .where(eq(employeeCases.id, quorumLaunched.caseRef.id))
-        .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
       await drainWorker(runtime.worker)
       let quorumProjection = JSON.parse(
@@ -1949,11 +1941,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-ALL' },
       })
       await drainWorker(runtime.worker)
-      const allParentRow = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, allLaunched.caseRef.id))
-        .get())!
+      const allParentRow = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, allLaunched.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -1963,7 +1953,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now + 1,
         })
         .where(eq(employeeCases.id, allLaunched.caseRef.id))
-        .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
       await drainWorker(runtime.worker)
       let allProjection = JSON.parse(
@@ -2033,11 +2022,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-PARTIAL' },
       })
       await drainWorker(runtime.worker)
-      const partialParentRow = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, partialLaunched.caseRef.id))
-        .get())!
+      const partialParentRow = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, partialLaunched.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -2047,7 +2034,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now + 1,
         })
         .where(eq(employeeCases.id, partialLaunched.caseRef.id))
-        .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
       await drainWorker(runtime.worker)
       let partialProjection = JSON.parse(
@@ -2104,11 +2090,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
       // A second delegated Case remains independent when the parent's globally
       // pinned wait deadline expires. The channel fails and wakes the parent,
       // while the child is detached rather than silently cancelled.
-      const parentBeforeTimeout = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, launched.caseRef.id))
-        .get())!
+      const parentBeforeTimeout = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, launched.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -2118,7 +2102,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now + 1,
         })
         .where(eq(employeeCases.id, launched.caseRef.id))
-        .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
       await drainWorker(runtime.worker)
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
@@ -2167,11 +2150,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         currentWorkItemRef: 'delegate',
         blockReason: null,
       })
-      const resumedParent = (await db
-        .select()
-        .from(employeeCases)
-        .where(eq(employeeCases.id, launched.caseRef.id))
-        .get())!
+      const resumedParent = (await first(
+        db.select().from(employeeCases).where(eq(employeeCases.id, launched.caseRef.id)),
+      ))!
       await db
         .update(employeeCases)
         .set({
@@ -2180,7 +2161,6 @@ describe('RFC-310 stateful employee Case runtime', () => {
           updatedAt: now + 1,
         })
         .where(eq(employeeCases.id, launched.caseRef.id))
-        .run()
 
       const observeMrEvent = async (eventTypeId: string, dedupeKey: string): Promise<void> => {
         now += 1
@@ -2245,16 +2225,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
         workItemRef: 'observe-mr',
         ruleId: 'handle-lifecycle',
       })
-      const lifecycleCase = (await db
-        .select({ activeRoundId: employeeCases.activeRoundId })
-        .from(employeeCases)
-        .where(eq(employeeCases.id, launched.caseRef.id))
-        .get())!
-      const lifecycleRound = (await db
-        .select({ planJson: employeeReactionRounds.planJson })
-        .from(employeeReactionRounds)
-        .where(eq(employeeReactionRounds.id, lifecycleCase.activeRoundId!))
-        .get())!
+      const lifecycleCase = (await first(
+        db
+          .select({ activeRoundId: employeeCases.activeRoundId })
+          .from(employeeCases)
+          .where(eq(employeeCases.id, launched.caseRef.id)),
+      ))!
+      const lifecycleRound = (await first(
+        db
+          .select({ planJson: employeeReactionRounds.planJson })
+          .from(employeeReactionRounds)
+          .where(eq(employeeReactionRounds.id, lifecycleCase.activeRoundId!)),
+      ))!
       const lifecyclePlan = JSON.parse(lifecycleRound.planJson) as { inputEnvelopeJson: string }
       const lifecycleEnvelope = JSON.parse(lifecyclePlan.inputEnvelopeJson) as {
         contextsJson: string
@@ -2289,11 +2271,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
       // A business-terminal settlement must never resurrect an Attention whose
       // older unsubscribe is still pending. This is a real lifecycle reaction,
       // not the administrative terminate command.
-      const pipelineAttentionBeforeTerminal = (await db
-        .select()
-        .from(employeeAttentionBindings)
-        .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id))
-        .get())!
+      const pipelineAttentionBeforeTerminal = (await first(
+        db
+          .select()
+          .from(employeeAttentionBindings)
+          .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeReactivation.id)),
+      ))!
       expect(pipelineAttentionBeforeTerminal).toMatchObject({ state: 'active' })
       expect(pipelineAttentionBeforeTerminal.eventSubscriptionId).not.toBeNull()
       const terminalPipelineSubscriptionId = pipelineAttentionBeforeTerminal.eventSubscriptionId!
@@ -2302,25 +2285,21 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .update(employeeAttentionBindings)
         .set({ state: 'cancel-requested', updatedAt: now })
         .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeTerminal.id))
-        .run()
-      await db
-        .insert(employeeOsOutbox)
-        .values({
-          id: `attention-terminal-race-unsubscribe:${launched.caseRef.id}`,
-          caseId: launched.caseRef.id,
-          kind: 'event-unsubscribe',
-          payloadJson: JSON.stringify({
-            bindingId: pipelineAttentionBeforeTerminal.id,
-            subscriptionId: terminalPipelineSubscriptionId,
-          }),
-          dedupeKey: `attention-terminal-race-unsubscribe:${launched.caseRef.id}`,
-          state: 'pending',
-          attemptCount: 0,
-          nextAttemptAt: terminalUnsubscribeAt,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertOne(db, employeeOsOutbox, {
+        id: `attention-terminal-race-unsubscribe:${launched.caseRef.id}`,
+        caseId: launched.caseRef.id,
+        kind: 'event-unsubscribe',
+        payloadJson: JSON.stringify({
+          bindingId: pipelineAttentionBeforeTerminal.id,
+          subscriptionId: terminalPipelineSubscriptionId,
+        }),
+        dedupeKey: `attention-terminal-race-unsubscribe:${launched.caseRef.id}`,
+        state: 'pending',
+        attemptCount: 0,
+        nextAttemptAt: terminalUnsubscribeAt,
+        createdAt: now,
+        updatedAt: now,
+      })
       observedMergeRequestStatus = 'merged'
       await observeMrEvent('development.lifecycle-updated', 'lifecycle-merged-terminal-race')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
@@ -2330,11 +2309,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
         state: 'terminal',
       })
       expect(
-        await db
-          .select()
-          .from(employeeAttentionBindings)
-          .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeTerminal.id))
-          .get(),
+        await first(
+          db
+            .select()
+            .from(employeeAttentionBindings)
+            .where(eq(employeeAttentionBindings.id, pipelineAttentionBeforeTerminal.id)),
+        ),
       ).toMatchObject({
         state: 'cancel-requested',
         eventSubscriptionId: terminalPipelineSubscriptionId,
@@ -2342,11 +2322,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
       now = terminalUnsubscribeAt
       await drainWorker(runtime.worker)
       expect(
-        await db
-          .select({ state: eventSubscriptions.state })
-          .from(eventSubscriptions)
-          .where(eq(eventSubscriptions.id, terminalPipelineSubscriptionId))
-          .get(),
+        await first(
+          db
+            .select({ state: eventSubscriptions.state })
+            .from(eventSubscriptions)
+            .where(eq(eventSubscriptions.id, terminalPipelineSubscriptionId)),
+        ),
       ).toEqual({ state: 'cancelled' })
 
       retryLimits = { defaultNodeRetries: 0, sessionRestartBudget: 0 }
@@ -2442,7 +2423,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         }),
       ).rejects.toThrow('manual digital employee work requires a task name')
 
-      await db.insert(users).values({
+      await insertOne(db, users, {
         id: 'case-collaborator',
         username: 'case-collaborator',
         displayName: 'Case Collaborator',
@@ -2482,8 +2463,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         await db
           .select({ userId: employeeCaseMembers.userId, role: employeeCaseMembers.role })
           .from(employeeCaseMembers)
-          .where(eq(employeeCaseMembers.caseId, manualLaunch.caseRef.id))
-          .all(),
+          .where(eq(employeeCaseMembers.caseId, manualLaunch.caseRef.id)),
       ).toEqual([{ userId: 'case-collaborator', role: 'collaborator' }])
       const manualProjection = JSON.parse(manualLaunch.projectionJson) as {
         contexts: Array<{ id: string; state: { request?: { workingBranch?: string | null } } }>

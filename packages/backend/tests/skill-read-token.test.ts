@@ -6,7 +6,7 @@ import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
   listSkills,
@@ -19,12 +19,12 @@ import {
   encodeSkillToken,
 } from '../src/modules/resource-catalog/application/skills/skillToken'
 
-async function getSkill(db: ProviderNeutralDatabase, name: string) {
+async function getSkill(db: PersistenceDb, name: string) {
   return (await listSkills(db)).find((skill) => skill.name === name) ?? null
 }
 
 describeEachProvider('RFC-170 T3 — read-path composite token', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string

@@ -15,7 +15,9 @@ type MutableTable = {
   -readonly [K in Exclude<keyof TableDefinition, 'columns'>]: TableDefinition[K]
 } & { columns: Record<string, Record<string, unknown>> }
 function mutated(mutate: (table: MutableTable) => void): SchemaRegistry {
-  const contributions = structuredClone(persistenceSchema.contributions) as SchemaContribution[]
+  const contributions = structuredClone([
+    ...persistenceSchema.contributions,
+  ]) as SchemaContribution[]
   const table = contributions
     .flatMap((c) => c.tables)
     .find((t) => t.id === 'agents')! as unknown as MutableTable

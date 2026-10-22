@@ -23,7 +23,7 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
 import {
@@ -38,7 +38,7 @@ import type { DaemonIntegrationModules } from './integration'
 
 type AutomationInput = Parameters<typeof composeDevelopmentAutomation>[0]
 export interface DaemonDevelopmentAutomationInput {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly log: Pick<Logger, 'info' | 'warn'>
   readonly developmentPurposeRoot: SelectedDevelopmentPurposeRoot

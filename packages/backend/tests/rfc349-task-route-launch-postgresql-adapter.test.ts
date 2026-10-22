@@ -1,3 +1,5 @@
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { preparedArtifactLane } from '@/modules/task-execution/infrastructure/workspaceLaunchLane'
 // RFC-349 — direct Agent/Workgroup launch keeps the existing route contract
 // while the selected PostgreSQL provider owns the task row, collaborators,
@@ -17,15 +19,7 @@ import {
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import { eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  users,
-  tasks,
-  taskRepos,
-  taskCollaborators,
-  taskExecutionIntents,
-  committedEvents,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -127,7 +121,10 @@ function postgresqlFixture(input: {
     }
     return sqlRows({ count: normalized.startsWith('insert ') ? 1 : 0 })
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -244,7 +241,7 @@ const workflow = Object.freeze({
 const temporaryRoots: string[] = []
 
 async function workspaceParticipant(input: {
-  readonly db?: ProviderNeutralDatabase
+  readonly db?: PersistenceDb
   readonly committed: string[]
   readonly rolledBack: string[]
   readonly sourceTerminationSignals: Array<AbortSignal | undefined>
@@ -361,7 +358,7 @@ function integrity(calls: string[][]): AgentLaunchResourceIntegrityParticipant {
 }
 
 async function harness(input: {
-  readonly db?: ProviderNeutralDatabase
+  readonly db?: PersistenceDb
   readonly activeUserIds: readonly string[]
   readonly visibleTaskIds?: readonly string[]
 }) {
@@ -370,6 +367,7 @@ async function harness(input: {
     input.db === undefined
       ? postgresqlFixture({ ...input, trace })
       : { db: input.db, executions: [] }
+  const { users } = tablesOf(postgres.db)
   if (input.db !== undefined)
     await input.db.insert(users).values(
       input.activeUserIds.map((id) => ({
@@ -1021,6 +1019,9 @@ describeEachProvider('RFC-363 Agent upload journal', (provider) => {
       state: 'admitted',
       lane: 'pre-materialized',
     })
+    const { tasks, taskRepos, taskCollaborators, taskExecutionIntents, committedEvents } = tablesOf(
+      provider.db,
+    )
     expect(await provider.db.select().from(tasks).where(eq(tasks.id, task.id))).toHaveLength(1)
     expect(
       await provider.db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id)),

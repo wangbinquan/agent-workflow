@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import {
@@ -5,8 +6,7 @@ import {
   RuntimeStatusEntrySchema,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import { createLogger } from '@/util/log'
 import { DEFAULT_TIMEOUT_MS } from '../application/systemAgentRun'
@@ -22,7 +22,7 @@ import type {
  * collaboration-owned generator port structurally; bootstrap checks the fit.
  */
 export function createClarifyFollowupGeneration(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly registry: RuntimeExecutionQueries
   readonly family: SystemAgentRunFamily
   readonly bindRuntime: <T extends { readonly binaryPath: string | null }>(
@@ -40,6 +40,7 @@ export function createClarifyFollowupGeneration(input: {
         inputLimit = 8000,
         instructionLimit = 4000
       try {
+        const { tasks, nodeRuns } = tablesOf(input.db)
         const task = (
           await input.db
             .select({ inputs: tasks.inputs, workflowSnapshot: tasks.workflowSnapshot })
@@ -112,6 +113,7 @@ export function createClarifyFollowupGeneration(input: {
       prompt: string
       signal: AbortSignal
     }) {
+      const { nodeRuns } = tablesOf(input.db)
       const row = (
         await input.db
           .select({

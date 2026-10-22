@@ -2,11 +2,12 @@
 // commit boundary. Keep their entry points and prove the shared sequence with
 // real database rollback, including the still-synchronous bundle participant.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
-import { agents } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import {
   commitAgentCreateInTx,
@@ -108,7 +109,8 @@ test('the legacy SQLite bundle commit exports still finish before their void cal
     })
     dbTxSync(db, (tx) => {
       expect(commitAgentCreateInTx(tx, prepared)).toBeUndefined()
-      expect(tx.select().from(agents).where(eq(agents.id, prepared.id)).get()?.description).toBe(
+      const { agents } = tablesOf(tx)
+      expect(first(tx.select().from(agents).where(eq(agents.id, prepared.id)))?.description).toBe(
         'before update',
       )
     })
@@ -118,7 +120,8 @@ test('the legacy SQLite bundle commit exports still finish before their void cal
     expect(() =>
       dbTxSync(db, (tx) => {
         expect(commitAgentUpdateInTx(tx, patch)).toBeUndefined()
-        expect(tx.select().from(agents).where(eq(agents.id, prepared.id)).get()?.description).toBe(
+        const { agents } = tablesOf(tx)
+        expect(first(tx.select().from(agents).where(eq(agents.id, prepared.id)))?.description).toBe(
           'inside transaction',
         )
         throw failure
@@ -152,7 +155,8 @@ describeEachProvider('legacy Agent entry points use one atomic commit sequence',
 
   test('an outer update abort preserves every original stored column', async () => {
     const created = await createAgent(harness.db, input('existing-agent'))
-    const before = await harness.db.select().from(agents).where(eq(agents.id, created.id)).get()
+    const { agents } = tablesOf(harness.db)
+    const before = await first(harness.db.select().from(agents).where(eq(agents.id, created.id)))
     const failure = new Error('abort existing Agent update')
     await expect(
       harness.session.transaction(async (tx) => {
@@ -168,7 +172,7 @@ describeEachProvider('legacy Agent entry points use one atomic commit sequence',
         throw failure
       }),
     ).rejects.toBe(failure)
-    expect(await harness.db.select().from(agents).where(eq(agents.id, created.id)).get()).toEqual(
+    expect(await first(harness.db.select().from(agents).where(eq(agents.id, created.id)))).toEqual(
       before,
     )
   })

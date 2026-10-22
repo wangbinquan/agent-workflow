@@ -20,10 +20,10 @@
 // The gate stays inactive in unit-only service use until explicitly activated.
 // Production activates it before any consumer/HTTP can observe persisted rows.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { skills, skillVersions } from '@/db/schema'
 import type { SkillSnapshotInspector } from '../../application/skills/lifecycleContentStore'
 import { createFileSkillSnapshotInspector } from '../local/fileSkillSnapshotInspector'
 import { createLogger } from '@/util/log'
@@ -131,7 +131,7 @@ interface BootVerifyOptions {
  * Passing marks the skill boot-verified; failing CAS-quarantines it fail-closed.
  */
 export async function verifyManagedSnapshot(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: BootVerifyOptions,
   skill: ReverifySkill,
 ): Promise<VerifyOutcome> {
@@ -148,6 +148,7 @@ export async function verifyManagedSnapshot(
     })
     if (result.ok) {
       const finalized = await databaseSessionFor(db).transaction(async (tx) => {
+        const { skills } = tablesOf(tx)
         const current = (
           await tx
             .select({
@@ -179,6 +180,7 @@ export async function verifyManagedSnapshot(
       }
     } else {
       const quarantined = await databaseSessionFor(db).transaction(async (tx) => {
+        const { skills } = tablesOf(tx)
         const current = (
           await tx
             .select({
@@ -215,6 +217,7 @@ export async function verifyManagedSnapshot(
       }
     }
 
+    const { skills } = tablesOf(db)
     const fresh = (
       await db
         .select({
@@ -238,12 +241,13 @@ export async function verifyManagedSnapshot(
 }
 
 async function inspectManagedSnapshot(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: BootVerifyOptions,
   skill: ReverifySkill,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const reject = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
   try {
+    const { skillVersions } = tablesOf(db)
     const versions = (await db
       .select({
         versionIndex: skillVersions.versionIndex,
@@ -315,10 +319,11 @@ async function inspectManagedSnapshot(
  * quarantined for size.
  */
 export async function runBootSnapshotReverify(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: BootVerifyOptions,
 ): Promise<{ verified: number; quarantined: number }> {
   bootReverifyActivated = true
+  const { skills } = tablesOf(db)
   const rows = (await db
     .select({
       id: skills.id,

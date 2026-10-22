@@ -1,5 +1,7 @@
 // RFC-370 A2: selected evidence content drives the actual Mission read faces.
 // Bounded range policy remains in the application; file IO has its own adapter.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,7 +9,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
-import { users } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
@@ -82,7 +83,8 @@ describe('RFC-370 selected evidence range policy', () => {
 describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => {
   test('actual detail and range operations await the same selected contents and preserve continuation', async () => {
     const fx = await buildPr3Fixture({ db: harness.db })
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'u-1',
       username: 'evidence-reader',
       displayName: 'Evidence reader',

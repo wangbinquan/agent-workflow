@@ -41,7 +41,7 @@ describe('RFC-345 Skill ZIP provider-neutral participant', () => {
 
     expect(adapter).toContain("from './legacy/skill-zip'")
     expect(adapter).toContain('createParticipant(Object.freeze(port))')
-    expect(adapter).toContain('ProviderNeutralDatabase')
+    expect(adapter).toContain('PersistenceDb')
     expect(adapter).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient|createSqlite|as unknown/)
 
     for (const retired of ['postgresqlSkillZipImport.ts', 'postgresqlSkillRepository.ts']) {

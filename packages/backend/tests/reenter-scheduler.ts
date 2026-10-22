@@ -18,13 +18,13 @@
 // that drive runTask synchronously. Exemplar for the explicit reset:
 // scheduler-clarify-dispatch.test.ts (2dbcf1 :404).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { tasks } from '../src/db/schema'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 /** Flip the task back to `pending` so the next runTask call can claim it
  *  through the RFC-097 entry CAS — the test stand-in for resumeTask. */
-export async function reenterScheduler(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+export async function reenterScheduler(db: PersistenceDb, taskId: string): Promise<void> {
+  const { tasks } = tablesOf(db)
   await db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
 }

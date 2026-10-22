@@ -28,6 +28,8 @@
 // ③ 是配套的反向锁：谁想靠「把非自有候选从 candidateIds 里滤掉」来"加固"上游，会
 // 立刻在 ③ 上变红，因为那等于顺手废掉 reuse 别人的资源。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -36,8 +38,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { users, workgroups } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
@@ -46,7 +47,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const box = createSecretBoxFromKey(randomBytes(32))
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 
 const actorOf = (id: string): Actor =>
   ({
@@ -55,14 +56,15 @@ const actorOf = (id: string): Actor =>
     permissions: new Set<string>(['workgroups:create', 'workgroups:update']),
   }) as unknown as Actor
 
-const deps = (db: ProviderNeutralDatabase) => ({
+const deps = (db: PersistenceDb) => ({
   db,
   appHome: mkdtempSync(join(tmpdir(), 'aw-rfc271-own-')),
   box,
 })
 
-async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
-  await db.insert(users).values({
+async function seedUser(db: PersistenceDb, id: string): Promise<void> {
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -74,13 +76,10 @@ async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> 
   } as never)
 }
 
-async function seedWorkgroup(
-  db: ProviderNeutralDatabase,
-  owner: string,
-  name: string,
-): Promise<string> {
+async function seedWorkgroup(db: PersistenceDb, owner: string, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(workgroups).values({
+  const { workgroups } = tablesOf(db)
+  await insertOne(db, workgroups, {
     id,
     name,
     description: `owned by ${owner}`,
@@ -109,7 +108,7 @@ async function seedFixture(harness: ProviderHarness): Promise<void> {
 
 /** 「我有一个 squad，别人也有一个 squad」——让 overwrite 合法出现在 allowedActions。 */
 async function seedRivalWorkgroups(): Promise<{
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   mine: string
   theirs: string
 }> {
@@ -121,7 +120,7 @@ async function seedRivalWorkgroups(): Promise<{
 }
 
 async function previewAndCommit(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   action: 'overwrite' | 'reuse',
   targetId: string,
 ): Promise<{ ok: true; action: string } | { ok: false; code: string }> {
@@ -155,6 +154,7 @@ describeEachProvider('AC-15 · 包级导入链上的 overwrite 归属边界（�
   describe('AC-15 · 包级导入链上的 overwrite 归属边界', () => {
     test('① 覆盖**别人的**同名可见工作组 ⇒ 拒绝，且对方那一行一个字节没变', async () => {
       const { db, theirs } = await seedRivalWorkgroups()
+      const { workgroups } = tablesOf(db)
       const before = (await db.select().from(workgroups)).find((r) => r.id === theirs)
 
       const out = await previewAndCommit(db, 'overwrite', theirs)

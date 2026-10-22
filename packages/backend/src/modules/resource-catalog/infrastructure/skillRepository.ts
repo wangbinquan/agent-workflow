@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
   deleteSkill,
@@ -32,7 +32,7 @@ import type { SkillRepository } from '../application/skills/ports'
  * Active transports consume module-owned handles.
  */
 export function createSkillRepository(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   fsOptions: SkillFsOptions,
   // RFC-353 T7：回滚时「哪些记忆退回待用」由 knowledge-evolution 的协调器裁定，
   // bootstrap 注入。此前这里直接 import memory 的 infrastructure——跨 context 内部 import。

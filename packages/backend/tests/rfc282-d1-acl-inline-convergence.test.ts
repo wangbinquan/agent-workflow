@@ -19,12 +19,13 @@
 // If any assertion here goes red after a refactor, the refactor changed
 // user-visible ACL behavior — that is a bug per RFC-282 §0 (功能不受影响).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { agents, resourceGrants, users, workflows, workgroups } from '../src/db/schema'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
 import { deleteAgent } from '../src/services/agent'
 import { deleteWorkflow } from '../src/services/workflow'
@@ -41,11 +42,12 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
 }
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   role: 'admin' | 'user' = 'user',
 ): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u-${id.slice(-6)}`,
     displayName: `U ${id.slice(-6)}`,
@@ -57,13 +59,14 @@ async function seedUser(
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: 'agent' | 'workflow' | 'workgroup',
   resourceId: string,
   userId: string,
   ownerId: string,
 ): Promise<void> {
-  await db.insert(resourceGrants).values({
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
     resourceType: type,
     resourceId,
     userId,
@@ -75,7 +78,7 @@ async function grant(
 describeEachProvider(
   'RFC-282 D1 — scheduledTasks target-visibility triple (true-copy convergence)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     const ownerId = ulid()
     const grantedId = ulid()
     const strangerId = ulid()
@@ -95,7 +98,8 @@ describeEachProvider(
         await seedUser(db, id, role)
       }
       wfId = ulid()
-      await db.insert(workflows).values({
+      const { workflows, agents, workgroups } = tablesOf(db)
+      await insertOne(db, workflows, {
         id: wfId,
         name: `wf-${wfId.toLowerCase()}`,
         description: '',
@@ -107,14 +111,14 @@ describeEachProvider(
         updatedAt: Date.now(),
       })
       agentId = ulid()
-      await db.insert(agents).values({
+      await insertOne(db, agents, {
         id: agentId,
         name: `ag-${agentId.toLowerCase()}`,
         ownerUserId: ownerId,
         visibility: 'private',
       })
       wgId = ulid()
-      await db.insert(workgroups).values({
+      await insertOne(db, workgroups, {
         id: wgId,
         name: `wg-${wgId.toLowerCase()}`,
         mode: 'free_collab',
@@ -170,6 +174,7 @@ describeEachProvider(
     }
 
     test('public target passes for a stranger (visibility, not ownership, gates create)', async () => {
+      const { agents } = tablesOf(db)
       await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, agentId))
       const created = await createScheduledTask(db, createInput('agent') as never, {
         actor: actorOf(strangerId),
@@ -182,7 +187,7 @@ describeEachProvider(
 describeEachProvider(
   'RFC-282 D1 — write-path assertion triples (agent / workflow / workgroup)',
   (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     const ownerId = ulid()
     const grantedId = ulid()
     const strangerId = ulid()
@@ -195,7 +200,8 @@ describeEachProvider(
       for (const id of [ownerId, grantedId, strangerId]) await seedUser(db, id)
       const aId = ulid()
       const now = Date.now()
-      await db.insert(agents).values({
+      const { agents, workflows, workgroups } = tablesOf(db)
+      await insertOne(db, agents, {
         id: aId,
         name: `ag-${aId.toLowerCase()}`,
         ownerUserId: ownerId,
@@ -206,7 +212,7 @@ describeEachProvider(
       const fresh = await db.select().from(agents).where(eq(agents.id, aId))
       agentRow = { id: aId, updatedAt: fresh[0]!.updatedAt, aclRevision: fresh[0]!.aclRevision }
       wfId = ulid()
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: wfId,
         name: `wf-${wfId.toLowerCase()}`,
         description: '',
@@ -218,7 +224,7 @@ describeEachProvider(
         updatedAt: now,
       })
       wgId = ulid()
-      await db.insert(workgroups).values({
+      await insertOne(db, workgroups, {
         id: wgId,
         name: `wg-${wgId.toLowerCase()}`,
         mode: 'free_collab',
@@ -290,6 +296,7 @@ describeEachProvider(
     })
 
     test('workflow: builtin outranks 403 — visible non-owner on a builtin row gets builtin-readonly', async () => {
+      const { workflows } = tablesOf(db)
       await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, wfId))
       await expect(
         deleteWorkflow(

@@ -16,20 +16,11 @@
 
 // System Operations SQLite adapter for the shared retention-sweep application contract.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  intentSessions,
-  intentTurnEvents,
-  intentTurns,
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  tasks,
-  webhookTriggerFires,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { BOUNDED_DELETE_MAX_ROWS } from '@/platform/persistence/capabilities'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createLogger } from '@/util/log'
@@ -149,7 +140,8 @@ function advanceRetentionPhase(cursor: RetentionSweepCursorV1): RetentionSweepCu
 // `INTEGER PRIMARY KEY AUTOINCREMENT`（rowid 别名）、`webhook_trigger_fires` 的 `id` 是 ULID 主键，
 // 按主键删与按 rowid 删选中的是同一批行。
 
-function distillCandidates(cutoff: number | null, batchSize: number): SQL {
+function distillCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
+  const { memoryDistillEvents, memoryDistillJobs } = tablesOf(db)
   return sql`
     SELECT ${memoryDistillEvents.id} AS id
     FROM ${memoryDistillEvents}
@@ -164,7 +156,8 @@ function distillCandidates(cutoff: number | null, batchSize: number): SQL {
   `
 }
 
-function intentCandidates(cutoff: number | null, batchSize: number): SQL {
+function intentCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
+  const { intentTurnEvents, intentTurns, intentSessions } = tablesOf(db)
   return sql`
     SELECT ${intentTurnEvents.id} AS id
     FROM ${intentTurnEvents}
@@ -181,7 +174,8 @@ function intentCandidates(cutoff: number | null, batchSize: number): SQL {
   `
 }
 
-function mcpRuntimeCandidates(cutoff: number | null, batchSize: number): SQL {
+function mcpRuntimeCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
+  const { mcpRuntimeTestEvents, mcpRuntimeTestSessions } = tablesOf(db)
   return sql`
     SELECT ${mcpRuntimeTestEvents.id} AS id
     FROM ${mcpRuntimeTestEvents}
@@ -196,7 +190,8 @@ function mcpRuntimeCandidates(cutoff: number | null, batchSize: number): SQL {
   `
 }
 
-function webhookFireCandidates(cutoff: number | null, batchSize: number): SQL {
+function webhookFireCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
+  const { webhookTriggerFires, tasks } = tablesOf(db)
   return sql`
     SELECT ${webhookTriggerFires.id} AS id
     FROM ${webhookTriggerFires}
@@ -219,7 +214,7 @@ function webhookFireCandidates(cutoff: number | null, batchSize: number): SQL {
  * contract; it cannot keep SQLite's writer lock across phases or batches.
  */
 export async function runRetentionSweepSlice(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   config: RetentionConfig,
   cursorValue: unknown,
   now: number = Date.now(),
@@ -234,43 +229,49 @@ export async function runRetentionSweepSlice(
 
   const engine = databaseSessionFor(db).engine
   let deleted: Array<{ id: string }>
+  const { memoryDistillEvents, intentTurnEvents, mcpRuntimeTestEvents, webhookTriggerFires } =
+    tablesOf(db)
   switch (cursor.phase) {
     case 'distill-events':
-      deleted = await db.all(
+      deleted = await rawRows(
+        db,
         engine.deleteByCandidates(
           memoryDistillEvents,
           memoryDistillEvents.id,
-          distillCandidates(cursor.eventCutoff, batchSize),
+          distillCandidates(db, cursor.eventCutoff, batchSize),
         ),
       )
       counters.distillEvents = deleted.length
       break
     case 'intent-turn-events':
-      deleted = await db.all(
+      deleted = await rawRows(
+        db,
         engine.deleteByCandidates(
           intentTurnEvents,
           intentTurnEvents.id,
-          intentCandidates(cursor.eventCutoff, batchSize),
+          intentCandidates(db, cursor.eventCutoff, batchSize),
         ),
       )
       counters.intentTurnEvents = deleted.length
       break
     case 'mcp-runtime-test-events':
-      deleted = await db.all(
+      deleted = await rawRows(
+        db,
         engine.deleteByCandidates(
           mcpRuntimeTestEvents,
           mcpRuntimeTestEvents.id,
-          mcpRuntimeCandidates(cursor.eventCutoff, batchSize),
+          mcpRuntimeCandidates(db, cursor.eventCutoff, batchSize),
         ),
       )
       counters.mcpRuntimeTestEvents = deleted.length
       break
     case 'webhook-trigger-fires':
-      deleted = await db.all(
+      deleted = await rawRows(
+        db,
         engine.deleteByCandidates(
           webhookTriggerFires,
           webhookTriggerFires.id,
-          webhookFireCandidates(cursor.webhookCutoff, batchSize),
+          webhookFireCandidates(db, cursor.webhookCutoff, batchSize),
         ),
       )
       counters.webhookTriggerFires = deleted.length
@@ -282,7 +283,7 @@ export async function runRetentionSweepSlice(
 
 /** One hourly retention pass. Every stage is independent and fail-soft. */
 export async function runRetentionSweep(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   config: RetentionConfig,
   now: number = Date.now(),
 ): Promise<RetentionSweepResult> {

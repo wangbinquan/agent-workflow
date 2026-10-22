@@ -5,13 +5,13 @@
 // locks keep the internal persisted fact out of public route/shared schemas and
 // prevent lifecycle code from gaining an origin UPDATE path.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import ts from 'typescript'
-import { tasks } from '@/db/schema'
-
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
 const SHARED_TASK_SCHEMA = resolve(REPO_ROOT, 'packages', 'shared', 'src', 'schemas', 'task.ts')
@@ -159,6 +159,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 与「不进请求/响应 schema」两条判据都没动。
     expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(0)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
+    const db = schemaFixtureDb()
+    const { tasks } = tablesOf(db)
     expect(tasks.launchOrigin.name).toBe('launch_origin')
     expect(tasks.launchOrigin.getSQLType()).toBe('text')
     // RFC-311 G1:过滤谓词改成**可换别名**的形式(`col('launch_origin')`),因为

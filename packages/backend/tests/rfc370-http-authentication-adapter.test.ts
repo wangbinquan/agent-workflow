@@ -1,10 +1,11 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { createHttpRequestApp } from '@/server'
-import { users } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {
   admitDurableWorkOwner,
@@ -30,7 +31,8 @@ function app(authentication: HttpAuthenticationParticipant) {
 
 describeEachProvider('RFC-370 HTTP authentication adapter', (harness) => {
   async function fixture() {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'http-adapter-user',
       username: 'http-adapter-user',
       displayName: 'HTTP adapter user',

@@ -16,6 +16,8 @@
 // System Operations SQLite generation-safe restore adapter. Restore orchestration
 // selects this mechanism only for a verified SQLite target.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
 import { Database } from 'bun:sqlite'
 import {
@@ -33,7 +35,6 @@ import {
 import { dirname, join } from 'node:path'
 import { openDb, type DbClient } from '@/db/client'
 import { quickCheckDbFile } from '@/db/integrity'
-import { recoveryEvents } from '@/db/schema'
 import { bumpRecoveryCounter } from '@/services/recovery'
 import { extractTarGz, tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
@@ -69,7 +70,8 @@ async function recordSqliteRestoreRecoveryEvent(
 ): Promise<void> {
   bumpRecoveryCounter('restore')
   try {
-    await db.insert(recoveryEvents).values({
+    const { recoveryEvents } = tablesOf(db)
+    await insertOne(db, recoveryEvents, {
       id: ulid(),
       taskId: null,
       nodeRunId: null,

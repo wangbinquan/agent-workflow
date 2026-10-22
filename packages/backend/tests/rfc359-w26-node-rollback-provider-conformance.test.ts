@@ -1,9 +1,10 @@
 // One rollback target loader runs against both real provider databases. The
 // no-context observer case covers construction only, with no workspace effect.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskRepos, tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createNodeRollbackEffectObserver,
   loadNodeRollbackTarget,
@@ -18,7 +19,8 @@ const originalInputs = '{ "value": "保留原字节", "items": [2, 1] }'
 const originalSnapshot = '{ "version": 1, "nodes": [] }'
 
 async function seedTask(harness: ProviderHarness, repoCount: number) {
-  await harness.db.insert(tasks).values({
+  const { tasks } = tablesOf(harness.db)
+  await insertOne(harness.db, tasks, {
     id: taskId,
     name: 'rollback fixture',
     workflowId: 'w26-rollback-workflow',
@@ -52,7 +54,8 @@ function repositoryRow(repoIndex: number) {
   }
 }
 
-async function readStored(db: ProviderNeutralDatabase) {
+async function readStored(db: PersistenceDb) {
+  const { tasks, taskRepos } = tablesOf(db)
   const taskRows = await db.select().from(tasks).orderBy(asc(tasks.id))
   const repositoryRows = await db
     .select()
@@ -103,6 +106,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
 
   test('repository index order and stored task fields survive the target projection', async () => {
     await seedTask(harness, 7)
+    const { taskRepos } = tablesOf(harness.db)
     await harness.db.insert(taskRepos).values([4, 1, 2].map(repositoryRow))
     const before = await readStored(harness.db)
     const recording = harness.recordStatements()
@@ -132,13 +136,15 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
 
   test('the actual transaction handle sees edits and rolls both complete rows back on failure', async () => {
     await seedTask(harness, 1)
-    await harness.db.insert(taskRepos).values(repositoryRow(1))
+    const { taskRepos } = tablesOf(harness.db)
+    await insertOne(harness.db, taskRepos, repositoryRow(1))
     const before = await readStored(harness.db)
     const rollbackError = new Error('w26 rollback fixture failure')
     const editedInputs = '{ "value": "事务内", "items": [1, 2] }'
     let receivedError: unknown
     try {
       await harness.session.transaction(async (tx) => {
+        const { tasks, taskRepos } = tablesOf(tx)
         await tx
           .update(tasks)
           .set({ repoCount: 9, worktreePath: '/fixture/transaction/task', inputs: editedInputs })
@@ -147,7 +153,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
           .update(taskRepos)
           .set({ worktreePath: '/fixture/transaction/repo-1' })
           .where(eq(taskRepos.taskId, taskId))
-        await tx.insert(taskRepos).values(repositoryRow(0))
+        await insertOne(tx, taskRepos, repositoryRow(0))
         const target = await loadNodeRollbackTarget(tx, taskId)
         expect(target?.db).toBe(tx)
         expect(target).toEqual({

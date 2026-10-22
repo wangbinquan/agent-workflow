@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import {
   clarifyCategoryPaths,
@@ -12,13 +13,8 @@ import {
   type ClarifyQuestion,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, taskQuestions, tasks } from '@/db/schema'
-import {
-  databaseSessionFor,
-  engineOf,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
@@ -27,9 +23,9 @@ import type {
 } from '../application/ports/clarifyFollowup'
 import type { CollaborationClarifyDraftEventPublisher } from '../application/ports/collaborationRouteOperations'
 
-type Reader = ProviderNeutralDatabase | DatabaseTransaction
+type Reader = PersistenceDb | PersistenceTx
 export function createClarifyFollowupStore(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   events: CollaborationClarifyDraftEventPublisher,
 ): ClarifyFollowupStore {
   const read = async (
@@ -37,6 +33,7 @@ export function createClarifyFollowupStore(
     nodeRunId: string,
     target: ClarifyFollowupTarget,
   ): Promise<ClarifyFollowupSnapshot> => {
+    const { clarifyRounds, tasks, taskQuestions } = tablesOf(reader)
     const round = (
       await reader
         .select()
@@ -105,6 +102,7 @@ export function createClarifyFollowupStore(
       const first = await read(db, nodeRunId, target)
       await getTaskQuestionWriteSem(first.taskId).run(async () => {
         await databaseSessionFor(db).transaction(async (tx) => {
+          const { tasks, clarifyRounds } = tablesOf(tx)
           await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, first.taskId)
           const current = await read(tx, nodeRunId, target)
           if (!current.canAppend)

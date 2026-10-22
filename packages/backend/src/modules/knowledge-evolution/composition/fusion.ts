@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   createFusionPersistence,
@@ -37,7 +37,7 @@ export interface FusionParticipants {
  * 绑出的同一个 participant 同时给仓库（暂存 / 提交 / 发布）与编排（种子树 / 候选树）。
  */
 function persistenceOf(
-  input: { readonly db: ProviderNeutralDatabase } & Pick<FusionParticipants, 'memoryMembership'>,
+  input: { readonly db: PersistenceDb } & Pick<FusionParticipants, 'memoryMembership'>,
   skillTrees: FusionSkillTrees,
 ): FusionPersistence {
   const { memoryMembership } = input
@@ -59,7 +59,7 @@ function persistenceOf(
 
 export function composeFusionPersistenceFor(
   input: {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
     readonly appHome: string
   } & FusionParticipants,
 ): FusionPersistence {
@@ -71,7 +71,7 @@ export function composeFusionPersistenceFor(
 
 export function composeFusionOperationsFor(
   input: FusionCompositionDependencies & {
-    readonly db: ProviderNeutralDatabase
+    readonly db: PersistenceDb
   } & FusionParticipants,
 ): FusionOperations {
   const skillTrees = input.skillVersionCommit.bind({ db: input.db, appHome: input.appHome })

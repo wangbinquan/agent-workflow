@@ -12,29 +12,33 @@
 // 了枚举里的大多数值，ANALYZE 之后 SQLite 会改选整表扫——即使活跃行一条都没有。判据（覆盖
 // 索引仍被选中）在 `tests/rfc359-w11-dialect-ledger-conformance.test.ts` 里两个引擎各跑一遍。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
 import { sql } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from './databaseTransaction'
 
 export type MaintenanceExecutionFence = () => Promise<'clear' | 'busy'>
 
-export function createMaintenanceExecutionFence(
-  db: ProviderNeutralDatabase,
-): MaintenanceExecutionFence {
+export function createMaintenanceExecutionFence(db: PersistenceDb): MaintenanceExecutionFence {
   return async () => {
     const statuses = sql.join(
       CANCELABLE_TASK_STATUSES.map((status) => sql`${status}`),
       sql`, `,
     )
-    const active = await db.all<{ readonly present: number }>(sql`
+    const { nodeRuns } = tablesOf(db)
+    const active = await rawRows<{ readonly present: number }>(
+      db,
+      sql`
       SELECT 1 AS present
       FROM ${nodeRuns} ${engineOf(db).indexHint('idx_node_runs_status_active')}
       WHERE ${nodeRuns.status} IN (${statuses})
       LIMIT 1
-    `)
+    `,
+      { present: 'int' },
+    )
     return active.length === 0 ? 'clear' : 'busy'
   }
 }

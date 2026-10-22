@@ -19,6 +19,8 @@
 // the breakage → wrapper done, git_diff carries the changed path (the normal
 // path is byte-unchanged by the fail-closed catch).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -27,7 +29,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
@@ -101,7 +102,8 @@ async function seedTask(h: Harness): Promise<string> {
   // READONLY inner agent: no pre-snapshot stash runs against the (about to
   // be) broken tree — the wrapper finalize is the first git touchpoint.
   const probeAgentId = ulid()
-  await h.db.insert(agents).values({
+  const { agents, workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, agents, {
     id: probeAgentId,
     name: 'probe',
     description: 'test',
@@ -124,12 +126,12 @@ async function seedTask(h: Harness): Promise<string> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc098-s24-task',
     id: taskId,
     workflowId,
@@ -181,6 +183,7 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
       }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     // HEADLINE: the task FAILED loudly (pre-B1 it went DONE with an empty
     // git_diff — downstream fan-out silently short-circuited on empty source).
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -239,6 +242,7 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
       }),
     )
 
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 

@@ -8,15 +8,12 @@
 // →重复选幂等、越候选集拒绝；④cancel 无外部 effect 直达 canceled + epoch
 // bump；retry blocked→working；⑤direct 上传目标路径重复/越界在 schema 层拒。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
 import { eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import {
-  developmentRepositoryUploadPlanEntries,
-  developmentRepositoryUploadPlans,
-} from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -57,14 +54,14 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 
 interface Fixture {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   deps: LaunchDeps
   employees: { single: string; multi: string; none: string }
   policyId: string
   uploads: UploadSessionPersistence
 }
 
-function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
+function lookupOf(db: PersistenceDb): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const row = await resolveAdmissionAssignment(db, {
@@ -94,7 +91,7 @@ function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
   }
 }
 
-async function buildFixture(db: ProviderNeutralDatabase): Promise<Fixture> {
+async function buildFixture(db: PersistenceDb): Promise<Fixture> {
   const now = () => Date.now()
   const templates = createActionTemplatePersistence(db)
   const adapters = createDevelopmentAdapterStore(db)
@@ -313,6 +310,9 @@ describeEachProvider('rfc310 pr2 admission', (harness) => {
     expect(claimed.claimedByMissionId).toBe(result.missionId)
     const mission = (await f.deps.store.getMission(result.missionId))!
     expect(mission.uploadPlanRef).not.toBeNull()
+    const { developmentRepositoryUploadPlans, developmentRepositoryUploadPlanEntries } = tablesOf(
+      f.db,
+    )
     const [plan] = await f.db
       .select()
       .from(developmentRepositoryUploadPlans)
@@ -369,6 +369,7 @@ describeEachProvider('rfc310 pr2 admission', (harness) => {
     }
     // 整体回滚：零 mission、零 plan、ok 行零消费、stolen 归属不变。
     expect(await f.deps.store.findByIdempotencyKey('idem-atomic-1')).toBeNull()
+    const { developmentRepositoryUploadPlans } = tablesOf(f.db)
     expect(await f.db.select().from(developmentRepositoryUploadPlans)).toHaveLength(0)
     expect((await f.uploads.getUpload(ok))!.state).toBe('pending')
     expect((await f.uploads.getUpload(stolen))!.claimedByMissionId).toBe('m-thief')

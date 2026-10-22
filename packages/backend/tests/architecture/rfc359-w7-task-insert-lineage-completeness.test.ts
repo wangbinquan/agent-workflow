@@ -63,17 +63,17 @@ const TASK_INSERT_SITES: readonly string[] = [
   // RFC-359 W11：行号从 579 挪到 580——同文件里祖先链的分支时间戳回填改调能力矩阵的
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   // RFC-386: 561 → 501; coordinator construction moved to the session factory. All three columns remain.
-  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:501 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:496 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-370 v2 P1: the host write selection is gone; the site keeps all three columns.
   // RFC-370 §10 V20: 121 → 129 — the workspace lane's imports, dependency and the
   // prepared-workspace parameter sit above it; the site and its three columns are unchanged.
-  'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts:102 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts:99 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
   // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：行号 813 → 826——`resourceAuthorityFor` 从两条臂的
   // 依赖面挪到路由面时加了注释与一个新接口，站点本身与它写的三列一格未动。
   // RFC-370 M2: the input-file launch dependency moved this unchanged site three lines.
-  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts:862 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts:858 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 W10：行号从 3509 挪到 3530——铸行事务从 `dbTxSync` 换成 `withTaskExecutionWrite`
   // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 3538 → 3590——延后准备的依赖面拆成中立形状时
@@ -105,24 +105,36 @@ function sourceFiles(dir: string): string[] {
  * 正则要么开窗口太小漏判（本判据初稿就是这么误判了两个站点「没写血缘」），要么跨站点串味。
  */
 export function taskInsertSites(text: string, rel: string): string[] {
-  if (!text.includes('insert(tasks)')) return []
+  if (!text.includes('insert(tasks)') && !text.includes('insertOne(')) return []
   const source = ts.createSourceFile('probe.ts', text, ts.ScriptTarget.Latest, true)
   const out: string[] = []
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'values'
-    ) {
-      const receiver = node.expression.expression
+    if (ts.isCallExpression(node)) {
+      let argument: ts.Expression | undefined
+      let isInsert = false
       if (
-        ts.isCallExpression(receiver) &&
-        ts.isPropertyAccessExpression(receiver.expression) &&
-        receiver.expression.name.text === 'insert' &&
-        receiver.arguments.length === 1 &&
-        receiver.arguments[0]!.getText(source) === 'tasks'
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'insertOne' &&
+        node.arguments[1]?.getText(source) === 'tasks'
       ) {
-        const argument = node.arguments[0]
+        isInsert = true
+        argument = node.arguments[2]
+      } else if (
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === 'values'
+      ) {
+        const receiver = node.expression.expression
+        if (
+          ts.isCallExpression(receiver) &&
+          ts.isPropertyAccessExpression(receiver.expression) &&
+          receiver.expression.name.text === 'insert' &&
+          receiver.arguments[0]?.getText(source) === 'tasks'
+        ) {
+          isInsert = true
+          argument = node.arguments[0]
+        }
+      }
+      if (isInsert) {
         const keys = new Set<string>()
         if (argument !== undefined && ts.isObjectLiteralExpression(argument)) {
           for (const property of argument.properties) {
@@ -209,6 +221,15 @@ describe('RFC-359 W7 —— insert(tasks) 的血缘 / 启动来源三列完整�
       '漏列没被判出来——这条守卫的全部作用就是判这个',
     ).toEqual(['a.ts:2 executionLineageId- lineageSlotPathJson- launchOrigin+'])
 
+    expect(taskInsertSites('await insertOne(tx, tasks, { launchOrigin })', 'native.ts')).toEqual([
+      'native.ts:1 executionLineageId- lineageSlotPathJson- launchOrigin+',
+    ])
+    expect(
+      taskInsertSites(
+        'await insertOne(tx, tasks, { executionLineageId, lineageSlotPathJson, launchOrigin })',
+        'native.ts',
+      ),
+    ).toEqual(['native.ts:1 executionLineageId+ lineageSlotPathJson+ launchOrigin+'])
     const otherTable = 'async function f() { await tx.insert(nodeRuns).values({ id: 1 }) }'
     expect(taskInsertSites(otherTable, 'a.ts'), '别的表不该被算进来').toEqual([])
   })

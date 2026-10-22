@@ -25,15 +25,16 @@
 // 确定性说明：纯本地 git（init/commit/worktree add/stash create/gc/update-ref），
 //   无网络/clone——不属于 RUN_GIT_NETWORK 门控形态（8859a67）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { rollbackNodeRunWorktrees } from '../src/services/nodeRollback'
 import type { RollbackTarget } from '../src/services/nodeRollback'
@@ -88,7 +89,7 @@ describeEachProvider(
   (harness) => {
     let appHome: string
     let repoPath: string
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
     beforeEach(async () => {
       appHome = mkdtempSync(join(tmpdir(), 'aw-rfc098-pin-'))
       repoPath = join(appHome, 'repo')
@@ -124,9 +125,10 @@ describeEachProvider(
       await gcPruneNow(repoPath)
       expect(await objectExists(repoPath, sha)).toBe(true)
 
+      const { workflows, tasks } = tablesOf(db)
       // Terminal task, old enough for the GC threshold.
-      await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
-      await db.insert(tasks).values({
+      await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
+      await insertOne(db, tasks, {
         name: 'fixture-task',
         id: taskId,
         workflowId,

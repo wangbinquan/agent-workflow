@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: complete selected evidence receiver at every real root and dual-provider HTTP.
@@ -7,7 +8,6 @@ import { dirname, join } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import ts from 'typescript'
-import { missionInputUploads } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type { EvidenceDocumentQueries } from '@/modules/development-automation/application/evidenceDocuments'
 import { DIRECT_SUBMISSION_BUDGET } from '@/modules/development-automation/infrastructure/requirementMaterializer'
@@ -132,6 +132,7 @@ describeEachProviderHttpApplication(
         )
         expect(Object.hasOwn(selected, 'putFile')).toBe(false)
         const opened = await scope.open({ evidenceArtifacts: selected })
+        const { missionInputUploads } = tablesOf(scope.harness.db)
         const before = await scope.harness.db.select().from(missionInputUploads)
         let settled = false
         const pending = Promise.resolve(

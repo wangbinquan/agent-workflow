@@ -10,6 +10,8 @@
 // 持久列过 normalizeKindString 归一为 canonical 'path<md>'（读侧等价折叠、
 // 零行为差异；migration 0075 清洗了存量，写入点不再倒灌别名）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -18,15 +20,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   appHome: string
   worktreePath: string
   taskId: string
@@ -61,14 +62,15 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const db = provider.db
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -129,9 +131,13 @@ function registerCases(provider: ProviderHarness) {
       outputKinds: { report: 'markdown_file' },
     })
     const nodeRunId = ulid()
-    await h.db
-      .insert(nodeRuns)
-      .values({ id: nodeRunId, taskId: h.taskId, nodeId: 'n1', status: 'pending' })
+    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
+      id: nodeRunId,
+      taskId: h.taskId,
+      nodeId: 'n1',
+      status: 'pending',
+    })
 
     const result = await withEnv(
       { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ report: 'report.md', note: 'just text' }) },

@@ -1,11 +1,12 @@
 // RFC-370 H6: classic catalogs must use the selected immutable-version facts
 // and content adapters. The real workflow loader must not probe another root.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CreateAgentSchema, CreateWorkflowSchema, type Skill } from '@agent-workflow/shared'
-import { skills, users } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { SkillVersionPresenceQueries } from '@/modules/resource-catalog/application/skills/contentAvailability'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
@@ -58,7 +59,8 @@ describeEachProvider('RFC-370 classic selected skill content', (harness) => {
     directory = mkdtempSync(join(tmpdir(), 'aw-classic-content-'))
     selectedHome = join(directory, 'selected')
     fallbackHome = join(directory, 'unused-fallback')
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'classic-content-admin',
       username: 'classic-content-admin',
       displayName: 'Classic content admin',
@@ -155,6 +157,7 @@ describeEachProvider('RFC-370 classic selected skill content', (harness) => {
           return verdict === 'present'
         },
       }
+      const { skills } = tablesOf(harness.db)
       const before = await harness.db.select().from(skills)
       let settled = false
       const pending = compose(query).workflow.validationQueries.validateCandidate(authority, {

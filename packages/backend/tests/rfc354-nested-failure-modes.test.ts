@@ -48,6 +48,8 @@
 // a per-call plan (fixtures/scenario-opencode.ts); no sleeps, no network; temp
 // dirs cleaned in afterEach.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   migrateWorkflowDefinitionToLatest,
   type Agent,
@@ -60,7 +62,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
@@ -95,7 +96,8 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: ulid(),
     name,
     description: 'test',
@@ -115,12 +117,13 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc354-nested-failure-task',
     id: taskId,
     workflowId,
@@ -260,6 +263,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     // Two gates can catch this, and which one fires is an implementation
@@ -321,17 +325,19 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorMessage ?? '').toContain('wrapper-loop-exhausted')
 
     // The inner loop burned its own ceiling in the FIRST outer round and the
     // failure travelled out: the outer loop never opened a second generation.
-    const rowsOf = (nodeId: string) =>
-      h.db
+    const rowsOf = (nodeId: string) => {
+      return h.db
         .select()
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+    }
     const innerRuns = await rowsOf('iloop')
     expect(innerRuns.length).toBe(1)
     expect(innerRuns[0]?.status).toBe('exhausted')
@@ -396,6 +402,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
+    const { tasks } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorMessage ?? '').toContain('wrapper-output-boundary-missing')
@@ -460,6 +467,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
+    const { tasks } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorMessage ?? '').toContain('wrapper-output-boundary-missing')
@@ -617,6 +625,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('done')
 
@@ -705,6 +714,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('done')
 

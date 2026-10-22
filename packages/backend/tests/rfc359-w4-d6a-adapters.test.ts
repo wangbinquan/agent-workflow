@@ -3,14 +3,15 @@
 // store 的 identity + immutable revisions 与撞名归类；配置装配的可见性 / 技术细节读面 / 改名栅栏；ACL 读写经目录
 // 中立路径——CAS、grants 整体替换、owner 变更时的撞名判定与旧 owner 降级为 read。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { developmentAdapterDefinitions, resourceGrants, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -36,12 +37,10 @@ function actorOf(
   })
 }
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'user',
-): Promise<string> {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'user'): Promise<string> {
   const id = `u_d6_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -196,6 +195,7 @@ describeEachProvider('RFC-359 W4-D6a —— development adapter 链与 foreign-o
       purpose: 'requirement-source',
       visibility: 'private',
     })
+    const { resourceGrants } = tablesOf(db)
     await db.insert(resourceGrants).values([
       {
         resourceType: 'development_adapter',
@@ -306,6 +306,7 @@ describeEachProvider('RFC-359 W4-D6a —— development adapter 链与 foreign-o
     expect(granted.grants.map((grant) => [grant.user.id, grant.level])).toEqual([
       [grantee, 'write'],
     ])
+    const { developmentAdapterDefinitions } = tablesOf(db)
     expect(
       (
         await db

@@ -5,10 +5,10 @@
 // （consumed/finalized 且操作 committed/completed），final 路径在则按 digest 校验读取，
 // 否则回退 staged 路径。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { ReviewArtifactContentPort } from '../application/ports/reviewArtifactContent'
@@ -32,11 +32,12 @@ function readVerified(
 
 export class DatabaseCommittedReviewArtifactReader implements CommittedReviewArtifactReader {
   constructor(
-    private readonly db: ProviderNeutralDatabase,
+    private readonly db: PersistenceDb,
     private readonly content: ReviewArtifactContentPort,
   ) {}
 
   async read(finalPath: string): Promise<string> {
+    const { collaborationGateArtifacts, collaborationGateOperations } = tablesOf(this.db)
     const rows = await this.db
       .select({
         stagedPath: collaborationGateArtifacts.stagedPath,

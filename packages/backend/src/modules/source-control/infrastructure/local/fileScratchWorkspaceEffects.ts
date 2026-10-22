@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ScratchWorkspaceEffects } from '../../application/ports/scratchWorkspaceEffects'
 import type { WorkspaceCleanupHookEvent } from '../../application/workspaceMaterialization'
 import { composeRepositoryWorkspaceStore } from '../repositoryWorkspaceStore'
@@ -10,7 +10,7 @@ import {
 } from '../workspaceMaterializer'
 
 export function createFileScratchWorkspaceEffects(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
 }) {

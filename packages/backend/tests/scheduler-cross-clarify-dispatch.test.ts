@@ -16,6 +16,8 @@
 //      External Feedback context (## External Feedback section appears
 //      in node_runs.promptText).
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -26,9 +28,8 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -52,7 +53,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // exercise) is now minted by reassigning the answered round's questioner card to the graph designer
 // node + dispatching that designer entry; buildClarifyQueueContext then injects its Q&A on rerun.
 async function reassignThenDispatchDesigner(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   intermediaryNodeRunId: string,
 ) {
@@ -69,7 +70,7 @@ async function reassignThenDispatchDesigner(
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   worktreePath: string
@@ -107,11 +108,12 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[] = ['main'],
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -130,12 +132,13 @@ async function seedWorkflowAndTask(
 ): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -357,6 +360,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, t2.taskId)))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
@@ -442,6 +446,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
+    const { clarifyRounds } = tablesOf(h.db)
     const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
     const qs = JSON.parse(sessions[0]?.questionsJson ?? '[]') as unknown[]
@@ -511,6 +516,7 @@ function registerProviderCases1(provider: ProviderHarness) {
           sessionRestartBudget: 0,
         }),
     )
+    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
     const sessionRows = await h.db
       .select()
       .from(clarifyRounds)
@@ -543,7 +549,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // short-circuit it to done.
     const { dispatchCrossClarifyNode } = await import('../src/services/clarify/service')
     const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: nrId,
       taskId,
       nodeId: 'cross1',
@@ -599,7 +605,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     // answer so the unified dispatch has prior rows to inherit (a never-run
     // frontier target is rejected — assertSafeFrontierTarget).
     const qRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
       id: qRunId,
       taskId,
       nodeId: 'questioner',
@@ -608,7 +615,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       iteration: 0,
     })
     const priorDesigner = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: priorDesigner,
       taskId,
       nodeId: 'designer',
@@ -715,11 +722,17 @@ function registerProviderCases1(provider: ProviderHarness) {
     // CONSUMED this designer run (so a designer rerun makes it provenance-stale
     // and gets it re-dispatched downstream).
     const inRunId = ulid()
-    await h.db
-      .insert(nodeRuns)
-      .values({ id: inRunId, taskId, nodeId: 'in1', status: 'done', retryIndex: 0, iteration: 0 })
+    const { nodeRuns, tasks } = tablesOf(h.db)
+    await insertOne(h.db, nodeRuns, {
+      id: inRunId,
+      taskId,
+      nodeId: 'in1',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+    })
     const priorDesigner = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: priorDesigner,
       taskId,
       nodeId: 'designer',
@@ -728,7 +741,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       iteration: 0,
     })
     const qRunId = ulid()
-    await h.db.insert(nodeRuns).values({
+    await insertOne(h.db, nodeRuns, {
       id: qRunId,
       taskId,
       nodeId: 'questioner',
@@ -964,6 +977,7 @@ function registerProviderCases2(provider: ProviderHarness) {
           sessionRestartBudget: 0,
         }),
     )
+    const { clarifyRounds, tasks } = tablesOf(h.db)
     const sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!

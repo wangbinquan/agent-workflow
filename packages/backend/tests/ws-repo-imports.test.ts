@@ -4,7 +4,7 @@
 // 正向用例先 seed 真批次（stub resolver，不触网），门矩阵见文件末 describe。
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderWebSocketApplication,
   type ProviderWebSocketScope,
@@ -29,7 +29,7 @@ const SCOPE_OPTIONS = {
 // RFC-359 AC-6 —— 整套「provider 应用 + 实时运行时 + ws 适配器 + 活的 server」交给
 // `describeEachProviderWebSocketApplication`；这里只留本文件自己的批次状态复位。
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   url: string
   httpUrl: string
 }
@@ -51,7 +51,7 @@ async function waitUntil(pred: () => boolean, capMs = 1000): Promise<void> {
 const hasType = (msgs: Array<{ type: string }>, type: string): boolean =>
   msgs.some((m) => m.type === type)
 
-function seedBatch(db: ProviderNeutralDatabase, ownerUserId: string): string {
+function seedBatch(db: PersistenceDb, ownerUserId: string): string {
   // stub resolver 永不返回：本套件只做频道语义，不跑真实 clone。
   const result = startBatchImport(
     {

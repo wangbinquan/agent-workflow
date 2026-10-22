@@ -1,6 +1,7 @@
 // RFC-374 T6: catch-up is boot step zero and hosted recovery starts only after activation; failure stops execution initialization.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { nodeRuns } from '@/db/schema'
 import { runTaskExecutionBootRecovery } from '@/modules/task-execution/composition/bootRecovery'
 import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
 import type {
@@ -75,9 +76,8 @@ function sequence(order: string[]): BootExecutionRecoveryFactory {
 describeEachProvider('RFC-374 boot step zero', (harness) => {
   test('real backfill completes before preparing or reaping, and reports its work', async () => {
     const taskId = await seedSequenceTask(harness.db)
-    await harness.db
-      .insert(nodeRuns)
-      .values({ id: 'legacy', taskId, nodeId: 'n', status: 'running' })
+    const { nodeRuns } = tablesOf(harness.db)
+    await insertOne(harness.db, nodeRuns, { id: 'legacy', taskId, nodeId: 'n', status: 'running' })
     const order: string[] = [],
       store = createNodeRunSeqBackfillStore(harness.db)
     const report = await runTaskExecutionBootRecovery(
@@ -98,9 +98,14 @@ describeEachProvider('RFC-374 boot step zero', (harness) => {
   })
   test('a real allocator failure rejects daemon boot before recovery or listeners', async () => {
     const taskId = await seedSequenceTask(harness.db)
-    await harness.db
-      .insert(nodeRuns)
-      .values({ id: 'invalid', taskId, nodeId: 'n', status: 'running', seq: 1 })
+    const { nodeRuns } = tablesOf(harness.db)
+    await insertOne(harness.db, nodeRuns, {
+      id: 'invalid',
+      taskId,
+      nodeId: 'n',
+      status: 'running',
+      seq: 1,
+    })
     const order: string[] = []
     const start = async () => {
       await runTaskExecutionBootRecovery(

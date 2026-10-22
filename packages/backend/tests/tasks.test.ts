@@ -1,6 +1,8 @@
 // HTTP coverage for /api/tasks (P-1-14).
 // Uses a real `git init` fixture so startTask's worktree creation works.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TasksListWsMessage, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test, beforeAll } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -9,10 +11,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '../src/ws/broadcaster'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
@@ -21,7 +22,7 @@ import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycle
 const TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   repoPath: string
   /** RFC-165: v2 HTTP bodies are URL-only; file:// is the local-repo form. */
@@ -67,9 +68,10 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
   return app.request(path, { ...init, headers })
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
+async function seedWorkflow(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const id = ulid()
-  await db.insert(workflows).values({
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id,
     name: 'wf',
     definition: JSON.stringify(def),
@@ -83,9 +85,10 @@ async function seedWorkflow(db: ProviderNeutralDatabase, def: WorkflowDefinition
  * materialization. Diff fixtures must wait for the durable prepared path;
  * writing against the immediate empty string resolves to this package cwd and
  * leaks README.md/NEWFILE.md into the repository under test. */
-async function preparedWorktree(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function preparedWorktree(db: PersistenceDb, taskId: string): Promise<string> {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
+    const { tasks } = tablesOf(db)
     const row = (
       await db
         .select({ worktreePath: tasks.worktreePath, baseCommit: tasks.baseCommit })
@@ -285,9 +288,10 @@ describeEachProviderHttpApplication(
 
     test('GET /:id roundtrips; GET / lists; status filter narrows', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+      const { tasks } = tablesOf(h.db)
       // Create three tasks; vary status by direct insert (POST always starts as
       // pending/running so we can't observe filtering on POST alone).
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id: ulid(),
@@ -302,7 +306,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 3000,
         finishedAt: Date.now() - 1000,
       })
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id: ulid(),
@@ -340,7 +344,8 @@ describeEachProviderHttpApplication(
     test('GET / and /:id include the joined workflow name', async () => {
       const wfId = ulid()
       const wfName = 'design-pipeline'
-      await h.db.insert(workflows).values({
+      const { workflows, tasks } = tablesOf(h.db)
+      await insertOne(h.db, workflows, {
         id: wfId,
         name: wfName,
         definition: JSON.stringify(EMPTY_DEF),
@@ -348,7 +353,7 @@ describeEachProviderHttpApplication(
         updatedAt: Date.now(),
       })
       const taskId = ulid()
-      await h.db.insert(tasks).values({
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id: taskId,
@@ -383,7 +388,8 @@ describeEachProviderHttpApplication(
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const taskId = ulid()
       const commentUrl = 'https://gitlab.example/group/repo/-/merge_requests/8#note_99'
-      await h.db.insert(tasks).values({
+      const { tasks } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'webhook source fixture',
         id: taskId,
         workflowId: wfId,
@@ -444,7 +450,8 @@ describeEachProviderHttpApplication(
     test('POST /:id/cancel on a completed task -> 409 task-not-cancelable', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -475,7 +482,8 @@ describeEachProviderHttpApplication(
       // canceled rather than block forever.
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -587,7 +595,8 @@ describeEachProviderHttpApplication(
       // worktree (repo missing, base ref invalid, etc.).
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -610,7 +619,8 @@ describeEachProviderHttpApplication(
     test('GET /:id/diff when worktree dir is missing -> 410', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -639,7 +649,8 @@ describeEachProviderHttpApplication(
       try {
         const wfId = await seedWorkflow(h.db, EMPTY_DEF)
         const id = ulid()
-        await h.db.insert(tasks).values({
+        const { tasks } = tablesOf(h.db)
+        await insertOne(h.db, tasks, {
           name: 'fixture-task',
           id,
           workflowId: wfId,
@@ -673,7 +684,8 @@ describeEachProviderHttpApplication(
       try {
         const wfId = await seedWorkflow(h.db, EMPTY_DEF)
         const id = ulid()
-        await h.db.insert(tasks).values({
+        const { tasks } = tablesOf(h.db)
+        await insertOne(h.db, tasks, {
           name: 'fixture-task',
           id,
           workflowId: wfId,
@@ -700,7 +712,8 @@ describeEachProviderHttpApplication(
     test('GET /:id/node-runs/:nodeRunId/events paginates with ?since', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const taskId = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id: taskId,
@@ -715,7 +728,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       const nrId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: nrId,
         taskId,
         nodeId: 'n1',
@@ -723,7 +736,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (let i = 0; i < 5; i++) {
-        await h.db.insert(nodeRunEvents).values({
+        await insertOne(h.db, nodeRunEvents, {
           nodeRunId: nrId,
           ts: Date.now() + i,
           kind: 'text',
@@ -750,6 +763,7 @@ describeEachProviderHttpApplication(
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const idA = ulid()
       const idB = ulid()
+      const { tasks, nodeRuns } = tablesOf(h.db)
       await h.db.insert(tasks).values([
         {
           id: idA,
@@ -779,7 +793,7 @@ describeEachProviderHttpApplication(
         },
       ])
       const nrA = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: nrA,
         taskId: idA,
         nodeId: 'n1',
@@ -794,7 +808,8 @@ describeEachProviderHttpApplication(
     test('POST /:id/resume on a non-failed task → 409', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -816,7 +831,8 @@ describeEachProviderHttpApplication(
     test('POST /:id/nodes/:nrId/retry while task is running → 409', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -831,7 +847,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       const nrId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: nrId,
         taskId: id,
         nodeId: 'n1',
@@ -856,7 +872,8 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -878,7 +895,7 @@ describeEachProviderHttpApplication(
         errorSummary: 'boom',
       })
       const nrId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: nrId,
         taskId: id,
         nodeId: 'n1',
@@ -915,7 +932,8 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -945,7 +963,7 @@ describeEachProviderHttpApplication(
       // HEAD 当基线，判据（继承哪些字段）一个字没改，而且不再依赖「那条门没跑」。
       const baseline = (await runGit(h.repoPath, ['rev-parse', 'HEAD'])).stdout.trim()
       const failedRunId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: failedRunId,
         taskId: id,
         nodeId: 'agent1',
@@ -992,7 +1010,8 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -1024,7 +1043,7 @@ describeEachProviderHttpApplication(
       })
       // Target (A): failed row at ci=4 — the user explicitly retried this.
       const aFailedId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: aFailedId,
         taskId: id,
         nodeId: 'A',
@@ -1038,7 +1057,7 @@ describeEachProviderHttpApplication(
       // Downstream (B): its own done row at a DIFFERENT ci (=1) — cascade must
       // inherit B's own state, not bleed A's ci=4 into B's fresh row.
       const bDoneId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: bDoneId,
         taskId: id,
         nodeId: 'B',
@@ -1082,7 +1101,8 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      await h.db.insert(tasks).values({
+      const { tasks, nodeRuns } = tablesOf(h.db)
+      await insertOne(h.db, tasks, {
         name: 'fixture-task',
 
         id,
@@ -1105,7 +1125,7 @@ describeEachProviderHttpApplication(
       })
       // Older done row the user wants to retry from: retryIndex=0, ci=2.
       const pickedId = ulid()
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: pickedId,
         taskId: id,
         nodeId: 'agent1',
@@ -1117,7 +1137,7 @@ describeEachProviderHttpApplication(
       })
       // Newer done row at higher retryIndex with DIFFERENT ci — desc(retryIndex)
       // would point retryNode at this row if it confused `prev` with `runRow`.
-      await h.db.insert(nodeRuns).values({
+      await insertOne(h.db, nodeRuns, {
         id: ulid(),
         taskId: id,
         nodeId: 'agent1',

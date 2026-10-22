@@ -1,3 +1,5 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   BUNDLE_RESOURCE_TYPES,
   decodeBundleIdentityRef,
@@ -10,7 +12,6 @@ import { z } from 'zod'
 
 import type { SecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
-import { resourceBundleApplies } from '@/db/schema'
 import type { PostgresqlResourcePackageProviderComposition } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import type { ResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
@@ -20,11 +21,8 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { preparedPackageMutation } from '@/modules/resource-catalog/public/types'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx, PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createResourcePackageApplyLock } from '@/platform/persistence/resourcePackageApplyLock'
 import {
   assertActionsAllowed,
@@ -97,17 +95,15 @@ const PACKAGE_IDEMPOTENCY_SCOPE = 'package'
  * 句柄取参。把中立句柄重新窄化给它**不是强转谎话**：那个参数类型归根到底就是
  * `Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]`，而中立会话在
  * PostgreSQL 上交出的正是驱动 `db.transaction` 回调里的那个句柄本身
- * （`createPostgresqlDatabaseSession` 只把同一个对象标注成 `DatabaseTransaction`）——运行期
+ * （`createPostgresqlDatabaseSession` 只把同一个对象标注成 `PersistenceTx`）——运行期
  * 逐字相同。目标类型直接从 `bindTransaction` 的形参上取，收件人变了这里跟着变。
- * 退役条件：`bindTransaction` 改吃 `DatabaseTransaction`，两套 apply 引擎合一时随之消失。
+ * 退役条件：`bindTransaction` 改吃 `PersistenceTx`，两套 apply 引擎合一时随之消失。
  */
 type PostgresqlResourcePackageBoundTransaction = Parameters<
   PostgresqlResourcePackageMutationSession['bindTransaction']
 >[0]
 
-function catalogTransaction(
-  transaction: DatabaseTransaction,
-): PostgresqlResourcePackageBoundTransaction {
+function catalogTransaction(transaction: PersistenceTx): PostgresqlResourcePackageBoundTransaction {
   return transaction as unknown as PostgresqlResourcePackageBoundTransaction
 }
 
@@ -151,7 +147,7 @@ const ReceiptSchema = z
 const ExpectedObjectSchema = z.record(z.unknown())
 
 export interface PostgresqlResourcePackageAtomicApplyDependencies {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly box: SecretBox
   readonly id?: () => string
   readonly now?: () => number
@@ -174,7 +170,7 @@ interface PreparedOperations {
 const withApplyLock = createResourcePackageApplyLock()
 
 function replayOutcome(
-  row: typeof resourceBundleApplies.$inferSelect,
+  row: PersistenceTables['resourceBundleApplies']['$inferSelect'],
 ): PostgresqlResourcePackageApplyReceipt {
   if (row.state === 'committed' && row.receiptJson !== null) {
     return ReceiptSchema.parse(JSON.parse(row.receiptJson))
@@ -721,16 +717,18 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
       )
     }
 
-    const replay = await dependencies.db
-      .select()
-      .from(resourceBundleApplies)
-      .where(
-        and(
-          eq(resourceBundleApplies.scope, PACKAGE_IDEMPOTENCY_SCOPE),
-          eq(resourceBundleApplies.key, verified.importId),
+    const { resourceBundleApplies } = tablesOf(dependencies.db)
+    const replay = await first(
+      dependencies.db
+        .select()
+        .from(resourceBundleApplies)
+        .where(
+          and(
+            eq(resourceBundleApplies.scope, PACKAGE_IDEMPOTENCY_SCOPE),
+            eq(resourceBundleApplies.key, verified.importId),
+          ),
         ),
-      )
-      .get()
+    )
     if (replay !== undefined) return replayOutcome(replay)
 
     if (now() > verified.expiresAt) {
@@ -778,44 +776,48 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
 
     const journalId = nextId()
     const claim = await databaseSessionFor(dependencies.db).transaction(async (transaction) => {
-      const existing = await transaction
-        .select()
-        .from(resourceBundleApplies)
-        .where(
-          and(
-            eq(resourceBundleApplies.scope, PACKAGE_IDEMPOTENCY_SCOPE),
-            eq(resourceBundleApplies.key, verified.importId),
+      const { resourceBundleApplies } = tablesOf(transaction)
+      const existing = await first(
+        transaction
+          .select()
+          .from(resourceBundleApplies)
+          .where(
+            and(
+              eq(resourceBundleApplies.scope, PACKAGE_IDEMPOTENCY_SCOPE),
+              eq(resourceBundleApplies.key, verified.importId),
+            ),
           ),
-        )
-        .get()
+      )
       if (existing !== undefined) return existing
       const recordedAt = now()
-      const inserted = await transaction
-        .insert(resourceBundleApplies)
-        .values({
-          id: journalId,
-          scope: PACKAGE_IDEMPOTENCY_SCOPE,
-          key: verified.importId,
-          actorUserId: input.actor.user.id,
-          state: 'prepared',
-          preparedArtifactsJson: '[]',
-          createdAt: recordedAt,
-          updatedAt: recordedAt,
-        })
-        .onConflictDoNothing()
-        .returning({ id: resourceBundleApplies.id })
-        .get()
+      const inserted = await first(
+        transaction
+          .insert(resourceBundleApplies)
+          .values({
+            id: journalId,
+            scope: PACKAGE_IDEMPOTENCY_SCOPE,
+            key: verified.importId,
+            actorUserId: input.actor.user.id,
+            state: 'prepared',
+            preparedArtifactsJson: '[]',
+            createdAt: recordedAt,
+            updatedAt: recordedAt,
+          })
+          .onConflictDoNothing()
+          .returning({ id: resourceBundleApplies.id }),
+      )
       if (inserted !== undefined) return null
-      const raced = await transaction
-        .select()
-        .from(resourceBundleApplies)
-        .where(
-          and(
-            eq(resourceBundleApplies.scope, PACKAGE_IDEMPOTENCY_SCOPE),
-            eq(resourceBundleApplies.key, verified.importId),
+      const raced = await first(
+        transaction
+          .select()
+          .from(resourceBundleApplies)
+          .where(
+            and(
+              eq(resourceBundleApplies.scope, PACKAGE_IDEMPOTENCY_SCOPE),
+              eq(resourceBundleApplies.key, verified.importId),
+            ),
           ),
-        )
-        .get()
+      )
       if (raced === undefined) throw new Error('resource-package-journal-claim-lost')
       return raced
     })
@@ -827,12 +829,13 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
       artifact: PostgresqlResourcePackageMutationArtifact,
     ): Promise<void> => {
       const nextArtifacts = [...artifacts, artifact]
-      const persisted = await dependencies.db
-        .update(resourceBundleApplies)
-        .set({ preparedArtifactsJson: JSON.stringify(nextArtifacts), updatedAt: now() })
-        .where(eq(resourceBundleApplies.id, journalId))
-        .returning({ id: resourceBundleApplies.id })
-        .get()
+      const persisted = await first(
+        dependencies.db
+          .update(resourceBundleApplies)
+          .set({ preparedArtifactsJson: JSON.stringify(nextArtifacts), updatedAt: now() })
+          .where(eq(resourceBundleApplies.id, journalId))
+          .returning({ id: resourceBundleApplies.id }),
+      )
       if (persisted === undefined) throw new Error('resource-package-artifact-journal-lost')
       artifacts.push(artifact)
     }
@@ -859,17 +862,19 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
       for (const item of prepared.items) await session.prestage(item, { recordArtifact })
 
       const receipt = await databaseSessionFor(dependencies.db).transaction(async (transaction) => {
-        const cas = await transaction
-          .update(resourceBundleApplies)
-          .set({ state: 'applying', updatedAt: now() })
-          .where(
-            and(
-              eq(resourceBundleApplies.id, journalId),
-              eq(resourceBundleApplies.state, 'prepared'),
-            ),
-          )
-          .returning({ id: resourceBundleApplies.id })
-          .get()
+        const { resourceBundleApplies } = tablesOf(transaction)
+        const cas = await first(
+          transaction
+            .update(resourceBundleApplies)
+            .set({ state: 'applying', updatedAt: now() })
+            .where(
+              and(
+                eq(resourceBundleApplies.id, journalId),
+                eq(resourceBundleApplies.state, 'prepared'),
+              ),
+            )
+            .returning({ id: resourceBundleApplies.id }),
+        )
         if (cas === undefined) {
           throw new ConflictError('bundle-apply-unsettled', 'journal claim lost')
         }
@@ -904,22 +909,23 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
             ? {}
             : { skippedSecrets: secretProjection.skippedRefs }),
         })
-        const committed = await transaction
-          .update(resourceBundleApplies)
-          .set({
-            state: 'committed',
-            receiptJson: JSON.stringify(receiptValue),
-            error: null,
-            updatedAt: now(),
-          })
-          .where(
-            and(
-              eq(resourceBundleApplies.id, journalId),
-              eq(resourceBundleApplies.state, 'applying'),
-            ),
-          )
-          .returning({ id: resourceBundleApplies.id })
-          .get()
+        const committed = await first(
+          transaction
+            .update(resourceBundleApplies)
+            .set({
+              state: 'committed',
+              receiptJson: JSON.stringify(receiptValue),
+              error: null,
+              updatedAt: now(),
+            })
+            .where(
+              and(
+                eq(resourceBundleApplies.id, journalId),
+                eq(resourceBundleApplies.state, 'applying'),
+              ),
+            )
+            .returning({ id: resourceBundleApplies.id }),
+        )
         if (committed === undefined) {
           throw new ConflictError('bundle-apply-unsettled', 'journal commit lost')
         }

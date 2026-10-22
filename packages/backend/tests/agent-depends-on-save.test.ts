@@ -13,9 +13,11 @@
 // "happy path with closure ordering" case that's not visible from the save
 // guard alone.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
@@ -24,12 +26,11 @@ import {
   resolveDependsClosure,
   validateDependsOn,
 } from '../src/services/agentDeps'
-import { agents } from '../src/db/schema'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { DomainError } from '../src/util/errors'
 import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 
-const dependencyLookup = (db: ProviderNeutralDatabase) => ({
+const dependencyLookup = (db: PersistenceDb) => ({
   get: (id: string) => getAgentById(db, id),
 })
 
@@ -39,15 +40,14 @@ interface AgentSeed {
   mcp?: string[]
 }
 
-function reverseDependencies(db: ProviderNeutralDatabase) {
+function reverseDependencies(db: PersistenceDb) {
   return {
     async findDependents(agentId: string) {
-      return agentsDependingOnIn(await db.select().from(agents).all(), agentId).map(
-        ({ id, name }) => ({
-          id,
-          name,
-        }),
-      )
+      const { agents } = tablesOf(db)
+      return agentsDependingOnIn(await db.select().from(agents), agentId).map(({ id, name }) => ({
+        id,
+        name,
+      }))
     },
   }
 }
@@ -56,10 +56,7 @@ function reverseDependencies(db: ProviderNeutralDatabase) {
 // the seed's dependsOn NAMES → ids, and this returns a name→id map so the
 // tests can pass the resolved ids to validateDependsOn / resolveDependsClosure
 // exactly as the production callers do.
-async function seed(
-  db: ProviderNeutralDatabase,
-  ...rows: AgentSeed[]
-): Promise<Map<string, string>> {
+async function seed(db: PersistenceDb, ...rows: AgentSeed[]): Promise<Map<string, string>> {
   const ids = new Map<string, string>()
   for (const r of rows) {
     const dependsOn: string[] = []
@@ -85,7 +82,7 @@ async function seed(
 }
 
 describeEachProvider('RFC-022 validateDependsOn (save-time guard)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
@@ -177,7 +174,8 @@ describeEachProvider('RFC-022 validateDependsOn (save-time guard)', (harness) =>
     )
     const midId = ids.get('mid')!
     const { sql } = await import('drizzle-orm')
-    await db.run(
+    await rawExec(
+      db,
       sql`UPDATE agents SET depends_on = ${JSON.stringify([midId, 'ghost-id'])} WHERE name = 'top'`,
     )
     const top = await getAgent(db, 'top')
@@ -202,7 +200,7 @@ describeEachProvider('RFC-022 validateDependsOn (save-time guard)', (harness) =>
 })
 
 describeEachProvider('RFC-223 findAgentsDependingOn (id match + JSON exactness)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db

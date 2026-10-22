@@ -132,6 +132,9 @@ export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
   'rfc359-w27-task-prefix-lookup-conformance.test.ts: 1',
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w8-system-operations-recovery-conformance.test.ts: 2',
+  // RFC-395 I-b: existing controlled ACK/error transaction probes now use the native driver protocol.
+  'rfc370-workgroup-commit-queue.test.ts: 1',
+  'rfc370-workgroup-read-snapshot.test.ts: 1',
 ]
 
 function walk(root: string, dir: string, out: string[]): string[] {
@@ -165,6 +168,13 @@ function underlyingObjectLiteral(node: ts.Expression): ts.ObjectLiteralExpressio
     if (ts.isAsExpression(current) || ts.isSatisfiesExpression(current))
       current = current.expression
     else if (ts.isParenthesizedExpression(current)) current = current.expression
+    else if (
+      ts.isCallExpression(current) &&
+      ts.isIdentifier(current.expression) &&
+      current.expression.text === 'withNativeTransactions' &&
+      current.arguments[0]
+    )
+      current = current.arguments[0]
     else return undefined
   }
 }

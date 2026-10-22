@@ -1,6 +1,8 @@
 // RFC-370 H6: replace physical skill reads without moving metadata, version
 // selection or token projection out of AW. Both database providers use the
 // production catalog composition; existing skill suites retain file behavior.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -9,7 +11,6 @@ import { join } from 'node:path'
 import type { Skill } from '@agent-workflow/shared'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
-import { skills, users } from '@/db/schema'
 import type {
   SkillContentReader,
   SkillContentReference,
@@ -40,7 +41,8 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
   let authority: SkillOperationContext
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-content-reader-'))
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: 'skill-content-admin',
       username: 'skill-content-admin',
       displayName: 'Skill content admin',
@@ -104,6 +106,7 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
           throw new Error('content completed before adapter read')
         }),
       ])
+      const { skills } = tablesOf(harness.db)
       await harness.db
         .update(skills)
         .set({
@@ -112,7 +115,6 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
           contentVersion: 2,
         })
         .where(eq(skills.id, skill.id))
-        .run()
     } finally {
       ready.release()
     }
@@ -165,7 +167,8 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
         content: {
           ...opts.content,
           async readMain() {
-            await harness.db.delete(skills).where(eq(skills.id, skill.id)).run()
+            const { skills } = tablesOf(harness.db)
+            await harness.db.delete(skills).where(eq(skills.id, skill.id))
             return 'body after delete'
           },
         },

@@ -14,6 +14,7 @@
 //
 // If this reds, PR-2's id-canonicalization of the non-agent references broke.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,7 +26,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { scheduledTasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createAgent, deleteAgent, getAgentById, renameAgent } from '../src/services/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
@@ -117,10 +117,12 @@ describe('RFC-223 PR-7 — scheduled payload writes + guards by id', () => {
     ownerId = await seedOwner(db)
   })
 
-  const storedPayload = async (id: string) =>
-    JSON.parse(
+  const storedPayload = async (id: string) => {
+    const { scheduledTasks } = tablesOf(db)
+    return JSON.parse(
       (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)))[0]!.launchPayload,
     )
+  }
 
   test('agent schedule requires $.agentId and refreshes the display name from that row', async () => {
     const agent = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
@@ -248,8 +250,7 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           runConfig: { binaryOverride: ['bun', '-e', 'process.exit(0)'] },
         }),
         db,
@@ -271,8 +272,7 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
         createTestTaskExecutionLaunchParticipant({
           db,
           appHome,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           runConfig: { binaryOverride: ['bun', '-e', 'process.exit(0)'] },
         }),
         db,

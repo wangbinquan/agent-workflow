@@ -1,8 +1,8 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent, CreateAgent, UpdateAgent } from '@agent-workflow/shared'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { agents } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
@@ -53,7 +53,13 @@ export interface AgentPersistenceSemantics {
   ): Promise<AgentReferenceLabels>
 }
 
-function ownerScopedNameWhere(ownerUserId: string | null, name: string, excludeId?: string) {
+function ownerScopedNameWhere(
+  db: object,
+  ownerUserId: string | null,
+  name: string,
+  excludeId?: string,
+) {
+  const { agents } = tablesOf(db)
   const owner =
     ownerUserId === null ? isNull(agents.ownerUserId) : eq(agents.ownerUserId, ownerUserId)
   const identity = and(owner, eq(agents.name, name))
@@ -79,7 +85,7 @@ function stale(id: string): ConflictError {
  * 映射回 `agent-name-in-use`（PG 给约束名 `agents_owner_name_unique`，SQLite 给列清单 `agents.owner_user_id, …`）。
  */
 export function createAgentRepository(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly semantics: AgentPersistenceSemantics
   readonly id?: () => string
   readonly now?: () => number
@@ -93,12 +99,14 @@ export function createAgentRepository(input: {
   }
 
   async function get(id: string): Promise<Agent | null> {
+    const { agents } = tablesOf(input.db)
     const row = (await input.db.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
     return row === undefined ? null : agentFromPersistenceRow(row)
   }
 
   const repository: AgentRepository = {
     async list(): Promise<readonly Agent[]> {
+      const { agents } = tablesOf(input.db)
       return (await input.db.select().from(agents)).map(agentFromPersistenceRow)
     },
     get,
@@ -115,7 +123,8 @@ export function createAgentRepository(input: {
       try {
         return await runResourceCatalogTransaction(input.db, async (transaction) => {
           await input.semantics.assertCreateInTransaction(transaction, authority, candidate)
-          const created = await transaction.insert(agents).values(values).returning().all()
+          const { agents } = tablesOf(transaction)
+          const created = await transaction.insert(agents).values(values).returning()
           if (created.length !== 1) throw new Error('agent insert did not return one row')
           return agentFromPersistenceRow(created[0]!)
         })
@@ -142,6 +151,7 @@ export function createAgentRepository(input: {
         updatedAt,
       }
       return runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { agents } = tablesOf(transaction)
         const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
         if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
         const fresh = agentFromPersistenceRow(row)
@@ -169,6 +179,7 @@ export function createAgentRepository(input: {
     },
     async delete(authority, id, fence): Promise<void> {
       await runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { agents } = tablesOf(transaction)
         const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
         if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
         const current = agentFromPersistenceRow(row)
@@ -195,6 +206,7 @@ export function createAgentRepository(input: {
     async rename(authority, id, rename, fence): Promise<Agent> {
       try {
         return await runResourceCatalogTransaction(input.db, async (transaction) => {
+          const { agents } = tablesOf(transaction)
           const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
           if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
           const current = agentFromPersistenceRow(row)
@@ -209,7 +221,9 @@ export function createAgentRepository(input: {
             await transaction
               .select({ id: agents.id })
               .from(agents)
-              .where(ownerScopedNameWhere(current.ownerUserId ?? null, rename.newName, id))
+              .where(
+                ownerScopedNameWhere(transaction, current.ownerUserId ?? null, rename.newName, id),
+              )
               .limit(1)
           )[0]
           if (collision !== undefined) throw nameConflict(rename.newName, true)

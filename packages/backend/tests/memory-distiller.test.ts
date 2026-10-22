@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 // RFC-041 — distiller unit tests (PR2 scope).
 //
@@ -14,18 +16,10 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Agent } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
-import {
-  memories,
-  memoryDistillJobs,
-  nodeRuns,
-  taskFeedback,
-  tasks,
-  workflows,
-} from '../src/db/schema'
 import {
   DISTILLER_SYSTEM_PROMPT,
   buildDistillerUserPrompt,
@@ -89,9 +83,10 @@ interface SeededTask {
   workflowId: string
 }
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<SeededTask> {
+async function seedTask(db: PersistenceDb): Promise<SeededTask> {
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -101,7 +96,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<SeededTask> {
   })
 
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -127,7 +122,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<SeededTask> {
 // failed runs) live in `rfc367-distiller-output-parse.test.ts`.
 
 describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -139,7 +134,8 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
     const { taskId } = await seedTask(db)
     // Seed a parent node_run so clarify session has a valid FK target.
     const sourceRunId = ulid()
-    await db.insert(nodeRuns).values({
+    const { nodeRuns, taskFeedback } = tablesOf(db)
+    await insertOne(db, nodeRuns, {
       id: sourceRunId,
       taskId,
       nodeId: 'agent-1',
@@ -150,7 +146,7 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
     })
 
     const clarifyRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: clarifyRunId,
       taskId,
       nodeId: 'clarify-1',
@@ -176,7 +172,7 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
       status: 'answered',
     })
     const feedbackId = ulid()
-    await db.insert(taskFeedback).values({
+    await insertOne(db, taskFeedback, {
       id: feedbackId,
       taskId,
       authorUserId: null,
@@ -240,8 +236,9 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
   })
 
   test('loadScopeContexts collects approved memories per scope and aggregates the tag pool', async () => {
+    const { memories } = tablesOf(db)
     // Seed two approved memories on different scopes + one candidate (excluded).
-    await db.insert(memories).values({
+    await insertOne(db, memories, {
       id: ulid(),
       scopeType: 'global',
       scopeId: null,
@@ -253,7 +250,7 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
       createdAt: Date.now(),
     })
 
-    await db.insert(memories).values({
+    await insertOne(db, memories, {
       id: ulid(),
       scopeType: 'agent',
       scopeId: 'a1',
@@ -266,7 +263,7 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
     })
 
     // Candidate must NOT appear.
-    await db.insert(memories).values({
+    await insertOne(db, memories, {
       id: ulid(),
       scopeType: 'global',
       scopeId: null,
@@ -360,7 +357,7 @@ describe('buildDistillerUserPrompt', () => {
 })
 
 describeEachProvider('validateAndPersistCandidate', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -403,6 +400,7 @@ describeEachProvider('validateAndPersistCandidate', (harness) => {
     expect(ok!.memory.tags).toEqual(['x', 'y', 'z'])
     expect(ok!.memory.distillAction).toBe('new')
     expect(ok!.memory.sourceKind).toBe('clarify')
+    const { memories } = tablesOf(db)
     const rowCount = (await db.select().from(memories)).length
     expect(rowCount).toBe(1)
   })
@@ -436,12 +434,13 @@ describeEachProvider('validateAndPersistCandidate', (harness) => {
       job,
     )
     expect(r).toBeNull()
+    const { memories } = tablesOf(db)
     expect((await db.select().from(memories)).length).toBe(0)
   })
 })
 
 describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: MemoryTestContext
   beforeEach(() => {
     db = harness.db
@@ -452,7 +451,8 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
   test('happy path: spawn returns one candidate envelope → persisted as candidate', async () => {
     const { taskId } = await seedTask(db)
     const jobId = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs, memories } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id: jobId,
       debounceKey: `${taskId}:clarify`,
       sourceKind: 'clarify',
@@ -510,7 +510,8 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
   test('closed loop: distilled candidate stays out until approval, then injects into a subsequent task', async () => {
     const source = await seedTask(db)
     const jobId = ulid()
-    await db.insert(memoryDistillJobs).values({
+    const { memoryDistillJobs, memories, tasks } = tablesOf(db)
+    await insertOne(db, memoryDistillJobs, {
       id: jobId,
       debounceKey: `${source.taskId}:feedback`,
       sourceKind: 'feedback',
@@ -562,7 +563,7 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
     expect(candidate.status).toBe('candidate')
 
     const nextTaskId = ulid()
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: nextTaskId,
       name: 'fixture-next-task',
       workflowId: source.workflowId,

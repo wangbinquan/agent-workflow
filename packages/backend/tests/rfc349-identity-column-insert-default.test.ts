@@ -1,3 +1,4 @@
+// RFC-395 I-b: retain every identity omission lock against the two native dialects.
 // RFC-349 回归防护 —— identity 列被省略时，PostgreSQL 投影必须渲染 `default` 而不是 `null`。
 //
 // 为什么这条测试存在（2026-09-03，对着真 PostgreSQL 跑真适配器时实测）：
@@ -24,21 +25,17 @@
 //   ③ 最热路径 node_run_events 的多行 insert 单独再钉一次。
 
 import { describe, expect, test } from 'bun:test'
-import { drizzle } from 'drizzle-orm/sqlite-proxy'
-import { getTableName, is } from 'drizzle-orm'
-import { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { getTableName, isTable, type Table } from 'drizzle-orm'
+import type { PersistenceDb } from '@/platform/persistence/querySurface'
 
-import * as schema from '@/db/schema'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { nativeQueryFixture } from './helpers/nativeQueryFixture'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 
-const db = drizzle(async () => ({ rows: [] }), { schema })
-
 /** Column list + first VALUES tuple of a rendered single-table insert. */
-function renderedInsert(table: object): { columns: string[]; values: string[] } {
+function renderedInsert(db: PersistenceDb, table: object): { columns: string[]; values: string[] } {
   const { sql } = db
-    .insert(table as Parameters<typeof db.insert>[0])
+    .insert(table as Table)
     .values({})
     .toSQL()
   const match = /^insert into\s+\S+\s+\(([^)]*)\)\s+values\s+\(([^)]*)\)/iu.exec(sql)
@@ -49,21 +46,14 @@ function renderedInsert(table: object): { columns: string[]; values: string[] } 
   }
 }
 
-function withProvider<T>(provider: DatabaseProvider, body: () => T): T {
-  const restore = selectDatabaseSchemaProvider(provider)
-  try {
-    return body()
-  } finally {
-    restore()
-  }
-}
-
 /** Every logical table that declares an identity column, paired with its facade. */
-function identityTables(): { table: string; column: string; facade: object }[] {
+function identityTables(
+  provider: DatabaseProvider = 'sqlite',
+): { table: string; column: string; facade: object }[] {
   const facades = new Map<string, object>()
-  for (const value of Object.values(schema)) {
+  for (const value of Object.values(nativeQueryFixture(provider).tables)) {
     if (typeof value !== 'object' || value === null) continue
-    if (!is(value, SQLiteTable)) continue
+    if (!isTable(value)) continue
     facades.set(getTableName(value), value)
   }
   return buildLogicalSchemaContract()
@@ -99,8 +89,8 @@ describe('RFC-349 identity columns render DEFAULT on PostgreSQL', () => {
   })
 
   test('an omitted identity column renders `default`, never `null`', () => {
-    for (const entry of identityTables()) {
-      const rendered = withProvider('postgresql', () => renderedInsert(entry.facade))
+    for (const entry of identityTables('postgresql')) {
+      const rendered = renderedInsert(nativeQueryFixture('postgresql').db, entry.facade)
       const at = rendered.columns.indexOf(entry.column)
       expect(at, `${entry.table} 的渲染列表里没有 ${entry.column}`).toBeGreaterThanOrEqual(0)
       expect(
@@ -113,7 +103,7 @@ describe('RFC-349 identity columns render DEFAULT on PostgreSQL', () => {
 
   test('SQLite keeps rendering `null` so the rowid alias still auto-assigns', () => {
     for (const entry of identityTables()) {
-      const rendered = withProvider('sqlite', () => renderedInsert(entry.facade))
+      const rendered = renderedInsert(nativeQueryFixture('sqlite').db, entry.facade)
       const at = rendered.columns.indexOf(entry.column)
       expect(rendered.values[at], `${entry.table}.${entry.column} 的 SQLite 语义被改动了`).toBe(
         'null',
@@ -122,10 +112,10 @@ describe('RFC-349 identity columns render DEFAULT on PostgreSQL', () => {
   })
 
   test('the hot path — a multi-row node_run_events insert — carries no null id', () => {
-    const restore = selectDatabaseSchemaProvider('postgresql')
-    try {
+    {
+      const { db, tables } = nativeQueryFixture('postgresql')
       const { sql } = db
-        .insert(schema.nodeRunEvents)
+        .insert(tables.nodeRunEvents)
         .values([
           { nodeRunId: 'nr1', ts: 1, kind: 'text', payload: 'a' },
           { nodeRunId: 'nr1', ts: 2, kind: 'stderr', payload: 'b' },
@@ -136,8 +126,6 @@ describe('RFC-349 identity columns render DEFAULT on PostgreSQL', () => {
         sql,
         'appendEvents 又渲染出了 null id ⇒ PostgreSQL 上一条事件都写不进去',
       ).not.toContain('(null,')
-    } finally {
-      restore()
     }
   })
 })

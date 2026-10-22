@@ -43,8 +43,8 @@ export function taskListViewerOf(actor: {
   return { userId: actor.user.id, canReadAllTasks: actor.permissions.has('tasks:read:all') }
 }
 
-export function defaultTaskListRowRef(): TaskListRowRef {
-  return defaultTaskVisibilityRowRef()
+export function defaultTaskListRowRef(db: object): TaskListRowRef {
+  return defaultTaskVisibilityRowRef(db)
 }
 
 /**

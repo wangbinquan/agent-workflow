@@ -13,8 +13,10 @@
 // validates exactly the contract the scheduler relies on without standing up
 // the whole clarify flow.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -22,7 +24,6 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -47,21 +48,22 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(__db: ProviderNeutralDatabase) {
+async function buildHarness(__db: PersistenceDb) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc042-rfc039-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -83,9 +85,10 @@ async function buildHarness(__db: ProviderNeutralDatabase) {
   }
 }
 
-async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
+async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n', status: 'pending' })
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n', status: 'pending' })
   return id
 }
 
@@ -136,6 +139,7 @@ describeEachProvider('RFC-042 follow-up + RFC-039 directive bias passthrough', (
         clarifyChannel: { kind: 'self', directive: 'mandatory', injectStopNotice: false },
       }),
     )
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     const prompt = row?.promptText ?? ''
     expect(prompt).toContain('Keep clarifying')
@@ -167,6 +171,7 @@ describeEachProvider('RFC-042 follow-up + RFC-039 directive bias passthrough', (
         clarifyChannel: { kind: 'self', directive: 'mandatory', injectStopNotice: false },
       }),
     )
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     const prompt = row?.promptText ?? ''
     expect(prompt).not.toContain('Keep clarifying')

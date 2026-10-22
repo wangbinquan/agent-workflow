@@ -14,6 +14,8 @@
 //  - case 8e ：`:` 开头文件名按字面 pathspec 收录（GIT_LITERAL_PATHSPECS）。
 //  - case 8f ：symlink 端口——归档物化目标内容 + 必达清单追加目标路径。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import {
@@ -30,7 +32,6 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
 import { parseArchiveJson } from '@/modules/task-execution/public/queries'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
@@ -235,7 +236,8 @@ async function seedAgent(
   outputKinds: Record<string, string>,
 ): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -251,12 +253,13 @@ async function seedAgent(
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf-rfc193-fi',
     definition: JSON.stringify(definition),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc193-fi',
     id: taskId,
     workflowId,
@@ -375,6 +378,7 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
     })
+    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const bRuns = await h.db
       .select()
       .from(nodeRuns)

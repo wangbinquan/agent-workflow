@@ -1,6 +1,7 @@
 // Shared Workgroup row, editable snapshot and revision projection.
 // Callers retain their database boundaries and original array-copy operation.
 
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   QUARANTINED_SNAPSHOT_AGENT_ID,
   resolveWorkgroupOutputContract,
@@ -16,12 +17,11 @@ import {
   type WorkgroupRevision,
   type WorkgroupSnapshotHash,
 } from '@agent-workflow/shared'
-import type { workgroups, workgroupMembers } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 
-type WorkgroupRow = typeof workgroups.$inferSelect
-type MemberRow = typeof workgroupMembers.$inferSelect
+type WorkgroupRow = PersistenceTables['workgroups']['$inferSelect']
+type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 
 export function normalizeWorkgroupSnapshot(
   snapshot: WorkgroupDraftSnapshot,
@@ -192,7 +192,7 @@ export function workgroupMemberPersistenceValues(
   names: ReadonlyMap<string, string>,
   nextId: () => string,
   agentNamePresence: 'truthy' | 'defined' = 'truthy',
-): Array<typeof workgroupMembers.$inferInsert> {
+): Array<PersistenceTables['workgroupMembers']['$inferInsert']> {
   return members.map((member, index) => ({
     id: nextId(),
     workgroupId,
@@ -213,7 +213,7 @@ export function workgroupMemberPersistenceValues(
 
 export function resolveWorkgroupLeaderMemberId(
   input: { readonly mode: string; readonly leaderDisplayName?: string },
-  members: ReadonlyArray<typeof workgroupMembers.$inferInsert>,
+  members: ReadonlyArray<PersistenceTables['workgroupMembers']['$inferInsert']>,
 ): string | null {
   if (input.mode !== 'leader_worker' || input.leaderDisplayName === undefined) return null
   const leader = members.find((member) => member.displayName === input.leaderDisplayName)

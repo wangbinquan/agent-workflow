@@ -2,7 +2,11 @@
 // enter observable errors, readiness uses a reserved/configured connection,
 // advisory locks remain session-scoped, and shutdown is idempotent.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { rawRows } from '@/platform/persistence/queryHelpers'
+import { sql } from 'drizzle-orm'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import {
   createPostgresqlDatabaseRuntime,
@@ -41,7 +45,7 @@ function fakePool(input: {
   let releases = 0
   let closes = 0
   let reserves = 0
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql, parameters) {
       queries.push({ sql, parameters })
       return rows(input.responses?.[responseIndex++] ?? [])
@@ -49,7 +53,7 @@ function fakePool(input: {
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       reserves += 1
@@ -261,4 +265,34 @@ describe('RFC-349 PostgreSQL runtime', () => {
     })
     expect(runtime.telemetry()).not.toHaveProperty('url')
   })
+})
+
+// RFC-395 I-b: native begin must reserve through the same measured pool boundary.
+test('native database transactions include their reservation in pool-wait telemetry', async () => {
+  const fake = fakePool({})
+  const ticks = [0, 25]
+  const runtime = createPostgresqlDatabaseRuntime({
+    config,
+    generationId: 'dbg_native_begin',
+    env: { RFC349_DATABASE_URL: 'postgresql://fixture@localhost/fixture' },
+    poolFactory: () => fake.pool,
+    telemetryWallNow: () => 1_000,
+    telemetryMonotonicNow: () => ticks.shift() ?? 25,
+  })
+  const db = createPostgresqlDatabaseClient(runtime)
+  await db.transaction(async (tx) => {
+    await rawRows(tx, sql`select 1`)
+  })
+  expect(runtime.telemetry().poolWait).toMatchObject({
+    sampleCount: 1,
+    acquiredCount: 1,
+    p95Ms: 25,
+  })
+  expect(fake.queries.map((query) => query.sql.toUpperCase())).toEqual([
+    'BEGIN',
+    'SELECT 1',
+    'COMMIT',
+  ])
+  expect(fake.releases).toBe(1)
+  await runtime.close()
 })

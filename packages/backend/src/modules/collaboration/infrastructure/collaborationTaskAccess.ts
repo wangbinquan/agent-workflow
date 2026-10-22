@@ -1,15 +1,13 @@
 // RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import { clarifyRounds, nodeRuns, taskCollaborators, taskQuestions, tasks } from '@/db/schema'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
-import {
-  type ProviderNeutralDatabase,
-  taskVisibilitySubjectOf,
-  visibleTaskIdsFor,
-} from '@/db/query'
+import { taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationTaskAccessDecision,
   CollaborationTaskAccessPort,
@@ -17,7 +15,7 @@ import type {
 } from '../application/ports/collaborationTaskAccess'
 import type { ReviewActor } from '../public/types'
 
-function snapshot(row: typeof tasks.$inferSelect): CollaborationTaskSnapshot {
+function snapshot(row: PersistenceTables['tasks']['$inferSelect']): CollaborationTaskSnapshot {
   return {
     id: row.id,
     ownerUserId: row.ownerUserId,
@@ -26,11 +24,12 @@ function snapshot(row: typeof tasks.$inferSelect): CollaborationTaskSnapshot {
 }
 
 async function resolve(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: ReviewActor,
-  row: typeof tasks.$inferSelect | undefined,
+  row: PersistenceTables['tasks']['$inferSelect'] | undefined,
 ): Promise<CollaborationTaskAccessDecision> {
   if (row === undefined) return { task: null, visible: false, actorRole: null }
+  const { taskCollaborators } = tablesOf(db)
   const memberships = await db
     .select({ role: taskCollaborators.role })
     .from(taskCollaborators)
@@ -51,21 +50,22 @@ async function resolve(
   }
 }
 
-export function createCollaborationTaskAccessPort(
-  db: ProviderNeutralDatabase,
-): CollaborationTaskAccessPort {
+export function createCollaborationTaskAccessPort(db: PersistenceDb): CollaborationTaskAccessPort {
   return {
     async resolveTask(actor, taskId) {
-      const row = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1).get()
+      const { tasks } = tablesOf(db)
+      const row = await first(db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))
       return await resolve(db, actor, row)
     },
     async resolveNodeRunTask(actor, nodeRunId) {
-      const run = await db
-        .select({ taskId: nodeRuns.taskId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, nodeRunId))
-        .limit(1)
-        .get()
+      const { nodeRuns } = tablesOf(db)
+      const run = await first(
+        db
+          .select({ taskId: nodeRuns.taskId })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, nodeRunId))
+          .limit(1),
+      )
       if (run === undefined) {
         return { nodeRunExists: false, taskId: null, task: null, visible: false, actorRole: null }
       }
@@ -73,20 +73,23 @@ export function createCollaborationTaskAccessPort(
       return { nodeRunExists: true, taskId: run.taskId, ...decision }
     },
     async resolveClarifyRoundTask(actor, intermediaryNodeRunId) {
-      const round = await db
-        .select({ taskId: clarifyRounds.taskId })
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId))
-        .orderBy(desc(clarifyRounds.createdAt))
-        .limit(1)
-        .get()
+      const { clarifyRounds, nodeRuns } = tablesOf(db)
+      const round = await first(
+        db
+          .select({ taskId: clarifyRounds.taskId })
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId))
+          .orderBy(desc(clarifyRounds.createdAt))
+          .limit(1),
+      )
       if (round === undefined) {
-        const run = await db
-          .select({ id: nodeRuns.id })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, intermediaryNodeRunId))
-          .limit(1)
-          .get()
+        const run = await first(
+          db
+            .select({ id: nodeRuns.id })
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, intermediaryNodeRunId))
+            .limit(1),
+        )
         return {
           roundExists: false,
           nodeRunExists: run !== undefined,
@@ -105,12 +108,14 @@ export function createCollaborationTaskAccessPort(
       return await visibleTaskIdsFor(db, taskVisibilitySubjectOf(actor), taskIds)
     },
     async questionTaskId(entryId) {
-      const row = await db
-        .select({ taskId: taskQuestions.taskId })
-        .from(taskQuestions)
-        .where(eq(taskQuestions.id, entryId))
-        .limit(1)
-        .get()
+      const { taskQuestions } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ taskId: taskQuestions.taskId })
+          .from(taskQuestions)
+          .where(eq(taskQuestions.id, entryId))
+          .limit(1),
+      )
       return row?.taskId ?? null
     },
   }

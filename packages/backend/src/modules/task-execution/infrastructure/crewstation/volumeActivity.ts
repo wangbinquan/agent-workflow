@@ -5,9 +5,9 @@
 // inherited tasks map to the physical owner named by their workspace
 // reference; owners that are not tasks (`system:…`, `development:shared`) are
 // their own owner.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   hostedWorkspaceOwnerFromReference,
   type HostedVolumeActivity,
@@ -18,7 +18,7 @@ const ACTIVE_TASK_STATUSES = ['pending', 'running'] as const
 const SQL_CHUNK = 500
 
 export function createHostedVolumeActivity(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly store: Pick<HostedExecutionStore, 'unsettled'>
 }): HostedVolumeActivity {
   const ownerOf = (task: { id: string; worktreePath: string }) =>
@@ -26,6 +26,7 @@ export function createHostedVolumeActivity(input: {
   return {
     async activeVolumeOwners() {
       const owners = new Set<string>()
+      const { tasks } = tablesOf(input.db)
       const active = await input.db
         .select({ id: tasks.id, worktreePath: tasks.worktreePath })
         .from(tasks)

@@ -8,7 +8,7 @@
 // start acknowledgement stops the remote run.
 import { expect, test } from 'bun:test'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
@@ -135,7 +135,7 @@ async function execute(
     createMaterial: async () => ({ materialId: 'material', digest: 'digest', sizeBytes: 1 }),
   } as unknown as CrewStationBusinessExecution
   const preparation = createHostedAgentInvocationPreparation({
-    db: {} as ProviderNeutralDatabase,
+    db: {} as PersistenceDb,
     fence: {
       current: () => ({ epoch: 1, leaseId: 'lease', instanceId: 'instance' }),
       assertHeld: unavailable,

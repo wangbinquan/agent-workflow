@@ -3,7 +3,7 @@ import { createClarifyFollowupOperations } from '../application/clarifyFollowup'
 import { clarifyFollowupActivity } from '../infrastructure/clarifyFollowupActivity'
 import { createClarifyFollowupStore } from '../infrastructure/clarifyFollowupStore'
 import type { ClarifyFollowupGenerator } from '../application/ports/clarifyFollowup'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationRouteOperations,
   CollaborationRoutePersistenceOperations,
@@ -62,7 +62,7 @@ function bindCollaborationRouteContext(
 // RFC-359 W7：路由持久化面已合一（`infrastructure/collaborationRouteOperations.ts`），两个
 // 装配入口只是名字不同的同一条线；名字暂留，等 bootstrap 侧的 provider 命名一并收敛。
 export function composeCollaborationRouteOperations(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly context: CollaborationRouteContext
   readonly followupGenerator?: ClarifyFollowupGenerator
 }): CollaborationRouteOperations {

@@ -4,7 +4,7 @@
 // arrive only through CrewStation, and each source binding's channel comes
 // from the deployment configuration (`AW_EVENT_SOURCES`).
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import {
   createCrewStationEventIngress,
@@ -25,7 +25,7 @@ export interface CrewStationEventIngress {
 }
 
 export function composeCrewStationEventIngress(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly installationId: string
   readonly sources: unknown
   readonly fence: CrewStationMutationFence

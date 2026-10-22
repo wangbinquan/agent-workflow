@@ -30,15 +30,10 @@
 // RETURNING 计数（两引擎同形），不再先取 id 列表再按 id 删——id 列表当绑定参数在大 Mission 上会撞
 // 绑定参数上限，且多一趟往返。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, count, eq, inArray, isNotNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentActionRuns,
-  developmentAgentAttempts,
-  developmentBundleRefs,
-  developmentMissions,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { automationPolicyContentSchema } from '../domain/automationPolicy'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -96,11 +91,17 @@ async function retentionOf(
 }
 
 export async function sweepDevelopmentRetention(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   reader: RetentionPolicyReader,
   now: number,
   limit: number = RETENTION_SWEEP_MISSION_LIMIT,
 ): Promise<RetentionSweepResult> {
+  const {
+    developmentMissions,
+    developmentActionRuns,
+    developmentAgentAttempts,
+    developmentBundleRefs,
+  } = tablesOf(db)
   const missions = await db
     .select({
       id: developmentMissions.id,

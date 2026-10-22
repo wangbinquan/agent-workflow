@@ -4,17 +4,18 @@
 // RFC-297: 响应形状由 InventorySnapshot 换成 {observation, declaration}。
 // (corrupt JSON) / 404 task / 404 node-run / 410 non-agent kind.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   RuntimeInventoryResponse,
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'a'.repeat(64)
@@ -40,7 +41,7 @@ interface SeedOpts {
 }
 
 async function seed(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: SeedOpts = {},
   lineage?: (id: string) => { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<{ taskId: string; nodeRunId: string }> {
@@ -60,7 +61,8 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -68,7 +70,7 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 'fixture-task',
 
     id: taskId,
@@ -84,7 +86,7 @@ async function seed(
     ...(lineage?.(taskId) ?? {}),
   })
   const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
+  await insertOne(db, nodeRuns, {
     id: nodeRunId,
     taskId,
     nodeId,
@@ -339,7 +341,7 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
 // 这里只剩「把本文件的 seed 夹具绑上去」这一点文件私有的东西。
 function registerProviderApplication(
   register: (
-    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    buildApp: () => Promise<{ db: PersistenceDb; app: Hono }>,
     seedForCase: typeof seed,
   ) => void,
 ): void {

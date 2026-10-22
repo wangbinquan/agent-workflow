@@ -11,8 +11,8 @@
 
 import { createAsyncSkillRestoreMembership } from '../../src/modules/knowledge-evolution/public/participants'
 import { composeSkillMemoryFusionParticipantFactory } from '../../src/modules/memory/composition'
-import type { DatabaseTransaction } from '../../src/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
-export const TEST_SKILL_RESTORE_MEMBERSHIP = createAsyncSkillRestoreMembership<DatabaseTransaction>(
+export const TEST_SKILL_RESTORE_MEMBERSHIP = createAsyncSkillRestoreMembership<PersistenceTx>(
   composeSkillMemoryFusionParticipantFactory(),
 )

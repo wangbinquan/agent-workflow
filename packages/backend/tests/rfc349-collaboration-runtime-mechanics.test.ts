@@ -1,4 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first, queryRows } from '@/platform/persistence/queryHelpers'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -6,17 +10,7 @@ import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRunOutputs,
-  nodeRuns,
-  taskNodeClarifyDirectives,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
   // RFC-359 W7：RFC-057 修复的两个协作侧端口各只剩一份中立实现，两个 provider 共用。
@@ -62,7 +56,10 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
     if (query.includes('database_generations')) return rows([['rfc349_collaboration_runtime']])
     return rows(responses.shift() ?? [])
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -88,21 +85,18 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
 
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
-
 describe('RFC-349 collaboration runtime mechanics', () => {
-  async function seedTask(db: ProviderNeutralDatabase, config: unknown): Promise<string> {
+  async function seedTask(db: PersistenceDb, config: unknown): Promise<string> {
     const taskId = ulid()
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: `rfc349-collaboration-${taskId}`,
       definition: '{}',
       builtin: true,
     })
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([
@@ -125,7 +119,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
   }
 
   describeEachProvider('persisted runtime mechanics', (harness) => {
-    let db: ProviderNeutralDatabase
+    let db: PersistenceDb
 
     beforeEach(() => {
       db = harness.db
@@ -136,6 +130,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       const runtime = createCollaborationRuntimeMechanics(db)
 
       await expect(runtime.isTaskClarifySuppressed({ taskId })).resolves.toBe(true)
+      const { tasks, clarifyRounds } = tablesOf(db)
       await db
         .update(tasks)
         .set({
@@ -174,7 +169,9 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         canceledParkRuns: [],
         requeuedAssignments: [],
       })
-      const round = await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)).get()
+      const round = await first(
+        db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)),
+      )
       expect(round?.status).toBe('canceled')
     })
 
@@ -222,15 +219,15 @@ describe('RFC-349 collaboration runtime mechanics', () => {
           occurredAt: 3,
         }),
       ).resolves.toBe(true)
+      const { clarifyRounds } = tablesOf(db)
       expect(
-        await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)).get(),
+        await first(db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId))),
       ).toMatchObject({
         status: 'awaiting_human',
         answersJson: null,
         answeredAt: null,
       })
 
-      selectDatabaseSchemaProvider('postgresql')
       const postgresql = postgresqlFixture([
         [['round-open']],
         [['round-pg', 'answered']],
@@ -272,13 +269,14 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       const taskId = await seedTask(db, { members: [{ memberType: 'agent' }] })
       const nodeRunId = ulid()
       const docVersionId = ulid()
-      await db.insert(nodeRuns).values({
+      const { nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
         id: nodeRunId,
         taskId,
         nodeId: 'review',
         status: 'awaiting_review',
       })
-      await db.insert(docVersions).values({
+      await insertOne(db, docVersions, {
         id: docVersionId,
         taskId,
         reviewNodeId: 'review',
@@ -311,7 +309,6 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
         .from(nodeRunOutputs)
         .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
-        .all()
       expect(
         Object.fromEntries(outputs.map(({ portName, content }) => [portName, content])),
       ).toEqual({
@@ -327,14 +324,14 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       await expect(sqlite.unapprove(identity)).resolves.toBe(true)
       await expect(sqlite.unapprove(identity)).resolves.toBe(false)
       expect(
-        await db
-          .select({ decision: docVersions.decision })
-          .from(docVersions)
-          .where(eq(docVersions.id, docVersionId))
-          .get(),
+        await first(
+          db
+            .select({ decision: docVersions.decision })
+            .from(docVersions)
+            .where(eq(docVersions.id, docVersionId)),
+        ),
       ).toEqual({ decision: 'pending' })
 
-      selectDatabaseSchemaProvider('postgresql')
       const postgresql = postgresqlFixture([
         [['approved', 3, 2, 'docs/result.md']],
         [['approved_doc'], ['approval_meta']],
@@ -374,7 +371,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         }),
       ).resolves.toBe(true)
       expect(postgresqlComplete.executions.map(({ sql }) => sql)).toEqual([
-        'begin',
+        'BEGIN',
         expect.stringContaining('select'),
         expect.stringContaining('select'),
         // One process-wide live-write marker, then a generation fence per write.
@@ -383,7 +380,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         expect.stringContaining('insert into "agent_workflow"."node_run_outputs"'),
         expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
         expect.stringContaining('insert into "agent_workflow"."node_run_outputs"'),
-        'commit',
+        'COMMIT',
       ])
 
       const postgresqlUnapprove = postgresqlFixture([
@@ -431,7 +428,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     expect(contract).not.toContain('PostgresqlDatabaseClient')
     expect(factory).not.toContain('@/modules/resource-catalog/')
     expect(factory).toContain('createCollaborationRuntimeMechanics')
-    expect(factory).toContain('ProviderNeutralDatabase')
+    expect(factory).toContain('PersistenceDb')
     expect(factory).not.toMatch(/\bPostgresqlDatabaseClient\b|\bDbClient\b|\$provider/)
     expect(() =>
       SRC('modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts'),
@@ -497,6 +494,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         answersJson: '[]',
         status: 'answered',
       })
+      const { taskNodeClarifyDirectives, clarifyRounds } = tablesOf(db)
       await db.insert(taskNodeClarifyDirectives).values([
         {
           taskId,
@@ -563,10 +561,9 @@ describe('RFC-349 collaboration runtime mechanics', () => {
           },
         ],
       })
-      const states = db
-        .select({ id: clarifyRounds.id, status: clarifyRounds.status })
-        .from(clarifyRounds)
-        .all()
+      const states = queryRows(
+        db.select({ id: clarifyRounds.id, status: clarifyRounds.status }).from(clarifyRounds),
+      )
       expect(Object.fromEntries(states.map((round) => [round.id, round.status]))).toEqual({
         'round-answered': 'answered',
         'round-open-a': 'canceled',

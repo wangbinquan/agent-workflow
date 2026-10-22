@@ -1,3 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sql, type SQLWrapper } from 'drizzle-orm'
 import {
   TERMINAL_TASK_STATUSES,
@@ -5,7 +8,6 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 
-import { nodeRuns, taskRepos, tasks } from '@/db/schema'
 import { WORKSPACE_PRUNING_LEASE_MS } from '../application/workspaceMaintenance'
 import type {
   WebhookWorkspaceClaimRecord,
@@ -15,7 +17,11 @@ import type {
 } from '../application/ports/workspaceMaintenance'
 
 export interface WorkspaceMaintenanceSqlExecutor {
-  all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]>
+  readonly db: PersistenceDb
+  all<T extends Record<string, unknown>>(
+    query: SQLWrapper,
+    codecs?: RawRowCodecs<T>,
+  ): Promise<readonly T[]>
 }
 
 interface RawWorkspaceTaskRow extends Record<string, unknown> {
@@ -42,7 +48,9 @@ interface RawWorkspaceRepositoryRow extends Record<string, unknown> {
   readonly base_branch: string
 }
 
-const taskProjection = sql`
+const taskProjection = (db: object) => {
+  const { tasks } = tablesOf(db)
+  return sql`
   ${tasks.id} AS id,
   ${tasks.status} AS status,
   ${tasks.repoPath} AS repo_path,
@@ -57,6 +65,7 @@ const taskProjection = sql`
   ${tasks.workspacePrunedAt} AS workspace_pruned_at,
   ${tasks.lifecycleEventRevision} AS lifecycle_event_revision
 `
+}
 
 const terminalStatuses = sql.join(
   TERMINAL_TASK_STATUSES.map((status) => sql`${status}`),
@@ -100,32 +109,62 @@ function mapRepository(row: RawWorkspaceRepositoryRow): WorkspaceTaskRepositoryR
 
 /** Shared logical SQL projection. Each provider supplies its own fenced client. */
 export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
+  protected get database(): PersistenceDb {
+    return this.executor.db
+  }
   constructor(private readonly executor: WorkspaceMaintenanceSqlExecutor) {}
 
   async listGcCandidates(): Promise<readonly WorkspaceTaskRecord[]> {
-    const rows = await this.executor.all<RawWorkspaceTaskRow>(sql`
-      SELECT ${taskProjection}
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<RawWorkspaceTaskRow>(
+      sql`
+      SELECT ${taskProjection(persistenceDb)}
       FROM ${tasks}
       WHERE ${tasks.status} IN (${terminalStatuses})
         AND ${tasks.spaceKind} <> 'internal'
         AND ${tasks.spaceKind} <> 'inherited'
         AND ${tasks.workspacePruneCause} IS NULL
         AND ${tasks.workspacePrunedAt} IS NULL
-    `)
+    `,
+      {
+        started_at: 'int',
+        finished_at: 'int',
+        workspace_pruning_at: 'int',
+        workspace_pruned_at: 'int',
+        lifecycle_event_revision: 'int',
+      },
+    )
     return rows.map(mapTask)
   }
 
   async listTasks(taskIds: readonly string[]): Promise<readonly WorkspaceTaskRecord[]> {
+    const persistenceDb = this.database
+
     if (taskIds.length === 0) return []
-    const rows = await this.executor.all<RawWorkspaceTaskRow>(sql`
-      SELECT ${taskProjection}
+    const { tasks } = tablesOf(persistenceDb)
+    const rows = await this.executor.all<RawWorkspaceTaskRow>(
+      sql`
+      SELECT ${taskProjection(persistenceDb)}
       FROM ${tasks}
       WHERE ${tasks.id} IN (${ids(taskIds)})
-    `)
+    `,
+      {
+        started_at: 'int',
+        finished_at: 'int',
+        workspace_pruning_at: 'int',
+        workspace_pruned_at: 'int',
+        lifecycle_event_revision: 'int',
+      },
+    )
     return rows.map(mapTask)
   }
 
   async listTaskRepositories(taskId: string): Promise<readonly WorkspaceTaskRepositoryRecord[]> {
+    const persistenceDb = this.database
+
+    const { taskRepos } = tablesOf(persistenceDb)
     const rows = await this.executor.all<RawWorkspaceRepositoryRow>(sql`
       SELECT
         ${taskRepos.mountPath} AS mount_path,
@@ -141,7 +180,10 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async anchoredTaskIds(taskIds: readonly string[]): Promise<ReadonlySet<string>> {
+    const persistenceDb = this.database
+
     if (taskIds.length === 0) return new Set()
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       SELECT ${tasks.id} AS id
       FROM ${tasks}
@@ -151,6 +193,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async hasLiveOrRevivableChild(taskId: string): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks, nodeRuns } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly status: string } & Record<string, unknown>>(sql`
       SELECT ${tasks.status} AS status
       FROM ${tasks}
@@ -167,6 +212,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async claimWorkspace(taskId: string, now: number): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       UPDATE ${tasks}
       SET ${sql.identifier(tasks.workspacePruningAt.name)} = ${now}
@@ -184,6 +232,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async claimIsoWorkspace(taskId: string, now: number): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       UPDATE ${tasks}
       SET ${sql.identifier(tasks.workspacePruningAt.name)} = ${now}
@@ -198,6 +249,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async reclaimWebhookWorkspace(taskId: string, expectedAt: number, now: number): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       UPDATE ${tasks}
       SET ${sql.identifier(tasks.workspacePruningAt.name)} = ${now}
@@ -211,6 +265,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async finalizeWorkspace(taskId: string, now: number): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       UPDATE ${tasks}
       SET ${sql.identifier(tasks.workspacePrunedAt.name)} = ${now}
@@ -225,6 +282,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   }
 
   async releaseIsoClaim(taskId: string, expectedAt?: number): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const expected =
       expectedAt === undefined ? sql`1 = 1` : sql`${tasks.workspacePruningAt} = ${expectedAt}`
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
@@ -250,6 +310,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
     now: number,
     expected: Pick<WorkspaceTaskRecord, 'worktreePath' | 'lifecycleEventRevision'>,
   ): Promise<boolean> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       UPDATE ${tasks}
       SET ${sql.identifier(tasks.workspacePrunedAt.name)} = ${now}
@@ -268,13 +331,17 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   async listUnstampedTerminalWorkspaces(): Promise<
     readonly Pick<WorkspaceTaskRecord, 'id' | 'worktreePath' | 'lifecycleEventRevision'>[]
   > {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<
       {
         readonly id: string
         readonly worktree_path: string
         readonly lifecycle_event_revision: number
       } & Record<string, unknown>
-    >(sql`
+    >(
+      sql`
       SELECT ${tasks.id} AS id, ${tasks.worktreePath} AS worktree_path,
         ${tasks.lifecycleEventRevision} AS lifecycle_event_revision
       FROM ${tasks}
@@ -282,7 +349,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
         AND ${tasks.workspacePrunedAt} IS NULL
         AND ${tasks.workspacePruningAt} IS NULL
         AND ${tasks.worktreePath} <> ''
-    `)
+    `,
+      { lifecycle_event_revision: 'int' },
+    )
     return rows.map((row) => ({
       id: row.id,
       worktreePath: row.worktree_path,
@@ -293,12 +362,16 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   async listStaleWebhookClaims(
     staleBefore: number,
   ): Promise<readonly WebhookWorkspaceClaimRecord[]> {
+    const persistenceDb = this.database
+
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<
       {
         readonly id: string
         readonly workspace_pruning_at: number
       } & Record<string, unknown>
-    >(sql`
+    >(
+      sql`
       SELECT
         ${tasks.id} AS id,
         ${tasks.workspacePruningAt} AS workspace_pruning_at
@@ -310,7 +383,9 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
         AND ${tasks.workspacePruningAt} < ${staleBefore}
         AND ${tasks.workspacePruneCause} = 'webhook-terminal'
         AND ${tasks.workspacePrunedAt} IS NULL
-    `)
+    `,
+      { workspace_pruning_at: 'int' },
+    )
     return rows.map((row) => ({
       id: row.id,
       workspacePruningAt: Number(row.workspace_pruning_at),

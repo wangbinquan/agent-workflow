@@ -1,21 +1,25 @@
 // RFC-030 T5 — persistence layer tests for mcp_probes.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, beforeEach } from 'bun:test'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../../src/db/query'
-import { mcps } from '../../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
 import type { McpProbeStore } from '../../src/modules/resource-catalog/public/participants'
 import type { ProbeResult } from '../../src/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
 import { describeEachProvider } from '../helpers/eachProvider'
 
-async function seedMcp(db: ProviderNeutralDatabase, name: string): Promise<string> {
+async function seedMcp(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  await db
-    .insert(mcps)
-    .values({ id, name, type: 'local', config: JSON.stringify({ command: ['true'] }) })
-    .run()
+  const { mcps } = tablesOf(db)
+  await insertOne(db, mcps, {
+    id,
+    name,
+    type: 'local',
+    config: JSON.stringify({ command: ['true'] }),
+  })
   return id
 }
 
@@ -42,7 +46,7 @@ function okResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
 }
 
 describeEachProvider('mcpProbeStore', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let store: McpProbeStore
   beforeEach(() => {
     db = harness.db

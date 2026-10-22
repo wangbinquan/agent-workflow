@@ -1,4 +1,4 @@
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import {
   createDigitalEmployeeAgentTemplateCatalogPersistence,
@@ -17,7 +17,7 @@ export type DigitalEmployeeAgentTemplateCatalogParticipantMint = (
 
 /** RFC-359 W4-D22 —— 岗位模版目录一份装配，两个 provider 共用。 */
 export function composeDigitalEmployeeAgentTemplateCatalogFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   mint: DigitalEmployeeAgentTemplateCatalogParticipantMint,
 ): DigitalEmployeeAgentTemplateCatalogParticipant {
   return mint(

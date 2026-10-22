@@ -1,5 +1,7 @@
 // RFC-360: the moved use cases preserve management behavior over both real databases.
 // Effects are injected; registry writes/receipt storage use the actual provider implementation.
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createRuntimeProfileConfigurationCommands } from '../src/modules/runtime-management/application/runtimeConfiguration'
@@ -15,7 +17,6 @@ import type { RuntimeSmokeResult } from '../src/modules/runtime-management/publi
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { composeRuntimeRegistryOperations as composeRegistry } from '../src/modules/runtime-management/composition/runtimeRegistry'
 import { composeRuntimeProfileParticipants } from '../src/modules/resource-catalog/composition/runtimeProfileParticipants'
-import { runtimes } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 
@@ -345,11 +346,10 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
         runtime: 'opencode',
       },
     })
-    const stored = await harness.db
-      .select()
-      .from(runtimes)
-      .where(eq(runtimes.name, 'claude-code'))
-      .get()
+    const { runtimes } = tablesOf(harness.db)
+    const stored = await firstRow(
+      harness.db.select().from(runtimes).where(eq(runtimes.name, 'claude-code')),
+    )
     expect(stored?.enabled).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 // RFC-381: passive bundle fixtures keep the database/provider real; unused outbound effects fail explicitly.
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDaemonScheduledTaskModules } from '@/bootstrap/daemonModules/scheduledTasks'
 import { composeDaemonIntegrationModules } from '@/bootstrap/daemonModules/integration'
@@ -17,7 +17,7 @@ import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 
 type IntegrationInput = Parameters<typeof composeDaemonIntegrationModules>[0]
 export function integrationBundleFixture(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
   overrides: Partial<
     Pick<

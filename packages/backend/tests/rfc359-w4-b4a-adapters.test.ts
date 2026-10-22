@@ -2,28 +2,15 @@
 // owner 身份批量查询、记忆蒸馏读存储、记忆注入读存储、终态工作区归属、webhook 端点管理、webhook 触发器管理、
 // webhook 派发执行运行时装配。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  memories,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  nodeRuns,
-  taskFeedback,
-  taskRepos,
-  tasks,
-  users,
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggerStreams,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleOwnerIdentityPersistence } from '@/modules/identity-access/infrastructure/ownerIdentityQueries'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
 import {
@@ -38,9 +25,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_b4a_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: `name-${id}`,
@@ -52,10 +40,11 @@ async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
   return id
 }
 
-async function seedTask(db: ProviderNeutralDatabase, owner: string): Promise<string> {
+async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -63,7 +52,7 @@ async function seedTask(db: ProviderNeutralDatabase, owner: string): Promise<str
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -99,6 +88,7 @@ describeEachProvider('RFC-359 W4-B4a —— owner 身份与记忆读存储', (ha
     const debounceKey = `k_${ulid()}`
     const job1 = `job_${ulid()}`
     const job2 = `job_${ulid()}`
+    const { memoryDistillJobs, memoryDistillEvents, memories, taskFeedback } = tablesOf(db)
     await db.insert(memoryDistillJobs).values([
       {
         id: job1,
@@ -146,7 +136,7 @@ describeEachProvider('RFC-359 W4-B4a —— owner 身份与记忆读存储', (ha
       },
     ])
     const memoryId = `m_${ulid()}`
-    await db.insert(memories).values({
+    await insertOne(db, memories, {
       id: memoryId,
       scopeType: 'global',
       scopeId: null,
@@ -164,7 +154,7 @@ describeEachProvider('RFC-359 W4-B4a —— owner 身份与记忆读存储', (ha
       createdAt: 30,
     })
     const feedbackId = `fb_${ulid()}`
-    await db.insert(taskFeedback).values({
+    await insertOne(db, taskFeedback, {
       id: feedbackId,
       taskId,
       authorUserId: a,
@@ -196,7 +186,8 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
     const owner = await seedUser(db)
     const taskId = await seedTask(db, owner)
     const repoId = `cr_${ulid()}`
-    await db.insert(cachedRepos).values({
+    const { cachedRepos, taskRepos, memories, nodeRuns } = tablesOf(db)
+    await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: `h_${repoId}`,
       urlRedacted: 'https://example.invalid/repo.git',
@@ -265,7 +256,7 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       },
     ])
     const runId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'n',
@@ -407,6 +398,7 @@ describeEachProvider('RFC-359 W4-B4a —— webhook 端点与触发器管理', (
       )?.name,
     ).toBe('fresh')
 
+    const { webhookTriggerFires, webhookTriggerStreams, webhookEndpoints } = tablesOf(db)
     await db.insert(webhookTriggerFires).values([
       {
         id: `fire_${ulid()}`,
@@ -427,9 +419,7 @@ describeEachProvider('RFC-359 W4-B4a —— webhook 端点与触发器管理', (
     ])
     expect((await triggers.listFires(triggerId, 10)).map((row) => row.firedAt)).toEqual([20, 10])
     expect((await triggers.listFires(triggerId, 1)).map((row) => row.firedAt)).toEqual([20])
-    await db
-      .insert(webhookTriggerStreams)
-      .values({ triggerId, streamKey: 's', consecutiveFires: 2 })
+    await insertOne(db, webhookTriggerStreams, { triggerId, streamKey: 's', consecutiveFires: 2 })
     await triggers.resetStream({ triggerId, streamKey: 's', resetAt: 30, resetBy: owner })
     const stream = (
       await db

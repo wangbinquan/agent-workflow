@@ -6,7 +6,7 @@
 // 由中立的 `createPortableBackupApplicationAssets` 提供；本文件只保留真正按引擎分叉的那
 // 一半——逻辑快照的取法与 cutover 归档的携带。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AdminBackupCoordinatorPort } from '../application/ports/adminBackupCoordinator'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import {
@@ -23,7 +23,7 @@ export function createPostgresqlAdminBackupCoordinator(input: {
   readonly contract: CreatePostgresqlProviderBackupOptions['contract']
   readonly runtime: CreatePostgresqlProviderBackupOptions['runtime']
   /** Provider-neutral client for the application-owned rows the archive carries. */
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly appHome: string
   /** Application-owned preparation such as portable asset consistency checks. */
   readonly prepare?: () => Promise<void> | void

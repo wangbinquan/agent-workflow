@@ -54,6 +54,8 @@
 // 离噪声极远的塌方阈值（见 CATASTROPHE_RATIO），通过也不代表原时延条款通过。
 // 各路径实际调用的函数见 GUARDED，生产装配覆盖与结构成本必须分别核验。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -63,20 +65,8 @@ import ts from 'typescript'
 
 import { OverviewResponseSchema } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { eq, type ProviderNeutralDatabase } from '../src/db/query'
-import {
-  cachedRepos,
-  developmentMissions,
-  lifecycleAlerts,
-  memories,
-  nodeRunEvents,
-  nodeRuns,
-  scheduledTasks,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-} from '../src/db/schema'
+import { eq } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
@@ -127,8 +117,9 @@ function actorOf(id: string, role: 'admin' | 'user' = 'admin'): Actor {
   })
 }
 
-async function seed(db: ProviderNeutralDatabase, n: number): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb, n: number): Promise<void> {
+  const { users, workflows, tasks, taskRepos, cachedRepos, developmentMissions } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
     displayName: 'admin',
@@ -136,11 +127,11 @@ async function seed(db: ProviderNeutralDatabase, n: number): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'nightly', definition: '{}' })
-  const taskRows: (typeof tasks.$inferInsert)[] = []
-  const repoRows: (typeof taskRepos.$inferInsert)[] = []
-  const cacheRows: (typeof cachedRepos.$inferInsert)[] = []
-  const missionRows: (typeof developmentMissions.$inferInsert)[] = []
+  await insertOne(db, workflows, { id: 'wf1', name: 'nightly', definition: '{}' })
+  const taskRows: PersistenceTables['tasks']['$inferInsert'][] = []
+  const repoRows: PersistenceTables['taskRepos']['$inferInsert'][] = []
+  const cacheRows: PersistenceTables['cachedRepos']['$inferInsert'][] = []
+  const missionRows: PersistenceTables['developmentMissions']['$inferInsert'][] = []
   for (let i = 0; i < n; i += 1) {
     const id = `t${String(i).padStart(4, '0')}`
     taskRows.push({
@@ -219,7 +210,18 @@ async function seed(db: ProviderNeutralDatabase, n: number): Promise<void> {
  * 清空。顺序按外键依赖从叶到根；受防护路径自己写的表（归档器碰 events、巡检可能落
  * lifecycle_alerts）也要清，否则第二次测量会带上第一次的残留。
  */
-async function clearCorpus(db: ProviderNeutralDatabase): Promise<void> {
+async function clearCorpus(db: PersistenceDb): Promise<void> {
+  const {
+    lifecycleAlerts,
+    nodeRunEvents,
+    nodeRuns,
+    developmentMissions,
+    taskRepos,
+    tasks,
+    cachedRepos,
+    workflows,
+    users,
+  } = tablesOf(db)
   await db.delete(lifecycleAlerts)
   await db.delete(nodeRunEvents)
   await db.delete(nodeRuns)
@@ -248,7 +250,7 @@ interface GuardedPath {
    * 它是 O(1) 有用。填这个字段必须同时写清为什么还没消。
    */
   readonly maxStatementsPerRow?: number
-  run(db: ProviderNeutralDatabase): Promise<unknown>
+  run(db: PersistenceDb): Promise<unknown>
 }
 
 /**
@@ -442,7 +444,8 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
   test('生产 overview 的五组查询在写入后重新计数', async () => {
     const db = harness.db
     await seed(db, 3)
-    await db.insert(scheduledTasks).values({
+    const { scheduledTasks, memories, workflows, cachedRepos, tasks } = tablesOf(db)
+    await insertOne(db, scheduledTasks, {
       id: 'overview-schedule',
       name: 'nightly',
       ownerUserId: 'admin',
@@ -453,7 +456,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
       createdAt: T0,
       updatedAt: T0,
     })
-    await db.insert(memories).values({
+    await insertOne(db, memories, {
       id: 'overview-memory',
       scopeType: 'global',
       scopeId: null,
@@ -486,8 +489,8 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
     expect(Date.parse(first.generatedAt)).toBeGreaterThanOrEqual(firstStartedAt)
     expect(Date.parse(first.generatedAt)).toBeLessThanOrEqual(firstCompletedAt)
 
-    await db.insert(workflows).values({ id: 'wf2', name: 'daily', definition: '{}' })
-    await db.insert(cachedRepos).values({
+    await insertOne(db, workflows, { id: 'wf2', name: 'daily', definition: '{}' })
+    await insertOne(db, cachedRepos, {
       id: 'overview-extra-repo',
       urlHash: 'overview-extra-hash',
       urlRedacted: 'https://example.test/overview.git',

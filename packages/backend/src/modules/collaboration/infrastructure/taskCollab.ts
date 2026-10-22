@@ -6,6 +6,7 @@
 // rights as the owner (cancel / retry / resume) — only member management,
 // owner transfer and task deletion stay with the owner or explicit permission holders.
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   AssignableTaskMemberRole,
   TaskActorRole,
@@ -15,10 +16,8 @@ import type {
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
-import type { tasks } from '@/db/schema'
-import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
@@ -28,7 +27,10 @@ import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
 /** Row-shape that visibility checks accept. The full `tasks` row is supersets of this. */
-export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'ownerUserId'>
+export type TaskRowForVisibility = Pick<
+  PersistenceTables['tasks']['$inferSelect'],
+  'id' | 'ownerUserId'
+>
 
 /**
  * Pure read: is the actor allowed to see this task?
@@ -38,7 +40,7 @@ export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'owner
  * - daemon-token actor (__system__) sees everything via `tasks:read:all`.
  */
 export async function canViewTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<boolean> {
@@ -61,14 +63,15 @@ export async function canViewTask(
  * 靠错误码区分「有这个任务但你没权限」与「没有这个任务」。
  */
 export async function assertCanReplaySourceTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   sourceTaskId: string,
 ): Promise<void> {
+  const { tasks } = tablesOf(db)
   const rows = await db
-    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
-    .from(tasksTable)
-    .where(eq(tasksTable.id, sourceTaskId))
+    .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
+    .from(tasks)
+    .where(eq(tasks.id, sourceTaskId))
     .limit(1)
   const row = rows[0]
   if (row === undefined || !(await canViewTask(db, actor, row))) {
@@ -81,10 +84,11 @@ export async function assertCanReplaySourceTask(
  * VISIBILITY predicate: an observer was added precisely so they could watch.
  */
 export async function hasMembership(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   userId: string,
 ): Promise<boolean> {
+  const { taskCollaborators } = tablesOf(db)
   const rows = await db
     .select()
     .from(taskCollaborators)
@@ -101,10 +105,11 @@ export async function hasMembership(
  * 混起来正好会让观察者拿回他被明确排除的那些操作。
  */
 export async function hasActingMembership(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   userId: string,
 ): Promise<boolean> {
+  const { taskCollaborators } = tablesOf(db)
   const rows = await db
     .select({ role: taskCollaborators.role })
     .from(taskCollaborators)
@@ -119,9 +124,10 @@ export async function hasActingMembership(
 // 事务体里现在直接 `await hasActingMembership(tx, …)`：`tx` 与 `db` 是同一套 query builder。
 
 export async function listCollaborators(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
-): Promise<(typeof taskCollaborators.$inferSelect)[]> {
+): Promise<PersistenceTables['taskCollaborators']['$inferSelect'][]> {
+  const { taskCollaborators } = tablesOf(db)
   return db.select().from(taskCollaborators).where(eq(taskCollaborators.taskId, taskId))
 }
 
@@ -132,7 +138,7 @@ export async function listCollaborators(
  * non-member privileged actor → a legacy audit label, anyone else → ForbiddenError.
  */
 export async function requireTaskMember(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskActorRole> {
@@ -155,7 +161,7 @@ export async function requireTaskMember(
  * 分开命名让将来任一侧单独演进时不必先把调用点摘开。
  */
 export async function requireTaskOperator(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<void> {
@@ -171,7 +177,7 @@ export async function requireTaskOperator(
 // RFC-099 (D10) — task member management (GET/PUT /api/tasks/:id/members)
 // ---------------------------------------------------------------------------
 
-type UserRow = typeof users.$inferSelect
+type UserRow = PersistenceTables['users']['$inferSelect']
 
 function toUserPublic(row: UserRow): UserPublic {
   return {
@@ -184,7 +190,7 @@ function toUserPublic(row: UserRow): UserPublic {
 }
 
 export async function getTaskMembers(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskMembers> {
@@ -193,6 +199,7 @@ export async function getTaskMembers(
   const memberRows = collabRows.filter((r) => r.role === 'collaborator' || r.role === 'observer')
   const collaboratorIds = memberRows.map((r) => r.userId)
   const wanted = [...new Set([...(task.ownerUserId ? [task.ownerUserId] : []), ...collaboratorIds])]
+  const { users } = tablesOf(db)
   const userRows =
     wanted.length === 0 ? [] : await db.select().from(users).where(inArray(users.id, wanted))
   const byId = new Map(userRows.map((u) => [u.id, u]))
@@ -266,7 +273,7 @@ export function planMembersReplacement(input: {
 
 /** RFC-330 —— 引用的用户必须 active 且非系统用户（422 `members-user-invalid`）；任务 / 案例共用。 */
 export async function assertMembersUsersActive(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   body: {
     readonly ownerUserId?: string
     readonly members?: ReadonlyArray<{ readonly userId: string }>
@@ -275,6 +282,7 @@ export async function assertMembersUsersActive(
   const referenced = new Set<string>((body.members ?? []).map((m) => m.userId))
   if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
   if (referenced.size === 0) return
+  const { users } = tablesOf(db)
   const rows = await db
     .select({ id: users.id, status: users.status })
     .from(users)
@@ -292,12 +300,12 @@ export async function assertMembersUsersActive(
 interface MembersCommit {
   prevOwner: string | null
   nextOwner: string | null
-  beforeCollaborators: (typeof taskCollaborators.$inferSelect)[]
+  beforeCollaborators: PersistenceTables['taskCollaborators']['$inferSelect'][]
   nextMembers: Map<string, AssignableTaskMemberRole>
 }
 
 export async function updateTaskMembers(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   task: TaskRowForVisibility,
   body: {
@@ -313,11 +321,12 @@ export async function updateTaskMembers(
   // The WS revalidation wait and the broadcast stay OUTSIDE the lock — they can
   // take arbitrarily long and must not stall reviews / cancels on the same task.
   const commit = await withTaskReviewMutationLock(task.id, async () => {
+    const { tasks } = tablesOf(db)
     const fresh = (
       await db
-        .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
-        .from(tasksTable)
-        .where(eq(tasksTable.id, task.id))
+        .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
+        .from(tasks)
+        .where(eq(tasks.id, task.id))
         .limit(1)
     )[0]
     if (fresh === undefined)
@@ -355,7 +364,7 @@ export async function updateTaskMembers(
 }
 
 async function updateTaskMembersLocked(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   actor: Actor,
   task: TaskRowForVisibility,
   body: {
@@ -376,7 +385,7 @@ async function updateTaskMembersLocked(
 
   const prevOwner = task.ownerUserId ?? null
   let nextOwner: string | null = prevOwner
-  let beforeCollaborators: (typeof taskCollaborators.$inferSelect)[] = []
+  let beforeCollaborators: PersistenceTables['taskCollaborators']['$inferSelect'][] = []
   let nextMembers = new Map<string, AssignableTaskMemberRole>()
 
   const now = Date.now()
@@ -385,7 +394,8 @@ async function updateTaskMembersLocked(
   // PostgreSQL 的 SERIALIZABLE 会把 predicate lock 落在索引**页**上、连改别的任务的
   // 事务都判成读写依赖（实测 32 并发 22.9% 冲突逃逸成 500）。锁 tasks 行即可。
   await databaseSessionFor(db).transaction(async (tx) => {
-    await engineOf(tx).lockAggregateRoot(tx, tasksTable, tasksTable.id, task.id)
+    const { tasks, taskCollaborators } = tablesOf(tx)
+    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, task.id)
     // Freeze the pre-change audience in the same transaction as the full
     // replacement. The post-commit WS frame can then authorize both sides of
     // the transition without racing a membership read.
@@ -405,14 +415,10 @@ async function updateTaskMembersLocked(
     nextMembers = plan.nextMembers
 
     if (nextOwner !== prevOwner) {
-      await tx
-        .update(tasksTable)
-        .set({ ownerUserId: nextOwner })
-        .where(eq(tasksTable.id, task.id))
-        .run()
+      await tx.update(tasks).set({ ownerUserId: nextOwner }).where(eq(tasks.id, task.id))
     }
-    await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id)).run()
-    const values: (typeof taskCollaborators.$inferInsert)[] = []
+    await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id))
+    const values: PersistenceTables['taskCollaborators']['$inferInsert'][] = []
     if (nextOwner !== null) {
       values.push({
         taskId: task.id,
@@ -432,7 +438,7 @@ async function updateTaskMembersLocked(
       })
     }
     if (values.length > 0) {
-      await tx.insert(taskCollaborators).values(values).run()
+      await tx.insert(taskCollaborators).values(values)
     }
   })
 
@@ -453,7 +459,7 @@ export function buildLaunchCollabRows(
     now: number
   },
   userRows: ReadonlyArray<{ id: string; status: string }>,
-): (typeof taskCollaborators.$inferInsert)[] {
+): PersistenceTables['taskCollaborators']['$inferInsert'][] {
   // 1. Validate every referenced user is active.
   const referenced = new Set<string>()
   referenced.add(args.ownerUserId)
@@ -466,7 +472,7 @@ export function buildLaunchCollabRows(
   }
 
   // 2. Owner row + collaborator rows, deduped by the composite PK.
-  const collabValues: (typeof taskCollaborators.$inferInsert)[] = []
+  const collabValues: PersistenceTables['taskCollaborators']['$inferInsert'][] = []
   collabValues.push({
     taskId: args.taskId,
     userId: args.ownerUserId,
@@ -499,7 +505,7 @@ export function buildLaunchCollabRows(
  * writes the supporting rows. (RFC-099 removed the assignments leg.)
  */
 export async function recordLaunchContext(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   args: {
     taskId: string
     ownerUserId: string
@@ -507,6 +513,7 @@ export async function recordLaunchContext(
     now: number
   },
 ): Promise<void> {
+  const { users, taskCollaborators } = tablesOf(db)
   const rows = await db.select().from(users)
   const insertCollab = buildLaunchCollabRows(args, rows)
   if (insertCollab.length > 0) {

@@ -8,15 +8,12 @@
 // `claimUploadSessions(tx, …)` 是唯一的认领原语：launch 事务（missionStore.commitMissionLaunch）在自己的事务里
 // 直接调用它，`UploadSessionPersistence.claimUploads` 只是给它套一笔事务。
 
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, gt, inArray, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { missionInputUploads } from '@/db/schema'
-import {
-  databaseSessionFor,
-  type DatabaseTransaction,
-} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   UploadSessionPersistence,
@@ -28,7 +25,9 @@ export type { UploadSessionPersistence, UploadSessionRow }
 export const UPLOAD_SESSION_TTL_MS = 2 * 60 * 60 * 1000
 export const UPLOAD_SESSION_SWEEP_LIMIT = 1_000
 
-export function uploadSessionRowOf(row: typeof missionInputUploads.$inferSelect): UploadSessionRow {
+export function uploadSessionRowOf(
+  row: PersistenceTables['missionInputUploads']['$inferSelect'],
+): UploadSessionRow {
   return {
     id: row.id,
     actorUserId: row.actorUserId,
@@ -43,7 +42,8 @@ export function uploadSessionRowOf(row: typeof missionInputUploads.$inferSelect)
   }
 }
 
-function actorFence(actorUserId: string | null) {
+function actorFence(db: object, actorUserId: string | null) {
+  const { missionInputUploads } = tablesOf(db)
   return actorUserId === null
     ? isNull(missionInputUploads.actorUserId)
     : eq(missionInputUploads.actorUserId, actorUserId)
@@ -56,7 +56,7 @@ function actorFence(actorUserId: string | null) {
  * 其余（过期 / 非 pending）→ `upload-not-claimable`。成功返回按输入序的行。
  */
 export async function claimUploadSessions(
-  tx: DatabaseTransaction,
+  tx: PersistenceTx,
   input: {
     readonly missionId: string
     readonly actorUserId: string | null
@@ -66,6 +66,7 @@ export async function claimUploadSessions(
 ): Promise<UploadSessionRow[]> {
   const rows: UploadSessionRow[] = []
   for (const uploadRef of input.uploadRefs) {
+    const { missionInputUploads } = tablesOf(tx)
     const claimed = (
       await tx
         .update(missionInputUploads)
@@ -73,7 +74,7 @@ export async function claimUploadSessions(
         .where(
           and(
             eq(missionInputUploads.id, uploadRef),
-            actorFence(input.actorUserId),
+            actorFence(tx, input.actorUserId),
             eq(missionInputUploads.state, 'pending'),
             gt(missionInputUploads.expiresAt, input.now),
           ),
@@ -106,26 +107,25 @@ export async function claimUploadSessions(
   return rows
 }
 
-export function createUploadSessionPersistence(
-  db: ProviderNeutralDatabase,
-): UploadSessionPersistence {
+export function createUploadSessionPersistence(db: PersistenceDb): UploadSessionPersistence {
   const session = databaseSessionFor(db)
   return {
     async createUpload(input) {
       // 幂等键（actor, idempotencyKey）的查—插在一笔事务里；同键并发由 insert 的冲突路径兜底。
       return await session.transaction(async (tx) => {
+        const { missionInputUploads } = tablesOf(tx)
         const byKey =
           input.idempotencyKey === null
             ? undefined
             : and(
-                actorFence(input.actorUserId),
+                actorFence(tx, input.actorUserId),
                 eq(missionInputUploads.uploadIdempotencyKey, input.idempotencyKey),
               )
         if (byKey !== undefined) {
           const existing = (await tx.select().from(missionInputUploads).where(byKey).limit(1))[0]
           if (existing !== undefined) return uploadSessionRowOf(existing)
         }
-        const row: typeof missionInputUploads.$inferInsert = {
+        const row: PersistenceTables['missionInputUploads']['$inferInsert'] = {
           id: ulid(),
           actorUserId: input.actorUserId,
           originalName: input.originalName,
@@ -154,19 +154,21 @@ export function createUploadSessionPersistence(
       })
     },
     async getUpload(id) {
+      const { missionInputUploads } = tablesOf(db)
       const row = (
         await db.select().from(missionInputUploads).where(eq(missionInputUploads.id, id)).limit(1)
       )[0]
       return row === undefined ? null : uploadSessionRowOf(row)
     },
     async deleteUpload(id, actorUserId) {
+      const { missionInputUploads } = tablesOf(db)
       // 本人 + pending 的围栏写在语句里；他人 / 已 claim 的 ref 与不存在同形——不确认资源存在性。
       const deleted = await db
         .delete(missionInputUploads)
         .where(
           and(
             eq(missionInputUploads.id, id),
-            actorFence(actorUserId),
+            actorFence(db, actorUserId),
             eq(missionInputUploads.state, 'pending'),
           ),
         )
@@ -177,6 +179,7 @@ export function createUploadSessionPersistence(
       return await session.transaction((tx) => claimUploadSessions(tx, input))
     },
     async sweepExpired(now, limit = UPLOAD_SESSION_SWEEP_LIMIT) {
+      const { missionInputUploads } = tablesOf(db)
       // 「子查询取一批 id + DELETE … RETURNING」一条语句，两引擎同形；只清 pending。
       const batch = db
         .select({ id: missionInputUploads.id })

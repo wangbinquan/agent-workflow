@@ -34,10 +34,12 @@
 //    「触发器补了」在 SQLite 上同形，①就证明不了任何事）。
 //  ④【继承优先】显式传进来的路径不被覆写。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 
-import { nodeRuns, tasks, workflows } from '@/db/schema'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -52,8 +54,9 @@ const MINTED = new Map<string, Record<string, { slot: string | null; lineage: st
 
 describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (harness) => {
   const seedTask = async (): Promise<void> => {
-    await harness.db.insert(workflows).values({ id: 'wf-lin', name: 'lineage', definition: '{}' })
-    await harness.db.insert(tasks).values({
+    const { workflows, tasks } = tablesOf(harness.db)
+    await insertOne(harness.db, workflows, { id: 'wf-lin', name: 'lineage', definition: '{}' })
+    await insertOne(harness.db, tasks, {
       id: 'tk-lin',
       name: 'lineage',
       workflowId: 'wf-lin',
@@ -99,6 +102,7 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
       },
     ] as NodeRunMintInput[])
 
+    const { nodeRuns } = tablesOf(harness.db)
     const rows = await harness.db
       .select({
         node: nodeRuns.nodeId,
@@ -140,6 +144,7 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
         overrides: { lineageSlotPathJson: explicit },
       },
     ] as NodeRunMintInput[])
+    const { nodeRuns } = tablesOf(harness.db)
     const [row] = await harness.db
       .select({ lineage: nodeRuns.lineageSlotPathJson })
       .from(nodeRuns)
@@ -151,16 +156,19 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
     if (harness.capabilities.provider !== 'sqlite') {
       // RFC-371 v2 retired every observation capture trigger and function (PostgreSQL 0032);
       // no user trigger remains in the schema, so none can supply the retired lineage default.
-      const rows = await harness.db.all<{ n: unknown }>(
+      const rows = await rawRows<{ n: number }>(
+        harness.db,
         sql`select count(*) as n from pg_trigger t join pg_class c on c.oid = t.tgrelid
             join pg_namespace ns on ns.oid = c.relnamespace
             where ns.nspname = 'agent_workflow' and not t.tgisinternal`,
+        { n: 'int' },
       )
-      expect(harness.capabilities.numericFromRawRow(rows[0]?.n, 'n')).toBe(0)
+      expect(rows[0]?.n).toBe(0)
       return
     }
     // RFC-371 v2 (SQLite 0256) also dropped the observation capture triggers on node_runs.
-    const rows = await harness.db.all<{ name: string }>(
+    const rows = await rawRows<{ name: string }>(
+      harness.db,
       sql`select name from sqlite_master where type = 'trigger' and tbl_name = 'node_runs'`,
     )
     expect(rows.map((row) => row.name)).toEqual([])

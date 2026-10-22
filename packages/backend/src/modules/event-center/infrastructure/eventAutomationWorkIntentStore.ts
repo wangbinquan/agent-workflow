@@ -1,8 +1,10 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { canonicalJson } from '@agent-workflow/shared'
 import { and, eq, isNull, or } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { eventAutomationWorkIntents, eventDeliveries, eventResponseRules } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -23,7 +25,7 @@ import type {
 import { eventResponseTargetSchema } from '../domain/responseRule'
 
 function preparedIntentOf(
-  row: typeof eventAutomationWorkIntents.$inferSelect,
+  row: PersistenceTables['eventAutomationWorkIntents']['$inferSelect'],
 ): PreparedEventAutomationIntent {
   if (row.portId === 'task-automation-work-start.v1') {
     return {
@@ -46,23 +48,25 @@ function preparedIntentOf(
 }
 
 export function createEventAutomationWorkIntentStore(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): EventAutomationWorkIntentStorePort {
   const session = databaseSessionFor(db)
   return {
     async prepare(input) {
       return await session.transaction(async (tx) => {
+        const { eventDeliveries, eventAutomationWorkIntents, eventResponseRules } = tablesOf(tx)
         await engineOf(tx).lockAggregateRoot(
           tx,
           eventDeliveries,
           eventDeliveries.id,
           input.delivery.deliveryId,
         )
-        const claimed = await tx
-          .select()
-          .from(eventDeliveries)
-          .where(eq(eventDeliveries.id, input.delivery.deliveryId))
-          .get()
+        const claimed = await first(
+          tx
+            .select()
+            .from(eventDeliveries)
+            .where(eq(eventDeliveries.id, input.delivery.deliveryId)),
+        )
         if (
           claimed === undefined ||
           claimed.state !== 'claimed' ||
@@ -75,18 +79,17 @@ export function createEventAutomationWorkIntentStore(
           )
         }
 
-        const existing = await tx
-          .select()
-          .from(eventAutomationWorkIntents)
-          .where(eq(eventAutomationWorkIntents.deliveryId, input.delivery.deliveryId))
-          .get()
+        const existing = await first(
+          tx
+            .select()
+            .from(eventAutomationWorkIntents)
+            .where(eq(eventAutomationWorkIntents.deliveryId, input.delivery.deliveryId)),
+        )
         const ruleId = eventResponseRuleIdFromSubscriberRef(input.delivery.subscriber.subscriberRef)
         if (ruleId === null) return { kind: 'obsolete' as const }
-        const rule = await tx
-          .select()
-          .from(eventResponseRules)
-          .where(eq(eventResponseRules.id, ruleId))
-          .get()
+        const rule = await first(
+          tx.select().from(eventResponseRules).where(eq(eventResponseRules.id, ruleId)),
+        )
         const current =
           rule !== undefined &&
           rule.enabled &&
@@ -169,7 +172,7 @@ export function createEventAutomationWorkIntentStore(
           }
         }
 
-        await tx.insert(eventAutomationWorkIntents).values({
+        await insertOne(tx, eventAutomationWorkIntents, {
           originRef: origin,
           deliveryId: input.delivery.deliveryId,
           subscriptionId: input.delivery.subscriptionId,
@@ -190,37 +193,40 @@ export function createEventAutomationWorkIntentStore(
           createdAt: input.now,
           updatedAt: input.now,
         })
-        const inserted = await tx
-          .select()
-          .from(eventAutomationWorkIntents)
-          .where(eq(eventAutomationWorkIntents.originRef, origin))
-          .get()
+        const inserted = await first(
+          tx
+            .select()
+            .from(eventAutomationWorkIntents)
+            .where(eq(eventAutomationWorkIntents.originRef, origin)),
+        )
         if (inserted === undefined) throw new Error('event-automation-intent-insert-missing')
         return { kind: 'prepared' as const, intent: preparedIntentOf(inserted) }
       })
     },
 
     async recordReceipt(input) {
-      const written = await db
-        .update(eventAutomationWorkIntents)
-        .set({
-          receiptRef: input.receiptRef,
-          status: 'launched',
-          lastError: null,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(eventAutomationWorkIntents.originRef, input.origin),
-            eq(eventAutomationWorkIntents.portId, input.portId),
-            or(
-              isNull(eventAutomationWorkIntents.receiptRef),
-              eq(eventAutomationWorkIntents.receiptRef, input.receiptRef),
+      const { eventAutomationWorkIntents } = tablesOf(db)
+      const written = await first(
+        db
+          .update(eventAutomationWorkIntents)
+          .set({
+            receiptRef: input.receiptRef,
+            status: 'launched',
+            lastError: null,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(eventAutomationWorkIntents.originRef, input.origin),
+              eq(eventAutomationWorkIntents.portId, input.portId),
+              or(
+                isNull(eventAutomationWorkIntents.receiptRef),
+                eq(eventAutomationWorkIntents.receiptRef, input.receiptRef),
+              ),
             ),
-          ),
-        )
-        .returning({ originRef: eventAutomationWorkIntents.originRef })
-        .get()
+          )
+          .returning({ originRef: eventAutomationWorkIntents.originRef }),
+      )
       if (written === undefined) {
         throw new ConflictError(
           'event-automation-receipt-conflict',
@@ -230,6 +236,7 @@ export function createEventAutomationWorkIntentStore(
     },
 
     async recordFailure(input) {
+      const { eventAutomationWorkIntents } = tablesOf(db)
       await db
         .update(eventAutomationWorkIntents)
         .set({ status: 'failed', lastError: input.error, updatedAt: input.now })
@@ -243,17 +250,19 @@ export function createEventAutomationWorkIntentStore(
 
     async settle(input) {
       return await session.transaction(async (tx) => {
+        const { eventDeliveries, eventAutomationWorkIntents, eventResponseRules } = tablesOf(tx)
         await engineOf(tx).lockAggregateRoot(
           tx,
           eventDeliveries,
           eventDeliveries.id,
           input.delivery.deliveryId,
         )
-        const claimed = await tx
-          .select()
-          .from(eventDeliveries)
-          .where(eq(eventDeliveries.id, input.delivery.deliveryId))
-          .get()
+        const claimed = await first(
+          tx
+            .select()
+            .from(eventDeliveries)
+            .where(eq(eventDeliveries.id, input.delivery.deliveryId)),
+        )
         if (
           claimed === undefined ||
           claimed.state !== 'claimed' ||
@@ -262,20 +271,19 @@ export function createEventAutomationWorkIntentStore(
         )
           return false
 
-        const intent = await tx
-          .select()
-          .from(eventAutomationWorkIntents)
-          .where(eq(eventAutomationWorkIntents.deliveryId, input.delivery.deliveryId))
-          .get()
+        const intent = await first(
+          tx
+            .select()
+            .from(eventAutomationWorkIntents)
+            .where(eq(eventAutomationWorkIntents.deliveryId, input.delivery.deliveryId)),
+        )
         const ruleId =
           intent?.ruleId ??
           eventResponseRuleIdFromSubscriberRef(input.delivery.subscriber.subscriberRef)
         if (ruleId !== null) {
-          const rule = await tx
-            .select()
-            .from(eventResponseRules)
-            .where(eq(eventResponseRules.id, ruleId))
-            .get()
+          const rule = await first(
+            tx.select().from(eventResponseRules).where(eq(eventResponseRules.id, ruleId)),
+          )
           const matchingRevision =
             rule !== undefined &&
             rule.enabled &&
@@ -311,46 +319,49 @@ export function createEventAutomationWorkIntentStore(
             .where(eq(eventAutomationWorkIntents.originRef, intent.originRef))
         }
         const terminal = input.state !== 'pending'
-        const settled = await tx
-          .update(eventDeliveries)
-          .set({
-            state: input.state,
-            nextAttemptAt: input.nextAttemptAt,
-            claimedBy: null,
-            claimExpiresAt: null,
-            lastError: input.error,
-            acceptedAt: input.state === 'accepted' ? input.now : null,
-            deadLetterAt: input.state === 'dead-letter' ? input.now : null,
-            ...(terminal ? {} : { acceptedAt: null, deadLetterAt: null }),
-          })
-          .where(
-            and(
-              eq(eventDeliveries.id, input.delivery.deliveryId),
-              eq(eventDeliveries.state, 'claimed'),
-              eq(eventDeliveries.claimedBy, input.claim.leaseOwner),
-              eq(eventDeliveries.attemptCount, input.claim.attemptCount),
-            ),
-          )
-          .returning({ id: eventDeliveries.id })
-          .get()
+        const settled = await first(
+          tx
+            .update(eventDeliveries)
+            .set({
+              state: input.state,
+              nextAttemptAt: input.nextAttemptAt,
+              claimedBy: null,
+              claimExpiresAt: null,
+              lastError: input.error,
+              acceptedAt: input.state === 'accepted' ? input.now : null,
+              deadLetterAt: input.state === 'dead-letter' ? input.now : null,
+              ...(terminal ? {} : { acceptedAt: null, deadLetterAt: null }),
+            })
+            .where(
+              and(
+                eq(eventDeliveries.id, input.delivery.deliveryId),
+                eq(eventDeliveries.state, 'claimed'),
+                eq(eventDeliveries.claimedBy, input.claim.leaseOwner),
+                eq(eventDeliveries.attemptCount, input.claim.attemptCount),
+              ),
+            )
+            .returning({ id: eventDeliveries.id }),
+        )
         return settled !== undefined
       })
     },
 
     async resolve(origin, portId) {
-      const row = await db
-        .select({
-          eventSubscriptionId: eventAutomationWorkIntents.subscriptionId,
-          eventDeliveryId: eventAutomationWorkIntents.deliveryId,
-        })
-        .from(eventAutomationWorkIntents)
-        .where(
-          and(
-            eq(eventAutomationWorkIntents.originRef, origin),
-            eq(eventAutomationWorkIntents.portId, portId),
+      const { eventAutomationWorkIntents } = tablesOf(db)
+      const row = await first(
+        db
+          .select({
+            eventSubscriptionId: eventAutomationWorkIntents.subscriptionId,
+            eventDeliveryId: eventAutomationWorkIntents.deliveryId,
+          })
+          .from(eventAutomationWorkIntents)
+          .where(
+            and(
+              eq(eventAutomationWorkIntents.originRef, origin),
+              eq(eventAutomationWorkIntents.portId, portId),
+            ),
           ),
-        )
-        .get()
+      )
       return row ?? null
     },
   }

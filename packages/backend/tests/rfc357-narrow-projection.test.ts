@@ -101,8 +101,8 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
   test('the /api/tasks row projection lists its columns and carries none of the heavy ones', () => {
     const source = read('modules', 'task-execution', 'infrastructure', 'taskRouteOperations.ts')
     const block = source.slice(
-      source.indexOf('const TASK_LIST_COLUMNS = {'),
-      source.indexOf('} as const', source.indexOf('const TASK_LIST_COLUMNS = {')),
+      source.indexOf('const TASK_LIST_COLUMNS = (db: object) => {'),
+      source.indexOf('} as const', source.indexOf('const TASK_LIST_COLUMNS = (db: object) => {')),
     )
     expect(block.length).toBeGreaterThan(0)
     for (const column of LIST_COLUMNS) {

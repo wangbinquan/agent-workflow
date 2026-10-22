@@ -1,8 +1,9 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createLocalTaskAgentRuntimeBindings } from '../src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings'
 import type { RuntimeExecutionQueries } from '../src/modules/runtime-management/public/queries'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -21,14 +22,15 @@ async function seed(harness: ProviderHarness) {
     workflowId = ulid(),
     taskId = ulid(),
     id = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'selected-runtime',
     definition: '{}',
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
@@ -45,10 +47,11 @@ async function seed(harness: ProviderHarness) {
     inputs: '{}',
     startedAt: 1,
   })
-  await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
+  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
   return { db, id }
 }
 async function columns(harness: ProviderHarness, id: string) {
+  const { nodeRuns } = tablesOf(harness.db)
   return (
     await harness.db
       .select({ protocol: nodeRuns.runtime, binary: nodeRuns.runtimeBinary })
@@ -84,6 +87,7 @@ describeEachProvider('RFC-370 selected Task runtime bindings', (harness) => {
     if (resumed.runtimeBinding === null) throw new Error('resumed binding missing')
     expect(selected.contents.runtimeBinary(resumed.runtimeBinding)).toBe(originalBinary)
     const session = 'session-' + ulid()
+    const { nodeRuns } = tablesOf(harness.db)
     await harness.db
       .update(nodeRuns)
       .set({ opencodeSessionId: session })

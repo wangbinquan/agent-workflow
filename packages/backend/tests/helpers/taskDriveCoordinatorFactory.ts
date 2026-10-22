@@ -1,6 +1,6 @@
 // RFC-386: direct engine fixtures compose the same drive factory as the daemon.
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger } from '@/util/log'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
@@ -12,7 +12,7 @@ import {
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 
 export function testDriveFactory(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   lifecycle: TaskDriverLifecyclePort,
   runConfiguration: () => TaskDriveRuntimeOptions | Promise<TaskDriveRuntimeOptions> = () => ({
     appHome: '/tmp',

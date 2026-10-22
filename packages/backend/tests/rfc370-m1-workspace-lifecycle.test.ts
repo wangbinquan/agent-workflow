@@ -10,9 +10,9 @@
 //   - M1 (kept): a lost create receipt and concurrent preparations resolve to
 //     one durable request key, and a late readiness answer cannot resurrect a
 //     concurrently closing parent.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedTaskWorkspaces,
   HOSTED_NO_ARTIFACTS_REASON,
@@ -124,13 +124,15 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
               task = { ...task, state: 'paused', resourceState: 'released' }
           }),
       })
-    const row = async () =>
-      (
+    const row = async () => {
+      const { hostedTaskWorkspaces } = tablesOf(harness.db)
+      return (
         await harness.db
           .select()
           .from(hostedTaskWorkspaces)
           .where(eq(hostedTaskWorkspaces.taskId, 'task'))
       )[0]
+    }
     return {
       workspace: reopen(),
       reopen,

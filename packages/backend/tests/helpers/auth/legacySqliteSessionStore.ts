@@ -2,18 +2,19 @@
 // sha256(raw) lands in DB. Caller is responsible for setting actor.user only
 // after status='active' is confirmed (handled here by lookupActiveSession).
 
-// RFC-359 AC-6：`db` 的类型放宽成 `ProviderNeutralDatabase`。
+// RFC-359 AC-6：`db` 的类型放宽成 `PersistenceDb`。
 // 这些夹具只用 drizzle 的中立面（select / insert / update，全部 await），没有任何 bun:sqlite
 // 的同步 API，所以两个引擎都跑得通。放宽是**向后兼容**的——`DbClient` 本身就是
-// `BaseSQLiteDatabase<'sync', …>` 的子类型，既有的 SQLite 调用点一个字都不用改。
+// `PersistenceDb` 的子类型，既有的 SQLite 调用点一个字都不用改。
 // 之所以必须放宽：AC-6 要把行为用例迁到 `describeEachProvider`，而**每一个 HTTP 用例都要先建会话**，
 // 会话夹具卡在 `DbClient` 上就等于整条路堵死。
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { randomBytes } from 'node:crypto'
 import { and, eq, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { userSessions, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { sha256Hex } from '@/util/hash'
@@ -49,7 +50,7 @@ export function hashToken(raw: string): string {
 }
 
 export interface CreateSessionInput {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   userId: string
   userAgent?: string | null
   ttlMs?: number
@@ -63,7 +64,7 @@ export interface CreateSessionResult {
 
 function prepareSession(input: CreateSessionInput): {
   token: string
-  row: typeof userSessions.$inferInsert
+  row: PersistenceTables['userSessions']['$inferInsert']
   session: SessionRecord
 } {
   const now = input.now ?? Date.now()
@@ -97,7 +98,8 @@ function prepareSession(input: CreateSessionInput): {
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
   const { token, row, session } = prepareSession(input)
-  await input.db.insert(userSessions).values(row)
+  const { userSessions } = tablesOf(input.db)
+  await insertOne(input.db, userSessions, row)
   return { token, session }
 }
 
@@ -113,7 +115,8 @@ export async function createLoginSession(input: CreateSessionInput): Promise<Cre
   const { token, row, session } = prepareSession(input)
   // RFC-359：从 bun:sqlite 独有的同步事务面搬到中立事务原语，「一次提交」的边界一格未变。
   return await databaseSessionFor(input.db).transaction(async (tx) => {
-    await tx.insert(userSessions).values(row)
+    const { userSessions, users } = tablesOf(tx)
+    await insertOne(tx, userSessions, row)
     await tx.update(users).set({ lastLoginAt: session.createdAt }).where(eq(users.id, input.userId))
     return { token, session }
   })
@@ -121,11 +124,11 @@ export async function createLoginSession(input: CreateSessionInput): Promise<Cre
 
 export interface ResolvedSession {
   session: SessionRecord
-  user: typeof users.$inferSelect
+  user: PersistenceTables['users']['$inferSelect']
 }
 
 export async function lookupActiveSession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   raw: string,
   now: number = Date.now(),
 ): Promise<ResolvedSession | null> {
@@ -145,12 +148,13 @@ export async function lookupActiveSession(
  * "just used" merely because a tab was left open.
  */
 export async function lookupActiveSessionByHash(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   hash: string,
   now: number = Date.now(),
   opts: { touch?: boolean } = {},
 ): Promise<ResolvedSession | null> {
   const touch = opts.touch ?? true
+  const { userSessions, users } = tablesOf(db)
   const rows = await db.select().from(userSessions).where(eq(userSessions.tokenHash, hash)).limit(1)
   const session = rows[0]
   if (!session) return null
@@ -182,20 +186,22 @@ export async function lookupActiveSessionByHash(
 }
 
 export async function revokeSession(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   sessionId: string,
   now: number = Date.now(),
 ): Promise<void> {
+  const { userSessions } = tablesOf(db)
   await db.update(userSessions).set({ revokedAt: now }).where(eq(userSessions.id, sessionId))
   // RFC-212 — close any live WS the revoked session opened. After the write.
   triggerRevalidation('session-revoked')
 }
 
 export async function revokeAllSessionsForUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   userId: string,
   now: number = Date.now(),
 ): Promise<void> {
+  const { userSessions } = tablesOf(db)
   await db
     .update(userSessions)
     .set({ revokedAt: now })
@@ -206,9 +212,10 @@ export async function revokeAllSessionsForUser(
 }
 
 export async function sweepExpiredSessions(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   now: number = Date.now(),
 ): Promise<number> {
+  const { userSessions } = tablesOf(db)
   // Hard-delete fully-expired rows that were already revoked — sessions store grows otherwise.
   const result = await db
     .delete(userSessions)
@@ -219,10 +226,11 @@ export async function sweepExpiredSessions(
 }
 
 export async function listActiveSessionsForUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   userId: string,
   now: number = Date.now(),
 ): Promise<SessionRecord[]> {
+  const { userSessions } = tablesOf(db)
   const rows = await db
     .select()
     .from(userSessions)

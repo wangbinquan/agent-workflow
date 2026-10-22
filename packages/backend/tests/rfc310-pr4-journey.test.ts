@@ -16,6 +16,8 @@
 //      changed 正常结算；violation 现场绝不产生 candidate；
 //   3. no-change 相对 action baseline clean 的合法性。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -41,14 +43,13 @@ import {
   OpaqueConflictEffects,
   WorkspaceReferenceCodec,
 } from './helpers/rfc370ConflictWorkspaceEffects'
-import { cachedRepos } from '../src/db/schema'
 import {
   buildPr3Fixture,
   PR3_JAVA_CELLS,
   type ProviderPr3Fixture,
 } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   CandidatePublicationStore,
   MappedCandidateFactory,
@@ -102,11 +103,12 @@ function startLaneWorld(): string {
   return repoPath
 }
 
-async function seedLaneDatabase(db: ProviderNeutralDatabase, repoPath: string): Promise<void> {
+async function seedLaneDatabase(db: PersistenceDb, repoPath: string): Promise<void> {
   launches.length = 0
   outcomes.clear()
   fx = await buildPr3Fixture({ db })
-  await fx.db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(fx.db)
+  await insertOne(fx.db, cachedRepos, {
     id: 'repo-1',
     urlHash: 'j4deadbe',
     localPath: repoPath,

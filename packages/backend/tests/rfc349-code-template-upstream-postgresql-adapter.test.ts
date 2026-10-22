@@ -2,9 +2,9 @@
 // PostgreSQL transaction: load local + upstream, decide purely, fence/write,
 // commit. No SQLite shadow or synchronous cast may participate.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { describe, expect, test } from 'bun:test'
 import { buildActor } from '@/auth/actor'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createTemplateUpstreamOperations } from '@/modules/code-capability/application/templateUpstreamStatus'
 import type { TemplateUpstreamRecord } from '@/modules/code-capability/application/ports/templateUpstreamPersistence'
 import { createTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/templateUpstreamPersistence'
@@ -48,7 +48,10 @@ function fixture() {
     }
     return result(queued.shift() ?? {})
   }
-  const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
+    unsafe: run,
+    release() {},
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection
@@ -145,10 +148,6 @@ function values(row: TemplateUpstreamRecord): readonly unknown[] {
     row.updatedAt,
   ]
 }
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 PostgreSQL capability-template upstream adapter', () => {
   test('reads both the local copy and its upstream from PostgreSQL', async () => {

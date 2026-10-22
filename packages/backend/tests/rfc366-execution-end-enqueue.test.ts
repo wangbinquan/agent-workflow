@@ -6,6 +6,8 @@
 //
 // 覆盖 proposal §7 的 AC-1/2/3/4/5/6/7/8/9/10/11/12/20。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
@@ -19,8 +21,7 @@ import {
   type ResolvedDistillScope,
   type TaskLaunchOrigin,
 } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { memoryDistillJobs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   enqueueDistillJob,
   resetMemoryDistillPolicyProviderForTest,
@@ -49,7 +50,7 @@ interface Fixture {
 }
 
 describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
 
   beforeEach(() => {
@@ -75,69 +76,63 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     } = {},
   ): Promise<Fixture> {
     const workflowId = ulid()
-    await db
-      .insert(workflows)
-      .values({
-        id: workflowId,
-        name: `wf-${workflowId}`,
-        definition: SNAPSHOT,
-        version: 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      .run()
+    const { workflows, tasks, nodeRuns } = tablesOf(db)
+    await insertOne(db, workflows, {
+      id: workflowId,
+      name: `wf-${workflowId}`,
+      definition: SNAPSHOT,
+      version: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
     const taskId = ulid()
-    await db
-      .insert(tasks)
-      .values({
-        id: taskId,
-        executionLineageId: taskId,
-        lineageSlotPathJson: JSON.stringify([
-          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
-        ]),
-        name: 'rfc366-fixture',
-        workflowId,
-        workflowSnapshot: SNAPSHOT,
-        repoPath: '/tmp/wt',
-        worktreePath: '/tmp/wt',
-        baseBranch: 'main',
-        branch: `agent-workflow/${taskId}`,
-        status: 'done',
-        inputs: '{}',
-        startedAt: Date.now(),
-        ...(overrides.launchOrigin === undefined ? {} : { launchOrigin: overrides.launchOrigin }),
-        ...(overrides.catalogVisibility === undefined
-          ? {}
-          : { catalogVisibility: overrides.catalogVisibility }),
-        ...(overrides.spaceKind === undefined ? {} : { spaceKind: overrides.spaceKind }),
-        ...(overrides.parentTaskId === undefined
-          ? {}
-          : { parentTaskId: overrides.parentTaskId, parentNodeRunId: ulid() }),
-      })
-      .run()
+    await insertOne(db, tasks, {
+      id: taskId,
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
+      name: 'rfc366-fixture',
+      workflowId,
+      workflowSnapshot: SNAPSHOT,
+      repoPath: '/tmp/wt',
+      worktreePath: '/tmp/wt',
+      baseBranch: 'main',
+      branch: `agent-workflow/${taskId}`,
+      status: 'done',
+      inputs: '{}',
+      startedAt: Date.now(),
+      ...(overrides.launchOrigin === undefined ? {} : { launchOrigin: overrides.launchOrigin }),
+      ...(overrides.catalogVisibility === undefined
+        ? {}
+        : { catalogVisibility: overrides.catalogVisibility }),
+      ...(overrides.spaceKind === undefined ? {} : { spaceKind: overrides.spaceKind }),
+      ...(overrides.parentTaskId === undefined
+        ? {}
+        : { parentTaskId: overrides.parentTaskId, parentNodeRunId: ulid() }),
+    })
     const runIds: Record<string, string> = {}
     for (const nodeId of ['agent-a', 'agent-b', 'named-only']) {
       const runId = ulid()
       runIds[nodeId] = runId
-      await db
-        .insert(nodeRuns)
-        .values({
-          id: runId,
-          taskId,
-          nodeId,
-          iteration: 0,
-          retryIndex: 0,
-          reviewIteration: 0,
-          status: 'done',
-          startedAt: Date.now(),
-        })
-        .run()
+      await insertOne(db, nodeRuns, {
+        id: runId,
+        taskId,
+        nodeId,
+        iteration: 0,
+        retryIndex: 0,
+        reviewIteration: 0,
+        status: 'done',
+        startedAt: Date.now(),
+      })
     }
     return { taskId, runIds }
   }
 
-  const rowsOf = async (taskId: string) =>
-    await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.taskId, taskId)).all()
+  const rowsOf = async (taskId: string) => {
+    const { memoryDistillJobs } = tablesOf(db)
+    return await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.taskId, taskId))
+  }
 
   // --- AC-1 / AC-4 / AC-12 -------------------------------------------------
 
@@ -218,20 +213,18 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     const keys: string[] = []
     for (const suffix of ['r1', 'r2', 'r3']) {
       const runId = ulid()
-      await db
-        .insert(nodeRuns)
-        .values({
-          id: runId,
-          taskId: fx.taskId,
-          nodeId: 'agent-a',
-          iteration: 0,
-          retryIndex: 0,
-          reviewIteration: 0,
-          status: 'done',
-          startedAt: Date.now(),
-          shardKey: suffix,
-        })
-        .run()
+      const { nodeRuns } = tablesOf(db)
+      await insertOne(db, nodeRuns, {
+        id: runId,
+        taskId: fx.taskId,
+        nodeId: 'agent-a',
+        iteration: 0,
+        retryIndex: 0,
+        reviewIteration: 0,
+        status: 'done',
+        startedAt: Date.now(),
+        shardKey: suffix,
+      })
       const r = await enqueueDistillJob(memory.store, {
         sourceKind: 'agent-run',
         sourceEventId: runId,

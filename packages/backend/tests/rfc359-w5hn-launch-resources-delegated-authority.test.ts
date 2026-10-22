@@ -22,7 +22,7 @@ import { beforeEach, expect, test } from 'bun:test'
 
 import type { Actor } from '@/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -35,7 +35,7 @@ import { admitDaemonIdentity } from '@/auth/session'
 import { createUser } from './helpers/userFixture'
 
 describeEachProvider('RFC-359 AC-1 —— 启动资源面接受委派 actor', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let identityAccess: ReturnType<typeof createIdentityAccessRuntime>
   let ownerId = ''
   let agentId = ''

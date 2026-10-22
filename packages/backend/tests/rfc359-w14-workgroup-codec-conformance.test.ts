@@ -3,13 +3,15 @@
 // The database cases run on real provider fixtures; the old synchronous writer
 // is still exercised by the existing RFC-225 revision cases.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ZodError } from 'zod'
 import { serializeWorkgroupEditableSnapshotV1, type Workgroup } from '@agent-workflow/shared'
-import { workgroupMembers, workgroups } from '@/db/schema'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { workgroupRepositoryDependencies } from '@/modules/resource-catalog/composition/workgroupOperations'
 import {
   rowToWorkgroup,
@@ -24,8 +26,8 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workgroupRepository'
 import { describeEachProvider } from './helpers/eachProvider'
 
-type WorkgroupRow = typeof workgroups.$inferSelect
-type MemberRow = typeof workgroupMembers.$inferSelect
+type WorkgroupRow = PersistenceTables['workgroups']['$inferSelect']
+type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 const T0 = 1_700_000_000_000
 
 function rowFixture(mode: WorkgroupRow['mode'] = 'leader_worker'): WorkgroupRow {
@@ -115,13 +117,14 @@ const OLD_GOLDENS = {
   },
 }
 
-function repositoryFor(db: ProviderNeutralDatabase) {
+function repositoryFor(db: PersistenceDb) {
   return createWorkgroupRepository(db, workgroupRepositoryDependencies({ db, now: () => T0 + 50 }))
 }
 
-async function seed(db: ProviderNeutralDatabase, mode: WorkgroupRow['mode'] = 'leader_worker') {
-  await db.insert(workgroups).values(rowFixture(mode)).run()
-  await db.insert(workgroupMembers).values(memberFixtures(mode)).run()
+async function seed(db: PersistenceDb, mode: WorkgroupRow['mode'] = 'leader_worker') {
+  const { workgroups, workgroupMembers } = tablesOf(db)
+  await insertOne(db, workgroups, rowFixture(mode))
+  await db.insert(workgroupMembers).values(memberFixtures(mode))
 }
 
 function thrownBy(run: () => unknown): unknown {
@@ -138,16 +141,11 @@ describeEachProvider('RFC-359 Workgroup codec on stored rows', (harness) => {
     test(`${mode}: real repository and legacy codec preserve complete rows, order and snapshot bytes`, async () => {
       await seed(harness.db, mode)
       const { repository, projection } = repositoryFor(harness.db)
-      const stored = await harness.db
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.id, 'wg-codec'))
-        .get()
-      const members = await harness.db
-        .select()
-        .from(workgroupMembers)
-        .orderBy(workgroupMembers.id)
-        .all()
+      const { workgroups, workgroupMembers } = tablesOf(harness.db)
+      const stored = await first(
+        harness.db.select().from(workgroups).where(eq(workgroups.id, 'wg-codec')),
+      )
+      const members = await harness.db.select().from(workgroupMembers).orderBy(workgroupMembers.id)
       expect(stored).toBeDefined()
       if (stored === undefined) throw new Error('missing stored group')
       const originalMemberOrder = members.map((member) => member.id)
@@ -182,17 +180,15 @@ describeEachProvider('RFC-359 Workgroup codec on stored rows', (harness) => {
     const before = await repository.get('wg-codec')
     if (before === null) throw new Error('missing original group')
     await harness.session.transaction(async (tx) => {
-      await tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, 'wg-codec')).run()
-      await tx
-        .insert(workgroupMembers)
-        .values(
-          memberFixtures().map((member) => ({
-            ...member,
-            id: `replacement-${member.id}`,
-            createdAt: T0 + 100,
-          })),
-        )
-        .run()
+      const { workgroupMembers, workgroups } = tablesOf(tx)
+      await tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, 'wg-codec'))
+      await tx.insert(workgroupMembers).values(
+        memberFixtures().map((member) => ({
+          ...member,
+          id: `replacement-${member.id}`,
+          createdAt: T0 + 100,
+        })),
+      )
       await tx
         .update(workgroups)
         .set({
@@ -201,7 +197,6 @@ describeEachProvider('RFC-359 Workgroup codec on stored rows', (harness) => {
           updatedAt: T0 + 100,
         })
         .where(eq(workgroups.id, 'wg-codec'))
-        .run()
     })
     const after = await repository.get('wg-codec')
     if (after === null) throw new Error('missing updated group')
@@ -227,22 +222,20 @@ describeEachProvider('RFC-359 Workgroup codec on stored rows', (harness) => {
     const failure = new Error('rollback the workgroup document')
     await expect(
       harness.session.transaction(async (tx) => {
+        const { workgroups, workgroupMembers } = tablesOf(tx)
         await tx
           .update(workgroups)
           .set({ instructions: 'uncommitted', version: 8 })
           .where(eq(workgroups.id, 'wg-codec'))
-          .run()
         await tx
           .update(workgroupMembers)
           .set({ roleDesc: 'uncommitted role' })
           .where(eq(workgroupMembers.id, 'member-zulu'))
-          .run()
-        const row = await tx.select().from(workgroups).where(eq(workgroups.id, 'wg-codec')).get()
+        const row = await first(tx.select().from(workgroups).where(eq(workgroups.id, 'wg-codec')))
         const members = await tx
           .select()
           .from(workgroupMembers)
           .where(eq(workgroupMembers.workgroupId, 'wg-codec'))
-          .all()
         if (row === undefined) throw new Error('missing transaction group')
         const detail = workgroupToDetail(workgroupFromRows(row, members))
         expect(detail.instructions).toBe('uncommitted')
@@ -258,18 +251,16 @@ describeEachProvider('RFC-359 Workgroup codec on stored rows', (harness) => {
 
   test('stored malformed editable content keeps the original schema issue ordering', async () => {
     await seed(harness.db)
+    const { workgroups, workgroupMembers } = tablesOf(harness.db)
     await harness.db
       .update(workgroups)
       .set({ name: '', maxRounds: 0 })
       .where(eq(workgroups.id, 'wg-codec'))
-      .run()
     const { repository, projection } = repositoryFor(harness.db)
-    const row = await harness.db
-      .select()
-      .from(workgroups)
-      .where(eq(workgroups.id, 'wg-codec'))
-      .get()
-    const members = await harness.db.select().from(workgroupMembers).all()
+    const row = await first(
+      harness.db.select().from(workgroups).where(eq(workgroups.id, 'wg-codec')),
+    )
+    const members = await harness.db.select().from(workgroupMembers)
     if (row === undefined) throw new Error('missing corrupt group')
     const group = rowToWorkgroup(row, members)
     const legacyError = thrownBy(() => workgroupDraftSnapshotOf(group))

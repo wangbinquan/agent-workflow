@@ -2,11 +2,11 @@
 // Locks status codes (201 / 200 / 204 / 404 / 409 / 422), shape of error
 // bodies (referencedBy on still-referenced delete) and auth (401 without token).
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
-import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {} from './helpers/providerHttpApplication'
@@ -50,7 +50,7 @@ async function createMcpHttp(
  */
 function describeMcpProvider(
   name: string,
-  register: (getApp: () => Hono, getDb: () => ProviderNeutralDatabase) => void,
+  register: (getApp: () => Hono, getDb: () => PersistenceDb) => void,
 ) {
   describeEachProviderHttpApplication(
     name,
@@ -205,7 +205,7 @@ describeMcpProvider('GET /api/mcps and /api/mcps/:id', (getApp) => {
 // RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
 describeMcpProvider('PUT /api/mcps/:id (legacy half)', (getApp, getDb) => {
   let app: Hono
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     app = getApp()
     db = getDb()
@@ -249,6 +249,7 @@ describeMcpProvider('PUT /api/mcps/:id (legacy half)', (getApp, getDb) => {
 
   test('ACL owner transfer invalidates a captured config-hash fence', async () => {
     const mcp = await createMcpHttp(app, 'owner-transfer')
+    const { mcps } = tablesOf(db)
     await db
       .update(mcps)
       .set({ ownerUserId: 'other-owner', aclRevision: 1 })
@@ -274,7 +275,7 @@ describeMcpProvider('PUT /api/mcps/:id (legacy half)', (getApp, getDb) => {
 // RFC-359 AC-6：本面的另一半此前只跑 SQLite，改成与上面同一个双引擎注册器。
 describeMcpProvider('DELETE /api/mcps/:id (legacy half)', (getApp, getDb) => {
   let app: Hono
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     app = getApp()
     db = getDb()

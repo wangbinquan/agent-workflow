@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-350 —— `interrupted` 任务树必须能被归档出库（回归防护）。
 //
@@ -19,14 +21,12 @@ import { mkdirSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { taskRepos, tasks, users, workflows } from '../src/db/schema'
-
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 
-type Db = ProviderNeutralDatabase
+type Db = PersistenceDb
 
 function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc350-archive-'))
@@ -40,7 +40,8 @@ function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
 }
 
 async function seedBase(db: Db): Promise<void> {
-  await db.insert(users).values({
+  const { users, workflows } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
     displayName: 'u1',
@@ -48,7 +49,7 @@ async function seedBase(db: Db): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
+  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 async function addTask(
@@ -60,7 +61,8 @@ async function addTask(
     parentTaskId?: string
   },
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks, taskRepos } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: seed.id,
     name: seed.id,
     executionLineageId: seed.parentTaskId ?? seed.id,
@@ -91,7 +93,7 @@ async function addTask(
     rootTaskId: seed.parentTaskId ?? seed.id,
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
   })
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -101,6 +103,7 @@ async function addTask(
 }
 
 async function taskCount(db: Db): Promise<number> {
+  const { tasks } = tablesOf(db)
   const rows = await db.select({ n: count() }).from(tasks)
   return rows[0]?.n ?? 0
 }

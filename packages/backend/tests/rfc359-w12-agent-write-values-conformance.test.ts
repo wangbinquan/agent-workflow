@@ -4,13 +4,15 @@
 // the existing RFC-166 / RFC-060 / RFC-014 and intent branch-port SQLite cases;
 // these tests do not claim PostgreSQL can execute that physical InTx mechanism.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import ts from 'typescript'
 import { ZodError } from 'zod'
 import type { CreateAgent } from '@agent-workflow/shared'
-import { agents, users } from '@/db/schema'
 import {
   agentContentPersistenceValues,
   agentFromPersistenceRow,
@@ -18,7 +20,7 @@ import {
   updateAgentPersistenceValues,
   type AgentPersistenceRow,
 } from '@/modules/resource-catalog/infrastructure/agentPersistence'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const OWNER = 'agent-values-owner'
@@ -76,15 +78,17 @@ const expectedRow: AgentPersistenceRow = {
   updatedAt: T0,
 }
 
-async function readRow(db: DatabaseTransaction, id = expectedRow.id) {
-  const row = await db.select().from(agents).where(eq(agents.id, id)).get()
+async function readRow(db: PersistenceTx, id = expectedRow.id) {
+  const { agents } = tablesOf(db)
+  const row = await first(db.select().from(agents).where(eq(agents.id, id)))
   if (row === undefined) throw new Error(`agent values fixture row disappeared: ${id}`)
   return row
 }
 
 describeEachProvider('RFC-359 Agent write values on real databases', (harness) => {
   beforeEach(async () => {
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       id: OWNER,
       username: OWNER,
       displayName: OWNER,
@@ -97,11 +101,12 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
 
   async function create(agent = input()) {
     return await harness.session.transaction(async (tx) => {
-      await tx
-        .insert(agents)
-        .values(
-          createAgentPersistenceValues({ id: expectedRow.id, agent, ownerUserId: OWNER, now: T0 }),
-        )
+      const { agents } = tablesOf(tx)
+      await insertOne(
+        tx,
+        agents,
+        createAgentPersistenceValues({ id: expectedRow.id, agent, ownerUserId: OWNER, now: T0 }),
+      )
       return await readRow(tx)
     })
   }
@@ -144,11 +149,13 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
   test('a sparse submitted patch still rewrites the complete neutral content projection', async () => {
     await create()
     const rawInputs = '[{"name":"source", "unknown":"old raw bytes"}]'
+    const { agents } = tablesOf(harness.db)
     await harness.db.update(agents).set({ inputs: rawInputs }).where(eq(agents.id, expectedRow.id))
     const original = await readRow(harness.db)
     expect(original.inputs).toBe(rawInputs)
     await harness.session.transaction(async (tx) => {
       const current = agentFromPersistenceRow(await readRow(tx))
+      const { agents } = tablesOf(tx)
       await tx
         .update(agents)
         .set(updateAgentPersistenceValues(current, { description: 'changed' }, T0 + 7))
@@ -166,6 +173,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     await create()
     await harness.session.transaction(async (tx) => {
       const current = agentFromPersistenceRow(await readRow(tx))
+      const { agents } = tablesOf(tx)
       await tx
         .update(agents)
         .set(
@@ -214,7 +222,10 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     const failure = new Error('abort created Agent transaction')
     await expect(
       harness.session.transaction(async (tx) => {
-        await tx.insert(agents).values(
+        const { agents } = tablesOf(tx)
+        await insertOne(
+          tx,
+          agents,
           createAgentPersistenceValues({
             id: expectedRow.id,
             agent: input(),
@@ -241,7 +252,8 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
         throw failure
       }),
     ).rejects.toBe(failure)
-    expect(await harness.db.select().from(agents).where(eq(agents.id, expectedRow.id)).get()).toBe(
+    const { agents } = tablesOf(harness.db)
+    expect(await first(harness.db.select().from(agents).where(eq(agents.id, expectedRow.id)))).toBe(
       undefined,
     )
   })
@@ -252,6 +264,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     await expect(
       harness.session.transaction(async (tx) => {
         const current = agentFromPersistenceRow(await readRow(tx))
+        const { agents } = tablesOf(tx)
         await tx
           .update(agents)
           .set(updateAgentPersistenceValues(current, { inputs: [], runtime: null }, T0 + 5))
@@ -270,6 +283,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     cycle['self'] = cycle
     await expect(
       harness.session.transaction(async (tx) => {
+        const { agents } = tablesOf(tx)
         await tx
           .update(agents)
           .set({ description: 'not committed' })
@@ -304,7 +318,8 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
       { name: 'duplicate', kind: 'markdown' },
     ]
     await expect(create(agent)).rejects.toBe(failure)
-    expect(await harness.db.select().from(agents).where(eq(agents.id, expectedRow.id)).get()).toBe(
+    const { agents } = tablesOf(harness.db)
+    expect(await first(harness.db.select().from(agents).where(eq(agents.id, expectedRow.id)))).toBe(
       undefined,
     )
   })

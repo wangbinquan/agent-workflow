@@ -56,9 +56,7 @@ const TRANSACTION_PRIMITIVES: Readonly<Record<string, string>> = {
     'serializable 三处直接调 PG 驱动的 db.transaction，那正是「中立会话在 PG 上的实现」。' +
     'SQLite 那半在同一文件里刻意**不**用驱动的 transaction，改发显式 BEGIN IMMEDIATE / COMMIT / ROLLBACK。',
   'platform/persistence/postgresqlDatabaseClient.ts':
-    'PG 客户端（sqlite-proxy 之上的 drizzle 远端库）自己的事务管道：它在 `transaction` 属性上预留连接、' +
-    '开一个绑定该连接的 drizzle 库再调 `transactionBase.transaction`，实现的正是上面中立会话所依赖的 ' +
-    '`db.transaction` 本身。这是驱动层，不是业务调用点。',
+    'RFC-395 I-b 原生 Bun.SQL 连接边界：先 reserve 再在同一连接 begin，嵌套事务使用原生 savepoint；连接包装器负责事务内的写入标记和部署门，并把 reserve 等待纳入已有遥测。',
 }
 
 /**
@@ -74,7 +72,9 @@ function isDatabaseHandle(type: ts.Type, checker: ts.TypeChecker): boolean {
   if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return true
   const has = (name: string): boolean => checker.getPropertyOfType(type, name) !== undefined
   return (
-    ['select', 'insert', 'update', 'delete'].every(has) || ['prepare', 'query', 'exec'].every(has)
+    ['select', 'insert', 'update', 'delete'].every(has) ||
+    ['prepare', 'query', 'exec'].every(has) ||
+    has('unsafe')
   )
 }
 
@@ -84,11 +84,12 @@ function countBareTransactions(source: ts.SourceFile, checker: ts.TypeChecker): 
     if (ts.isCallExpression(node)) {
       const callee = node.expression
       const receiver =
-        ts.isPropertyAccessExpression(callee) && callee.name.text === 'transaction'
+        ts.isPropertyAccessExpression(callee) &&
+        ['transaction', 'begin', 'savepoint'].includes(callee.name.text)
           ? callee.expression
           : ts.isElementAccessExpression(callee) &&
               ts.isStringLiteralLike(callee.argumentExpression) &&
-              callee.argumentExpression.text === 'transaction'
+              ['transaction', 'begin', 'savepoint'].includes(callee.argumentExpression.text)
             ? callee.expression
             : undefined
       if (

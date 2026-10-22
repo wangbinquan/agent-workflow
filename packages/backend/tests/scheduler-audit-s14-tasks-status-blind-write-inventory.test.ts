@@ -60,6 +60,8 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  * The exact per-file snapshot catches a new write authority in either provider.
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
+  // RFC-395 I-b: the existing tasksTable alias is now the session's tasks binding.
+  'modules/collaboration/infrastructure/taskCollab.ts': 1,
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': 1,
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,

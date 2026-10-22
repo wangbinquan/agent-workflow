@@ -25,13 +25,13 @@
 // 节点行 id 用定长补零字符串（字典序 = 数值序）而非 ulid()，保证「谁更新」
 // 100% 确定——同毫秒 ulid 随机段不保证单调。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
@@ -46,11 +46,12 @@ const mkId = (n: number): string => String(n).padStart(26, '0')
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  await db.insert(workflows).values({ id: workflowId, name: 'w', definition: SNAPSHOT })
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: SNAPSHOT })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     name: 't',
     id: taskId,
     workflowId,
@@ -67,7 +68,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 async function seedRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: {
     id?: string
@@ -80,7 +81,8 @@ async function seedRun(
   } = {},
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId: opts.nodeId ?? 'n',
@@ -95,14 +97,15 @@ async function seedRun(
   return id
 }
 
-async function mergeStateOf(db: ProviderNeutralDatabase, id: string): Promise<string | null> {
+async function mergeStateOf(db: PersistenceDb, id: string): Promise<string | null> {
+  const { nodeRuns } = tablesOf(db)
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!.mergeState
 }
 
 /** 竞争写者版的 merge_state 迁移：persistence 自己开事务，代理保证 UPDATE 前插得进去。 */
 function racingPersistence(
-  db: ProviderNeutralDatabase,
-  sabotage: (tx: DatabaseTransaction) => Promise<void>,
+  db: PersistenceDb,
+  sabotage: (tx: PersistenceTx) => Promise<void>,
 ): DrizzleMergeStateLifecyclePersistence {
   return new DrizzleMergeStateLifecyclePersistence(dbWithCompetingWriter(db, sabotage))
 }
@@ -119,6 +122,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
       extra: { isoWorktreePath: '/iso/x', isoBaseSnapshot: 'sha-base' },
     })
     expect(r).toEqual({ from: null, to: 'isolating' })
+    const { nodeRuns } = tablesOf(db)
     const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
     expect(after.mergeState).toBe('isolating')
     expect(after.isoWorktreePath).toBe('/iso/x')
@@ -142,6 +146,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
       event: { kind: 'mark-merged', via: 'live' },
     })
     expect(r3).toEqual({ from: 'pending-merge', to: 'merged' })
+    const { nodeRuns } = tablesOf(db)
     const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
     expect(after.mergeState).toBe('merged')
     expect(after.isoNodeTree).toBe('sha-tree')
@@ -195,6 +200,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
       extra: { isoWorktreePath: '/iso/new', isoBaseSnapshot: 'sha-new' },
     })
     expect(r).toEqual({ from: 'isolating', to: 'isolating' })
+    const { nodeRuns } = tablesOf(db)
     const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
     expect(after.isoWorktreePath).toBe('/iso/new')
     expect(after.isoBaseSnapshot).toBe('sha-new')
@@ -241,6 +247,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— CAS 竞态', (harness) =
     await expect(
       // 竞争写者（模拟另一条腿的 merge-back）先把行推到 merged。
       racingPersistence(db, async (tx) => {
+        const { nodeRuns } = tablesOf(tx)
         await tx.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, id))
       }).transition({ nodeRunId: id, event: { kind: 'park-conflict-human' } }),
     ).rejects.toMatchObject({ code: 'concurrent-merge-state-transition' })
@@ -256,6 +263,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— CAS 竞态', (harness) =
     const id = await seedRun(db, taskId, { mergeState: null, status: 'running' })
     await expect(
       racingPersistence(db, async (tx) => {
+        const { nodeRuns } = tablesOf(tx)
         await tx
           .update(nodeRuns)
           .set({ mergeState: 'isolating', isoWorktreePath: '/iso/winner' })
@@ -266,6 +274,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— CAS 竞态', (harness) =
         extra: { isoWorktreePath: '/iso/loser' },
       }),
     ).rejects.toMatchObject({ code: 'concurrent-merge-state-transition' })
+    const { nodeRuns } = tablesOf(db)
     // 同上，整笔回滚。关键是 `/iso/loser` **没**落库：NULL-from 的谓词若写成 `eq(col, null)`
     // 就会恒 false——那样这里也会抛冲突，但真正的 NULL→isolating 也永远做不成；
     // 所以 happy path 的 `begin-isolation` 用例与本例必须同时绿，才证明谓词走的是 IS NULL。
@@ -296,6 +305,7 @@ describeEachProvider('RFC-144 tryTransition —— 域错误折 false', (harness
     const id = await seedRun(db, taskId, { mergeState: 'pending-merge' })
     expect(
       await racingPersistence(db, async (tx) => {
+        const { nodeRuns } = tablesOf(tx)
         await tx.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, id))
       }).tryTransition({ nodeRunId: id, event: { kind: 'mark-merged' } }),
     ).toBe(false)
@@ -322,7 +332,7 @@ describeEachProvider('RFC-144 tryTransition —— 域错误折 false', (harness
 
 /** 铸一行新 node_run —— 生产铸行链路的唯一入口（RFC-369 起只 insert，不再写旧代）。 */
 async function mint(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   opts: { id: string; nodeId?: string; iteration?: number; shardKey?: string | null },
 ): Promise<string> {
@@ -456,6 +466,7 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
     // 回滚后新一代不存在 ⇒ 旧行按推导未被取代、保持 pending-merge，入口重放仍会合并它。
     expect(await mergeStateOf(db, zombie)).toBe('pending-merge')
     expect(await derivedSupersededIds(db, taskId)).toEqual([])
+    const { nodeRuns } = tablesOf(db)
     expect(
       (
         await db

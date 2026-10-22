@@ -15,6 +15,9 @@
 // （提交大事务顺带写挂载清单 / replay 幂等 / 谱系退根 / handle 高水位）全在库里：
 // apply 引擎两个 provider 合一之后，同一份 body 在 SQLite 与 PostgreSQL 上各跑一遍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -23,8 +26,7 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { agents, intentApplyJournal, intentDrafts, intentSessions, users } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
@@ -34,7 +36,7 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 
 const OWNER = 'user_owner_rfc291_00000000'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let appHome: string
 
 const actor: Actor = {
@@ -44,7 +46,8 @@ const actor: Actor = {
 }
 
 async function seedUser(id: string, username: string): Promise<void> {
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username,
     displayName: username,
@@ -52,7 +55,7 @@ async function seedUser(id: string, username: string): Promise<void> {
     status: 'active',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
+  } as PersistenceTables['users']['$inferInsert'])
 }
 
 async function seedAgent(
@@ -61,7 +64,8 @@ async function seedAgent(
 ): Promise<{ id: string; updatedAt: number }> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'existing',
@@ -70,7 +74,7 @@ async function seedAgent(
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as typeof agents.$inferInsert)
+  } as PersistenceTables['agents']['$inferInsert'])
   return { id, updatedAt: now }
 }
 
@@ -85,12 +89,11 @@ async function installDraft(
   const canonical = canonicalIntentJson(parsed.changeset)
   const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
   const draftId = ulid()
-  const session = await db
-    .select()
-    .from(intentSessions)
-    .where(eq(intentSessions.id, sessionId))
-    .get()
-  await db.insert(intentDrafts).values({
+  const { intentSessions, intentDrafts } = tablesOf(db)
+  const session = await firstRow(
+    db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)),
+  )
+  await insertOne(db, intentDrafts, {
     id: draftId,
     sessionId,
     revision,
@@ -118,7 +121,8 @@ async function manifestOf(sessionId: string): Promise<IntentContextManifest> {
 }
 
 async function sessionRow(sessionId: string) {
-  return await db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
+  const { intentSessions } = tablesOf(db)
+  return await firstRow(db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)))
 }
 
 const createAgentOp = (opId: string, tempRef: string, name: string): unknown => ({
@@ -246,6 +250,7 @@ describeEachProvider('RFC-291 提交入库自动挂载（双引擎）', (harness
         ),
       ).rejects.toThrow()
 
+      const { agents } = tablesOf(db)
       expect(await db.select().from(agents)).toHaveLength(0)
       expect(await manifestOf(session.id)).toEqual([])
     })
@@ -269,6 +274,7 @@ describeEachProvider('RFC-291 提交入库自动挂载（双引擎）', (harness
       })
       const manifestAfterFirst = JSON.stringify(await manifestOf(session.id))
       const revisionAfterFirst = (await sessionRow(session.id))?.contextRevision
+      const { intentApplyJournal, agents } = tablesOf(db)
       const journalAfterFirst = (await db.select().from(intentApplyJournal)).length
 
       const second = await applyIntentChangeset(deps(), {
@@ -341,7 +347,8 @@ describeEachProvider('RFC-291 提交入库自动挂载（双引擎）', (harness
         ],
       })
       const c1 = r1.applied[0]?.resourceId ?? ''
-      const c1Row = await db.select().from(agents).where(eq(agents.id, c1)).get()
+      const { agents } = tablesOf(db)
+      const c1Row = await firstRow(db.select().from(agents).where(eq(agents.id, c1)))
 
       // ② C1 → C2（对自己的副本再选 copy——服务端允许，applyMode 由用户 decision 决定）
       const d2 = await installDraft(
@@ -457,6 +464,7 @@ describeEachProvider('RFC-291 提交入库自动挂载（双引擎）', (harness
 
     test('高水位单调：不会被后续提交调低', async () => {
       const { session } = await createIntentSession(db, actor, { message: 'build' })
+      const { intentSessions } = tablesOf(db)
       await db
         .update(intentSessions)
         .set({ handleWatermarkJson: JSON.stringify({ agent: 9 }) })

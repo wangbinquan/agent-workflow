@@ -25,9 +25,9 @@
 // parent with the running release's task image. A durable shared owner's idle
 // parent that is already paused is upgraded to the release's task image when
 // it runs another one (§10 V21, CS RFC-043); its next use resumes it on it.
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, or } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedTaskWorkspaces } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
@@ -69,7 +69,7 @@ export interface HostedWorkspaceLifecycle {
 }
 
 export function createHostedWorkspaceLifecycle(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly api: CrewStationBusinessExecution
   readonly fence: CrewStationMutationFence
   readonly workspaces: Pick<HostedTaskWorkspaces, 'close' | 'superseded'>
@@ -91,8 +91,9 @@ export function createHostedWorkspaceLifecycle(input: {
   const sharedIdleMs = input.sharedIdleMs ?? HOSTED_SHARED_VOLUME_IDLE_MS
   // A `closing` registration may have no parent receipt yet: an abandoned
   // launch whose create the platform is still admitting. It is retried too.
-  const rows = () =>
-    input.db
+  const rows = () => {
+    const { hostedTaskWorkspaces } = tablesOf(input.db)
+    return input.db
       .select()
       .from(hostedTaskWorkspaces)
       .where(
@@ -104,20 +105,24 @@ export function createHostedWorkspaceLifecycle(input: {
           ),
         ),
       )
-  const lastUse = async (taskId: string) =>
-    (
+  }
+  const lastUse = async (taskId: string) => {
+    const { hostedTaskWorkspaces } = tablesOf(input.db)
+    return (
       await input.db
         .select({ updatedAt: hostedTaskWorkspaces.updatedAt, state: hostedTaskWorkspaces.state })
         .from(hostedTaskWorkspaces)
         .where(eq(hostedTaskWorkspaces.taskId, taskId))
         .limit(1)
     )[0]
+  }
   const idleFor = (owner: string) =>
     hostedWorkspaceOwnerKind(owner) === 'task' ? taskGraceMs : sharedIdleMs
   const recordClosed = async (taskId: string) => {
     const fence = input.fence.current()
     await session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, fence)
+      const { hostedTaskWorkspaces } = tablesOf(tx)
       await tx
         .update(hostedTaskWorkspaces)
         .set({ state: 'closed', updatedAt: now() })
@@ -265,7 +270,7 @@ export type HostedMigrationDrain = (
  * active owner's next use resumes a paused parent (`HostedTaskWorkspaces`).
  */
 export function createHostedMigrationDrain(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly api: Pick<
     CrewStationBusinessExecution,
     'getTask' | 'listSubtasks' | 'cancelSubtask' | 'pauseTask'
@@ -283,6 +288,7 @@ export function createHostedMigrationDrain(input: {
     return value.length <= 128 ? value : `aw-task-op:${sha256Hex(value)}`
   }
   return async (stop, signal) => {
+    const { hostedTaskWorkspaces } = tablesOf(input.db)
     const rows = await input.db
       .select({
         taskId: hostedTaskWorkspaces.taskId,

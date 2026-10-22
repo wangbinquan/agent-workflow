@@ -5,15 +5,16 @@
 // `assertRuntimeReference` 则在该文件与
 // `aggregateAdapters/postgresqlResourcePackageMutationArms.ts` 各一份，**逐字相同**，
 // 唯一差别是事务的类型名（`ResourceCatalogTransaction` / `PostgresqlResourceCatalogTransaction`，
-// 两者都是 `DatabaseTransaction` 派生）。它们抛的是**用户可见的校验错误**
+// 两者都是 `PersistenceTx` 派生）。它们抛的是**用户可见的校验错误**
 // （`branch-port-not-declared` / `runtime-not-found` / `runtime-disabled`），
 // 多一份实现就是多一条可能给出不同措辞或不同判据的路径。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
-import { runtimes } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 
 export function assertBranchPortsDeclared(
@@ -32,16 +33,18 @@ export function assertBranchPortsDeclared(
 
 /** `previous` 是本次改动前引用的 runtime：已经在用的那个即便被停用也放行，换成别的才拦。 */
 export async function assertRuntimeReference(input: {
-  readonly transaction: DatabaseTransaction
+  readonly transaction: PersistenceTx
   readonly name: string | null | undefined
   readonly previous?: string
 }): Promise<void> {
   if (input.name === null || input.name === undefined) return
-  const row = await input.transaction
-    .select({ name: runtimes.name, enabled: runtimes.enabled })
-    .from(runtimes)
-    .where(eq(runtimes.name, input.name))
-    .get()
+  const { runtimes } = tablesOf(input.transaction)
+  const row = await first(
+    input.transaction
+      .select({ name: runtimes.name, enabled: runtimes.enabled })
+      .from(runtimes)
+      .where(eq(runtimes.name, input.name)),
+  )
   if (row === undefined) {
     throw new ValidationError(
       'runtime-not-found',

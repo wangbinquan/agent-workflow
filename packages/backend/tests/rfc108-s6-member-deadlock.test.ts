@@ -5,21 +5,23 @@
 // → S6 告警；② 属主活跃 → 无 S6；③ system-owned（无人类成员边界）→ 无 S6；④ 属主停用
 // 但有活跃协作者 → 无 S6（仍有人能应答）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 
 async function seedUser(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   status: 'active' | 'disabled' | 'invited',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: `u_${id}`,
     displayName: 'U',
@@ -31,15 +33,13 @@ async function seedUser(
   return id
 }
 
-async function seedAwaitingTask(
-  db: ProviderNeutralDatabase,
-  ownerUserId: string | null,
-): Promise<string> {
+async function seedAwaitingTask(db: PersistenceDb, ownerUserId: string | null): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await db.insert(tasks).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await insertOne(db, tasks, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -101,7 +101,8 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const owner = await seedUser(db, 'disabled')
     const collab = await seedUser(db, 'active')
     const taskId = await seedAwaitingTask(db, owner)
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId,
       userId: collab,
       role: 'collaborator',

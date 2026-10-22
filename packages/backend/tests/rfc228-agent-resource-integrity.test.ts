@@ -4,6 +4,7 @@
 // reject the complete dependsOn closure, while actor-safe status distinguishes
 // a visible name, a hidden existing row, and a genuinely missing row.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import {
@@ -14,7 +15,6 @@ import {
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgentResourceStatus } from '../src/modules/resource-catalog/application/agents/agentResourceIntegrity'
 import { createMcpFixture } from './helpers/mcpServiceBinding'
@@ -99,6 +99,7 @@ describe('RFC-228 Agent resource integrity', () => {
 
   test('a broken dependent Agent prevents saving a new root Agent', async () => {
     const child = await createAgent(db, agentInput('child'))
+    const { agents } = tablesOf(db)
     await db
       .update(agents)
       .set({
@@ -143,6 +144,7 @@ describe('RFC-228 Agent resource integrity', () => {
       },
       { ownerUserId: 'other-owner' },
     )
+    const { mcps } = tablesOf(db)
     await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
     const root = await createAgent(db, agentInput('root', { mcp: [mcp.id] }))
 
@@ -233,6 +235,7 @@ describe('RFC-228 Agent resource integrity', () => {
       { ownerUserId: viewer.user.id, actor: viewer },
     )
 
+    const { mcps } = tablesOf(db)
     await db.delete(mcps).where(eq(mcps.id, mcp.id))
 
     await expect(assertWorkflowLaunchable(db, viewer, workflow.id)).rejects.toMatchObject({
@@ -247,8 +250,7 @@ describe('RFC-228 Agent resource integrity', () => {
           db,
           // 资源完整性门在**参与者的工作组臂**里，早于内核碰工作区——这条路径一次都用不到它。
           appHome: '/unused-before-resource-gate',
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           runConfig: { defaultRuntime: VALID_RUNTIME },
         }),
         db,

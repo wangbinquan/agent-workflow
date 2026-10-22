@@ -2,14 +2,15 @@
 // 分页 / 搜索 / 成员制过滤、反应轮次的建—跑—结、收件箱投递去重与合并、outbox 认领 / 完成 / 重试、终止案件的级联，
 // 同一段断言在两个引擎上各跑一遍。末尾一条源码锁保证该族不再出现 provider 专属文件。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { employeeCases, employeeOsOutbox, users } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeCasePersistence } from '@/modules/digital-employee/application/ports/runtimeStore'
 import type {
   EmployeeCaseRecord,
@@ -83,9 +84,10 @@ async function seedCase(
   return record
 }
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_d7b_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -173,6 +175,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
         })
       ).map((row) => row.state),
     ).toEqual(['claimed'])
+    const { employeeOsOutbox } = tablesOf(db)
     // 生命周期事件进了 outbox（dedupe 键幂等）。
     const outbox = await db
       .select({ id: employeeOsOutbox.id, kind: employeeOsOutbox.kind })
@@ -649,6 +652,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
     expect((await store.listInbox(id)).find((row) => row.id === `inbox_${id}_3`)?.state).toBe(
       'obsolete',
     )
+    const { employeeOsOutbox, employeeCases } = tablesOf(harness.db)
     const lifecycle = await harness.db
       .select({ id: employeeOsOutbox.id })
       .from(employeeOsOutbox)
@@ -683,7 +687,7 @@ test('源码锁：运行时案件存储不再有 provider 专属文件', () => {
   expect(source).not.toMatch(
     /PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update|\bilike\(|\blike\(/i,
   )
-  expect(source).toContain('ProviderNeutralDatabase')
+  expect(source).toContain('PersistenceDb')
   expect(source).toContain('engine.lockAggregateRoot(')
   expect(source).toContain('engine.ascNullsFirst(')
 })

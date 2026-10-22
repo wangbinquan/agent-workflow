@@ -7,6 +7,8 @@
 // 伪造 change；⑤blob 缺失显式抛；⑥reconciler provider 把失败折叠为
 // configuration/PortOutcome，不抛穿。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import {
   chmodSync,
@@ -21,8 +23,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { developmentMissions, developmentRepositoryUploadReceipts } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
 import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
 import { createUploadPlacementPersistence } from '../src/modules/development-automation/infrastructure/uploadPlacementPersistence'
@@ -42,7 +43,7 @@ afterEach(() => {
 const T0 = 1_700_000_000_000
 
 interface Rig {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   evidence: EvidenceStore
   seedsRoot: string
   root: string
@@ -56,13 +57,14 @@ interface Rig {
   }
 }
 
-async function rig(db: ProviderNeutralDatabase): Promise<Rig> {
+async function rig(db: PersistenceDb): Promise<Rig> {
   const root = mkdtempSync(join(tmpdir(), 'aw-place-'))
   roots.push(root)
   const evidence = new EvidenceStore(join(root, 'evidence'))
   const seedsRoot = join(root, 'seeds')
   mkdirSync(seedsRoot, { recursive: true })
-  await db.insert(developmentMissions).values({
+  const { developmentMissions } = tablesOf(db)
+  await insertOne(db, developmentMissions, {
     id: 'm-1',
     status: 'working',
     repositoryId: 'repo-1',
@@ -158,6 +160,7 @@ describeEachProvider('rfc310 pr3 upload placement', (harness) => {
     // already-present 不物化。
     expect(readdirSync(join(seedRoot, 'docs'))).toEqual(['new.md'])
     expect(result.seedTreeDigest).toBe(seedTreeDigestOf(seedRoot))
+    const { developmentRepositoryUploadReceipts } = tablesOf(r.db)
     // receipt 落库（placement kind、seedChangeRef=planDigest）。
     const receipts = await r.db.select().from(developmentRepositoryUploadReceipts)
     expect(receipts).toHaveLength(1)
@@ -179,6 +182,7 @@ describeEachProvider('rfc310 pr3 upload placement', (harness) => {
     // 重放：digest 不变、receipt 不重复。
     const replay = await placeUploadSeed(r.deps, { planId: 'p2' })
     expect(replay.seedTreeDigest).toBe(first.seedTreeDigest)
+    const { developmentRepositoryUploadReceipts } = tablesOf(r.db)
     expect(await r.db.select().from(developmentRepositoryUploadReceipts)).toHaveLength(1)
 
     // 篡改残留：重放检测 digest 漂移 → 废弃重建 → byte-identical 恢复。
@@ -218,6 +222,7 @@ describeEachProvider('rfc310 pr3 upload placement', (harness) => {
     ])
     const result = await placeUploadSeed(r.deps, { planId: 'p3' })
     expect(result.seedChangeRef).toBeNull()
+    const { developmentRepositoryUploadReceipts } = tablesOf(r.db)
     const receipts = await r.db.select().from(developmentRepositoryUploadReceipts)
     expect(receipts[0]!).toMatchObject({
       receiptKind: 'placement',

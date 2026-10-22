@@ -1,8 +1,8 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { BundlePluginPayloadSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { plugins } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IntentPluginArtifactOwner } from '../../application/intent/artifactOwners'
 import type {
   ResourcePackageArtifactContext,
@@ -12,11 +12,12 @@ import type {
 import type { createHostedPluginGenerations } from './pluginGenerations'
 
 export function createHostedPluginArtifactOwners(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly generations: ReturnType<typeof createHostedPluginGenerations>
 }) {
   const store = input.generations
   const verifyCurrent = async (pluginId: string, allowDeleted = false) => {
+    const { plugins } = tablesOf(input.db)
     const current = (
       await input.db
         .select({ cachedPath: plugins.cachedPath })

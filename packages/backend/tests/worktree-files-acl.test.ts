@@ -16,6 +16,8 @@
 // If either goes red, a regression re-opened cross-task file read or symlink
 // escape in the worktree-files proxy.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,8 +25,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -39,7 +40,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   worktree: string
   outside: string
   taskId: string
@@ -75,7 +76,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const admin = await mkUser('root', 'admin')
 
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks, taskCollaborators } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -85,7 +87,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture',
     workflowId,
@@ -103,7 +105,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     startedAt: Date.now(),
     finishedAt: Date.now(),
   })
-  await db.insert(taskCollaborators).values({
+  await insertOne(db, taskCollaborators, {
     taskId,
     userId: collaborator.id,
     role: 'collaborator',

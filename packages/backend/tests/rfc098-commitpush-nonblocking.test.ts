@@ -27,6 +27,8 @@
 //   (incl. the commit container + its session child) is settled — nothing
 //   left 'running'/'pending'.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'
 import type { CommitPushMeta, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -36,7 +38,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { commitPushNodeId, COMMIT_AGENT_NAME } from '../src/services/commitPush'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
@@ -190,7 +191,8 @@ async function buildHarness(slug: string): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id,
     name,
     description: 'test',
@@ -228,12 +230,13 @@ async function seedTask(h: Harness): Promise<string> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 'rfc098-cp-task',
     id: taskId,
     workflowId,
@@ -328,6 +331,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
         }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
@@ -414,6 +418,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     // synthetic would hang here until the test timeout).
     await runP
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')
 
@@ -539,6 +544,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
         (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex > 0 && e.phase === 'start',
       ).length,
     ).toBeGreaterThanOrEqual(1)
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(rows.filter((r) => r.status === 'running' || r.status === 'pending')).toEqual([])
   }, 40_000)

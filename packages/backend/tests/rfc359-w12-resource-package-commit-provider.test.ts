@@ -3,6 +3,9 @@
 // receipt through a fresh catalog. Read assertions also pin ordered snapshots
 // and file bytes before the duplicated provider assembly is extracted.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -19,16 +22,6 @@ import {
 
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import {
-  agents,
-  mcps,
-  resourceBundleApplies,
-  skills,
-  skillVersions,
-  users,
-  workflows,
-  workgroups,
-} from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
@@ -390,7 +383,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       },
       source: 'daemon',
     })
-    await harness.db.insert(users).values({
+    const { users } = tablesOf(harness.db)
+    await insertOne(harness.db, users, {
       ...actor.user,
       createdAt: NOW,
       updatedAt: NOW,
@@ -469,7 +463,10 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       ['package-graph-a', ['package-graph-leaf']],
       ['package-graph-b', ['package-graph-leaf']],
     ] as const) {
-      await harness.db.insert(agents).values(
+      const { agents } = tablesOf(harness.db)
+      await insertOne(
+        harness.db,
+        agents,
         createAgentPersistenceValues({
           id,
           agent: CreateAgentSchema.parse({ name: id, dependsOn }),
@@ -513,7 +510,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     const receipt = await apply(bytes, prepared.previewToken, decision)
     if (receipt.root === undefined) throw new Error('package Agent root missing')
     const id = receipt.root.resourceId
-    const before = await harness.db.select().from(agents).where(eq(agents.id, id)).get()
+    const { agents, resourceBundleApplies } = tablesOf(harness.db)
+    const before = await first(harness.db.select().from(agents).where(eq(agents.id, id)))
     if (before === undefined) throw new Error('package Agent row missing')
     expect(before).toEqual({
       id,
@@ -558,7 +556,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(await apply(bytes, prepared.previewToken, decision, f.compose().catalog)).toEqual(
       receipt,
     )
-    expect(await harness.db.select().from(agents).where(eq(agents.id, id)).get()).toEqual(before)
+    expect(await first(harness.db.select().from(agents).where(eq(agents.id, id)))).toEqual(before)
     expect(
       await harness.db
         .select()
@@ -575,7 +573,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       targetId: id,
     }
     const updateReceipt = await apply(updateBytes, updatePreview.previewToken, updateDecision)
-    const after = await harness.db.select().from(agents).where(eq(agents.id, id)).get()
+    const after = await first(harness.db.select().from(agents).where(eq(agents.id, id)))
     if (after === undefined) throw new Error('updated package Agent row missing')
     expect(after).toEqual({
       ...before,
@@ -596,7 +594,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(
       await apply(updateBytes, updatePreview.previewToken, updateDecision, f.compose().catalog),
     ).toEqual(updateReceipt)
-    expect(await harness.db.select().from(agents).where(eq(agents.id, id)).get()).toEqual(after)
+    expect(await first(harness.db.select().from(agents).where(eq(agents.id, id)))).toEqual(after)
     expect(
       await harness.db
         .select()
@@ -704,6 +702,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     }
 
     const receipt = await commit(app)
+    const { skills, skillVersions, resourceBundleApplies } = tablesOf(harness.db)
     const landed = await harness.db.select().from(skills).where(eq(skills.ownerUserId, OWNER))
     expect(landed).toHaveLength(1)
     const skill = landed[0]!
@@ -764,7 +763,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       ['skill-z', 'Zebra'],
       ['skill-a', 'Alpha'],
     ] as const) {
-      await harness.db.insert(skills).values({
+      const { skills } = tablesOf(harness.db)
+      await insertOne(harness.db, skills, {
         id,
         name,
         description: '',
@@ -837,7 +837,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
     if (receipt.root === undefined) throw new Error('package Workflow root missing')
     const id = receipt.root.resourceId
-    const row = await harness.db.select().from(workflows).where(eq(workflows.id, id)).get()
+    const { workflows } = tablesOf(harness.db)
+    const row = await first(harness.db.select().from(workflows).where(eq(workflows.id, id)))
     if (row === undefined) throw new Error('package Workflow row missing')
     expect(row).toMatchObject({
       id,
@@ -868,7 +869,9 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
       receipt,
     )
-    expect(await harness.db.select().from(workflows).where(eq(workflows.id, id)).get()).toEqual(row)
+    expect(await first(harness.db.select().from(workflows).where(eq(workflows.id, id)))).toEqual(
+      row,
+    )
   })
 
   test('workgroup package create and replay persist the same row and receipt on both engines', async () => {
@@ -880,7 +883,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
     if (receipt.root === undefined) throw new Error('package Workgroup root missing')
     const id = receipt.root.resourceId
-    const row = await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).get()
+    const { workgroups } = tablesOf(harness.db)
+    const row = await first(harness.db.select().from(workgroups).where(eq(workgroups.id, id)))
     if (row === undefined) throw new Error('package Workgroup row missing')
     expect(row).toMatchObject({
       id,
@@ -912,7 +916,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
       receipt,
     )
-    expect(await harness.db.select().from(workgroups).where(eq(workgroups.id, id)).get()).toEqual(
+    expect(await first(harness.db.select().from(workgroups).where(eq(workgroups.id, id)))).toEqual(
       row,
     )
   })
@@ -926,7 +930,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
     if (receipt.root === undefined) throw new Error('package MCP root missing')
     const id = receipt.root.resourceId
-    const row = await harness.db.select().from(mcps).where(eq(mcps.id, id)).get()
+    const { mcps } = tablesOf(harness.db)
+    const row = await first(harness.db.select().from(mcps).where(eq(mcps.id, id)))
     if (row === undefined) throw new Error('package MCP row missing')
     expect(row).toMatchObject({
       id,
@@ -953,6 +958,6 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
       receipt,
     )
-    expect(await harness.db.select().from(mcps).where(eq(mcps.id, id)).get()).toEqual(row)
+    expect(await first(harness.db.select().from(mcps).where(eq(mcps.id, id)))).toEqual(row)
   })
 })

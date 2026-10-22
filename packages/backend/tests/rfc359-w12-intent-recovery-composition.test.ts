@@ -1,5 +1,7 @@
 // The recovery inputs are persisted crash states and real plugin generations.
 // No artifact compensation, publication result, or database operation is mocked.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +9,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { intentApplyJournal, intentSessions, plugins } from '@/db/schema'
 import { INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE } from '@/modules/intent/application/journalConvergence'
 import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import {
@@ -66,7 +67,8 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     const sessionId = ulid()
     const id = ulid()
     const timestamp = input.fresh ? Date.now() : staleTimestamp()
-    await harness.db.insert(intentSessions).values({
+    const { intentSessions, intentApplyJournal } = tablesOf(harness.db)
+    await insertOne(harness.db, intentSessions, {
       id: sessionId,
       ownerUserId: 'recovery-fixture-owner',
       title: 'Recovery fixture',
@@ -82,7 +84,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
       input.state === 'committed'
         ? JSON.stringify({ journalId: id, commitSeq: 1, applied: [] })
         : null
-    await harness.db.insert(intentApplyJournal).values({
+    await insertOne(harness.db, intentApplyJournal, {
       id,
       sessionId,
       clientMutationId: ulid(),
@@ -99,6 +101,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
   }
 
   async function readJournal(id: string) {
+    const { intentApplyJournal } = tablesOf(harness.db)
     const [row] = await harness.db
       .select()
       .from(intentApplyJournal)
@@ -143,6 +146,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     })
     expect(existsSync(active.generationDir)).toBe(false)
     expect(readFileSync(fresh.entry, 'utf8')).toBe(pluginBytes)
+    const { intentApplyJournal } = tablesOf(harness.db)
     await harness.db
       .update(intentApplyJournal)
       .set({ updatedAt: staleTimestamp() })
@@ -170,7 +174,8 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     })
     expect(readFileSync(published.entry, 'utf8')).toBe(pluginBytes)
 
-    await harness.db.insert(plugins).values({
+    const { plugins } = tablesOf(harness.db)
+    await insertOne(harness.db, plugins, {
       id: published.pluginId,
       name: 'Recovered plugin',
       spec: published.entry,

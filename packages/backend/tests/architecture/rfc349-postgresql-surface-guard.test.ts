@@ -7,7 +7,7 @@
 // 等同于「文件名带 postgresql 前缀」**。按类型重新算一遍执行面，前缀判据漏掉 27 个文件：
 //
 //   · 双 provider **共用一份实现**、PG 侧只是具名工厂转调它的（RFC-350 的
-//     `taskIdleTimeoutPersistence.ts`，db 形参是 `BaseSQLiteDatabase<'sync' | 'async', …>`）；
+//     `taskIdleTimeoutPersistence.ts`，db 形参是 `PersistenceDb`）；
 //   · 直接吃 `PostgresqlDatabaseClient` / PG 事务、却按领域命名的
 //     （`retentionSweeper.ts` / `employeePlatformWorkItemPersistence.ts` …）。
 //
@@ -94,7 +94,19 @@ describe('RFC-349 PostgreSQL 执行面语料', () => {
     expect(
       classifyPostgresqlSurfaceFile(
         'taskIdleTimeoutPersistence.ts',
-        "type Db = BaseSQLiteDatabase<'sync' | 'async', unknown, S>\nconst r = db.select().from(t)",
+        "import type { PersistenceDb } from '@/platform/persistence/persistenceDb'\nconst r = db.select().from(t)",
+      ),
+    ).toBe('typed-handle')
+    expect(
+      classifyPostgresqlSurfaceFile(
+        'store.ts',
+        'const { tasks } = tablesOf(db); insertOne(db, tasks, row)',
+      ),
+    ).toBe('typed-handle')
+    expect(
+      classifyPostgresqlSurfaceFile(
+        'store.ts',
+        "import type { PersistenceTx } from '@/x'; const q = rawRows(tx, query)",
       ),
     ).toBe('typed-handle')
     // 只有类型没有 SQL（纯端口 / 纯组合）不进语料，避免把噪声塞给三条判据。

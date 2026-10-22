@@ -12,6 +12,8 @@
 // final-iteration output, and downstream rows must record the wrapper run as
 // consumed provenance.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -19,9 +21,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -31,7 +32,7 @@ import { runGit } from '../src/util/git'
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   postgresql: boolean
   appHome: string
   repoPath: string
@@ -72,7 +73,7 @@ async function createHarness(provider: ProviderHarness, slug: string): Promise<H
 }
 
 async function seedAgent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   name: string,
   outputs: string[],
   options: {
@@ -81,7 +82,8 @@ async function seedAgent(
     outputWrapperPortNames?: Record<string, string>
   } = {},
 ): Promise<void> {
-  await db.insert(agents).values({
+  const { agents } = tablesOf(db)
+  await insertOne(db, agents, {
     id: agentId(name),
     name,
     description: 'wrapper scope regression agent',
@@ -102,14 +104,15 @@ async function seedTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  await h.db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(h.db)
+  await insertOne(h.db, workflows, {
     id: workflowId,
     name: `wrapper-scope-${taskId}`,
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     id: taskId,
     name: `wrapper-scope-${taskId}`,
     workflowId,
@@ -157,13 +160,14 @@ async function waitForFile(path: string, timeoutMs: number): Promise<boolean> {
 }
 
 async function waitForNodeRun(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   nodeId: string,
   timeoutMs: number,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    const { nodeRuns } = tablesOf(db)
     const row = (
       await db
         .select({ id: nodeRuns.id })
@@ -280,6 +284,7 @@ function registerCases(provider: ProviderHarness) {
       }
 
       expect(innerStartedBeforeUpstreamCompleted).toBe(false)
+      const { tasks, nodeRuns } = tablesOf(h.db)
       const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       expect(task?.status).toBe('done')
       const innerRun = (
@@ -331,6 +336,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorSummary).toBe('wrapper-containment-invalid')
@@ -412,6 +418,7 @@ function registerCases(provider: ProviderHarness) {
     }
 
     expect(innerStartedBeforeUpstreamCompleted).toBe(false)
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const wrapperRun = rows.find((row) => row.nodeId === 'fan')
     const children = rows.filter(
@@ -481,6 +488,7 @@ function registerCases(provider: ProviderHarness) {
     }
 
     expect(loopStartedBeforeUpstreamCompleted).toBe(false)
+    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(task?.status).toBe('done')
     const loopRun = (
@@ -567,6 +575,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const loopRun = rows.find((row) => row.nodeId === 'loop' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
@@ -652,6 +661,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const gitRun = rows.find((row) => row.nodeId === 'git' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
@@ -761,6 +771,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const fanRun = rows.find((row) => row.nodeId === 'fan' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
@@ -865,6 +876,7 @@ function registerCases(provider: ProviderHarness) {
     }
 
     expect(editorStartedBeforeUpstreamCompleted).toBe(false)
+    const { nodeRuns } = tablesOf(h.db)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const loopRun = rows.find((row) => row.nodeId === 'loop' && row.status === 'done')
     const editorRun = rows.find((row) => row.nodeId === 'editor' && row.status === 'done')

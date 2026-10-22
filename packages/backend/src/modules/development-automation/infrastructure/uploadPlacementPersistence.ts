@@ -1,21 +1,20 @@
 // RFC-359 W4-D12 —— 上传 placement 的读写：一份实现，两个 provider 共用。
 // record 的幂等落在 `dev_upload_receipts_unique`（plan, baseline, receiptKind）上：`onConflictDoNothing` 两引擎同形。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  developmentRepositoryUploadPlanEntries,
-  developmentRepositoryUploadPlans,
-  developmentRepositoryUploadReceipts,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { UploadPlacementPersistence } from '../application/ports/uploadPlacementStore'
 
-export function createUploadPlacementPersistence(
-  db: ProviderNeutralDatabase,
-): UploadPlacementPersistence {
+export function createUploadPlacementPersistence(db: PersistenceDb): UploadPlacementPersistence {
   return {
     async load(planId) {
+      const {
+        developmentRepositoryUploadPlans,
+        developmentRepositoryUploadPlanEntries,
+        developmentRepositoryUploadReceipts,
+      } = tablesOf(db)
       const plan = (
         await db
           .select()
@@ -48,6 +47,7 @@ export function createUploadPlacementPersistence(
       }
     },
     async record(input) {
+      const { developmentRepositoryUploadReceipts } = tablesOf(db)
       await db
         .insert(developmentRepositoryUploadReceipts)
         .values({ ...input, receiptKind: 'placement' })

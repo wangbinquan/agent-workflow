@@ -12,6 +12,7 @@
 //                   non-blocking warn (the scenario stub writes no files, so every
 //                   scenario done is zero-delta — exactly the detection surface).
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { describe, expect, test } from 'bun:test'
@@ -20,7 +21,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, nodeRuns, tasks, workgroupMessages, users } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -98,6 +98,7 @@ async function seedGroup(
 ): Promise<string> {
   const leadAgentId = await seedAgent(db, 'wg-lead')
   const writerAgentId = await seedAgent(db, 'wg-writer')
+  const { users } = tablesOf(db)
   // RFC-359 AC-1（plan §5hn 批次二 ⑧）：**这一行现在无条件建**，并且带上 `email` / `gitName`。
   // 原因是启动路换了：根启动内核要为非系统 actor 解析 **Git 提交身份**
   //（`getUserGitCommitIdentity`：用户存在、active、有 email、gitName 非空），
@@ -184,10 +185,12 @@ async function launch(h: Harness, workgroupId: string) {
   })
 }
 
-const leaderRunCount = async (db: DbClient, taskId: string): Promise<number> =>
-  (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+const leaderRunCount = async (db: DbClient, taskId: string): Promise<number> => {
+  const { nodeRuns } = tablesOf(db)
+  return (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
     (r) => r.nodeId === '__wg_leader__',
   ).length
+}
 
 // RFC-254 T31 — EXPLICIT wall-clock budgets on the three cases below.
 //
@@ -214,6 +217,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
       })
       const task = await launch(h, groupId)
 
+      const { tasks, clarifyRounds } = tablesOf(h.db)
       // PROBE B LOCK: the task parks awaiting_human — NOT running/failed — and the
       // leader ran exactly ONCE (before the fix it re-drove every round to max_rounds).
       const parked = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
@@ -275,6 +279,7 @@ describe('RFC-187 §3-7 — maxRounds with completed work wraps up (does not har
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, groupId)
 
+      const { tasks } = tablesOf(h.db)
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final).toBeDefined()
       // PROBE C LOCK: NOT failed — the deliverable-in-hand task wrapped up.
@@ -297,6 +302,7 @@ describe('RFC-187 §4 — zero canonical delta on done posts a warn', () => {
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, groupId)
 
+      const { tasks, workgroupMessages } = tablesOf(h.db)
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
       // PROBE A LOCK: the framework flags the silent empty deliverable.

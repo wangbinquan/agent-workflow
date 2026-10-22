@@ -10,23 +10,16 @@
 //     exists to remove;
 //   · a seed failure taking the daemon down with it.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import {
-  agents,
-  capabilityTemplates,
-  codeRoundStages,
-  codeWorkItems,
-  codeWorkRounds,
-  webhookEndpoints,
-  workflows,
-} from '../src/db/schema'
 import {
   DEMO_AGENT_ID,
   DEMO_ENDPOINT_ID,
@@ -39,7 +32,7 @@ import { lookupStageContract } from '../src/modules/code-capability/domain/capab
 import { composeCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let home: string
 let priorHome: string | undefined
 
@@ -71,6 +64,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       const result = await seed()
       expect(result.seeded).toBe(true)
 
+      const { capabilityTemplates, agents, codeWorkRounds, workflows } = tablesOf(db)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
       expect((await db.select().from(agents)).map((a) => a.id)).toContain(DEMO_AGENT_ID)
@@ -82,6 +76,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       await seed()
       const second = await seed()
       expect(second).toEqual({ seeded: false, reason: 'already-offered' })
+      const { capabilityTemplates, workflows } = tablesOf(db)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
       expect(await db.select().from(workflows)).toHaveLength(2)
     })
@@ -91,6 +86,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // have offered these once", NOT a check for whether the rows are there; a
       // user who deletes them means it.
       await seed()
+      const { capabilityTemplates } = tablesOf(db)
       await db.delete(capabilityTemplates)
       await db.delete(capabilityTemplates)
 
@@ -101,6 +97,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     })
 
     test('a partial failure does NOT write the marker, so the next start retries', async () => {
+      const { agents } = tablesOf(db)
       // Without this, one bad start leaves an install permanently half-seeded and
       // nothing ever finishes the job.
       //
@@ -112,7 +109,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // not fail for the stated reason: an occupied id is SKIPPED by design (and
       // logged), not thrown. A test that cannot fail for its stated reason is
       // worse than no test.
-      await db.insert(agents).values({
+      await insertOne(db, agents, {
         id: 'someone-elses-agent',
         name: '[demo] reviewer',
         bodyMd: 'x',
@@ -129,7 +126,8 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     })
 
     test('a seed failure is reported, never thrown — a daemon must still start', async () => {
-      await db.insert(agents).values({
+      const { agents } = tablesOf(db)
+      await insertOne(db, agents, {
         id: 'someone-elses-agent',
         name: '[demo] reviewer',
         bodyMd: 'x',
@@ -143,9 +141,10 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     })
 
     test('a demo id occupied by someone else is skipped, and the rest still seeds', async () => {
+      const { workflows, capabilityTemplates } = tablesOf(db)
       // The other half of the collision story: skipping is correct (overwriting
       // someone's workflow would be much worse), and it must not abort the batch.
-      await db.insert(workflows).values({
+      await insertOne(db, workflows, {
         id: DEMO_WORKFLOW_REVIEW_ID,
         name: 'not ours',
         definition: '{}',
@@ -164,6 +163,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
 
     test('every seeded row says it is a sample and is safe to delete', async () => {
       await seed()
+      const { capabilityTemplates, agents, workflows } = tablesOf(db)
       const framework = (await db.select().from(capabilityTemplates))[0]
       const binding = (await db.select().from(capabilityTemplates))[0]
       const agent = (await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)
@@ -186,6 +186,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // in the sample is what teaches people the picture cannot be trusted.
       await seed()
       const contract = lookupStageContract('mr-review')
+      const { codeRoundStages, codeWorkRounds } = tablesOf(db)
       const stages = await db.select().from(codeRoundStages)
       expect(stages).toHaveLength(contract?.stages.length ?? 0)
       expect(stages.map((s) => s.stageName).sort()).toEqual(
@@ -202,6 +203,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // the flow view shows the shared-slot warning, which is the single most
       // surprising thing about slot-shaped configuration.
       await seed()
+      const { capabilityTemplates } = tablesOf(db)
       const [binding] = await db.select().from(capabilityTemplates)
       const agentBySlot = JSON.parse(binding?.agentBySlotJson ?? '{}') as Record<string, string>
       const aiSlots = new Set(
@@ -216,6 +218,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
 
     test('the demo framework ships a script AND a hook, so both layers are visible', async () => {
       await seed()
+      const { capabilityTemplates } = tablesOf(db)
       const [framework] = await db.select().from(capabilityTemplates)
       const scripts = JSON.parse(framework?.scriptsJson ?? '{}') as Record<string, unknown>
       const hooks = JSON.parse(framework?.hooksJson ?? '[]') as Array<{ stage: string }>
@@ -243,6 +246,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       }
       expect(calls).toEqual([])
 
+      const { codeWorkItems } = tablesOf(db)
       // And the endpoint it references is disabled, so nothing that scans for
       // live endpoints picks it up.
       const [item] = await db.select().from(codeWorkItems)
@@ -252,6 +256,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     test('an existing marker means the seed does not even look at the database', async () => {
       writeFileSync(join(home, '.demo-seeded'), 'already\n')
       expect(await seed()).toEqual({ seeded: false, reason: 'already-offered' })
+      const { workflows, capabilityTemplates } = tablesOf(db)
       expect(await db.select().from(workflows)).toEqual([])
       expect(await db.select().from(capabilityTemplates)).toEqual([])
     })
@@ -259,6 +264,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     test('the seeded round is settled and published — a finished example, not a stuck one', async () => {
       // A sample that shows a round mid-flight would look like the platform hung.
       await seed()
+      const { codeWorkItems, codeWorkRounds } = tablesOf(db)
       const [item] = await db.select().from(codeWorkItems)
       const [round] = await db.select().from(codeWorkRounds)
       expect(item?.status).toBe('settled')
@@ -278,6 +284,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // binding answered `capability-template-builtin` to the exact prompt edit
       // this RFC exists to enable, and "safe to delete" was simply false.
       await seed()
+      const { workflows, capabilityTemplates, agents } = tablesOf(db)
       for (const row of await db.select().from(workflows)) expect(row.builtin).toBe(false)
       for (const row of await db.select().from(capabilityTemplates)) expect(row.builtin).toBe(false)
       for (const row of await db.select().from(capabilityTemplates)) expect(row.builtin).toBe(false)
@@ -289,6 +296,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // The other half of the same decision: not builtin, but not private either
       // — a sample nobody can see is not a sample.
       await seed()
+      const { capabilityTemplates, agents, workflows } = tablesOf(db)
       for (const row of await db.select().from(capabilityTemplates)) {
         expect(row.visibility).toBe('public')
       }
@@ -309,6 +317,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // it. A first example that does not work teaches the wrong thing twice —
       // once about hooks, once about whether the samples can be trusted.
       await seed()
+      const { capabilityTemplates } = tablesOf(db)
       const [framework] = await db.select().from(capabilityTemplates)
       const hooks = JSON.parse(framework?.hooksJson ?? '[]') as Array<{
         stage: string
@@ -340,6 +349,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // It is also unnecessary: the column carries no foreign key and no read
       // path joins the endpoint table, because the id is opaque there.
       await seed()
+      const { webhookEndpoints, codeWorkItems } = tablesOf(db)
       expect(await db.select().from(webhookEndpoints)).toEqual([])
       // The work item still names its (opaque) host identity, so the row is not
       // half-populated.

@@ -3,10 +3,10 @@
 // fixtures already use, so the migration sweep is a call-site rename instead
 // of a 51-file reshape; internally everything lands in `clarify_rounds`.
 
-import { clarifyRounds, nodeRuns } from '../src/db/schema'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-type DbLike = Pick<ProviderNeutralDatabase, 'insert'>
+type DbLike = Pick<PersistenceDb, 'insert'>
 
 export interface LegacySelfClarifyValues {
   id: string
@@ -39,6 +39,7 @@ async function ensureRunStubs(
 ): Promise<void> {
   for (const id of runIds) {
     if (id === null || id === '') continue
+    const { nodeRuns } = tablesOf(db)
     await db
       .insert(nodeRuns)
       .values({ id, taskId, nodeId: `stub:${id}`, status: 'done', retryIndex: 0, iteration: 0 })
@@ -51,6 +52,7 @@ export async function insertLegacySelfClarify(
   v: LegacySelfClarifyValues,
 ): Promise<void> {
   await ensureRunStubs(db, v.taskId, [v.sourceAgentNodeRunId, v.clarifyNodeRunId])
+  const { clarifyRounds } = tablesOf(db)
   await db.insert(clarifyRounds).values({
     id: v.id,
     taskId: v.taskId,
@@ -98,6 +100,7 @@ export async function insertLegacyCrossClarify(
   v: LegacyCrossClarifyValues,
 ): Promise<void> {
   await ensureRunStubs(db, v.taskId, [v.sourceQuestionerNodeRunId, v.crossClarifyNodeRunId])
+  const { clarifyRounds } = tablesOf(db)
   await db.insert(clarifyRounds).values({
     id: v.id,
     taskId: v.taskId,
@@ -124,8 +127,9 @@ export async function insertLegacyCrossClarify(
 /** rounds 键名直插（含 run 桩）——给已经手写统一表形状的夹具用。 */
 export async function insertClarifyRoundRaw(
   db: DbLike,
-  v: typeof clarifyRounds.$inferInsert,
+  v: PersistenceTables['clarifyRounds']['$inferInsert'],
 ): Promise<void> {
   await ensureRunStubs(db, v.taskId, [v.askingNodeRunId ?? null, v.intermediaryNodeRunId ?? null])
+  const { clarifyRounds } = tablesOf(db)
   await db.insert(clarifyRounds).values(v)
 }

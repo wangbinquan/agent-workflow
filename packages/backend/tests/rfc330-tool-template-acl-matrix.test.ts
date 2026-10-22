@@ -13,22 +13,18 @@
 // 种出的是「存在但无可执行修订」的半成品），正向用例只断言「写门放行」——放行之后
 // 领域校验会因半成品内容各自失败，那不是本文件绑架的边界。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import {
-  employeeJobTemplates,
-  employeeToolRegistrations,
-  resourceGrants,
-  users,
-} from '../src/db/schema'
 import { projectVisibleRowsWithAccess } from '../src/modules/resource-catalog/composition/resourceAcl'
 import {
   describeEachProviderHttpApplication,
@@ -48,7 +44,7 @@ interface Actor {
 }
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   owner: Actor
   reader: Actor
@@ -96,13 +92,14 @@ async function req(
 }
 
 async function seedTool(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   visibility: 'private' | 'public',
   name = 'Analyzer',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(employeeToolRegistrations).values({
+  const { employeeToolRegistrations } = tablesOf(db)
+  await insertOne(db, employeeToolRegistrations, {
     id,
     typeId: 'development',
     typeRevision: 10,
@@ -124,13 +121,14 @@ async function seedTool(
 }
 
 async function seedTemplate(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   ownerUserId: string,
   visibility: 'private' | 'public',
   name = 'Reviewer',
 ): Promise<string> {
   const id = ulid()
-  await db.insert(employeeJobTemplates).values({
+  const { employeeJobTemplates } = tablesOf(db)
+  await insertOne(db, employeeJobTemplates, {
     id,
     typeId: 'development',
     typeRevision: 10,
@@ -148,24 +146,32 @@ async function seedTemplate(
 }
 
 async function grant(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   type: 'employee_tool' | 'employee_job_template',
   resourceId: string,
   userId: string,
   level: 'read' | 'write',
 ): Promise<void> {
-  await db
-    .insert(resourceGrants)
-    .values({ resourceType: type, resourceId, userId, level, addedBy: 'seed', addedAt: NOW })
+  const { resourceGrants } = tablesOf(db)
+  await insertOne(db, resourceGrants, {
+    resourceType: type,
+    resourceId,
+    userId,
+    level,
+    addedBy: 'seed',
+    addedAt: NOW,
+  })
 }
 
-async function toolSnapshot(db: ProviderNeutralDatabase, id: string): Promise<unknown> {
+async function toolSnapshot(db: PersistenceDb, id: string): Promise<unknown> {
+  const { employeeToolRegistrations } = tablesOf(db)
   return (
     await db.select().from(employeeToolRegistrations).where(eq(employeeToolRegistrations.id, id))
   )[0]
 }
 
-async function templateSnapshot(db: ProviderNeutralDatabase, id: string): Promise<unknown> {
+async function templateSnapshot(db: PersistenceDb, id: string): Promise<unknown> {
+  const { employeeJobTemplates } = tablesOf(db)
   return (await db.select().from(employeeJobTemplates).where(eq(employeeJobTemplates.id, id)))[0]
 }
 
@@ -471,8 +477,9 @@ describeEachProviderHttpApplication(
     test('projectVisibleRowsWithAccess：own / write / read / public-read / 不可见剔除 / bypass 恒 own', async () => {
       const db = scope.harness.db
       const mk = async (id: string, role: 'admin' | 'user') => {
+        const { users } = tablesOf(db)
         // 直接种 users 行（固定 id），grants 的外键要指向它。
-        await db.insert(users).values({
+        await insertOne(db, users, {
           id,
           username: id,
           displayName: id,
@@ -496,6 +503,7 @@ describeEachProviderHttpApplication(
       const hidden = await seedTool(db, owner.user.id, 'private', 'hidden')
       await grant(db, 'employee_tool', shared, viewer.user.id, 'read')
       await grant(db, 'employee_tool', editable, viewer.user.id, 'write')
+      const { employeeToolRegistrations } = tablesOf(db)
       const rows = await db.select().from(employeeToolRegistrations)
       const byId = (out: Array<{ id: string; access: string }>): Record<string, string> =>
         Object.fromEntries(out.map((row) => [row.id, row.access]))

@@ -8,12 +8,13 @@
 //     writes, owner transfer keeps the previous owner as collaborator
 //   - task users hold operational rights (D13): a collaborator may cancel
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { taskCollaborators, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -23,7 +24,7 @@ import { createUser } from './helpers/userFixture'
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface Harness {
-  db: ProviderNeutralDatabase
+  db: PersistenceDb
   app: Hono
   alice: { id: string; token: string }
   carol: { id: string; token: string }
@@ -68,9 +69,10 @@ async function req(
 
 async function seedTask(h: Harness, ownerId: string, collaboratorIds: string[]): Promise<string> {
   const workflowId = ulid()
-  await h.db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
+  const { workflows, tasks, taskCollaborators } = tablesOf(h.db)
+  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
   const taskId = ulid()
-  await h.db.insert(tasks).values({
+  await insertOne(h.db, tasks, {
     name: 't',
     id: taskId,
     workflowId,

@@ -1,6 +1,8 @@
 // LOCKS: RFC-057 — S1 repair options (awaiting_review without pending doc_version).
 // 2 options × 3 cases = 6 tests.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -11,7 +13,6 @@ import { createRepairEngine } from './helpers/repairEngine'
 import { isoWorktreePathFor } from '../src/services/nodeIsolation'
 import { runGit } from '../src/util/git'
 
-import { docVersions, nodeRunOutputs } from '../src/db/schema'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import {
@@ -53,7 +54,8 @@ describeEachProvider('RFC-057 — S1.recreate-doc-version', (provider) => {
       status: 'done',
       finishedAt: Date.now(),
     })
-    await h.db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs, docVersions } = tablesOf(h.db)
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: srcRunId,
       portName: 'docpath',
       content: '# Demo doc body\n\nInline markdown sourced from src.',
@@ -123,7 +125,8 @@ describeEachProvider('RFC-057 — S1.recreate-doc-version', (provider) => {
       status: 'done',
       finishedAt: Date.now(),
     })
-    await h.db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs, docVersions } = tablesOf(h.db)
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: srcRunId,
       portName: 'docpath',
       content: '# must not be recreated',
@@ -296,7 +299,8 @@ describeEachProvider('RFC-193 case 8d —— S1 的评审派发落在 wrapper �
       status: 'awaiting_review',
     })
     const sourceRunId = await insertNodeRun(h.db, h.taskId, { nodeId: 'doc', status: 'done' })
-    await h.db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: sourceRunId,
       portName: 'docpath',
       content: '# wrapper doc body',
@@ -346,7 +350,8 @@ describeEachProvider('RFC-193 case 8d —— S1 的评审派发落在 wrapper �
       status: 'awaiting_review',
     })
     const sourceRunId = await insertNodeRun(h.db, h.taskId, { nodeId: 'doc', status: 'done' })
-    await h.db.insert(nodeRunOutputs).values({
+    const { nodeRunOutputs } = tablesOf(h.db)
+    await insertOne(h.db, nodeRunOutputs, {
       nodeRunId: sourceRunId,
       portName: 'docpath',
       content: '# wrapper doc body',

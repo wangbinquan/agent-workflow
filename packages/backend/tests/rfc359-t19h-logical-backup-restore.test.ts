@@ -11,7 +11,6 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   inspectPortableDatabaseBackup,
   restorePortableDatabaseBackup,
@@ -94,8 +93,7 @@ async function historicalArtifact() {
   const migrations = freezeAt(history.root.sqliteMigration.last.index)
   roots.push(appHome, migrations)
   const sourcePath = join(appHome, 'db.sqlite')
-  const restoreProvider = selectDatabaseSchemaProvider('sqlite')
-  try {
+  {
     const db = createInMemoryDb(migrations)
     const sqlite: unknown = Reflect.get(db, '$client')
     if (!(sqlite instanceof Database)) throw new Error('expected the published SQLite fixture')
@@ -118,8 +116,6 @@ async function historicalArtifact() {
     } finally {
       sqlite.close()
     }
-  } finally {
-    restoreProvider()
   }
   const artifactRoot = join(appHome, 'old-logical')
   const source = openSqliteLogicalSource({ path: sourcePath, contract: history.root.contract })

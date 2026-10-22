@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { distillTick, runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -22,9 +24,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { enqueueDistillJob } from '../src/modules/memory/application/distill/schedule'
 
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
@@ -37,7 +38,7 @@ import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastruct
 /** 用户指定的新默认值：1 小时。 */
 const ONE_HOUR_MS = 3_600_000
 
-function createContext(db: ProviderNeutralDatabase) {
+function createContext(db: PersistenceDb) {
   const previousHome = process.env.AGENT_WORKFLOW_HOME
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-timeout-'))
   process.env.AGENT_WORKFLOW_HOME = root
@@ -59,9 +60,10 @@ function createContext(db: ProviderNeutralDatabase) {
 
 type Context = ReturnType<typeof createContext>
 
-async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -70,7 +72,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -122,7 +124,7 @@ function expectBudget(seen: number[], configured: number): void {
 }
 
 describeEachProvider('memory distill timeout — default and override', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let ctx: Context
   beforeEach(() => {
     db = harness.db
@@ -187,7 +189,7 @@ describeEachProvider('memory distill timeout — default and override', (harness
 })
 
 describeEachProvider('memory distill timeout — scheduler plumbing', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let ctx: Context
   beforeEach(() => {
     db = harness.db

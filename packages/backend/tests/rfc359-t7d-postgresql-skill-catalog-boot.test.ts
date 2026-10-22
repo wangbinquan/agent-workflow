@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W1-T7d（P0-11）—— PostgreSQL daemon 也装配技能启动屏障。
 //
@@ -16,7 +18,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { skills, skillOperationLocks, skillVersions } from '@/db/schema'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import {
   isBootReverifyActive,
@@ -106,7 +107,8 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
     try {
       // The process died after the durable reserve intent and before file writes.
       const opId = await session.transaction(async (tx) => {
-        await tx.insert(skills).values({
+        const { skills } = tablesOf(tx)
+        await insertOne(tx, skills, {
           id: skillId,
           name: 'crashed-boot-create',
           description: 'not yet published',
@@ -127,6 +129,7 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
       await boot.runIdentityMigrationBarrier()
       // Observe actual persistence, independent of the barrier's receipt.
       expect((await listActiveOps(db)).map((op) => op.phase)).toEqual([])
+      const { skillOperationLocks, skills } = tablesOf(db)
       expect(
         await db.select().from(skillOperationLocks).where(eq(skillOperationLocks.opId, opId)),
       ).toEqual([])
@@ -167,6 +170,7 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
           bodyMd: 'PERSISTED',
         },
       )
+      const { skillVersions } = tablesOf(db)
       const versions = await db
         .select()
         .from(skillVersions)

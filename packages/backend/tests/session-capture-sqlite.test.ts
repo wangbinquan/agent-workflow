@@ -2,6 +2,9 @@
 // opencode-shaped SQLite fixture. Covers the path BFS, message+part
 // transcoding, the missing-DB fallback, and the readonly contract.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
@@ -10,7 +13,6 @@ import { resolve, join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   captureChildSessions,
   captureOpencodeSessionsToSink,
@@ -25,46 +27,41 @@ const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersiste
 
 function seedNodeRun(db: DbClient): string {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  insertOne(db, workflows, {
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      name: 'fixture-task',
+  insertOne(db, tasks, {
+    name: 'fixture-task',
 
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+    id: taskId,
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   const nodeRunId = ulid()
-  db.insert(nodeRuns)
-    .values({
-      id: nodeRunId,
-      taskId,
-      nodeId: 'n1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'done',
-    })
-    .run()
+  insertOne(db, nodeRuns, {
+    id: nodeRunId,
+    taskId,
+    nodeId: 'n1',
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'done',
+  })
   return nodeRunId
 }
 
@@ -159,7 +156,10 @@ describe('captureChildSessions', () => {
     })
     expect(result.failed).toBe(true)
     expect(result.failureReason).toBe('opencode-db-not-found')
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const { nodeRunEvents } = tablesOf(db)
+    const rows = queryRows(
+      db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     expect(rows).toHaveLength(1)
     expect(rows[0]!.kind).toBe('subagent_capture_failed')
   })
@@ -210,7 +210,10 @@ describe('captureChildSessions', () => {
     expect(result.failed).toBe(false)
     expect(result.capturedSessionIds.sort()).toEqual(['A', 'B', 'C'])
     expect(result.insertedEventRows).toBe(3)
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const { nodeRunEvents } = tablesOf(db)
+    const rows = queryRows(
+      db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     const bySession = new Map<string, typeof rows>()
     for (const r of rows) {
       const key = r.sessionId ?? '<null>'
@@ -245,7 +248,10 @@ describe('captureChildSessions', () => {
     })
     expect(result.capturedSessionIds).toEqual([])
     expect(result.insertedEventRows).toBe(0)
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const { nodeRunEvents } = tablesOf(db)
+    const rows = queryRows(
+      db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     expect(rows).toHaveLength(0)
   })
 
@@ -295,7 +301,10 @@ describe('captureChildSessions', () => {
       opencodeDbPath: dbPath,
     })
     expect(result.failed).toBe(true)
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const { nodeRunEvents } = tablesOf(db)
+    const rows = queryRows(
+      db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     expect(rows.some((r) => r.kind === 'subagent_capture_failed')).toBe(true)
   })
 
@@ -368,35 +377,32 @@ describe('captureChildSessions', () => {
   })
 
   test('RFC-026 inline-mode dedup: child sessions already captured by sibling node_runs are skipped', async () => {
+    const { nodeRuns, nodeRunEvents } = tablesOf(db)
     // Two node_runs in the same task share the same opencode root
     // session. First run already captured child session 'shared'.
     // Second run's capture must skip 'shared' and only write 'new'.
-    const taskRow = db.select({ taskId: nodeRuns.taskId }).from(nodeRuns).all()[0]!
+    const taskRow = queryRows(db.select({ taskId: nodeRuns.taskId }).from(nodeRuns))[0]!
     const taskId = taskRow.taskId
     const siblingId = ulid()
-    db.insert(nodeRuns)
-      .values({
-        id: siblingId,
-        taskId,
-        nodeId: 'n2',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'done',
-      })
-      .run()
+    insertOne(db, nodeRuns, {
+      id: siblingId,
+      taskId,
+      nodeId: 'n2',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'done',
+    })
     // Pre-populate sibling's events under sessionId='shared' to
     // simulate the first inline round's capture.
-    db.insert(nodeRunEvents)
-      .values({
-        nodeRunId: siblingId,
-        ts: 100,
-        kind: 'text',
-        payload: '{"part":{"type":"text","text":"prior round"}}',
-        sessionId: 'shared',
-        parentSessionId: 'root',
-      })
-      .run()
+    insertOne(db, nodeRunEvents, {
+      nodeRunId: siblingId,
+      ts: 100,
+      kind: 'text',
+      payload: '{"part":{"type":"text","text":"prior round"}}',
+      sessionId: 'shared',
+      parentSessionId: 'root',
+    })
 
     const opencodeDb = buildOpencodeDb({
       sessions: [
@@ -438,11 +444,9 @@ describe('captureChildSessions', () => {
     expect(result.capturedSessionIds.sort()).toEqual(['new'])
     expect(result.insertedEventRows).toBe(1)
     // node_run_events under THIS nodeRunId should not contain 'shared'.
-    const myRows = db
-      .select()
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .all()
+    const myRows = queryRows(
+      db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     expect(myRows.find((r) => r.sessionId === 'shared')).toBeUndefined()
     expect(myRows.find((r) => r.sessionId === 'new')).toBeDefined()
   })
@@ -486,7 +490,10 @@ describe('captureChildSessions', () => {
     })
     expect(result.failed).toBe(false)
     expect(result.insertedEventRows).toBe(1) // only pPost
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const { nodeRunEvents } = tablesOf(db)
+    const rows = queryRows(
+      db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    )
     expect(rows).toHaveLength(1)
     expect(rows[0]!.payload).toContain('post')
   })

@@ -94,10 +94,13 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   //（`db` 改必填）。它是「这套夹具的消费者可以只跑 SQLite」的唯一出口；五个消费者
   //（t109 全旅程 / pr5 java 端到端 / pr4 工作区旅程 / pr7b 冲突收敛 / pr3 外部适配器）
   // 全部迁到 `describeEachProvider`，回退随之消失。
+  // RFC-395 I-b: native compiler fixtures and schema reflection need the provider's own table metadata.
+  'helpers/nativeQueryFixture.ts: 1',
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
   // RFC-370: exercise Bun SQLite's native Statement.run()/changes() contract,
   // trigger/cascade counts and both DB factories; the existing $client classifier applies.
   'helpers/rfc370SqliteAffectedRowsCases.ts: 1',
+  'helpers/schemaFixture.ts: 1',
   // RFC-371: one physical OpenCode SQLite/WAL source; derived pages and original Workers
   // are independently exercised against both real AW application providers.
   'input-port-contract.test.ts: 1',
@@ -366,7 +369,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-sqlite-migration-compatibility.test.ts: 2',
   'rfc349-task-execution-provider-adapters.test.ts: 3',
   // RFC-359 AC-6 销账：`rfc349-websocket-provider.test.ts` —— 那对「真 SQLite + 假池 PG」的
-  // 手搓孪生合成一条双引擎。`DrizzleRealtimeStore` 的形参本来就是 `ProviderNeutralDatabase`
+  // 手搓孪生合成一条双引擎。`DrizzleRealtimeStore` 的形参本来就是 `PersistenceDb`
   // （一份实现），两条用例只是喂了两种库；合并后同一份真数据、同一组断言跑两个引擎，
   // `sqlRows` / `postgresqlFixture` 假池随之删除。5 例 → 7 例。
   'rfc351-sqlite-write-transaction-immediate.test.ts: 1',
@@ -378,6 +381,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc357-provider-portability.test.ts: 1',
   'rfc359-database-transaction.test.ts: 1',
   'rfc359-engine-capabilities.test.ts: 1',
+  // RFC-395 I-b: concurrent native clients and SQLite sync transaction inheritance.
+  'rfc359-provider-schema-column-facade.test.ts: 1',
   'rfc359-t19h-generation-upgrade.test.ts: 4',
   'rfc359-t19h-logical-backup-restore.test.ts: 1',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts: 1',
@@ -411,6 +416,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-395 I-a proof 3 compares the SQLite compiler with SQLite migration replay;
   // the companion PostgreSQL catalog test builds both PostgreSQL databases in its lane.
   'rfc395-provider-catalog-equivalence.test.ts: 2',
+  // RFC-395 I-b: native sync transaction timing and cast-free compiler conformance.
+  'rfc395-query-helpers.test.ts: 1',
+  'rfc395-query-surface.test.ts: 1',
   'runner-subagent-live-capture.test.ts: 6',
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1',
@@ -658,7 +666,8 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
     id: 'cross-provider-oracle',
     holds: (_rel, code) =>
       /(?<![A-Za-z0-9_.])createInMemoryDb\s*\(/.test(code) &&
-      /(?<![A-Za-z0-9_.])createPostgresqlDatabaseClient\s*\(/.test(code),
+      /(?<![A-Za-z0-9_.])createPostgresqlDatabaseClient\s*\(/.test(code) &&
+      !code.includes('withNativeTransactions'),
   },
   {
     id: 'real-file-database',
@@ -892,6 +901,11 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // RFC-370 v3 V5: `POST /api/backup` boundary locks through the SQLite HTTP root
   // with a stubbed backup adapter; migrate to the dual-provider HTTP application
   // harness next wave.
+  // RFC-395 I-b: native transaction fixtures make the pre-existing scripted PG lanes explicit.
+  // They are protocol oracles, not live two-provider coverage; keep that debt visible.
+  'rfc349-daemon-provider-core.test.ts',
+  'rfc349-dual-provider-behavior-oracle.test.ts',
+  'rfc349-task-execution-provider-adapters.test.ts',
   'rfc370-m3-backup-http.test.ts',
   'rfc370-v3-standalone-backup-request.test.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`rfc268-webhook-scratch-launch.test.ts` **转为
@@ -970,6 +984,12 @@ describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降�
       'sqlite-only-primitive',
     )
     expect(sanctionFor('plain.test.ts', "await db.insert(tasks).values({ id: 't1' })\n")).toBeNull()
+    expect(
+      sanctionFor(
+        'plain.test.ts',
+        'createInMemoryDb(); createPostgresqlDatabaseClient(); withNativeTransactions({})',
+      ),
+    ).toBeNull()
     // 注释里提到某个符号**不算**用了它——否则一句解释性注释就能把一条真待办挪进 sanctioned。
     expect(sanctionFor('plain.test.ts', '// 这里解释 db.$client 与 PRAGMA 为什么危险\n')).toBeNull()
   }, 30_000)

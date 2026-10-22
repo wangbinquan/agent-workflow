@@ -35,6 +35,8 @@
 // 不是某个类型的巧合；工作流那组还顺带把 `finalName` 改名与 `scripts:author` 这条
 // **随 payload 动态求值**的写能力判据（RFC-304/309）拉进两台机器一起验。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
@@ -48,15 +50,6 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import {
-  agents,
-  mcps,
-  resourceBundleApplies,
-  resourceGrants,
-  users,
-  workflows,
-  workgroups,
-} from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
@@ -246,7 +239,8 @@ describeEachProvider(
   (harness) => {
     async function fixture() {
       const db = harness.db
-      await db.insert(users).values({
+      const { users } = tablesOf(db)
+      await insertOne(db, users, {
         id: OWNER,
         username: OWNER,
         displayName: 'Package Owner',
@@ -362,6 +356,7 @@ describeEachProvider(
       const rootId = receipt.root?.resourceId
       if (rootId === undefined) throw new Error('workgroup receipt root missing')
 
+      const { workgroups, resourceGrants, resourceBundleApplies } = tablesOf(f.db)
       const rows = await f.db.select().from(workgroups).where(eq(workgroups.id, rootId))
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
@@ -388,6 +383,7 @@ describeEachProvider(
       const replay = await f.apply(bytes, previewResult.previewToken, decision, mappings)
 
       expect(replay).toEqual(first)
+      const { workgroups, resourceBundleApplies } = tablesOf(f.db)
       expect(await f.db.select().from(workgroups)).toHaveLength(1)
       expect(await f.db.select().from(resourceBundleApplies)).toHaveLength(1)
     })
@@ -404,6 +400,7 @@ describeEachProvider(
           action: 'new',
         }),
       ).rejects.toMatchObject({ code: 'package-human-mapping-missing' })
+      const { workgroups } = tablesOf(f.db)
       expect(await f.db.select().from(workgroups)).toEqual([])
     })
 
@@ -419,6 +416,7 @@ describeEachProvider(
           [{ workgroupSlug: 'workgroup-squad', username: 'alice', userId: 'no-such-user' }],
         ),
       ).rejects.toMatchObject({ status: 422 })
+      const { workgroups } = tablesOf(f.db)
       expect(await f.db.select().from(workgroups)).toEqual([])
     })
 
@@ -433,6 +431,7 @@ describeEachProvider(
 
       const rootId = receipt.root?.resourceId
       if (rootId === undefined) throw new Error('agent receipt root missing')
+      const { agents, resourceGrants, resourceBundleApplies } = tablesOf(f.db)
       const rows = await f.db.select().from(agents).where(eq(agents.id, rootId))
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
@@ -458,6 +457,7 @@ describeEachProvider(
       const replay = await f.apply(bytes, previewResult.previewToken, decision)
 
       expect(replay).toEqual(first)
+      const { agents, resourceBundleApplies } = tablesOf(f.db)
       expect(await f.db.select().from(agents)).toHaveLength(1)
       expect(await f.db.select().from(resourceBundleApplies)).toHaveLength(1)
     })
@@ -483,6 +483,7 @@ describeEachProvider(
 
       expect(receipt.root?.name).toBe('tools-copy')
       expect(receipt.skippedSecrets).toBeUndefined()
+      const { mcps } = tablesOf(f.db)
       const rows = await f.db.select().from(mcps).where(eq(mcps.name, 'tools-copy'))
       expect(JSON.parse(rows[0]?.config ?? '{}')).toMatchObject({ env: { TOKEN: 'local-secret' } })
     })
@@ -499,6 +500,7 @@ describeEachProvider(
         [{ resourceType: 'mcp', resourceName: 'tools', field: 'config.env.TOKEN', value: '' }],
       )
 
+      const { mcps, resourceBundleApplies } = tablesOf(f.db)
       const rows = await f.db.select().from(mcps).where(eq(mcps.name, 'tools-copy'))
       const stored = JSON.parse(rows[0]?.config ?? '{}') as { env?: Record<string, string> }
       expect(stored.env?.TOKEN).toBeUndefined()
@@ -526,6 +528,7 @@ describeEachProvider(
 
       const rootId = receipt.root?.resourceId
       if (rootId === undefined) throw new Error('workflow receipt root missing')
+      const { workflows, resourceGrants } = tablesOf(f.db)
       const rows = await f.db.select().from(workflows).where(eq(workflows.id, rootId))
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
@@ -550,6 +553,7 @@ describeEachProvider(
       })
 
       expect(receipt.root?.name).toBe('deploy-copy')
+      const { workflows } = tablesOf(f.db)
       const rows = await f.db.select().from(workflows).where(eq(workflows.name, 'deploy-copy'))
       expect(rows).toHaveLength(1)
       expect(await f.db.select().from(workflows).where(eq(workflows.name, 'deploy'))).toEqual([])
@@ -574,6 +578,7 @@ describeEachProvider(
           (e: unknown) => e,
         )
       expect(err).toMatchObject({ code: 'package-decision-not-allowed' })
+      const { workflows, resourceBundleApplies } = tablesOf(f.db)
       expect(await f.db.select().from(workflows)).toEqual([])
       expect(await f.db.select().from(resourceBundleApplies)).toEqual([])
     })

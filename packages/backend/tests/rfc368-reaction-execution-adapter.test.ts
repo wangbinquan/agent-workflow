@@ -9,12 +9,13 @@
 //   ③ 人审六态：`unknown`（执行行不在 / 输入不可解析）与 `not-applicable`（没配闸门）分开
 //      （设计门 P2-2）；旧的 null 接口折叠行为逐字不变。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { composeReactionExecutionAdmissionParticipantInTx } from '@/modules/task-execution/application/adapters/reaction-admission-adapter'
@@ -297,6 +298,7 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
       readonly errorSummary: string | null
       readonly inputs?: string
     }): Promise<void> {
+      const { workflows, tasks } = tablesOf(harness.db)
       await harness.db
         .insert(workflows)
         .values({
@@ -308,30 +310,26 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
           updatedAt: 1,
         })
         .onConflictDoNothing()
-        .run()
-      await harness.db
-        .insert(tasks)
-        .values({
-          id: input.id,
-          name: input.id,
-          workflowId: `wf-${input.id}`,
-          workflowSnapshot: '{}',
-          repoPath: '/tmp/rfc368',
-          worktreePath: '/tmp/rfc368',
-          baseBranch: 'main',
-          branch: `agent-workflow/${input.id}`,
-          baseCommit: null,
-          status: input.status,
-          inputs: input.inputs ?? '{}',
-          startedAt: 1,
-          finishedAt: input.status === 'canceled' ? 2 : null,
-          errorSummary: input.errorSummary,
-          executionLineageId: input.id,
-          lineageSlotPathJson: JSON.stringify([
-            { stableNodeKey: 'task-root', frozenOccurrenceKey: input.id, workflowRevision: null },
-          ]),
-        })
-        .run()
+      await insertOne(harness.db, tasks, {
+        id: input.id,
+        name: input.id,
+        workflowId: `wf-${input.id}`,
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/rfc368',
+        worktreePath: '/tmp/rfc368',
+        baseBranch: 'main',
+        branch: `agent-workflow/${input.id}`,
+        baseCommit: null,
+        status: input.status,
+        inputs: input.inputs ?? '{}',
+        startedAt: 1,
+        finishedAt: input.status === 'canceled' ? 2 : null,
+        errorSummary: input.errorSummary,
+        executionLineageId: input.id,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: input.id, workflowRevision: null },
+        ]),
+      })
     }
 
     function core() {

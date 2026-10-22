@@ -36,7 +36,7 @@ describe('RFC-345 Intent context resource authorization seam', () => {
     )
     expect(composition).toContain('authority !== pair.authority')
     expect(composition).toContain('foreign-intent-context-resource-authority')
-    expect(reads).toContain('ACL_TABLES[resourceType]')
+    expect(reads).toContain('ACL_TABLES(transaction)[resourceType]')
     expect(reads).toContain('resourceGrants.resourceType')
     expect(reads).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|runPostgresqlResourceCatalogTransaction/,

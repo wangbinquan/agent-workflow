@@ -13,16 +13,17 @@
 // C5 regression lock (RFC-014 §4): if anyone removes the column or downgrades
 // the default to false, the "syncOutputsOnIterate default true" case breaks.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test, beforeEach } from 'bun:test'
-import { agents } from '../src/db/schema'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ulid } from 'ulid'
 
 describeEachProvider('agent.syncOutputsOnIterate (RFC-014 T0)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
   })
@@ -92,7 +93,7 @@ describeEachProvider('agent.syncOutputsOnIterate (RFC-014 T0)', (harness) => {
     // migration-backfill contract.
     const id = ulid()
     // Intentionally omit syncOutputsOnIterate to exercise the column DEFAULT.
-    const row: typeof agents.$inferInsert = {
+    const row: PersistenceTables['agents']['$inferInsert'] = {
       id,
       name: 'legacy',
       outputs: '["a"]',
@@ -102,8 +103,9 @@ describeEachProvider('agent.syncOutputsOnIterate (RFC-014 T0)', (harness) => {
       bodyMd: '',
       createdAt: 0,
       updatedAt: 0,
-    } as typeof agents.$inferInsert
-    await db.insert(agents).values(row)
+    } as PersistenceTables['agents']['$inferInsert']
+    const { agents } = tablesOf(db)
+    await insertOne(db, agents, row)
     const got = await getAgent(db, 'legacy')
     expect(got?.syncOutputsOnIterate).toBe(true)
   })

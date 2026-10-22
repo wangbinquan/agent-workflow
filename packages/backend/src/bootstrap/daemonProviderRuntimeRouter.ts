@@ -60,6 +60,9 @@ export type DaemonProviderRuntimeRouter<WebSocket = DaemonProviderListenerWebSoc
  * 因此割接的顺序是：先竖起 handover 栅栏（新请求排队），再等在途请求跑完（有上界），
  * 最后才组装目标。等待有上界是有意的：长连接的一次 WS 帧、慢查询都不该把割接卡死；
  * 超时就照旧推进，行为退回到加这道闸之前。
+ *
+ * RFC-395 I-b 起表随会话句柄绑定（`tablesOf(db)`），进程级投影已删除，上面那种「目标形状的
+ * SQL 打在源 client 上」不会再发生；排空照旧保留，让在途请求在源 composition 上跑完再割接。
  */
 export interface DaemonProviderListenerTraffic {
   /** Mark one listener call in flight; call the returned function when it ends. */

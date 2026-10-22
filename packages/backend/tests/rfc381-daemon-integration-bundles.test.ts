@@ -1,17 +1,12 @@
 // RFC-381: one passive session graph owns all integration state; MR termination stops the selected driver and cleanup failures never stall its stream.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import {
-  tasks,
-  taskExecutionIntents,
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-  eventTypeCatalog,
-} from '@/db/schema'
 import {
   createProviderTaskExecutionModule,
   taskExecutionModule,
@@ -22,7 +17,7 @@ import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/co
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
@@ -38,12 +33,13 @@ afterEach(() => {
   for (const path of homes.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
-async function seed(db: ProviderNeutralDatabase) {
+async function seed(db: PersistenceDb) {
   const id = 'rfc381-mr-task'
   const slot = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: 1 },
   ])
-  await db.insert(tasks).values({
+  const { tasks, taskExecutionIntents, webhookMrControlEffects } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId: 'rfc381-wf',
@@ -64,7 +60,7 @@ async function seed(db: ProviderNeutralDatabase) {
     sourceTerminationBinding: 'rfc381-binding',
     sourceTerminationLaunchRev: 1,
   })
-  await db.insert(taskExecutionIntents).values({
+  await insertOne(db, taskExecutionIntents, {
     id: 'rfc381-intent',
     taskId: id,
     kind: 'launch',
@@ -80,7 +76,7 @@ async function seed(db: ProviderNeutralDatabase) {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(webhookMrControlEffects).values({
+  await insertOne(db, webhookMrControlEffects, {
     id: 'rfc381-close',
     deliveryId: 'rfc381-delivery',
     endpointId: 'rfc381-endpoint',
@@ -169,6 +165,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
     }
     const module = sessions[0]!.integrationModules.eventCenter
     await module.initialize()
+    const { eventTypeCatalog } = tablesOf(harness.db)
     // The fifth package was absent from the old HTTP fallback. Its internal facts are
     // persisted but intentionally excluded from the public authoring catalog.
     const registered = await harness.db.select().from(eventTypeCatalog)
@@ -271,6 +268,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       expect(controller.signal.aborted).toBe(true)
       await stopped.promise
       expect(stop).toHaveBeenCalled()
+      const { tasks, webhookMrControlEffects, webhookMrControlTargets } = tablesOf(harness.db)
       expect((await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
         'canceled',
       )
@@ -335,7 +333,8 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       composeWebhookTerminalWorkspacePrunePolicy({ db: harness.db, enabled: () => true }),
     )
     const graph = integrationBundleFixture(harness.db, home(), { workspaceMaintenance })
-    await harness.db.insert(webhookMrControlEffects).values({
+    const { webhookMrControlEffects, tasks } = tablesOf(harness.db)
+    await insertOne(harness.db, webhookMrControlEffects, {
       id: 'rfc381-reopen',
       deliveryId: 'rfc381-reopened',
       endpointId: 'rfc381-endpoint',

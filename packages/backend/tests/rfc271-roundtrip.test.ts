@@ -21,6 +21,9 @@
 // 覆盖验收条款：AC-5（技能带整棵文件树）/ AC-9（builtin 不入 resources，只入 builtins 声明）/ AC-19（工作组人类席位逐个显式映射，无按 username 自动绑定）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -31,15 +34,6 @@ import { stringify as stringifyYaml } from 'yaml'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import {
-  agents,
-  mcps,
-  skills,
-  users,
-  workflows,
-  workgroupMembers,
-  workgroups,
-} from '../src/db/schema'
 import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { encodeZip } from '../src/util/zip'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
@@ -48,7 +42,7 @@ import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const box = createSecretBoxFromKey(randomBytes(32))
@@ -66,14 +60,15 @@ const actorOf = (id: string, permissions: readonly string[] = SESSION_PERMISSION
   }) as unknown as Actor
 
 /** 一个「实例」= 一个 DB + 一个 app home。往返要跨两个实例才有意义。 */
-async function createInstance<TDb extends ProviderNeutralDatabase>(
+async function createInstance<TDb extends PersistenceDb>(
   createDatabase: () => TDb,
   onHome?: (appHome: string) => void,
 ): Promise<{ db: TDb; appHome: string }> {
   const db = createDatabase()
   const appHome = mkdtempSync(join(tmpdir(), 'rfc271-rt-'))
   onHome?.(appHome)
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id: 'u1',
     username: 'alice',
     displayName: 'Alice',
@@ -91,7 +86,7 @@ async function createInstance<TDb extends ProviderNeutralDatabase>(
  * 之间各自 TRUNCATE 回迁移后的快照），因此同一条用例里的 src / dst 仍然是两台互不可见的机器
  * ——往返判据全靠这一点。beforeEach 现绑；在用例体外调用会显式报错而不是拿到半个库。
  */
-let makeInstance: () => Promise<{ db: ProviderNeutralDatabase; appHome: string }> = () => {
+let makeInstance: () => Promise<{ db: PersistenceDb; appHome: string }> = () => {
   throw new Error('makeInstance 只能在用例体内调用（describeEachProvider 的 beforeEach 之后）')
 }
 
@@ -99,7 +94,7 @@ let makeInstance: () => Promise<{ db: ProviderNeutralDatabase; appHome: string }
 const BINARY = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x01])
 
 async function seedSource(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   appHome: string,
 ): Promise<{ skillId: string; wg: string }> {
   const skill = await createManagedSkillWithFiles(
@@ -117,7 +112,8 @@ async function seedSource(
   )
 
   const mcpId = ulid()
-  await db.insert(mcps).values({
+  const { mcps, agents, workgroups, workgroupMembers } = tablesOf(db)
+  await insertOne(db, mcps, {
     id: mcpId,
     name: 'gh',
     description: '',
@@ -135,7 +131,7 @@ async function seedSource(
   } as never)
 
   const agentId = ulid()
-  await db.insert(agents).values({
+  await insertOne(db, agents, {
     id: agentId,
     name: 'auditor',
     description: '',
@@ -157,7 +153,7 @@ async function seedSource(
   // 「开关根本没被导出」和「导出了恰好等于默认」无法区分。
   const wg = ulid()
   const leaderMemberId = ulid()
-  await db.insert(workgroups).values({
+  await insertOne(db, workgroups, {
     id: wg,
     name: 'squad',
     description: '',
@@ -177,7 +173,7 @@ async function seedSource(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   } as never)
-  await db.insert(workgroupMembers).values([
+  await insertOne(db, workgroupMembers, [
     {
       id: leaderMemberId,
       workgroupId: wg,
@@ -286,7 +282,10 @@ describeEachProvider(
               },
             )
 
-            const landed = await dst.db.select().from(skills).where(eq(skills.name, 'helper')).get()
+            const { skills } = tablesOf(dst.db)
+            const landed = await first(
+              dst.db.select().from(skills).where(eq(skills.name, 'helper')),
+            )
             expect(landed).toBeDefined()
             const filesDir = join(dst.appHome, 'skills', landed!.id, 'files')
 
@@ -359,11 +358,10 @@ describeEachProvider(
               },
             )
 
-            const landed = await dst.db
-              .select()
-              .from(workgroups)
-              .where(eq(workgroups.name, 'squad'))
-              .get()
+            const { workgroups, workgroupMembers } = tablesOf(dst.db)
+            const landed = await first(
+              dst.db.select().from(workgroups).where(eq(workgroups.name, 'squad')),
+            )
             expect(landed).toBeDefined()
             // ⚠️ 逐个断言**非默认**值：曾经这些全部丢失，落地的是一组默认开关。
             expect(landed!.shareOutputs).toBe(false)
@@ -378,7 +376,6 @@ describeEachProvider(
               .select()
               .from(workgroupMembers)
               .where(eq(workgroupMembers.workgroupId, landed!.id))
-              .all()
             expect(members.map((m) => m.displayName).sort()).toEqual([
               'lead',
               'observer',
@@ -405,7 +402,8 @@ describeEachProvider(
       test('MCP 的凭据没进包；留空后安全省略并进入导入报告', async () => {
         const src = await makeInstance()
         await seedSource(src.db, src.appHome)
-        const agentRow = await src.db.select().from(agents).where(eq(agents.name, 'auditor')).get()
+        const { agents } = tablesOf(src.db)
+        const agentRow = await first(src.db.select().from(agents).where(eq(agents.name, 'auditor')))
         try {
           const pkg = await exportResourcePackage(
             src.db,
@@ -440,9 +438,10 @@ describeEachProvider(
               },
             )
 
+            const { mcps } = tablesOf(dst.db)
             // ② 留空不是把占位符当真值落库：可选 argv/env 槽被删除，可执行档保持不变，
             // 且回执逐字段报告，方便用户知道还要去哪里补。
-            const landed = await dst.db.select().from(mcps).where(eq(mcps.name, 'gh')).get()
+            const landed = await first(dst.db.select().from(mcps).where(eq(mcps.name, 'gh')))
             const config = JSON.parse(landed!.config) as {
               command: string[]
               env: Record<string, string>
@@ -522,11 +521,10 @@ describeEachProvider(
         const src = await makeInstance()
         const { skillId, wg } = await seedSource(src.db, src.appHome)
         try {
-          const agentRow = await src.db
-            .select()
-            .from(agents)
-            .where(eq(agents.name, 'auditor'))
-            .get()
+          const { agents, workflows, skills, mcps, workgroups } = tablesOf(src.db)
+          const agentRow = await first(
+            src.db.select().from(agents).where(eq(agents.name, 'auditor')),
+          )
           const wfRow = { id: wg } // workgroup 也走同一条断言
           for (const root of [
             { type: 'agent' as const, id: agentRow!.id },
@@ -548,11 +546,11 @@ describeEachProvider(
             // ⚠️ 枚举**六类**资源的源 id，不是只枚举 agents。第一版只查 agents 表，
             // 工作流 / 技能 / MCP / 工作组的 id 泄漏一律看不见。
             const sourceIds = [
-              ...(await src.db.select().from(agents).all()).map((r) => r.id),
-              ...(await src.db.select().from(workflows).all()).map((r) => r.id),
-              ...(await src.db.select().from(skills).all()).map((r) => r.id),
-              ...(await src.db.select().from(mcps).all()).map((r) => r.id),
-              ...(await src.db.select().from(workgroups).all()).map((r) => r.id),
+              ...(await src.db.select().from(agents)).map((r) => r.id),
+              ...(await src.db.select().from(workflows)).map((r) => r.id),
+              ...(await src.db.select().from(skills)).map((r) => r.id),
+              ...(await src.db.select().from(mcps)).map((r) => r.id),
+              ...(await src.db.select().from(workgroups)).map((r) => r.id),
             ]
             for (const id of sourceIds) {
               expect({ root: root.type, id, leaked: whole.includes(id) }).toEqual({
@@ -572,7 +570,8 @@ describeEachProvider(
         // 完全看不到 manifest —— 所以这条用例必须**单独**造出 dangling ref。
         const src = await makeInstance()
         try {
-          await src.db.insert(workflows).values({
+          const { workflows } = tablesOf(src.db)
+          await insertOne(src.db, workflows, {
             id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
             name: 'caller',
             description: '',
@@ -615,8 +614,9 @@ describeEachProvider(
       // 用户拍板的语义。反面是**复制一份**：对端会多出一个 owner 是导入者、
       // `builtin=false` 的同名副本，而真正的 built-in 仍在那儿 —— 两个同名资源共存，
       // 正好撞上运行时「执行闭包内不得同名」那条约束。
-      const seedBuiltin = async (db: ProviderNeutralDatabase): Promise<void> => {
-        await db.insert(agents).values({
+      const seedBuiltin = async (db: PersistenceDb): Promise<void> => {
+        const { agents } = tablesOf(db)
+        await insertOne(db, agents, {
           id: 'BUILTIN_AGENT',
           name: '__skill_merger__',
           description: '',
@@ -639,7 +639,8 @@ describeEachProvider(
       test('导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:', async () => {
         const src = await makeInstance()
         await seedBuiltin(src.db)
-        await src.db.insert(workflows).values({
+        const { workflows } = tablesOf(src.db)
+        await insertOne(src.db, workflows, {
           id: 'WF',
           name: 'mine',
           description: '',
@@ -690,7 +691,8 @@ describeEachProvider(
       test('导入：绑到对端自己 seed 的 built-in，不新建副本', async () => {
         const src = await makeInstance()
         await seedBuiltin(src.db)
-        await src.db.insert(workflows).values({
+        const { workflows } = tablesOf(src.db)
+        await insertOne(src.db, workflows, {
           id: 'WF',
           name: 'mine',
           description: '',
@@ -713,8 +715,9 @@ describeEachProvider(
             { appHome: src.appHome },
           )
           const dst = await makeInstance()
+          const { agents, workflows } = tablesOf(dst.db)
           // 对端有它**自己的** built-in，id 与源库完全不同。
-          await dst.db.insert(agents).values({
+          await insertOne(dst.db, agents, {
             id: 'DST_BUILTIN',
             name: '__skill_merger__',
             description: '',
@@ -756,11 +759,13 @@ describeEachProvider(
             )
 
             // 没有多出副本：仍然只有对端那一个 built-in。
-            const merged = await dst.db.select().from(agents).all()
+            const merged = await dst.db.select().from(agents)
             expect(merged).toHaveLength(1)
             expect(merged[0]!.id).toBe('DST_BUILTIN')
             // 工作流的节点绑到了**对端**的 id。
-            const wf = await dst.db.select().from(workflows).where(eq(workflows.name, 'mine')).get()
+            const wf = await first(
+              dst.db.select().from(workflows).where(eq(workflows.name, 'mine')),
+            )
             expect(JSON.stringify(wf!.definition)).toContain('DST_BUILTIN')
           } finally {
             removeTempDirSync(dst.appHome)
@@ -797,7 +802,7 @@ describeEachProvider(
         const dst = await makeInstance()
         try {
           const srcBuiltin = ulid()
-          await src.db.insert(agents).values({
+          await insertOne(src.db, tablesOf(src.db).agents, {
             id: srcBuiltin,
             name: 'aw-skill-merger',
             description: '',
@@ -816,7 +821,7 @@ describeEachProvider(
             updatedAt: 1,
           } as never)
           const wfId = ulid()
-          await src.db.insert(workflows).values({
+          await insertOne(src.db, tablesOf(src.db).workflows, {
             id: wfId,
             name: 'uses-builtin',
             description: '',
@@ -848,7 +853,7 @@ describeEachProvider(
           // 目标实例的同名 built-in 是**另一个 id**。
           const dstBuiltin = ulid()
           expect(dstBuiltin).not.toBe(srcBuiltin)
-          await dst.db.insert(agents).values({
+          await insertOne(dst.db, tablesOf(dst.db).agents, {
             id: dstBuiltin,
             name: 'aw-skill-merger',
             description: '',
@@ -886,7 +891,7 @@ describeEachProvider(
           expect(receipt.root).toMatchObject({ resourceType: 'workflow', action: 'create' })
 
           // 落地的 definition 必须指向**目标实例**的 built-in id，不是源实例那个。
-          const landed = (await dst.db.select().from(workflows).all()).find(
+          const landed = (await dst.db.select().from(tablesOf(dst.db).workflows)).find(
             (r) => r.name === 'uses-builtin',
           )
           const def = JSON.parse(String(landed?.definition ?? '{}')) as {
@@ -910,11 +915,12 @@ describeEachProvider(
       // 只有升级/修复对端实例，在这个包里改什么都没用。所以它必须出现在「要不要导入」这个
       // 决策之前，而不是决策之后。
       const exportPkgUsingBuiltin = async (src: {
-        db: ProviderNeutralDatabase
+        db: PersistenceDb
         appHome: string
       }): Promise<Uint8Array> => {
         const builtinId = ulid()
-        await src.db.insert(agents).values({
+        const { agents, workflows } = tablesOf(src.db)
+        await insertOne(src.db, agents, {
           id: builtinId,
           name: 'aw-skill-merger',
           description: '',
@@ -933,7 +939,7 @@ describeEachProvider(
           updatedAt: 1,
         } as never)
         const wfId = ulid()
-        await src.db.insert(workflows).values({
+        await insertOne(src.db, workflows, {
           id: wfId,
           name: 'needs-builtin',
           description: '',
@@ -983,7 +989,8 @@ describeEachProvider(
         const src = await makeInstance()
         const dst = await makeInstance()
         try {
-          await dst.db.insert(agents).values({
+          const { agents } = tablesOf(dst.db)
+          await insertOne(dst.db, agents, {
             id: ulid(),
             name: 'aw-skill-merger', // 同名
             description: '',
@@ -1021,7 +1028,8 @@ describeEachProvider(
         const src = await makeInstance()
         const dst = await makeInstance()
         try {
-          await dst.db.insert(agents).values({
+          const { agents } = tablesOf(dst.db)
+          await insertOne(dst.db, agents, {
             id: ulid(),
             name: 'aw-skill-merger',
             description: '',
@@ -1072,7 +1080,8 @@ describeEachProvider(
         const dst = await makeInstance()
         try {
           const srcAgent = ulid()
-          await src.db.insert(agents).values({
+          const { agents } = tablesOf(src.db)
+          await insertOne(src.db, agents, {
             id: srcAgent,
             name: 'aw-skill-merger',
             description: '',
@@ -1091,7 +1100,7 @@ describeEachProvider(
             updatedAt: 1,
           } as never)
           const srcWf = ulid()
-          await src.db.insert(workflows).values({
+          await insertOne(src.db, tablesOf(src.db).workflows, {
             id: srcWf,
             name: 'aw-skill-fusion',
             description: '',
@@ -1128,7 +1137,7 @@ describeEachProvider(
           // ② 对端两项都有 ⇒ 预检通过、提交绑到对端自己那一个（不复制）。
           for (const [name, table] of [
             ['aw-skill-merger', agents],
-            ['aw-skill-fusion', workflows],
+            ['aw-skill-fusion', tablesOf(src.db).workflows],
           ] as const) {
             const base = {
               id: ulid(),
@@ -1140,7 +1149,10 @@ describeEachProvider(
               createdAt: 1,
               updatedAt: 1,
             }
-            await dst.db.insert(table).values(
+            const { agents } = tablesOf(dst.db)
+            await insertOne(
+              dst.db,
+              table,
               (table === agents
                 ? {
                     ...base,
@@ -1183,7 +1195,7 @@ describeEachProvider(
           })
           // 没有复制出第二份。
           expect(
-            (await dst.db.select().from(workflows).all()).filter(
+            (await dst.db.select().from(tablesOf(dst.db).workflows)).filter(
               (r) => r.name === 'aw-skill-fusion',
             ),
           ).toHaveLength(1)
@@ -1207,7 +1219,8 @@ describeEachProvider(
         const dst = await makeInstance() // 目标实例**没有**任何 built-in
         try {
           const srcWf = ulid()
-          await src.db.insert(workflows).values({
+          const { workflows } = tablesOf(src.db)
+          await insertOne(src.db, workflows, {
             id: srcWf,
             name: 'aw-skill-fusion',
             description: '',
@@ -1265,9 +1278,9 @@ describeEachProvider(
        * `0 === 0`，一条什么都没测的绿。所以用例里先断言「确实数到了」。
        */
       const countSelects = (
-        db: ProviderNeutralDatabase,
+        db: PersistenceDb,
         tables: readonly unknown[],
-      ): { db: ProviderNeutralDatabase; n: () => number } => {
+      ): { db: PersistenceDb; n: () => number } => {
         let n = 0
         const wrapHandle = (handle: object): object =>
           new Proxy(handle, {
@@ -1304,7 +1317,7 @@ describeEachProvider(
             },
           })
         return {
-          db: wrapHandle(db as object) as unknown as ProviderNeutralDatabase,
+          db: wrapHandle(db as object) as unknown as PersistenceDb,
           n: () => n,
         }
       }
@@ -1316,7 +1329,8 @@ describeEachProvider(
           for (let i = 0; i < count; i += 1) {
             const id = ulid()
             ids.push(id)
-            await src.db.insert(agents).values({
+            const { agents } = tablesOf(src.db)
+            await insertOne(src.db, agents, {
               id,
               name: `aw-builtin-${i}`,
               description: '',
@@ -1336,7 +1350,8 @@ describeEachProvider(
             } as never)
           }
           const wfId = ulid()
-          await src.db.insert(workflows).values({
+          const { workflows } = tablesOf(src.db)
+          await insertOne(src.db, workflows, {
             id: wfId,
             name: `uses-${count}`,
             description: '',
@@ -1477,6 +1492,7 @@ describeEachProvider(
         const counted = async (pkg: typeof small): Promise<number> => {
           const dst = await makeInstance()
           try {
+            const { agents } = tablesOf(dst.db)
             const { db: proxied, n } = countSelects(dst.db, [agents])
             // ⚠️ 只吞**预期的业务拒绝**，不要 `.catch(() => undefined)` 把任何异常都吞掉
             // ——第五轮实测那种写法会掩盖「只查一次、但查询本身失败」这类新问题。

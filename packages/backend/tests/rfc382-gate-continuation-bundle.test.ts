@@ -1,4 +1,7 @@
 // RFC-382: reproduce the former PostgreSQL session wiring, then prove real gate work precedes drive once.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
@@ -7,15 +10,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { gitStashSnapshot } from '@/util/git'
-import {
-  tasks,
-  nodeRuns,
-  taskExecutionIntents,
-  taskQuestions,
-  taskExecutionEffects,
-  taskExecutionEffectAttempts,
-  collaborationGateOperations,
-} from '@/db/schema'
 import {
   DefaultTaskDriveCoordinator,
   resolveTaskDriveConfig,
@@ -69,6 +63,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           db = harness.db
         const seeded = await seedBundleTask(harness, home, 'running', false),
           taskId = seeded.taskId
+        const { tasks, taskExecutionIntents, taskQuestions, nodeRuns } = tablesOf(db)
         await db
           .update(tasks)
           .set({
@@ -223,6 +218,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           db = harness.db
         const seeded = await seedBundleTask(harness, home, 'running', false),
           taskId = seeded.taskId
+        const { tasks, nodeRuns, taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(db)
         await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
         const source = await mintSequenceRun(db, taskId, { nodeId: 'writer', status: 'done' })
         await db
@@ -256,10 +252,11 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           gateRef = `review:${taskId}:1`,
           now = Date.now()
         const decision = await databaseSessionFor(db).transaction(async (tx) => {
+          const { nodeRuns, tasks, collaborationGateOperations } = tablesOf(tx)
           const rows = await tx.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-          const revision = (await tx.select().from(tasks).where(eq(tasks.id, taskId)).get())!
+          const revision = (await first(tx.select().from(tasks).where(eq(tasks.id, taskId))))!
             .lifecycleEventRevision
-          await tx.insert(collaborationGateOperations).values({
+          await insertOne(tx, collaborationGateOperations, {
             id: operationId,
             taskId,
             gateKind: 'review',

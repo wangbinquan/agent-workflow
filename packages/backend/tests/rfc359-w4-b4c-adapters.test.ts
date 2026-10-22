@@ -1,25 +1,15 @@
 // RFC-359 W4-B4 批 c —— identity-access / memory 两对合一，两个引擎各跑一遍：OIDC provider 仓库（写路径走统一原语的
 // serializable，slug 撞库经引擎能力矩阵归类）与记忆蒸馏工作存储（含会话捕获 sink 合一）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  authLoginPolicy,
-  cachedRepos,
-  memories,
-  memoryDistillJobs,
-  nodeRuns,
-  taskFeedback,
-  tasks,
-  userIdentities,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleOidcProviderRepository } from '@/modules/identity-access/infrastructure/oidcProviderRepository'
 import type { InsertOidcProviderRecord } from '@/modules/identity-access/application/ports/oidcProviderPersistence'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
@@ -27,9 +17,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedUser(db: ProviderNeutralDatabase): Promise<string> {
+async function seedUser(db: PersistenceDb): Promise<string> {
   const id = `u_b4c_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -114,6 +105,7 @@ describeEachProvider('RFC-359 W4-B4c —— OIDC provider 仓库', (harness) => 
     expect(renamed).toMatchObject({ ok: true, value: { id: b.id, displayName: 'renamed' } })
     expect((await repository.findById(b.id))?.displayName).toBe('renamed')
 
+    const { authLoginPolicy, userIdentities } = tablesOf(db)
     // 密码登录已关闭 ⇒ 不能停用最后一个启用的 provider；开第二个之后就可以。
     await db
       .insert(authLoginPolicy)
@@ -151,7 +143,7 @@ describeEachProvider('RFC-359 W4-B4c —— OIDC provider 仓库', (harness) => 
 
     // 已有身份挂在 provider 上 ⇒ subject claim 锁定，删除需要 force。
     const userId = await seedUser(db)
-    await db.insert(userIdentities).values({
+    await insertOne(db, userIdentities, {
       id: `ident_${ulid()}`,
       userId,
       providerId: b.id,
@@ -263,6 +255,8 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
 
     await store.savePrompt(job1, '# prompt', '["m1"]')
     await store.saveSpawnResult(job1, { sessionId: 'ses-1', exitCode: 0, stderrExcerpt: null })
+    const { memoryDistillJobs, memories, workflows, cachedRepos, tasks, nodeRuns, taskFeedback } =
+      tablesOf(db)
     const job = (await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job1)))[0]
     expect(job).toMatchObject({
       userPromptMd: '# prompt',
@@ -310,7 +304,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
 
     const owner = await seedUser(db)
     const workflowId = `wf_${ulid()}`
-    await db.insert(workflows).values({
+    await insertOne(db, workflows, {
       id: workflowId,
       name: workflowId,
       description: '',
@@ -319,7 +313,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
       schemaVersion: 2,
     })
     const repoId = `cr_${ulid()}`
-    await db.insert(cachedRepos).values({
+    await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: `h_${repoId}`,
       urlRedacted: 'https://example.invalid/repo.git',
@@ -329,7 +323,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
       createdAt: 1,
     })
     const taskId = `t_${ulid()}`
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       id: taskId,
       name: taskId,
       workflowId,
@@ -357,7 +351,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     })
     expect(await store.findTaskScope('missing')).toBeNull()
     const runId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'n',
@@ -377,7 +371,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     ])
     expect(await store.listNodeRuns([])).toEqual([])
     const feedbackId = `fb_${ulid()}`
-    await db.insert(taskFeedback).values({
+    await insertOne(db, taskFeedback, {
       id: feedbackId,
       taskId,
       authorUserId: owner,

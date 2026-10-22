@@ -24,7 +24,7 @@ import { databaseSessionFor } from '../src/platform/persistence/databaseTransact
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   abortStagedSkillVersion,
@@ -41,8 +41,8 @@ afterEach(() => {
   for (const d of dirs.splice(0)) removeTempDirSync(d)
 })
 
-async function seedSkill(db: ProviderNeutralDatabase): Promise<{
-  db: ProviderNeutralDatabase
+async function seedSkill(db: PersistenceDb): Promise<{
+  db: PersistenceDb
   appHome: string
   skillId: string
   initial: string

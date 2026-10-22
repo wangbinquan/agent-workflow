@@ -687,7 +687,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(ports).not.toContain(legacyWriter)
     }
     // 提交臂直接落在 RC 自己的表上（drizzle schema），不经任何 `services/*` 门面。
-    expect(ports).toContain("from '@/db/schema'")
+    expect(ports).toContain("from '@/platform/persistence/sessionTables'")
+    expect(ports).toContain('tablesOf(transaction)')
     expect(adapter).toContain('authority !== options.authority')
     expect(adapter).toContain("throw new Error('foreign-postgresql-intent-apply-authority')")
     expect(composition).toContain('composeIntentApplyResourceBinding')
@@ -1332,7 +1333,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).not.toContain('/infrastructure/')
     // RFC-359 W4-D14：Agent 仓库只有一份中立实现，不再有 legacy 包装的 SQLite 兼容岛。
     expect(repository).not.toContain("from './legacy/agent'")
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction(')
     expect(repository).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync/)
     expect(composition).toContain('createAgentApplication')
@@ -1602,7 +1603,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).not.toContain(
       "from '@/modules/resource-catalog/infrastructure/legacy/workflow'",
     )
-    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction(')
     expect(composition).toContain('createWorkflowRepository({')
     expect(composition).toContain('createWorkflowApplication')

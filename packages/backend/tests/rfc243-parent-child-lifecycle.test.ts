@@ -1,3 +1,5 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
@@ -33,7 +35,6 @@ import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { selectResumeRollbackTargets } from '@/services/task'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { deleteTask } from '../src/services/taskDelete'
@@ -65,15 +66,19 @@ interface SeedOpts {
 
 async function seedWorkflow(db: DbClient): Promise<string> {
   const id = ulid()
-  await db
-    .insert(workflows)
-    .values({ id, name: `wf-${id.slice(-6).toLowerCase()}`, definition: EMPTY_DEF })
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
+    id,
+    name: `wf-${id.slice(-6).toLowerCase()}`,
+    definition: EMPTY_DEF,
+  })
   return id
 }
 
 async function seedTask(db: DbClient, wfId: string, opts: SeedOpts = {}): Promise<string> {
   const id = ulid()
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id,
     name: `t-${id.slice(-6).toLowerCase()}`,
     workflowId: wfId,
@@ -101,10 +106,11 @@ async function seedRun(
   db: DbClient,
   taskId: string,
   nodeId: string,
-  over: Partial<typeof nodeRuns.$inferInsert> = {},
+  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
 ): Promise<string> {
   const id = ulid()
-  await db.insert(nodeRuns).values({
+  const { nodeRuns } = tablesOf(db)
+  await insertOne(db, nodeRuns, {
     id,
     taskId,
     nodeId,
@@ -125,6 +131,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
     const grandchild = await seedTask(db, wf, { status: 'awaiting_human', parentTaskId: child })
     await cancelViaEngine(db, parent)
+    const { tasks } = tablesOf(db)
     const rows = new Map((await db.select().from(tasks)).map((t) => [t.id, t] as const))
     expect(rows.get(parent)?.status).toBe('canceled')
     expect(rows.get(child)?.status).toBe('canceled')
@@ -140,6 +147,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
     await cancelViaEngine(db, child)
+    const { tasks } = tablesOf(db)
     const row = (await db.select().from(tasks).where(eq(tasks.id, child)))[0]
     expect(row?.status).toBe('canceled')
     expect(row?.errorMessage).not.toBe('canceled-by-parent-cascade')
@@ -209,8 +217,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
       await expect(
         launchTestTask({ workflowId: wf, name: 'late child', inputs: {} } as StartTask, {
           db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
+          schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           materializedSpace: space,
           callLaunch: {
             parentTaskId: parent,
@@ -222,6 +229,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
           },
         }),
       ).rejects.toMatchObject({ code: 'parent-task-not-running' })
+      const { tasks } = tablesOf(db)
       expect(await db.select().from(tasks).where(eq(tasks.id, childId))).toHaveLength(0)
     } finally {
       rmSync(childRoot, { recursive: true, force: true })
@@ -310,6 +318,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
       parentTaskId: parent,
       parentNodeRunId: callRow,
     })
+    const { nodeRuns } = tablesOf(db)
     await db.update(nodeRuns).set({ childTaskId: child }).where(eq(nodeRuns.id, callRow))
     const deps = {} as unknown as TaskContinuationDependencies
     // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用同一份实现。这一格验的是
@@ -378,6 +387,7 @@ describe('RFC-243 §4.1 — liveness delegation to the child task', () => {
     }
     const first = await reconcileDeadRunningRuns(deps)
     expect(first.reapedRuns).not.toContain(callRun)
+    const { tasks } = tablesOf(db)
     // Child settles (done) while the parent driver is gone → the call row is
     // now a reapable orphan; finalize replays on the parent's next resume.
     await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, child))

@@ -10,7 +10,7 @@
 // 平台进程 env 透传这一个名字；真实内网 adapter 只读取已发布定义点名的
 // connectionRef 与 daemon-boot secretProjection。
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createAsyncDbAdapterBindingResolver,
   createRequirementSourceAdapter,
@@ -31,9 +31,7 @@ function runner(input: {
 }
 
 /** RFC-359 W4-D6：一份装配，两个 provider 共用（绑定解析经中立 store 的 Promise 读）。 */
-export function composeRequirementSourceRunnerFor(
-  db: ProviderNeutralDatabase,
-): RequirementSourceExecution {
+export function composeRequirementSourceRunnerFor(db: PersistenceDb): RequirementSourceExecution {
   const store = createDevelopmentAdapterStore(db)
   return runner({
     resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
@@ -51,7 +49,7 @@ import {
 import type { RequirementAdapterBinding } from '../application/ports/developmentPurposeBinding'
 
 export function composeSelectedRequirementSourceRunnerFor(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   binding: RequirementAdapterBinding,
 ): SelectedRequirementSourceExecution {
   const store = createDevelopmentAdapterStore(db)

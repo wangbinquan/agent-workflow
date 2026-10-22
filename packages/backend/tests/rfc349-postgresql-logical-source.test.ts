@@ -2,6 +2,7 @@
 // snapshot, keeps the live generation fence observable, and never pretends the
 // six archive-only tables are present in the active PostgreSQL schema.
 
+import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 import {
   openPostgresqlLogicalSource,
@@ -127,14 +128,14 @@ function fixture(applicationTables: readonly string[] = [ACTIVE.id]) {
     }
     return rows([])
   }
-  const connection: PostgresqlReservedConnection = {
+  const connection: PostgresqlReservedConnection = withNativeTransactions({
     unsafe(sql, parameters) {
       return answer('snapshot', sql, parameters)
     },
     release() {
       releases += 1
     },
-  }
+  })
   const pool: PostgresqlPool = {
     async reserve() {
       return connection

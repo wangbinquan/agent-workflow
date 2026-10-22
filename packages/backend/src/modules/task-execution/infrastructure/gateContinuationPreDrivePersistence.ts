@@ -1,10 +1,10 @@
 // RFC-359 W4-B1 —— 人工门 continuation 的 pre-drive 检视 / 反问重试释放：一份实现，两个 provider 共用。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNotNull, isNull } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { taskExecutionIntents, taskQuestions } from '@/db/schema'
 import { decodeClaimedClarifyContinuation } from '../application/claimedClarifyContinuation'
 import type { GateContinuationPreDrivePersistence } from '../application/ports/gateContinuationPreDrivePersistence'
 import { TaskExecutionError } from '../application/taskExecutionError'
@@ -12,9 +12,10 @@ import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinua
 import { assertTaskOwnerTx, withTaskExecutionWrite } from './ownedTaskExecution'
 
 export class DrizzleGateContinuationPreDrivePersistence implements GateContinuationPreDrivePersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(private readonly db: PersistenceDb) {}
 
   async inspect(input: Parameters<GateContinuationPreDrivePersistence['inspect']>[0]) {
+    const { taskExecutionIntents } = tablesOf(this.db)
     const rows = await this.db
       .select({
         kind: taskExecutionIntents.kind,
@@ -56,6 +57,7 @@ export class DrizzleGateContinuationPreDrivePersistence implements GateContinuat
   async hasUndispatchedClarifyWork(
     input: Parameters<GateContinuationPreDrivePersistence['hasUndispatchedClarifyWork']>[0],
   ): Promise<boolean> {
+    const { taskQuestions } = tablesOf(this.db)
     const rows = await this.db
       .select({ id: taskQuestions.id })
       .from(taskQuestions)
@@ -77,6 +79,7 @@ export class DrizzleGateContinuationPreDrivePersistence implements GateContinuat
   ): Promise<void> {
     await withTaskExecutionWrite(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, input.now)
+      const { taskExecutionIntents } = tablesOf(tx)
       const released = await tx
         .update(taskExecutionIntents)
         .set({

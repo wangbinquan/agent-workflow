@@ -4,13 +4,15 @@
 // 这里锁的是**服务层**该负责的事：规范化落库、保存期就拒环、祖先复查、
 // 两个删除守卫、以及设计门 G5 的「删组同事务归档组记忆」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 
 import { and, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { cachedRepos, memories, repoGroupNodes, repoGroups } from '../src/db/schema'
 import {
   RepoGroupHasReferencesError,
   createRepoGroup as createRepoGroupImpl,
@@ -72,10 +74,11 @@ function updateRepoGroup(
   )
 }
 
-async function makeRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
+async function makeRepo(db: PersistenceDb, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  await db.insert(cachedRepos).values({
+  const { cachedRepos } = tablesOf(db)
+  await insertOne(db, cachedRepos, {
     id,
     urlHash: `${slug}00000000`.slice(0, 8),
     urlRedacted: `https://git.example/${slug}.git`,
@@ -98,7 +101,7 @@ async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
   return 'no-throw'
 }
 
-let db: ProviderNeutralDatabase
+let db: PersistenceDb
 let store: RepositoryWorkspaceStore
 let appRepo: string
 let sdkRepo: string
@@ -443,7 +446,7 @@ describeNativeRepoGroupCases(() => {
 })
 
 describeEachProvider('RFC-248 repo group service', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let store: RepositoryWorkspaceStore
   let appRepo: string
   beforeEach(async () => {
@@ -566,15 +569,19 @@ describeNativeRepoGroupCases(() => {
       null,
     )
     for (const title of ['m1', 'm2']) {
-      await db.run(sql`
+      await rawExec(
+        db,
+        sql`
         INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
         VALUES (${ulid()}, 'repo_group', ${g.id}, ${title}, 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
-      `)
+      `,
+      )
     }
     expect((await getRepoGroup(store, g.id)).boundMemories).toBe(2)
 
     const r = await deleteRepoGroup(store, g.id)
     expect(r.archivedMemories).toBe(2)
+    const { memories } = tablesOf(db)
     // 不硬删——用户知识保住了。
     const rows = await db.select().from(memories)
     expect(rows).toHaveLength(2)
@@ -607,17 +614,20 @@ describeNativeRepoGroupCases(() => {
       },
       null,
     )
-    await db.run(sql`
+    await rawExec(
+      db,
+      sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'old', 'b', '[]', 'archived', 'manual', ${Date.now()}, 1)
-    `)
+    `,
+    )
     expect((await getRepoGroup(store, g.id)).boundMemories).toBe(0)
     expect((await deleteRepoGroup(store, g.id)).archivedMemories).toBe(0)
   })
 })
 
 describeEachProvider('RFC-248 repo group service', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let store: RepositoryWorkspaceStore
   let appRepo: string
   beforeEach(async () => {
@@ -691,15 +701,15 @@ describeNativeRepoGroupCases(() => {
   test('外键挡住悬空的 child_group_id——坏数据进不了库', () => {
     // 服务层的 member-not-found 校验之外还有 DB 兜底：`child_group_id` 上的外键
     // 让「并发删组留下悬空引用」这件事在存储层就不可能发生。
-    expect(
-      async () =>
-        await db.insert(repoGroupNodes).values({
-          groupId: ulid(),
-          path: 'x',
-          attachmentKind: 'group',
-          childGroupId: 'ghost',
-        }),
-    ).toThrow()
+    expect(async () => {
+      const { repoGroupNodes } = tablesOf(db)
+      return await insertOne(db, repoGroupNodes, {
+        groupId: ulid(),
+        path: 'x',
+        attachmentKind: 'group',
+        childGroupId: 'ghost',
+      })
+    }).toThrow()
   })
 
   test('列表在某个组展平失败（成环）时不整体 500——该组 flatRepoCount 记 0', async () => {
@@ -733,8 +743,9 @@ describeNativeRepoGroupCases(() => {
       },
       null,
     )
+    const { repoGroupNodes } = tablesOf(db)
     // 绕过服务层的保存期环检测，直写一条把 g1 → g2 的边补上，成环。
-    await db.insert(repoGroupNodes).values({
+    await insertOne(db, repoGroupNodes, {
       groupId: g1.id,
       path: 'b',
       attachmentKind: 'group',
@@ -786,6 +797,7 @@ describeNativeRepoGroupCases(() => {
     )
     expect(code).toBe('mount-path-duplicate')
     expect(await listRepoGroups(store)).toHaveLength(0)
+    const { repoGroupNodes } = tablesOf(db)
     expect(await db.select().from(repoGroupNodes)).toHaveLength(0)
   })
 
@@ -922,21 +934,28 @@ describeNativeRepoGroupCases(() => {
     )
     // 一条 approved（可归档）+ 一条 fused（不可改——CHECK 要求 fused ⟺ 两个
     // fused_into_skill* 非空，把它改成 archived 会违反约束、整个删除事务 500）。
-    await db.run(sql`
+    await rawExec(
+      db,
+      sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'ok', 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
-    `)
-    await db.run(sql`
+    `,
+    )
+    await rawExec(
+      db,
+      sql`
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version,
                             fused_into_skill, fused_into_skill_id)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'fused-one', 'b', '[]', 'fused', 'manual', ${Date.now()}, 1,
               'some-skill', ${ulid()})
-    `)
+    `,
+    )
     // boundMemories 只数可归档的那条。
     expect((await getRepoGroup(store, g.id)).boundMemories).toBe(1)
 
     const r = await deleteRepoGroup(store, g.id)
     expect(r.archivedMemories).toBe(1)
+    const { memories } = tablesOf(db)
     const rows = await db.select().from(memories)
     expect(rows).toHaveLength(2)
     // fused 那条原样保留——它本就是终态、也本就不会被注入。
@@ -946,7 +965,7 @@ describeNativeRepoGroupCases(() => {
 })
 
 describeEachProvider('RFC-248 repo group service', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let store: RepositoryWorkspaceStore
   let appRepo: string
   beforeEach(async () => {
@@ -981,6 +1000,7 @@ describeEachProvider('RFC-248 repo group service', (harness) => {
       null,
     )
     await deleteRepoGroup(store, g.id)
+    const { repoGroupNodes, repoGroups } = tablesOf(db)
     expect(await db.select().from(repoGroupNodes)).toHaveLength(0)
     expect(await db.select().from(repoGroups)).toHaveLength(0)
   })

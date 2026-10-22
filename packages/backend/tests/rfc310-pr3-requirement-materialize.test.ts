@@ -14,11 +14,11 @@
 //    真实竞争写锁住已复现的 requirementBundleRef 丢失机制及 epoch 边界。
 //    该次 CI 未输出事实引用，不能据其最后一行独占归因于本机制。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 
-import { developmentBundleRefs } from '../src/db/schema'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import { retryBlockedMission } from '../src/modules/development-automation/application/commands/launchMission'
 import {
@@ -63,6 +63,7 @@ describeEachProvider('rfc310 pr3 — direct requirement materialization', (harne
       submission: SUBMISSION,
     })
     expect(replay).toEqual(stashed)
+    const { developmentBundleRefs } = tablesOf(fx.db)
     expect(
       (await fx.db.select().from(developmentBundleRefs)).filter(
         (row) => row.missionId === missionId && row.purpose === 'direct-submission',

@@ -2,6 +2,8 @@
 // 任务反馈存储、评审人存储（替换走统一事务）、协作侧任务可见性 / 角色、评审侧任务关系、
 // 人工门 continuation 恢复查询、任务终态清扫（挂起 run 取消 + node-statuses committed event）。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -10,15 +12,7 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { buildActor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRuns,
-  taskCollaborators,
-  taskExecutionIntents,
-  tasks,
-  users,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/infrastructure/collaborationTaskAccess'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
 import { createHumanGateTerminalSweepCommand } from '@/modules/collaboration/infrastructure/humanGateTerminalSweep'
@@ -29,12 +23,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedUser(
-  db: ProviderNeutralDatabase,
-  role: 'admin' | 'user' = 'user',
-): Promise<string> {
+async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'user'): Promise<string> {
   const id = `u_b3a_${ulid()}`
-  await db.insert(users).values({
+  const { users } = tablesOf(db)
+  await insertOne(db, users, {
     id,
     username: id,
     displayName: id,
@@ -53,10 +45,11 @@ function actorFor(userId: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedTask(db: ProviderNeutralDatabase, owner: string): Promise<string> {
+async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -64,7 +57,7 @@ async function seedTask(db: ProviderNeutralDatabase, owner: string): Promise<str
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -125,7 +118,8 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
     const stranger = await seedUser(db)
     const admin = await seedUser(db, 'admin')
     const taskId = await seedTask(db, owner)
-    await db.insert(taskCollaborators).values({
+    const { taskCollaborators, nodeRuns } = tablesOf(db)
+    await insertOne(db, taskCollaborators, {
       taskId,
       userId: collaborator,
       role: 'collaborator',
@@ -133,7 +127,7 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
       addedAt: 1,
     })
     const runId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: runId,
       taskId,
       nodeId: 'n',
@@ -180,7 +174,8 @@ describeEachProvider('RFC-359 W4-B3a —— continuation 恢复与终态清扫',
     const owner = await seedUser(db)
     const taskId = await seedTask(db, owner)
     const intentId = `intent_${ulid()}`
-    await db.insert(taskExecutionIntents).values({
+    const { taskExecutionIntents, nodeRuns } = tablesOf(db)
+    await insertOne(db, taskExecutionIntents, {
       id: intentId,
       taskId,
       kind: 'gate-continuation',

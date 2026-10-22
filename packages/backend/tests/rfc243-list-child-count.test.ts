@@ -12,6 +12,8 @@
 // count runs under the SAME visibility predicate as the list itself. If the two
 // ever diverge, the arrow starts promising rows the viewer cannot open.
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -20,10 +22,8 @@ import { sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, users } from '../src/db/schema'
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 type Db = ReturnType<typeof createInMemoryDb>
@@ -61,7 +61,8 @@ async function seed(
   db: Db,
   rows: { id: string; owner: string | null; parent?: string; status?: string }[],
 ): Promise<void> {
-  await db.run(sql`PRAGMA foreign_keys = OFF`)
+  await rawExec(db, sql`PRAGMA foreign_keys = OFF`)
+  const { tasks } = tablesOf(db)
   await db.insert(tasks).values(
     rows.map((r) => ({
       ...baseTask(r.id, r.owner),
@@ -69,12 +70,12 @@ async function seed(
       ...(r.status === undefined ? {} : { status: r.status as 'done' }),
     })),
   )
-  await db.run(sql`PRAGMA foreign_keys = ON`)
+  await rawExec(db, sql`PRAGMA foreign_keys = ON`)
 }
 
 // Preserve the original seed's observed parent-first lineage without changing
 // foreign-key enforcement on the provider-neutral query fixture.
-async function seedQueryRows(db: ProviderNeutralDatabase, rows: Parameters<typeof seed>[1]) {
+async function seedQueryRows(db: PersistenceDb, rows: Parameters<typeof seed>[1]) {
   const lineageByTaskId = new Map<
     string,
     {
@@ -82,6 +83,7 @@ async function seedQueryRows(db: ProviderNeutralDatabase, rows: Parameters<typeo
       frames: { stableNodeKey: string; frozenOccurrenceKey: string; workflowRevision: null }[]
     }
   >()
+  const { tasks } = tablesOf(db)
   await db.insert(tasks).values(
     rows.map((r) => {
       const parent = r.parent === undefined ? undefined : lineageByTaskId.get(r.parent)
@@ -131,7 +133,7 @@ describe('RFC-243 — list childCount', () => {
       ])
 
       const rows = await taskListItemsProjection(
-        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { db, owners: composeOwnerIdentityQueries(db) },
         {},
       )
       expect(countOf(rows, 'p-two')).toBe(2)
@@ -154,7 +156,7 @@ describe('RFC-243 — list childCount', () => {
       // exactly the rows a user most needs to open when diagnosing a failure.
       expect(
         countOf(
-          await taskListItemsProjection({ db: db, owners: composeOwnerIdentityQueries(db) }, {}),
+          await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {}),
           'p-failed',
         ),
       ).toBe(1)
@@ -164,6 +166,7 @@ describe('RFC-243 — list childCount', () => {
   test('counts only children VISIBLE to the actor (same predicate as the list)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
+    const { users } = tablesOf(db)
     await db.insert(users).values([
       { id: 'alice', username: 'alice', displayName: 'Alice', createdAt: now, updatedAt: now },
       { id: 'bob', username: 'bob', displayName: 'Bob', createdAt: now, updatedAt: now },
@@ -176,7 +179,7 @@ describe('RFC-243 — list childCount', () => {
     ])
 
     const asAlice = await taskListItemsProjection(
-      { db: db, owners: composeOwnerIdentityQueries(db) },
+      { db, owners: composeOwnerIdentityQueries(db) },
       {
         visibility: { actorUserId: 'alice', scope: 'mine' },
       },
@@ -188,7 +191,7 @@ describe('RFC-243 — list childCount', () => {
     // Unfiltered (admin scope=all) sees the true total.
     expect(
       countOf(
-        await taskListItemsProjection({ db: db, owners: composeOwnerIdentityQueries(db) }, {}),
+        await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {}),
         'p-alice',
       ),
     ).toBe(2)
@@ -206,14 +209,14 @@ describe('RFC-243 — list childCount', () => {
       ])
 
       const children = await taskListItemsProjection(
-        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { db, owners: composeOwnerIdentityQueries(db) },
         { parentTaskId: 'root' },
       )
       expect(children.map((r) => r.id)).toEqual(['mid'])
       expect(countOf(children, 'mid')).toBe(1)
 
       const grandchildren = await taskListItemsProjection(
-        { db: db, owners: composeOwnerIdentityQueries(db) },
+        { db, owners: composeOwnerIdentityQueries(db) },
         { parentTaskId: 'mid' },
       )
       expect(countOf(grandchildren, 'leaf')).toBe(0)
@@ -245,10 +248,7 @@ describe('RFC-243 — list childCount', () => {
       return realPrepare(text, ...(rest as []))
     }) as typeof raw.prepare
 
-    const rows = await taskListItemsProjection(
-      { db: db, owners: composeOwnerIdentityQueries(db) },
-      {},
-    )
+    const rows = await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {})
     raw.prepare = realPrepare
 
     expect(rows.filter((r) => r.id.startsWith('p')).every((r) => r.childCount === 1)).toBe(true)

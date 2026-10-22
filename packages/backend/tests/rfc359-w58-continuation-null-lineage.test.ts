@@ -14,19 +14,20 @@
 //
 // 判据现在只有一个来源：`canonicalTaskLineageScope`，两侧都从它取。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { tasks, taskExecutionIntents, workflows } from '@/db/schema'
 import {
   canonicalTaskLineageScope,
   decodeLineageSlotPath,
   encodeLineageSlotPath,
 } from '@/modules/task-execution/domain/executionIntent'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -94,10 +95,11 @@ describe('RFC-359 W58 —— 准入与派生共用同一个函数（源代码层
   })
 })
 
-async function seedTaskWithoutLineage(db: ProviderNeutralDatabase): Promise<string> {
+async function seedTaskWithoutLineage(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -105,7 +107,7 @@ async function seedTaskWithoutLineage(db: ProviderNeutralDatabase): Promise<stri
     version: 1,
     schemaVersion: 2,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id,
     name: id,
     workflowId,
@@ -151,6 +153,7 @@ describeEachProvider('RFC-359 W58 —— lineage 列为空的任务仍可被 con
     })
     expect(submitted.state).toBe('pending')
 
+    const { taskExecutionIntents } = tablesOf(db)
     const [row] = await db
       .select({
         executionLineageId: taskExecutionIntents.executionLineageId,

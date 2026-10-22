@@ -1,20 +1,20 @@
 // RFC-359 W4-B3 —— 任务终态时的人工门清扫（澄清轮次封存 / 作废 + 挂起 run 取消 + node-statuses committed event）：
 // 一份实现，两个 provider 共用。SQLite 此前经 dbTxSync + 同步 committed-event 参与者，PG 经 SERIALIZABLE；现在同走统一写事务。
 
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import { clarifyRounds, nodeRuns } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HumanGateTerminalSweepCommand,
   HumanGateTerminalSweepResult,
 } from '../application/ports/humanGateTerminalSweep'
 
 export function createHumanGateTerminalSweepCommand(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
 ): HumanGateTerminalSweepCommand {
   return {
     async run(input) {
@@ -25,6 +25,7 @@ export function createHumanGateTerminalSweepCommand(
       } = { sealedSelfRounds: 0, abandonedCrossRounds: 0, canceledRuns: [] }
       const now = input.now ?? Date.now()
       const eventRef = await databaseSessionFor(db).transaction(async (tx) => {
+        const { clarifyRounds, nodeRuns } = tablesOf(tx)
         const openRounds = await tx
           .select({
             id: clarifyRounds.id,

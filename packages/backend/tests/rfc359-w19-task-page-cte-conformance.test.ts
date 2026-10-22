@@ -2,12 +2,14 @@
 // matches/roots stop materializing and the recursive seed becomes page-local.
 // This small default-provider suite exercises real DB rows and the production
 // page factory. It does not measure latency or change the HTTP acceptance budget.
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { asc, eq } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, taskRepos, tasks, users, workflows } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   createDatabaseTaskListPage,
@@ -35,7 +37,7 @@ const STATUSES = [
   'awaiting_human',
 ] as const
 
-type TaskInsert = typeof tasks.$inferInsert
+type TaskInsert = PersistenceTables['tasks']['$inferInsert']
 
 function fixtureTasks(): TaskInsert[] {
   const rows: TaskInsert[] = []
@@ -154,8 +156,9 @@ function fixtureTasks(): TaskInsert[] {
   }))
 }
 
-async function seed(db: ProviderNeutralDatabase): Promise<void> {
-  await db.insert(users).values({
+async function seed(db: PersistenceDb): Promise<void> {
+  const { users, workflows, tasks, lifecycleAlerts, taskRepos } = tablesOf(db)
+  await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
     displayName: 'Fixture owner',
@@ -168,7 +171,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     { id: 'wf01', name: 'Mixed Workflow', definition: '{}', createdAt: 1, updatedAt: 1 },
     { id: 'wf02', name: 'Quiet Flow', definition: '{}', createdAt: 1, updatedAt: 1 },
   ])
-  for (const row of fixtureTasks()) await db.insert(tasks).values(row)
+  for (const row of fixtureTasks()) await insertOne(db, tasks, row)
   const alerts: ReadonlyArray<readonly [string, string, number | null]> = [
     ['a01', 'r01', null],
     ['a02', 'r01', null],
@@ -178,7 +181,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
     ['a06', 'g02', null],
   ]
   for (const [id, taskId, resolvedAt] of alerts) {
-    await db.insert(lifecycleAlerts).values({
+    await insertOne(db, lifecycleAlerts, {
       id,
       taskId,
       rule: `fixture-${id}`,
@@ -188,7 +191,7 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
       resolvedAt,
     })
   }
-  await db.insert(taskRepos).values({
+  await insertOne(db, taskRepos, {
     taskId: 'c04',
     repoIndex: 0,
     repoPath: '/fixture/sidecar',
@@ -199,7 +202,8 @@ async function seed(db: ProviderNeutralDatabase): Promise<void> {
   })
 }
 
-async function fixtureRowsDigest(db: ProviderNeutralDatabase): Promise<string> {
+async function fixtureRowsDigest(db: PersistenceDb): Promise<string> {
+  const { tasks } = tablesOf(db)
   const rows = await db.select().from(tasks).orderBy(tasks.id)
   return createHash('sha256').update(JSON.stringify(rows)).digest('hex')
 }
@@ -230,7 +234,8 @@ function scenarios(): TaskOperationsRawQuery[] {
   return rows
 }
 
-async function storedJson(db: ProviderNeutralDatabase): Promise<string> {
+async function storedJson(db: PersistenceDb): Promise<string> {
+  const { tasks } = tablesOf(db)
   return JSON.stringify(
     await db
       .select({
@@ -265,10 +270,12 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
         for (;;) {
           const request = { ...raw, ...(cursor === undefined ? {} : { cursor }) }
           const parsed = parseTaskOperationsQuery(VIEWER, request, OPTIONS)
-          const expectedRows = await harness.db.all(
+          const expectedRows = await rawRows(
+            harness.db,
             rootQuery(harness.db, VIEWER, parsed, OPTIONS.catalogVisibility),
           )
-          const actualRows = await harness.db.all(
+          const actualRows = await rawRows(
+            harness.db,
             fastFilteredRootQuery(harness.db, VIEWER, parsed, OPTIONS.catalogVisibility),
           )
           expect(actualRows, JSON.stringify(request)).toEqual(expectedRows)
@@ -372,6 +379,7 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
 
   test('the retained recursive UNION terminates a repeated parent and counts each matched row once', async () => {
     await seed(harness.db)
+    const { tasks } = tablesOf(harness.db)
     await harness.db.update(tasks).set({ parentTaskId: 'c09' }).where(eq(tasks.id, 'c09'))
     expect(await fixtureRowsDigest(harness.db)).toBe(
       'd7ace4653b9b868b0ba5e78b9d30a7031be13115a4f858925e75b13736e57498',

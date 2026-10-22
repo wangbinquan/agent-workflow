@@ -16,21 +16,13 @@
 // 其余用例覆盖三个 assert* 的主要判据（open effect / 水位覆盖 / replay 决策 / owner 必须 released /
 // intents-attempts-holds 三查 / ledger digest 比对）与认领行的 CAS，两个引擎各跑一遍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  taskExecutionEffects,
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionMaintenanceClaims,
-  taskExecutionMaintenanceMembers,
-  taskExecutionOwners,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
 import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
@@ -44,8 +36,9 @@ function id(prefix: string): string {
   return `${prefix}_${ulid()}`
 }
 
-async function seedWorkflow(db: ProviderNeutralDatabase, workflowId: string): Promise<void> {
-  await db.insert(workflows).values({
+async function seedWorkflow(db: PersistenceDb, workflowId: string): Promise<void> {
+  const { workflows } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -57,12 +50,13 @@ async function seedWorkflow(db: ProviderNeutralDatabase, workflowId: string): Pr
 
 /** 一个「可认领」的终态任务：终态状态、无 owner、无 intent、账本为空。 */
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   workflowId: string,
-  over: Partial<typeof tasks.$inferInsert> = {},
+  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
 ): Promise<void> {
-  await db.insert(tasks).values({
+  const { tasks } = tablesOf(db)
+  await insertOne(db, tasks, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -83,11 +77,12 @@ async function seedTask(
 
 /** 终态 intent —— effect 行的外键需要它，而 `completed` 不算「执行面未静止」。 */
 async function seedSettledIntent(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   intentId: string,
 ): Promise<void> {
-  await db.insert(taskExecutionIntents).values({
+  const { taskExecutionIntents } = tablesOf(db)
+  await insertOne(db, taskExecutionIntents, {
     id: intentId,
     taskId,
     kind: 'launch',
@@ -113,10 +108,11 @@ interface EffectSeed {
   readonly generation?: number
 }
 
-async function seedEffect(db: ProviderNeutralDatabase, seed: EffectSeed): Promise<string> {
+async function seedEffect(db: PersistenceDb, seed: EffectSeed): Promise<string> {
   const effectId = id('eff')
   const family = seed.family ?? `family_${seed.taskId}`
-  await db.insert(taskExecutionEffects).values({
+  const { taskExecutionEffects } = tablesOf(db)
+  await insertOne(db, taskExecutionEffects, {
     id: effectId,
     taskId: seed.taskId,
     originIntentId: seed.intentId,
@@ -140,7 +136,7 @@ async function seedEffect(db: ProviderNeutralDatabase, seed: EffectSeed): Promis
 
 /** 留存的世代水位：账本里唯一能在任务行被删之后仍解释那次外部效果的行。 */
 async function seedWatermark(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   input: {
     readonly taskId: string
     readonly family: string
@@ -148,7 +144,8 @@ async function seedWatermark(
     readonly requestHash: string
   },
 ): Promise<void> {
-  await db.insert(taskExecutionLineageOperationRecords).values({
+  const { taskExecutionLineageOperationRecords } = tablesOf(db)
+  await insertOne(db, taskExecutionLineageOperationRecords, {
     id: id('rec'),
     recordKind: 'generation-watermark',
     executionLineageId: input.taskId,
@@ -164,7 +161,7 @@ async function seedWatermark(
   })
 }
 
-async function claimableTask(db: ProviderNeutralDatabase): Promise<string> {
+async function claimableTask(db: PersistenceDb): Promise<string> {
   const workflowId = id('wf')
   const taskId = id('task')
   await seedWorkflow(db, workflowId)
@@ -172,7 +169,7 @@ async function claimableTask(db: ProviderNeutralDatabase): Promise<string> {
   return taskId
 }
 
-function store(db: ProviderNeutralDatabase): DrizzleTerminalMaintenancePersistence {
+function store(db: PersistenceDb): DrizzleTerminalMaintenancePersistence {
   return new DrizzleTerminalMaintenancePersistence(db)
 }
 
@@ -188,7 +185,7 @@ async function conflictCode(body: () => Promise<unknown>): Promise<TaskExecution
 }
 
 async function claimWorkspaceGc(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   members: readonly MaintenanceMemberSnapshot[],
 ) {
@@ -215,6 +212,7 @@ describeEachProvider('RFC-359 W7 —— 终态维护认领：并发冲突按闭�
     expect(error.message).toMatch(/already claimed by terminal maintenance/)
     expect(error.status).toBe(409)
 
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
     // 冲突的那一笔整笔回滚：只留下第一次认领的行。
     const claims = await db
       .select({ id: taskExecutionMaintenanceClaims.id })
@@ -259,7 +257,8 @@ describeEachProvider('RFC-359 W7 —— snapshotTree：枚举与快照在同一�
         // 走统一事务原语：SQLite 上它排在写者租约后面，PG 上它是另一条连接——
         // 两边都是「一次正常的并发写」，而不是绕过事务边界的旁观者语句。
         await session.transaction(async (tx) => {
-          await tx.delete(tasks).where(eq(tasks.id, childId)).run()
+          const { tasks } = tablesOf(tx)
+          await tx.delete(tasks).where(eq(tasks.id, childId))
         })
       })()
 
@@ -313,7 +312,8 @@ describeEachProvider('RFC-359 W7 —— 认领前的静止判据', (harness) => 
     const db = harness.db
     const taskId = await claimableTask(db)
     const members = await store(db).snapshotMembers([taskId])
-    await db.insert(taskExecutionIntents).values({
+    const { taskExecutionIntents } = tablesOf(db)
+    await insertOne(db, taskExecutionIntents, {
       id: id('intent'),
       taskId,
       kind: 'launch',
@@ -337,7 +337,8 @@ describeEachProvider('RFC-359 W7 —— 认领前的静止判据', (harness) => 
   test('执行 owner 还没 released ⇒ 拒绝', async () => {
     const db = harness.db
     const taskId = await claimableTask(db)
-    await db.insert(taskExecutionOwners).values({
+    const { taskExecutionOwners } = tablesOf(db)
+    await insertOne(db, taskExecutionOwners, {
       taskId,
       ownerId: id('owner'),
       daemonGeneration: 'dbg_w7',
@@ -358,7 +359,8 @@ describeEachProvider('RFC-359 W7 —— 认领前的静止判据', (harness) => 
     const db = harness.db
     const taskId = await claimableTask(db)
     const members = await store(db).snapshotMembers([taskId])
-    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId)).run()
+    const { tasks } = tablesOf(db)
+    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
 
     const error = await conflictCode(async () => await claimWorkspaceGc(db, taskId, members))
     expect(error.message).toMatch(/changed before terminal maintenance claim/)
@@ -408,6 +410,7 @@ describeEachProvider('RFC-359 W7 —— 已结算账本的覆盖判据', (harnes
     )
     expect(error.message).toMatch(/lacks a complete retained watermark/)
 
+    const { taskExecutionEffects } = tablesOf(db)
     const effectRow = (
       await db
         .select({ requestHash: taskExecutionEffects.requestHash })
@@ -437,6 +440,7 @@ describeEachProvider('RFC-359 W7 —— 已结算账本的覆盖判据', (harnes
       state: 'outcome-unknown',
       family,
     })
+    const { taskExecutionEffects, taskExecutionLineageOperationRecords } = tablesOf(db)
     const effectRow = (
       await db
         .select({ requestHash: taskExecutionEffects.requestHash })
@@ -454,7 +458,7 @@ describeEachProvider('RFC-359 W7 —— 已结算账本的覆盖判据', (harnes
     const error = await conflictCode(async () => await claimWorkspaceGc(db, taskId, members))
     expect(error.message).toMatch(/lacks a retained replay decision/)
 
-    await db.insert(taskExecutionLineageOperationRecords).values({
+    await insertOne(db, taskExecutionLineageOperationRecords, {
       id: id('rec'),
       recordKind: 'replay-decision',
       executionLineageId: taskId,
@@ -494,6 +498,7 @@ describeEachProvider('RFC-359 W7 —— 认领行的 CAS 与恢复面', (harness
     claim = await store(db).transition({ claim, to: 'db-finalized', now: NOW + 2 })
     await store(db).complete({ claim, now: NOW + 3 })
 
+    const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(db)
     const row = (
       await db
         .select()

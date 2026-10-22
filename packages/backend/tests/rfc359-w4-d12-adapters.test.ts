@@ -2,18 +2,15 @@
 // receipt、requirement bundle 指针行、仓库位置读取、保留期清扫，以及三组 sqlite / postgresql 装配对的收口。
 // 同一段断言在两个引擎上各跑一遍；源码锁钉住「不再有 provider 命名的孪生」。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  cachedRepos,
-  developmentBundleRefs,
-  developmentRepositoryUploadReceipts,
-} from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'
 import type { RequirementBundleRefRecord } from '@/modules/development-automation/application/ports/requirementBundleRefStore'
 import { defaultAutomationPolicyContent } from '@/modules/development-automation/domain/automationPolicy'
@@ -81,16 +78,13 @@ function missionRow(overrides: Partial<MissionRow> = {}): MissionRow {
   }
 }
 
-async function newMission(
-  db: ProviderNeutralDatabase,
-  overrides: Partial<MissionRow> = {},
-): Promise<string> {
+async function newMission(db: PersistenceDb, overrides: Partial<MissionRow> = {}): Promise<string> {
   const row = missionRow(overrides)
   await createMissionPersistence(db).createMission(row)
   return row.id
 }
 
-async function plantPlan(db: ProviderNeutralDatabase, missionId: string): Promise<string> {
+async function plantPlan(db: PersistenceDb, missionId: string): Promise<string> {
   const planId = `plan-${missionId}`
   await insertUploadPlan(db, {
     planId,
@@ -172,6 +166,7 @@ describeEachProvider('RFC-359 W4-D12 —— 上传 placement / publication recei
     expect((await placement.load(planId))?.placementReceipt).toEqual({
       seedTreeDigest: 't'.repeat(64),
     })
+    const { developmentRepositoryUploadReceipts } = tablesOf(harness.db)
     expect(
       await harness.db
         .select({ id: developmentRepositoryUploadReceipts.id })
@@ -256,7 +251,8 @@ describeEachProvider('RFC-359 W4-D12 —— bundle 指针 / 仓库位置 / 保�
 
   test('仓库位置读取：cached_repos 命中回 localPath，未缓存回 null', async () => {
     const id = ulid()
-    await harness.db.insert(cachedRepos).values({
+    const { cachedRepos } = tablesOf(harness.db)
+    await insertOne(harness.db, cachedRepos, {
       id,
       urlHash: id.slice(0, 8).toLowerCase(),
       localPath: `/tmp/aw-repos/${id}`,
@@ -359,6 +355,7 @@ describeEachProvider('RFC-359 W4-D12 —— bundle 指针 / 仓库位置 / 保�
     ])
     expect(await store.listAttempts(`run-${noPolicy}`)).toHaveLength(2)
     expect(await store.listAttempts(`run-${live}`)).toHaveLength(2)
+    const { developmentBundleRefs } = tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -399,7 +396,7 @@ test('源码锁：development-automation 不再有 provider 命名的持久化 /
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source, file).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync/)
-    expect(source, file).toContain('ProviderNeutralDatabase')
+    expect(source, file).toContain('PersistenceDb')
   }
   const composition = readFileSync(join(root, 'composition.ts'), 'utf8')
   for (const retired of [

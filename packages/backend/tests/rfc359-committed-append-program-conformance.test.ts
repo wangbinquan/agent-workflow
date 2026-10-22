@@ -1,14 +1,9 @@
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { and, asc, eq } from 'drizzle-orm'
 
 import { canonicalJson } from '@agent-workflow/shared'
-import {
-  committedEventAggregateHeads,
-  committedEventDeliveries,
-  committedEventFamilyCutovers,
-  committedEvents,
-  workflows,
-} from '@/db/schema'
 import { appendCommittedEvent } from '@/platform/events/committed/append'
 import type { AppendCommittedEventInput } from '@/platform/events/committed/types'
 import {
@@ -24,10 +19,13 @@ import type { RecordedStatement } from './helpers/statementRecorder'
 
 const NOW = 1_789_488_100_000
 type Input = AppendCommittedEventInput<'fixture.changed.v1', { readonly value: string }>
-const family = and(
-  eq(committedEventFamilyCutovers.producer, 'collaboration'),
-  eq(committedEventFamilyCutovers.family, 'review'),
-)
+const family = (db: object) => {
+  const { committedEventFamilyCutovers } = tablesOf(db)
+  return and(
+    eq(committedEventFamilyCutovers.producer, 'collaboration'),
+    eq(committedEventFamilyCutovers.family, 'review'),
+  )
+}
 
 function event(operation: string, changes: Partial<Input> = {}): Input {
   return {
@@ -49,11 +47,11 @@ function event(operation: string, changes: Partial<Input> = {}): Input {
 }
 
 async function enable(harness: ProviderHarness): Promise<void> {
+  const { committedEventFamilyCutovers } = tablesOf(harness.db)
   await harness.db
     .update(committedEventFamilyCutovers)
     .set({ mode: 'shadow', epoch: 7, changedAt: NOW - 1, changeRef: 'fixture:shadow' })
-    .where(family)
-    .run()
+    .where(family(harness.db))
 }
 
 function eventSql(statements: readonly RecordedStatement[]): readonly string[] {
@@ -71,18 +69,19 @@ function eventSql(statements: readonly RecordedStatement[]): readonly string[] {
 }
 
 async function rows(harness: ProviderHarness) {
+  const { committedEvents, committedEventDeliveries, committedEventAggregateHeads } = tablesOf(
+    harness.db,
+  )
   return {
-    events: await harness.db.select().from(committedEvents).orderBy(asc(committedEvents.id)).all(),
+    events: await harness.db.select().from(committedEvents).orderBy(asc(committedEvents.id)),
     deliveries: await harness.db
       .select()
       .from(committedEventDeliveries)
-      .orderBy(asc(committedEventDeliveries.eventId), asc(committedEventDeliveries.consumerId))
-      .all(),
+      .orderBy(asc(committedEventDeliveries.eventId), asc(committedEventDeliveries.consumerId)),
     heads: await harness.db
       .select()
       .from(committedEventAggregateHeads)
-      .orderBy(asc(committedEventAggregateHeads.aggregateId))
-      .all(),
+      .orderBy(asc(committedEventAggregateHeads.aggregateId)),
   }
 }
 
@@ -267,11 +266,11 @@ describeEachProvider(
         async (tx) => await appendCommittedEvent(tx, input),
       )
       const before = await rows(harness)
+      const { committedEventFamilyCutovers } = tablesOf(harness.db)
       await harness.db
         .update(committedEventFamilyCutovers)
         .set({ mode: 'legacy' })
-        .where(family)
-        .run()
+        .where(family(harness.db))
       const replay = await harness.session.transaction(
         async (tx) => await appendCommittedEvent(tx, input),
       )
@@ -319,7 +318,8 @@ describeEachProvider(
         ).rejects.toThrow(message)
         expect(eventSql(recording.statements)).toEqual(expectedSql)
       }
-      await harness.db.delete(committedEventFamilyCutovers).where(family).run()
+      const { committedEventFamilyCutovers } = tablesOf(harness.db)
+      await harness.db.delete(committedEventFamilyCutovers).where(family(harness.db))
       const recording = harness.recordStatements()
       await expect(
         harness.session
@@ -337,10 +337,12 @@ describeEachProvider(
       const before = await rows(harness)
       await expect(
         harness.session.transaction(async (tx) => {
-          await tx
-            .insert(workflows)
-            .values({ id: 'append-business', name: 'append-business', definition: '{}' })
-            .run()
+          const { workflows } = tablesOf(tx)
+          await insertOne(tx, workflows, {
+            id: 'append-business',
+            name: 'append-business',
+            definition: '{}',
+          })
           await appendCommittedEvent(
             tx,
             event('collision', {
@@ -350,8 +352,9 @@ describeEachProvider(
           )
         }),
       ).rejects.toThrow()
+      const { workflows } = tablesOf(harness.db)
       expect(
-        await harness.db.select().from(workflows).where(eq(workflows.id, 'append-business')).all(),
+        await harness.db.select().from(workflows).where(eq(workflows.id, 'append-business')),
       ).toEqual([])
       expect(await rows(harness)).toEqual(before)
     })

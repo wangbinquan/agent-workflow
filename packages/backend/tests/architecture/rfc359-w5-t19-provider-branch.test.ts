@@ -353,7 +353,7 @@ export const PROVIDER_BRANCH_DEBT: readonly string[] = [
  * **账本已空**（RFC-359 AC-10 第一波）。原来唯一那条是 `db/providerSchema.ts` 的
  * `concreteDatabaseColumn`——按 provider 在 `PgColumn` / `SQLiteColumn` 之间做类型判定。
  * 它**根本没有调用方**（全仓只有自己的定义），所以销账方式不是搬家而是**删除**；
- * 同文件的孪生 `concreteDatabaseTable` 是活的（`schemaContract.ts` 在用），保留。
+ * RFC-395 I-b 已删除余下的全局表投影，规范契约直接读取原生 SQLite 元数据。
  */
 export const PROVIDER_BRANCH_RELOCATION_DEBT: readonly string[] = []
 

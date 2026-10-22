@@ -10,6 +10,7 @@
 // therefore orphans; maintenance replays the stable upload request without
 // bytes to learn whether an object (and so a pin) exists, then releases it.
 // Owner-released objects are unpinned only behind the backup release horizon.
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   and,
   asc,
@@ -23,8 +24,7 @@ import {
   type SQL,
   type SQLWrapper,
 } from 'drizzle-orm'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { hostedObjectPublications } from '@/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -41,7 +41,7 @@ import type {
   HostedObjectReleaseSelection,
 } from './objectPublicationContract'
 
-type Row = typeof hostedObjectPublications.$inferSelect
+type Row = PersistenceTables['hostedObjectPublications']['$inferSelect']
 type Lease = ReturnType<CrewStationMutationFence['current']>
 
 const OWNER = /^[a-z][a-z0-9-]{0,63}$/
@@ -113,7 +113,7 @@ interface Bound {
 }
 
 export function createHostedObjectPublications(input: {
-  readonly db: ProviderNeutralDatabase
+  readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly objects: Pick<
     CrewStationStreamObjectStorage,
@@ -132,22 +132,25 @@ export function createHostedObjectPublications(input: {
   const abandonAfter = input.abandonAfterMs ?? HOSTED_PUBLICATION_ABANDON_MS
   const retention = input.retentionMs ?? HOSTED_PUBLICATION_RETENTION_MS
   const log = createLogger('hosted-object-publications')
-  const write = <T>(run: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> => {
+  const write = <T>(run: (tx: PersistenceDb) => Promise<T>): Promise<T> => {
     const lease = input.fence.current()
     return session.transaction(async (tx) => {
       await input.fence.assertHeld(tx, lease)
       return run(tx)
     })
   }
-  const read = async (tx: ProviderNeutralDatabase, id: string) =>
-    (
+  const read = async (tx: PersistenceDb, id: string) => {
+    const { hostedObjectPublications } = tablesOf(tx)
+    return (
       await tx
         .select()
         .from(hostedObjectPublications)
         .where(eq(hostedObjectPublications.id, id))
         .limit(1)
     )[0]
-  const lock = async (tx: ProviderNeutralDatabase, id: string) => {
+  }
+  const lock = async (tx: PersistenceDb, id: string) => {
+    const { hostedObjectPublications } = tablesOf(tx)
     await session.engine.lockAggregateRoot(
       tx,
       hostedObjectPublications,
@@ -202,7 +205,7 @@ export function createHostedObjectPublications(input: {
       throw new HostedObjectPublicationError('hosted-object-publication-scope-changed')
   }
   const bindOne = async (
-    tx: ProviderNeutralDatabase,
+    tx: PersistenceDb,
     request: HostedObjectPublicationRequest,
     lease: Lease,
   ): Promise<Row> => {
@@ -227,6 +230,7 @@ export function createHostedObjectPublications(input: {
       releasedAt: null,
       updatedAt: at,
     }
+    const { hostedObjectPublications } = tablesOf(tx)
     await tx.insert(hostedObjectPublications).values(fresh).onConflictDoNothing()
     const row = await lock(tx, id)
     if (row === undefined)
@@ -296,11 +300,7 @@ export function createHostedObjectPublications(input: {
       throw new HostedObjectPublicationError('hosted-object-publication-receipt-mismatch')
     return { id: object.id, sha256: object.sha256, size: object.size }
   }
-  const markReady = async (
-    tx: ProviderNeutralDatabase,
-    bound: Bound,
-    receipt: HostedObjectReceipt,
-  ) => {
+  const markReady = async (tx: PersistenceDb, bound: Bound, receipt: HostedObjectReceipt) => {
     const current = await lock(tx, bound.row.id)
     if (current === undefined || current.attempt !== bound.row.attempt)
       throw new HostedObjectPublicationError('hosted-object-publication-superseded')
@@ -311,6 +311,7 @@ export function createHostedObjectPublications(input: {
     }
     if (current.state !== 'pending')
       throw new HostedObjectPublicationError('hosted-object-publication-retired')
+    const { hostedObjectPublications } = tablesOf(tx)
     await tx
       .update(hostedObjectPublications)
       .set({ state: 'ready', objectId: receipt.id, sourceSealed: null, updatedAt: now() })
@@ -354,7 +355,7 @@ export function createHostedObjectPublications(input: {
       const row = await read(input.db, hostedPublicationId(owner, key))
       return row?.state === 'ready' ? receiptOf(row) : null
     },
-    async release(selection: HostedObjectReleaseSelection, tx?: ProviderNeutralDatabase) {
+    async release(selection: HostedObjectReleaseSelection, tx?: PersistenceDb) {
       if (!OWNER.test(selection.owner))
         throw new HostedObjectPublicationError('hosted-object-publication-owner-invalid')
       if (
@@ -363,8 +364,9 @@ export function createHostedObjectPublications(input: {
         selection.keyPrefix === undefined
       )
         throw new HostedObjectPublicationError('hosted-object-publication-selection-empty')
-      const run = async (handle: ProviderNeutralDatabase) => {
+      const run = async (handle: PersistenceDb) => {
         const at = now()
+        const { hostedObjectPublications } = tablesOf(handle)
         const live = and(
           eq(hostedObjectPublications.owner, selection.owner),
           inArray(hostedObjectPublications.state, ['pending', 'ready']),
@@ -410,6 +412,7 @@ export function createHostedObjectPublications(input: {
       return run(tx)
     },
     async scopes(owner, page) {
+      const { hostedObjectPublications } = tablesOf(input.db)
       const rows = await input.db
         .select({ scope: hostedObjectPublications.scope })
         .from(hostedObjectPublications)
@@ -436,6 +439,7 @@ export function createHostedObjectPublications(input: {
       error: error instanceof Error ? error.message : String(error),
     })
     await write(async (tx) => {
+      const { hostedObjectPublications } = tablesOf(tx)
       await tx
         .update(hostedObjectPublications)
         .set({
@@ -457,6 +461,7 @@ export function createHostedObjectPublications(input: {
     write(async (tx) => {
       const current = await lock(tx, row.id)
       if (current?.attempt !== row.attempt || current.state !== from) return false
+      const { hostedObjectPublications } = tablesOf(tx)
       await tx
         .update(hostedObjectPublications)
         .set({ ...values, updatedAt: now() })
@@ -576,6 +581,7 @@ export function createHostedObjectPublications(input: {
             }
           }
           const lease = input.fence.current()
+          const { hostedObjectPublications } = tablesOf(input.db)
           const abandoned = await input.db
             .select()
             .from(hostedObjectPublications)
@@ -632,6 +638,7 @@ export function createHostedObjectPublications(input: {
             .limit(SQL_CHUNK)
           if (settled.length > 0)
             counters.purged = await write(async (tx) => {
+              const { hostedObjectPublications } = tablesOf(tx)
               const rows = await tx
                 .delete(hostedObjectPublications)
                 .where(
@@ -658,7 +665,7 @@ export type HostedObjectPublicationJournal = ReturnType<typeof createHostedObjec
 /** Restore normalization only: a backup's own archive was published after its
  * snapshot, so the restored journal re-adopts that exact deterministic pin. */
 export async function adoptHostedPublicationInTx(
-  tx: ProviderNeutralDatabase,
+  tx: PersistenceDb,
   input: {
     readonly owner: string
     readonly key: string
@@ -686,6 +693,7 @@ export async function adoptHostedPublicationInTx(
     releasedAt: null,
     updatedAt: input.now,
   }
+  const { hostedObjectPublications } = tablesOf(tx)
   await tx
     .insert(hostedObjectPublications)
     .values({ id, ...values })

@@ -10,13 +10,14 @@
 //  - F-05/F-07: base-side queries and un-indexed documents degrade to
 //    baseline with an honest degradedReason.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import {
   encodeScipFixture,
@@ -34,7 +35,7 @@ import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastr
 import type { IndexerProbe } from '../src/services/structuralDiff/deep/indexers'
 
 const getCodeIntel = (
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   query: CodeIntelQuery,
   deps?: CodeIntelDeps,
@@ -64,18 +65,19 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
 }
 
 async function seedTask(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   opts: { worktreePath: string; baseCommit: string | null },
 ): Promise<string> {
   const taskId = `01CI${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  await db.insert(workflows).values({
+  const { workflows, tasks } = tablesOf(db)
+  await insertOne(db, workflows, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await db.insert(tasks).values({
+  await insertOne(db, tasks, {
     id: taskId,
     name: 't',
     workflowId,
@@ -334,7 +336,7 @@ describe('ScipIndexCache — weight eviction and oversize refusal (P1-9⑥)', ()
 })
 
 describeEachProvider('getCodeIntel — engines and degradation', (harness) => {
-  const db = (): ProviderNeutralDatabase => harness.db
+  const db = (): PersistenceDb => harness.db
   test('deep resolves definition + cross-file references from the cached index', async () => {
     const d = db()
     const repo = await makeRepo({ 'a.ts': 'export function f() {}\nf()\n' })

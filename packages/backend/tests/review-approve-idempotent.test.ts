@@ -7,21 +7,23 @@
 // signal lost. Result: review row stayed `awaiting_review` forever even
 // though the doc_version was approved.
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { docVersions, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-052)', (harness) => {
-  let db: ProviderNeutralDatabase
+  let db: PersistenceDb
   let appHome: string
   let worktree: string
 
@@ -54,7 +56,8 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
       edges: [],
     }
     const workflowId = ulid()
-    await db.insert(workflows).values({
+    const { workflows, tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
+    await insertOne(db, workflows, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify(definition),
@@ -66,7 +69,7 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     const lineageSlotPathJson = JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ])
-    await db.insert(tasks).values({
+    await insertOne(db, tasks, {
       name: 'rfc-052-approve',
       id: taskId,
       workflowId,
@@ -83,19 +86,20 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     })
     // Both providers must start from the original SQLite-materialized row.
     expect(
-      await db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get(),
+      await first(
+        db
+          .select({
+            executionLineageId: tasks.executionLineageId,
+            lineageSlotPathJson: tasks.lineageSlotPathJson,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, taskId)),
+      ),
     ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
 
     // Review run currently awaiting a decision.
     const reviewRunId = ulid()
-    await db.insert(nodeRuns).values({
+    await insertOne(db, nodeRuns, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -110,7 +114,7 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     const bodyPathRel = 'doc_versions/v1.md'
     mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
     writeFileSync(join(appHome, bodyPathRel), '# approved body\n')
-    await db.insert(docVersions).values({
+    await insertOne(db, docVersions, {
       id: ulid(),
       taskId,
       reviewNodeId: 'rev_1',
@@ -126,12 +130,12 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     // The smoking gun: a prior crashed-approve already wrote both output
     // rows. Without RFC-052's upsert, the next approve would throw PK on
     // these.
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: reviewRunId,
       portName: 'approved_doc',
       content: '[stale leftover from a prior crashed approve]',
     })
-    await db.insert(nodeRunOutputs).values({
+    await insertOne(db, nodeRunOutputs, {
       nodeRunId: reviewRunId,
       portName: 'approval_meta',
       content: '{"stale":true}',

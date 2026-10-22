@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
@@ -87,7 +87,7 @@ export interface RetryEngine {
 
 /** 先把任务推回可跑状态，再后台驱动引擎——不等它跑完（合并前那一步也是 background）。 */
 async function driveInBackground(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   deps: TaskContinuationDependencies,
   now?: () => number,
@@ -127,7 +127,7 @@ function actorFor(userId: string | null): Actor {
 }
 
 export function createRetryEngine(
-  db: ProviderNeutralDatabase,
+  db: PersistenceDb,
   options: RetryEngineOptions = {},
 ): RetryEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-retry-engine-'))
