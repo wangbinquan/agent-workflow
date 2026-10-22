@@ -15,6 +15,7 @@
 | PostgreSQL 旧 schema → PostgreSQL 目标 | 必须 | 独立目标 database，沿用当前固定应用 schema；目标连接经 profile 配置切换 |
 | SQLite 旧 schema → PostgreSQL 目标 | 必须保留已有跨 provider 搬迁能力 | 独立验证，不能用同 provider 演练替代 |
 | PostgreSQL → SQLite | 非本次新增承诺 | 不以通用逻辑转换器存在就宣称已支持 |
+| 切换前的旧 epoch 备份 → 目标 epoch | 必须（用户 2026-10-21 确认） | 旧备份作为转换器的一种源：读备份内容与引用内容清单，经同一版本化 reader / transformer 恢复到目标 epoch；纳入 AC-7 必测矩阵 |
 
 不采用同一 PostgreSQL 库改 `search_path` 切代：当前适配和迁移对固定 schema 有假设，独立 database 能让源和目标的备份、driver、连接池及恢复边界清晰。目标 database 创建权限、容量与连接配置是预检条件；托管环境由现有部署控制面提供目标实例 / 配置能力，不在业务进程内擅自新建基础设施。
 
