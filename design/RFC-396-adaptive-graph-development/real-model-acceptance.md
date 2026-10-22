@@ -117,3 +117,12 @@
 - `createGraphDesignArtifacts.files()` 原来并发读取全部文件，且每个文件再次读取同一清单，超过本项目两路对象传输额度。改为顺序读取已验证清单指向的实际 blob，保留整包/每文件摘要与缺失检查；单文件读取也复用已验证清单。真实文件回归用两路额度模拟拒绝，八份中文材料完整返回，清单只读取一次；缺失内容、被改字节和错误清单仍拒绝。
 - 本隔离服务原采用小型接入验收的 50m CPU 套餐，有持续 event-loop stall。下一版配置选择平台已存在的 250m/512Mi `agent-workflow-control` 套餐，仅作用于 `rfc396-graph-acceptance`；不修改共享套餐。该资源调整与 429 修复分别记录，不能把延迟或租约退出全部归因于 CPU。
 - 材料读取与设计/工作区限定验证：SQLite 三文件 12 pass / 0 fail、83 assertions，真实 PostgreSQL 两文件 10 pass / 0 fail、73 assertions；岗位真名回归两库各 7 pass / 0 fail、71 assertions。backend typecheck 和目标 lint 通过。范围包含重叠检查，未累计为全仓结论，实际托管重试另验。
+
+### 2026-10-22 10:54 UTC：存量升级成功与真实候选执行
+
+- `c38be1ef0a2b1e1bba6d06ea92e1d686a4313b13` 的 CI `39763563985`、macOS artifact `12419412282` 已在原持久目录成功升级；原岗位、三个 Case、原答案和批准记录未重建。首次下载因 `unexpected EOF` 失败，重试相同产物成功。预约 v5、通知 v7、已有模块 v8 的实现分别启动 Task `01M5HKDYCYTVC978B81TRQZG88`、`01M5HKDYG6T4CSQ0DHKH7264QJ`、`01M5HKE0NZHBTDAJSMCNJK01A9`。
+- 已有模块首个输出被 `envelope-port-malformed` 拒绝，平台一次正常重试成功。候选 tree `6cb114c7678258359c3559e42b9f977c3c3d327c` 的原始 profile 回执为 exit 0、13 pass / 0 fail、16 assertions；`src/consumer.ts` blob 仍为 `b5c8e6a8d477f051d9056931f9d62bad5110eae0`。已实际读取代码与两个测试文件，五类非法 data、空串/空白和旧行为均保留；尚待精确候选的人工义务和最后交付。
+- 通知 tree `08243c7639f7c4eedae89d11d88500c184eb79a9` 也取得独立 profile 原始回执，35 pass / 0 fail、105 assertions，包括同版本无 error 保留、更高版本无 error 清除的新增分支。但模型仍把已批准范围、平台后续工作和人工待办写入实现 `limitations`，平台按原合同继续阻止交付。预约也存在相同报告分类问题，不能删除这些回执后冒称首次通过。
+- 独立托管 v0.1.4 源码提交 `e802441cabdafcd81e8f92377b5fbdd6d92aa846` 对应 `c38be1ef0`，release `01a16330-cc08-7000-bcca-54dd6b4db7e2`。构建阶段失败，平台消息 `Job has reached the specified backoff limit`；尚未进入迁移、部署或激活，具体根因继续读取日志，不能据此断言业务代码错误或资源不足。
+- 执行材料暴露环境记录错误：编译验证进程报告内嵌 Bun 1.4.3 / Node 兼容版本，而真实 `verify.sh` 日志使用 PATH 中 Bun 1.3.13。修复将 `verifierRuntime` 与实际 PATH 的 `bun/node --version` 观测分列，探测失败/缺失/超时明确保留，不回填内嵌版本；环境 digest 会随观测变化。该观测范围只涵盖 PATH Bun/Node，任意 profile 脚本仍可能选择其他工具，不宣称完整工具链证明。
+- 环境回归通过实际子进程验证版本变化、缺失、失败、超时和同环境摘要稳定；连同真实候选验证和测试清单三文件 SQLite 27 pass / 0 fail、95 assertions，backend typecheck、目标 lint 通过。真实实例的新环境记录与 PostgreSQL 相关复验另记。
