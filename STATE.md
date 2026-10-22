@@ -26,6 +26,8 @@
 
 隔离托管 v0.1.7 已自动切到实际新服务（AW 源码 `67795ed462`、镜像 `48b6900402c2…`），本次生产路由无需手工调和；v0.1.6 的人工路由历史及两条失败审核夹具保留。新 Case `01M5J5MH5Q3M2ZBAYK0VPT200M` 已冻结 basis `833ecd749ff3…`，内置文件审核的真实 DeepSeek profile 子任务已 succeeded / exit 0。应用随后再次因 `platform-unreachable` 失去租约并重启；原生门正文与批准、实际候选、独立 profile、最终交付仍待完成。不能把 Agent 成功当作审核批准或 AC14 通过。准确部署、失败与恢复位置见 [托管状态](design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json)。
 
+**19:26 UTC 后续**：同一已验证源码与相同镜像的 v0.1.8 已完成 500m / 512Mi 服务资源试验，平台交接 succeeded；本次 prod / 内部 service 两条路由需按平台批准目标人工调和，此事实单列。500m 实例仍两次重启，epoch 56 再次因 `platform-unreachable` 失去租约；原审核 Task 保持 `interrupted / daemon-restart`，无原生待审门、候选或交付。共享前继文档提交 `480be6a4a` 的 CI `39829520528` failure 已按 RFC-395 的实际数据库/测试缝/源码守卫差异归因；正常同步已取得其修复 `c35067361`，对应 CI `39836782229` 当时仍在运行，不能冒称后继 main 总绿。详细失败、资源与人工调和记录见上方托管证据。
+
 T03～T13 的完整实现、用例、集中验证、独立功能实现门以及三个确定性浏览器旅程已完成，证据和历史失败见 [validation](design/RFC-396-adaptive-graph-development/validation.md)、[设计门](design/RFC-396-adaptive-graph-development/design-gate.md)、[实现门](design/RFC-396-adaptive-graph-development/implementation-gate.md)。当前浏览器控制没有可用 surface，真实模型案例通过产品 API 操作，和此前实际浏览器证据分列。T14 仍待托管闭环；T15 的代码 exact-SHA CI 已通过，最终文档发布另记，全部退出条件满足后才能 Done。共享 RFC-395 在制代码完整保留，未创建分支或替代 checkout。
 
 ## 2026-10-21 RFC-294 后继 S2c：RFC-393 Done

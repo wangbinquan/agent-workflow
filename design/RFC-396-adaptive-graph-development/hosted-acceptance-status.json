@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-22T18:10:17Z",
+  "observedAt": "2026-10-22T19:26:26.183Z",
   "rfc": "RFC-396",
   "rfcStatus": "In Progress",
   "acceptanceCriterion": "AC14",
@@ -10,22 +10,28 @@
     "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
     "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
     "projectSlug": "rfc396-graph-acceptance",
-    "releaseId": "01a16484-de19-7000-b60c-4ba2b51f2bcd",
-    "releaseVersion": "0.1.7",
+    "releaseId": "01a164f2-b7a0-7000-8caf-c3a9d1f2d8ec",
+    "releaseVersion": "0.1.8",
     "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
     "serviceImageDigest": "sha256:48b6900402c2874e3c3efdbb5869557e7fe9582e39bf47eb74d2e3fa49ed0321",
-    "releaseJourneyId": "01a16484-e5eb-7000-a281-8da7c9046436",
-    "activationId": "01a1649a-5661-7000-9481-cf38479b5657",
+    "releaseJourneyId": "01a164f2-c061-7000-9d13-456440e9d79d",
+    "activationId": "01a16505-d31d-7000-9eb6-6af46a97c076",
     "activationResult": "succeeded",
-    "manualRouteReconciliation": false,
+    "manualRouteReconciliation": true,
     "actualTaskParentId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
     "actualTaskGeneration": 1,
     "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
     "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
     "actualTaskImageUpgradeObserved": false,
-    "productionRouteObserved": "rfc396-graph-acceptance-blue",
+    "productionRouteObserved": "rfc396-graph-acceptance-green",
     "previewRouteObserved": "rfc396-graph-acceptance-blue",
-    "routeScope": "Production target matched the newly activated release without manual reconciliation in this release. The preview target is only an observation; no preview-switch equivalence claim."
+    "routeScope": "The platform declared prod and internal targets as green, but both physical routes remained blue. Exact resourceVersion/spec-guarded changes reconciled only these two owned routes. The platform then completed its handoff. This is manual operations evidence, not automatic routing acceptance.",
+    "servicePlanId": "01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10",
+    "resources": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "internalRouteObserved": "rfc396-graph-acceptance-green"
   },
   "failedInlineFixture": {
     "caseId": "01M5HWSH80PTX0K0ER0WADS9FF",
@@ -111,7 +117,7 @@
       "roundId": "01M5JAY36499QEA29XXNZ7YEKN",
       "preallocatedTaskId": "01M5JAY3G3WYAFAY0KX986JXG7",
       "actualTaskObserved": true,
-      "lastObservedTaskStatus": "running",
+      "lastObservedTaskStatus": "interrupted",
       "materialNodeRunId": "01M5JBRHH6X77XZC54Y1AKAYCF",
       "agentSubtask": {
         "id": "01a164be-b8b5-7000-bfac-b9e4cda64522",
@@ -124,7 +130,10 @@
         "stderrBytes": 0
       },
       "nativeGateReceipt": null,
-      "stageBoundary": "A preallocated execution identity initially returned task-not-found. The Task was later observed running with its input complete and material agent running; platform agent success does not establish native approval."
+      "stageBoundary": "A preallocated execution identity initially returned task-not-found. The Task was later observed running with its input complete and material agent running; platform agent success does not establish native approval.",
+      "lastObservedAt": "2026-10-22T19:26:26.183Z",
+      "errorSummary": "daemon-restart",
+      "errorMessage": "remote execution retained; the next owner adopts it"
     }
   },
   "documentationCi": {
@@ -198,6 +207,27 @@
       "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
       "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
       "actualTaskImageUpgradeObserved": false
+    },
+    {
+      "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
+      "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
+      "projectSlug": "rfc396-graph-acceptance",
+      "releaseId": "01a16484-de19-7000-b60c-4ba2b51f2bcd",
+      "releaseVersion": "0.1.7",
+      "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+      "serviceImageDigest": "sha256:48b6900402c2874e3c3efdbb5869557e7fe9582e39bf47eb74d2e3fa49ed0321",
+      "releaseJourneyId": "01a16484-e5eb-7000-a281-8da7c9046436",
+      "activationId": "01a1649a-5661-7000-9481-cf38479b5657",
+      "activationResult": "succeeded",
+      "manualRouteReconciliation": false,
+      "actualTaskParentId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+      "actualTaskGeneration": 1,
+      "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
+      "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
+      "actualTaskImageUpgradeObserved": false,
+      "productionRouteObserved": "rfc396-graph-acceptance-blue",
+      "previewRouteObserved": "rfc396-graph-acceptance-blue",
+      "routeScope": "Production target matched the newly activated release without manual reconciliation in this release. The preview target is only an observation; no preview-switch equivalence claim."
     }
   ],
   "sourceCi": {
@@ -223,16 +253,76 @@
     "preservedGuards": ["expected remote head", "per-file revision", "exact committed source"]
   },
   "serviceRecoveryObservation": {
-    "observedAt": "2026-10-22T18:03:17Z",
-    "release": "0.1.7",
-    "pod": "rfc396-graph-acceptance-blue-597b58f584-5whsw",
+    "observedAt": "2026-10-22T19:26:26.183Z",
+    "release": "0.1.8",
+    "pod": "rfc396-graph-acceptance-green-7c579d49cb-9dmcf",
     "observedRestartCount": 2,
-    "epoch": 39,
-    "leaseAcquiredAt": "2026-10-22T18:02:49.715Z",
-    "leaseLostAt": "2026-10-22T18:03:07.380Z",
+    "epoch": 56,
+    "leaseAcquiredAt": "2026-10-22T19:22:12.196Z",
+    "leaseLostAt": "2026-10-22T19:22:30.612Z",
+    "exitAt": "2026-10-22T19:22:40.643Z",
+    "exitCode": 1,
     "reason": "platform-unreachable",
-    "effect": "Service endpoint temporarily unavailable; workspace command detached for the next owner. Agent result remained persisted in the platform.",
+    "effect": "The original review Task remained interrupted / daemon-restart. Its successful remote agent result was retained, but no pending native review gate was present.",
     "rootCause": "unconfirmed"
   },
-  "currentAcceptancePosition": "Frozen revision 2; actual approved-profile review-material agent succeeded. Await service recovery, exact native review body and receipt, then candidate/profile execution and delivery."
+  "currentAcceptancePosition": "Frozen revision 2; approved-profile material agent succeeded. The original review Task remains interrupted after the 500m resource trial. Native review receipt, candidate, independent verification and delivery are still absent. AC14 and RFC stay open.",
+  "resourceTrial": {
+    "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+    "gitlabCommit": "eea8eda466c0a7afa739153e74e6c926fe2690cb",
+    "changedFiles": ["crewstation.yaml"],
+    "changedProfileFields": ["servicePlanId"],
+    "before": {
+      "cpu": "250m",
+      "memory": "512Mi"
+    },
+    "after": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "serviceImageUnchanged": true,
+    "sourceCiRechecked": "completed / success; all 49 jobs and exact-SHA required check passed",
+    "priorCpuStat": {
+      "usage_usec": 9811862,
+      "nr_periods": 548,
+      "nr_throttled": 324,
+      "throttled_usec": 24623369
+    },
+    "result": "Increasing CPU did not eliminate platform-unreachable lease loss; no causal root-cause claim."
+  },
+  "serviceRecoveryHistory": [
+    {
+      "observedAt": "2026-10-22T18:03:17Z",
+      "release": "0.1.7",
+      "pod": "rfc396-graph-acceptance-blue-597b58f584-5whsw",
+      "observedRestartCount": 2,
+      "epoch": 39,
+      "leaseAcquiredAt": "2026-10-22T18:02:49.715Z",
+      "leaseLostAt": "2026-10-22T18:03:07.380Z",
+      "reason": "platform-unreachable",
+      "effect": "Service endpoint temporarily unavailable; workspace command detached for the next owner. Agent result remained persisted in the platform.",
+      "rootCause": "unconfirmed"
+    }
+  ],
+  "sharedMainCi": {
+    "commit": "480be6a4a5835900533e3086a1efb480f6e52e40",
+    "runId": 39829520528,
+    "status": "completed",
+    "conclusion": "failure",
+    "requiredCheckId": 120015778107,
+    "interveningProductionCommit": "9e66d89dfcb16fb6ffe1be39870942ffd0811686",
+    "ownDelta": [
+      "STATE.md",
+      "design/RFC-396-adaptive-graph-development/real-model-acceptance.md",
+      "design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json"
+    ],
+    "attribution": "The executable delta after the previous green source was RFC-395 native-provider work. Failure logs and exact changed test/dependency paths showed PG transaction handle detection, query-instrumentation and source-inventory mismatches; the broken link was in RFC-395 research and pointed to its deleted providerSchema.ts. No foreign source or assertion was edited here.",
+    "followup": {
+      "commit": "c3506736178806e036860c380286b06298cd6c99",
+      "runId": 39836782229,
+      "lastObservedStatus": "in_progress",
+      "conclusion": null,
+      "scope": "A separate RFC-395 fix was observed on synchronized main. Its existence is not a passing CI receipt."
+    }
+  }
 }
