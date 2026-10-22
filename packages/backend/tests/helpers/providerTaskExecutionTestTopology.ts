@@ -1,7 +1,9 @@
 import type { ProviderNeutralDatabase } from '../../src/db/query'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 import { join } from 'node:path'
+import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { taskExecutionIntents } from '../../src/db/schema'
 import {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
@@ -73,17 +75,30 @@ export async function createProviderTaskExecutionTestTopology(
         const { db, taskId, ...runConfig } = options
         if (db !== binding.db) throw new Error('task fixture database mismatch')
         const provider = selected.selected
+        // A task launched through the production kernel with a recording coordinator
+        // still holds its pending launch intent; drive that one, as the real
+        // coordinator would, instead of submitting a conflicting continuation.
+        const pending = await binding.db
+          .select({ id: taskExecutionIntents.id })
+          .from(taskExecutionIntents)
+          .where(
+            and(eq(taskExecutionIntents.taskId, taskId), eq(taskExecutionIntents.state, 'pending')),
+          )
+          .limit(1)
         const previousOwner = await provider.persistence.ownership.read(taskId)
-        const intent = await provider.persistence.intents.submitContinuation({
-          taskId,
-          intentId: ulid(),
-          kind: previousOwner === null ? 'launch' : 'resume',
-          source: 'internal',
-          actorUserId: null,
-          payload: { v: 1 },
-          now: Date.now(),
-          advanceOperationGeneration: false,
-        })
+        const intent =
+          pending[0] !== undefined
+            ? { intentId: pending[0].id }
+            : await provider.persistence.intents.submitContinuation({
+                taskId,
+                intentId: ulid(),
+                kind: previousOwner === null ? 'launch' : 'resume',
+                source: 'internal',
+                actorUserId: null,
+                payload: { v: 1 },
+                now: Date.now(),
+                advanceOperationGeneration: false,
+              })
         const coordinator = new DefaultTaskDriveCoordinator({
           runtime: resolveTaskDriveConfig(runConfig),
           lifecycle: provider.driverLifecycle,

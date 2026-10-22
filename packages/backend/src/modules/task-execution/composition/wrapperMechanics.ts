@@ -615,7 +615,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     const priorMergedRow = doneMergedCandidates[0]!
     const priorBase: Record<string, string> = {}
     const priorNode: Record<string, string> = {}
-    if (task.repoCount === 1) {
+    if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
       if (priorMergedRow.isoBaseSnapshot !== null) priorBase[''] = priorMergedRow.isoBaseSnapshot
       if (priorMergedRow.isoNodeTree !== null) priorNode[''] = priorMergedRow.isoNodeTree
     } else {
@@ -1726,7 +1726,7 @@ export async function createOrRebuildWrapperIso(
   }
   if (effectiveExisting !== null) {
     const baseSnapshots: Record<string, string> = {}
-    if (task.repoCount === 1) {
+    if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
       if (effectiveExisting.isoBaseSnapshot !== null) {
         baseSnapshots[''] = effectiveExisting.isoBaseSnapshot
       }
@@ -1756,7 +1756,7 @@ export async function createOrRebuildWrapperIso(
               isoSubmodulesJson: effectiveExisting.isoSubmodulesJson ?? null,
               isoSubmodulesReposJson: effectiveExisting.isoSubmodulesReposJson ?? null,
             },
-            task.repoCount,
+            state.repos,
           ),
         ),
       })

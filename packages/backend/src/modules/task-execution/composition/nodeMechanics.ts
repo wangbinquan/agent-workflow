@@ -1023,7 +1023,7 @@ export function describeIsoFailure(code: string, error: unknown): string {
  */
 export function parseIsoSubmodules(
   row: { isoSubmodulesJson: string | null; isoSubmodulesReposJson: string | null },
-  repoCount: number,
+  repos: ReadonlyArray<{ mountPath: string }>,
 ): Record<
   string,
   {
@@ -1032,11 +1032,12 @@ export function parseIsoSubmodules(
     pendingSubResolves: string[]
   }
 > {
-  const raw = repoCount === 1 ? row.isoSubmodulesJson : row.isoSubmodulesReposJson
+  const singleRoot = repos.length === 1 && repos[0]!.mountPath === ''
+  const raw = singleRoot ? row.isoSubmodulesJson : row.isoSubmodulesReposJson
   if (raw === null || raw === '') return {}
   try {
     const parsed: unknown = JSON.parse(raw)
-    if (repoCount === 1) {
+    if (singleRoot) {
       const one = IsoSubmodulesSchema.safeParse(parsed)
       // `pendingSubResolves` MUST be carried through. Dropping it here (it used
       // to be filtered out by this very projection) left the fail-closed gate in
@@ -1852,7 +1853,7 @@ export async function runCallWorkflowNode(
     if (handle === null) {
       // Adoption after restart — rebuild from persisted columns (replay idiom).
       const baseSnapshots: Record<string, string> = {}
-      if (task.repoCount === 1) {
+      if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
         if (currentRow?.isoBaseSnapshot != null) baseSnapshots[''] = currentRow.isoBaseSnapshot
       } else {
         Object.assign(baseSnapshots, parseIsoJsonMap(currentRow?.isoBaseSnapshotReposJson ?? null))
@@ -1876,7 +1877,7 @@ export async function runCallWorkflowNode(
         const h = await scope.head(repo.worktreePath)
         taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
       }
-      const submodules = currentRow !== null ? parseIsoSubmodules(currentRow, task.repoCount) : {}
+      const submodules = currentRow !== null ? parseIsoSubmodules(currentRow, state.repos) : {}
       handle = await restoreTaskIsolation(state, {
         key: await scope.recoverKey(currentRow?.isoWorktreePath ?? null, nodeRunId),
         dbNodeRunId: nodeRunId,

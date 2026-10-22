@@ -163,11 +163,13 @@ export async function createIsoUnderLock(args: {
 export async function persistIsoBase(
   binding: IsolatedAgentRunBinding,
   nodeRunId: string,
-  repoCount: number,
+  _repoCount: number,
   handle: IsoHandle,
 ): Promise<void> {
   if (handle.passthrough) return // in-place run — leave iso columns NULL (golden-lock)
-  if (repoCount === 1) {
+  // The isolation view carries mountPath as worktreeDirName. One member at
+  // 'svc' still needs the per-repo columns; only the root mount uses scalars.
+  if (handle.repos.length === 1 && handle.repos[0]!.worktreeDirName === '') {
     await binding.persistence.mergeStates.transition({
       nodeRunId,
       event: { kind: 'begin-isolation' },
@@ -243,23 +245,25 @@ function submodulesReposJsonFor(handle: IsoHandle): string | null {
 export async function persistIsoNodeTree(
   binding: IsolatedAgentRunBinding,
   nodeRunId: string,
-  repoCount: number,
+  _repoCount: number,
   nodeTrees: Record<string, string>,
   handle?: IsoHandle,
 ): Promise<void> {
+  const mounts =
+    handle === undefined ? Object.keys(nodeTrees) : handle.repos.map((repo) => repo.worktreeDirName)
+  const singleRoot = mounts.length === 1 && mounts[0] === ''
   const topology =
     handle === undefined
       ? {}
-      : repoCount === 1
+      : singleRoot
         ? { isoSubmodulesJson: submodulesJsonFor(handle.repos[0]) }
         : { isoSubmodulesReposJson: submodulesReposJsonFor(handle) }
   await binding.persistence.mergeStates.transition({
     nodeRunId,
     event: { kind: 'mark-pending-merge' },
-    extra:
-      repoCount === 1
-        ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null, ...topology }
-        : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), ...topology },
+    extra: singleRoot
+      ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null, ...topology }
+      : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), ...topology },
     ...contextInput(binding),
   })
 }
@@ -392,7 +396,7 @@ export async function mergeBackAndSettle(args: {
       // resume; without it a crash between park and resume would lose the fact that
       // a submodule conflict is open, and the parent-level re-probe would find the
       // parent clean and declare the repo resolved.
-      await persistPendingSubResolves(binding, nodeRunId, args.repoCount, handle)
+      await persistPendingSubResolves(binding, nodeRunId, handle)
       await binding.persistence.mergeStates.transition({
         nodeRunId,
         event: { kind: 'park-conflict-human', via },
@@ -418,7 +422,6 @@ export async function mergeBackAndSettle(args: {
 async function persistPendingSubResolves(
   binding: IsolatedAgentRunBinding,
   nodeRunId: string,
-  repoCount: number,
   handle: IsoHandle,
 ): Promise<void> {
   if (handle.passthrough) return
@@ -440,7 +443,7 @@ async function persistPendingSubResolves(
     return JSON.stringify({ ...base, pendingSubResolves: repo.pendingSubResolves })
   }
 
-  if (repoCount === 1) {
+  if (handle.repos.length === 1 && handle.repos[0]!.worktreeDirName === '') {
     await binding.persistence.nodeExecution.patch({
       nodeRunId,
       values: { isoSubmodulesJson: withPending(row.isoSubmodulesJson, handle.repos[0]) },

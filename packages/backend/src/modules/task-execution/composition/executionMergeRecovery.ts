@@ -121,7 +121,7 @@ async function replayPendingMerge(
   const { taskId, task } = state
   const baseSnapshots: Record<string, string> = {}
   const nodeTrees: Record<string, string> = {}
-  if (task.repoCount === 1) {
+  if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
     if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
     if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
   } else {
@@ -131,7 +131,7 @@ async function replayPendingMerge(
   if (Object.keys(nodeTrees).length === 0) {
     throw new Error(`pending-merge replay: node_tree missing for run ${r.id}`)
   }
-  const submodules = parseIsoSubmodules(r, task.repoCount)
+  const submodules = parseIsoSubmodules(r, state.repos)
   const missingSub = await replaySubmodulesMissing(scope, state.repos, submodules)
   if (missingSub !== null) {
     throw new Error(
@@ -210,7 +210,7 @@ async function completeInterruptedRun(
 ): Promise<void> {
   const { taskId, task } = state
   const baseSnapshots: Record<string, string> =
-    task.repoCount === 1
+    state.repos.length === 1 && state.repos[0]!.mountPath === ''
       ? r.isoBaseSnapshot === null
         ? {}
         : { '': r.isoBaseSnapshot }
@@ -225,7 +225,7 @@ async function completeInterruptedRun(
       workspaceRef: r.isoWorktreePath,
       baseSnapshots,
       taskBaseHeads,
-      submodules: restoredSubmodules(parseIsoSubmodules(r, task.repoCount)),
+      submodules: restoredSubmodules(parseIsoSubmodules(r, state.repos)),
       forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
     })
     // No node trees supplied: the assembly snapshots the kept iso, pins the
@@ -331,7 +331,7 @@ export async function completeInterruptedMerge(
  * resume entry (before the scope loop), right after the top frame's merges complete.
  */
 async function replayConflictHumanResolutions(state: SchedulerState, log: Logger): Promise<void> {
-  const { taskId, task } = state
+  const { taskId } = state
   await abandonSupersededRuns(state, 'conflict-human', log)
   const rows = await state.opts.persistence.nodeExecution.list({
     taskId,
@@ -348,7 +348,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
   for (const r of rows) {
     const baseSnapshots: Record<string, string> = {}
     const nodeTrees: Record<string, string> = {}
-    if (task.repoCount === 1) {
+    if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
       if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
       if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
     } else {
@@ -368,7 +368,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
       // RFC-210: the human-resolve completion re-merges, so it needs the same
       // per-submodule bases the original merge-back had.
-      submodules: restoredSubmodules(parseIsoSubmodules(r, task.repoCount)),
+      submodules: restoredSubmodules(parseIsoSubmodules(r, state.repos)),
     })
     const outcome = await state.writeSem.run(() =>
       completeIsolatedHumanConflict(handle, nodeTrees, log),
