@@ -351,6 +351,14 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
       .update(tasks)
       .set({
         status: 'done',
+        // A done workflow publishes its result through an output node. Keep the
+        // plan-run freshness oracle separate from that task-boundary result.
+        workflowSnapshot: JSON.stringify({
+          nodes: [
+            { id: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID, kind: 'agent-single' },
+            { id: 'final-result', kind: 'output', ports: [{ name: DIGITAL_EMPLOYEE_RESULT_PORT }] },
+          ],
+        }),
         inputs: JSON.stringify({
           [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]:
             'EXPECTED_ANALYSIS_PLAN_PATH_JSON\n' + JSON.stringify(path),
@@ -359,10 +367,16 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
       .where(eq(tasks.id, taskId))
     await mintSequenceRun(db, taskId, { id: 'z', nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID })
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID })
+    await mintSequenceRun(db, taskId, { id: 'final', nodeId: 'final-result' })
     await db.insert(nodeRunOutputs).values([
       { nodeRunId: 'a', portName: 'analysis-plan', kind: 'document', content: path },
       { nodeRunId: 'z', portName: 'analysis-plan', kind: 'document', content: 'stale.md' },
-      { nodeRunId: 'a', portName: DIGITAL_EMPLOYEE_RESULT_PORT, kind: 'document', content: '{}' },
+      {
+        nodeRunId: 'final',
+        portName: DIGITAL_EMPLOYEE_RESULT_PORT,
+        kind: 'document',
+        content: '{}',
+      },
     ])
     const core = composeDigitalEmployeeExecutionCore({
       appHome: '/tmp/rfc374',
