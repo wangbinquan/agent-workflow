@@ -65,3 +65,12 @@
 - 使用平台正式签发的临时 registry 凭据和公开本机网关完成上传，未更改全局 Docker 配置、registry 授权或其他项目。镜像为 `runtime/rfc396/graph-acceptance@sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91`；本机上传途中发生的证书、代理和工具配置错误留在临时验收日志。
 - 登记已有镜像 revision `01a16297-d3b4-7000-81f0-569047a05d90`，检查成功；生成版本 `01a16297-d960-7000-8a61-ae04bd5a10a4`。实际任务验证 `01a16298-f4d8-7000-aff9-4e527600d4b0` passed。
 - 绑定该任务镜像的服务 v0.1.2：release `01a1629d-ce69-7000-bea3-495f2b4a1da2`、journey `01a1629d-cfba-7000-86f8-3897db7833c4`、发布仓库 commit `f637479915f578bd6a36aaf9f31c5a70c0d4598f`，已 Ready。镜像验证和服务就绪仍不代表 AC14 的完整业务执行或 AC17 真实模型闭环完成。
+
+### 2026-10-22 08:25 UTC：冻结依据的大提示传输与托管激活
+
+- `cfe25471eff2475c5c1546e1892ece92981e0002` 已推送并在同一单机验收数据目录运行（CI `39746345356` 的 macOS artifact `12412061085`）。预约走原 action retry，已有模块走新的原生 clarification request，保留先前超时、无效候选与答案历史。
+- 通知 v3 重规划再次达到 10 分钟限制。代理逐项审核 v2 的状态机和规则表后，经正常 changes API 修正第三次仍 applied / 第四次才 attempts-exhausted 的两处歧义及旧版门控说明；未冒充模型自动修正，未删除量化 coverage 元数据漏项的限制。冻结 revision 4、52 个 included 元素、12 个义务、3 条原始 provisional 答案，basis digest `94ed81132c1e0c5bf4aeff76ba11e9426d5eb7ff889e11516c49cce4cb5f299d`。
+- 原生审核任务 `01M5HBB9G719ENFD92D0CFC5F6` 和恢复任务 `01M5HBBCJ7G2VDT5H3SYH44Q7W` 启动失败：`prompt-too-large`，实际提示分别 322366 / 322689 bytes，argv guard 为 122880 bytes。尚未批准此依据、未执行代码生成。
+- 修复选择完整 stdin 传输大提示，保留小提示既有 argv 协议和 argv-only guard，两个统一装配入口均传递 stdin；不裁掉设计、原回答或审批材料。[本机 OpenCode 1.19.0 对应源码](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/opencode/src/cli/cmd/run.ts#L400) 明确在分派前读取 piped input。增加真实子进程大段 CJK/多行/尾部哨兵和业务、系统装配回归；真实模型上的修复效果待新候选继续验收。
+- 独立托管 v0.1.2 已从 Ready 切到 prod，release journey `01a1629d-cfba-7000-86f8-3897db7833c4` 为 succeeded，激活 `01a162ab-407b-7000-afef-248060b34ce0`。仅该项目的部署就绪，不代表托管业务链路完成。
+- CI `66c084c3` 的两个剩余根失败是 provider 函数语料 47/门槛48，以及新增 `rfc395-head-history-injection.test.ts` 假 PG runtime 未登记；RFC-395 自行提交 `228f726c0` 修复，已为 `cfe25471e` 祖先。旧 CI 仍按自己的失败记录保存，后继 exact-SHA CI 另记。

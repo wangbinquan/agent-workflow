@@ -132,7 +132,7 @@ export async function assembleOpencodePersonaSpawn(
   // a system-agent run with NO explicit binary falls back to it before the
   // built-in `opencode` head. Callers that pass a binary (smoke probes, custom
   // forks) are unaffected. claude has no analogous override.
-  const { cmd, env } = buildOpencodeSpawn({
+  const { cmd, env, stdin } = buildOpencodeSpawn({
     opencodeCmd: head,
     // A known pre-1.18 binary receives the old spelling; an unprobed current
     // binary defaults to `--auto` in buildOpencodeSpawn.
@@ -152,7 +152,7 @@ export async function assembleOpencodePersonaSpawn(
     gitUserName: ctx.gitUserName ?? null,
     gitUserEmail: ctx.gitUserEmail ?? null,
   })
-  return { cmd, env, stdin: { mode: 'ignore' } }
+  return { cmd, env, stdin: stdin ?? { mode: 'ignore' } }
 }
 
 /** RFC-282 — business assembly body (was RuntimeDriver.buildBusinessSpawn);
@@ -273,7 +273,7 @@ export async function assembleOpencodeBusinessSpawn(
   // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
   // (production config.opencodePath 已在 mint 冻结链单点解析〔RFC-282 C1〕,
   // or a test mock) — byte-for-byte unchanged for built-ins.
-  const { cmd, env } = buildOpencodeSpawn({
+  const { cmd, env, stdin } = buildOpencodeSpawn({
     opencodeCmd: businessHead,
     // Key = head[0] exactly as spawned and as explicit probes record it.
     binaryVersion: getOpencodeBinaryVersion(businessHead?.[0] ?? 'opencode'),
@@ -294,6 +294,7 @@ export async function assembleOpencodeBusinessSpawn(
   return {
     cmd,
     env,
+    ...(stdin ? { stdin } : {}),
     diagnostics: {
       inlineModel: primaryInline?.model ?? null,
       inlineVariant: primaryInline?.variant ?? null,

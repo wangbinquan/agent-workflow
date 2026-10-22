@@ -181,6 +181,34 @@ function stripVolatile(plan: { cmd: string[]; env: Record<string, string> }): {
 }
 
 describe('RFC-282 B1a — business-path parity (facade vs legacy, live while both exist)', () => {
+  test('RFC-396: business and persona adapters both retain the complete large-prompt stdin plan', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc396-large-assembly-'))
+    const prompt = '---\n' + '冻结依据\n'.repeat(40000) + 'END_OF_BASIS'
+    try {
+      const pair = mkBusinessPair(root, 'opencode')
+      const driver = getRuntimeDriver('opencode')
+      const business = await driver.buildSpawn({
+        ...pair.unified,
+        prompt,
+        injection: { ...pair.unified.injection, profile: PROFILES.get('root-agent')! },
+      })
+      const persona = await driver.buildSpawn({
+        ...pair.unified,
+        prompt,
+        injection: { mcps: [] },
+      })
+      for (const plan of [business, persona]) {
+        expect(plan.stdin).toEqual({ mode: 'pipe', data: prompt })
+        expect(plan.cmd).not.toContain(prompt)
+        expect(plan.cmd).toContain('--session')
+        expect(plan.cmd).toContain('ses_42')
+        await plan.cleanup?.()
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   for (const kind of ['opencode', 'claude-code'] as const) {
     test(`${kind}: cmd/env/stdin byte-identical; declared equals legacy renderInjection`, async () => {
       const driver = getRuntimeDriver(kind)

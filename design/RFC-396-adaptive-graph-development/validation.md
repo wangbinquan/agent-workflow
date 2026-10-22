@@ -167,3 +167,7 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 通知案例的 designer 和澄清后的 output 都发布 `agent-result`；原宿主按原始输出行顺序取首个同名端口，错误地重复消费首稿，导致 Task 已 done 而 Case 卡在 running。修复复用已有 `projectExecutionOutcome`，按工作流 output 节点和最新 settled run 取结果，保留 inactive/skipped/缺失端口语义。另将设计导入的 `ValidationError` 归为 semantic 失败回执；真实存储错误仍传播，避免吞掉基础设施问题。冻结材料补充 decision 人工来源、决策表规则引用、预算单位和验收义务规则，不修改已发布内置资源版本，也不放宽领域校验。
 
 完成上述代码和用例后集中复验：同一 5 文件集合在 SQLite 与独立真实 PostgreSQL 分别 **20 pass / 0 fail / 116 assertions**，涵盖最终端口选择、两部署材料/恢复、原生人工来源导入、组合规划，以及既有 agent/workflow 真实子进程执行；相关架构 3 文件 **45 pass / 0 fail / 146 assertions**；backend typecheck、目标文件 ESLint 和格式检查通过。日志为 `rfc396-result-repair-{tests,postgresql,architecture,types,lint}.log`。本地测试使用保留 RFC-395 并发内容的共享工作区；其结果不是新候选 exact-SHA CI 或真实模型恢复验收。
+
+### 大冻结依据提示传输修复（2026-10-22）
+
+真实审核的 322 KB 提示触发 OpenCode 单参数限制。大提示改走已有 SpawnPlan stdin，完整材料不截断，小提示 argv 与直接 buildCommand 的有界校验保持原语义。真实子进程检验 CJK、多行、末尾哨兵，业务与系统装配均检验 stdin 和续跑 session 标识；对应两文件集中验证 **21 pass / 0 fail / 61 assertions**，目标 lint/格式通过。这是传输和装配范围的证据，不替代真实模型审核成功或全仓 CI。

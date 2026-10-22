@@ -235,11 +235,19 @@ export interface OpencodeSpawnContext extends OpencodeEnvContext {
   binaryVersion?: string | null
 }
 
-/** Combine argv + env into one spawn plan (the opencode driver's buildSpawn). */
+/**
+ * Keep small-prompt argv compatibility; deliver large input intact over stdin.
+ * OpenCode reads piped input before dispatching either a fresh or resumed run:
+ * https://github.com/anomalyco/opencode/blob/v1.19.0/packages/opencode/src/cli/cmd/run.ts#L400
+ * RFC-396: frozen design/review material can exceed the single-argument limit.
+ * buildCommand retains its guard for callers that explicitly request argv only.
+ */
 export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
   cmd: string[]
   env: Record<string, string>
+  stdin?: { mode: 'pipe'; data: string }
 } {
+  const piped = Buffer.byteLength(ctx.prompt, 'utf8') > MAX_OPENCODE_PROMPT_BYTES
   const cmd = buildCommand(
     {
       opencodeCmd: ctx.opencodeCmd,
@@ -247,8 +255,9 @@ export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
       resumeSessionId: ctx.resumeSessionId,
       binaryVersion: ctx.binaryVersion,
     },
-    ctx.prompt,
+    piped ? '' : ctx.prompt,
   )
+  if (piped) cmd.splice(-2) // No positional message; stdin is the complete prompt.
   const env = buildOpencodeEnv(ctx)
-  return { cmd, env }
+  return { cmd, env, ...(piped ? { stdin: { mode: 'pipe' as const, data: ctx.prompt } } : {}) }
 }

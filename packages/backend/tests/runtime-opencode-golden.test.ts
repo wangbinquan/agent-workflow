@@ -5,6 +5,9 @@
 // cmd/env from the same raw materials — this test pins opencode's).
 
 import { describe, expect, it } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   buildCommand,
   buildOpencodeSpawn,
@@ -195,5 +198,50 @@ describe('opencode prompt argv size guard (B4-runtime-5)', () => {
     // argv also carries the other flags and shares ARG_MAX with the ~128 KiB
     // env block; the guard must sit strictly below 128 KiB.
     expect(MAX_OPENCODE_PROMPT_BYTES).toBeLessThan(128 * 1024)
+  })
+})
+
+// RFC-396 real review failed before spawn with a 322 KB frozen basis. Preserve
+// the argv-only guard, but the production spawn plan must transport all bytes.
+describe('RFC-396 large OpenCode prompt transport', () => {
+  it('keeps the exact boundary positional and pipes one byte more without losing resume flags', () => {
+    expect(
+      buildOpencodeSpawn({ ...BASE, prompt: 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES) }).stdin,
+    ).toBeUndefined()
+    const prompt = 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES + 1)
+    const plan = buildOpencodeSpawn({ ...BASE, prompt, resumeSessionId: 'same-session' })
+    expect(plan.stdin).toEqual({ mode: 'pipe', data: prompt })
+    expect(plan.cmd.slice(-2)).toEqual(['--session', 'same-session'])
+    expect(plan.cmd).not.toContain(prompt)
+  })
+
+  it('delivers a CJK multiline input and its final sentinel intact to an actual subprocess', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc396-prompt-'))
+    try {
+      const receiver = join(root, 'receiver.ts')
+      writeFileSync(
+        receiver,
+        'const s=await Bun.stdin.text();console.log(JSON.stringify({s,args:Bun.argv.slice(2)}))',
+      )
+      const prompt = '---\n' + '完整冻结材料🙂\n'.repeat(24000) + '\nFINAL_SENTINEL'
+      const plan = buildOpencodeSpawn({
+        ...BASE,
+        prompt,
+        opencodeCmd: [process.execPath, receiver],
+      })
+      expect(plan.stdin?.mode).toBe('pipe')
+      const proc = Bun.spawn(plan.cmd, {
+        stdin: new Blob([plan.stdin!.data]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      const received = (await new Response(proc.stdout).json()) as { s: string; args: string[] }
+      expect(await proc.exited).toBe(0)
+      expect(received.s).toBe(prompt)
+      expect(received.args).toEqual(plan.cmd.slice(2))
+      expect(plan.cmd.every((arg) => Buffer.byteLength(arg) < 128 * 1024)).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
