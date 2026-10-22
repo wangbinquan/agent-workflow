@@ -1,7 +1,7 @@
 # RFC-396 技术设计：自适应图驱动研发数字人
 
 > 状态：In Progress；调研基线 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8`（2026-10-21）。
-> 本文所有 `Graph*` / `Design*` 新合同及路径均为拟新增设计，除明确标为现有者外，不表示源码已存在。
+> 本文保留设计阶段的架构合同与研究基线；实际实现落点见 §1.1，发布与运行证据见 [validation](./validation.md)。不能将下列历史基线行号当作当前 HEAD 行号。
 > 产品范围、裁决及 AC 见 [proposal](./proposal.md)，工程任务与证据状态见 [plan](./plan.md)。
 
 ## 1. 基线与接入依据
@@ -23,6 +23,20 @@
 | `packages/frontend/src/components/review/MermaidBlock.tsx:129`                                                       | 现有 Mermaid 渲染                                              | 复用渲染基础；元素语义映射另有显式数据             |
 
 RFC-393 已将模块组迁到 `bootstrap/daemonModules/`。正在进行的 RFC-394 修改部署 profile；本 RFC 文档不修改其生产代码，实施时使用完成后的唯一应用图。
+
+### 1.1 已实现的主要入口（发布候选 `bcdfdc366`）
+
+| 能力 | 实际落点 | 关键约束 |
+| --- | --- | --- |
+| 共享传输合同 | [graphDesign.ts](../../packages/shared/src/schemas/graphDesign.ts) | 前后端共享 schema；语义选择仍属于研发领域 |
+| 自适应组合 | [selectViews.ts](../../packages/backend/src/modules/development-automation/domain/graph-development/selectViews.ts)、[viewPlanning.ts](../../packages/backend/src/modules/development-automation/application/graph-development/viewPlanning.ts) | 模型生成候选，程序按有效引用、覆盖增益、预算与固定项选择；policyVersion 2 对同一 concern 取最大贡献，不累加重复表达 |
+| 冻结依据与真实输入 | [implementationBasis.ts](../../packages/backend/src/modules/development-automation/domain/graph-development/implementationBasis.ts)、[executionConsumption.ts](../../packages/backend/src/modules/development-automation/application/graph-development/executionConsumption.ts) | 保留完整语义、原始答案与未知；消费实际最终节点结果，校验来源与代次 |
+| 实际验证 | [verification.ts](../../packages/backend/src/modules/development-automation/application/graph-development/verification.ts)、[behaviorVerification.ts](../../packages/backend/src/modules/development-automation/application/graph-development/behaviorVerification.ts) | profile 和有限模型程序实际运行，证据绑定 basis / tree / profile，人工义务单独结算 |
+| 类型与岗位 | [employeeType.ts](../../packages/backend/src/modules/development-automation/application/graph-development/employeeType.ts)、[builtinResources.ts](../../packages/backend/src/modules/development-automation/application/graph-development/builtinResources.ts) | `graph-development@1` 与新岗位 v2；既有员工保持冻结版本 |
+| 唯一装配 | [digitalEmployee.ts](../../packages/backend/src/bootstrap/daemonModules/digitalEmployee.ts) | 接入现有应用图、执行合同与 Case；不另建调度器 |
+| Case 设计与证据页 | [GraphDesignWorkspace.tsx](../../packages/frontend/src/components/digital-employees/GraphDesignWorkspace.tsx)、[GraphDesignEvidence.tsx](../../packages/frontend/src/components/digital-employees/GraphDesignEvidence.tsx) | 动态目录、图引用、原生人工门、候选与原始证据的现有组件入口 |
+
+相较下方设计路径草图，实际前端复用了 `components/digital-employees/`；实现依据、版本影响与证据投影按实际职责合并在上述 domain/application 文件中。完整行为与兼容结论以测试和实际旅程为准，单有文件不能证明接线完成。托管自定义 script 的 path 类型审核缺口与实际 inline Markdown 夹具分开记录于 [真实验收](./real-model-acceptance.md)，不在这里隐藏或宣称已修复。
 
 ## 2. 总体结构与对象边界
 
@@ -64,7 +78,7 @@ flowchart TD
 
 development-automation 不直接 import collaboration 或 task-execution 内部。它声明窄的 required SPI；task-execution 提供执行/材料适配器，人工门继续经过 task-execution 已有 collaboration required port。Task 执行不反向 import 新研发 domain。
 
-### 3.2 拟新增路径
+### 3.2 设计阶段的路径分工
 
 ```text
 modules/development-automation/

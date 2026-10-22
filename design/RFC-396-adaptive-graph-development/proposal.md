@@ -1,9 +1,9 @@
 # RFC-396：自适应图驱动研发数字人
 
 > 状态：In Progress（2026-10-21）。用户已明确授权“完整实现RFC并提交上库到远端”。原型与独立功能设计门记录见 [design-gate.md](./design-gate.md)。
-> 类型建议：`graph-development@1`；产品名称：图驱动研发数字人。
+> 已实现类型：`graph-development@1`；产品名称：图驱动研发数字人。
 > 配套：[技术设计](./design.md)、[实施与验收计划](./plan.md)。
-> 源码核对基线：`main@3fcb14dbf8ab27cf451934942ea6b9cd647077f8`。新增对象、合同和路径均是待实现设计。
+> 设计调研基线：`main@3fcb14dbf8ab27cf451934942ea6b9cd647077f8`。完整实现与后续修复已发布至 `bcdfdc366`，主 CI 49/49 success；真实模型、托管执行与最终退出状态以 [验收记录](./validation.md) 为准。
 
 ## 1. 背景与用户要求
 
