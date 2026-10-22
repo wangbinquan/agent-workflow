@@ -140,3 +140,21 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 | [119646933476，backend 16/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933476) | 本 RFC 新增 HTTP 断言误写 400；既有 `ValidationError` 一直定义为 422；1005 pass / 2 fail / 1 skip | 改正断言为 422，继续精确断言 `graph-request-invalid`；不改生产错误合同 |
 
 `baf4ac293` 的 [backend 16/24，job 119649325233](https://github.com/wangbinquan/agent-workflow/actions/runs/39725816019/job/119649325233) 是同一个尚未包含修复的 400/422 断言失败，未认领为其他原因。修复后的完整 HTTP 用例在本地 SQLite 与真实 PostgreSQL 同次复验 **2 pass / 0 fail，42 assertions**，日志 `rfc396-http-status-repair.txt`。复验包含读取、深链、原始证据导出、编辑、版本冲突、独立展示状态、历史版本与冻结依据导出，未缩成只检查状态码。后续 hosted exact-SHA 结果仍需收齐。
+
+
+## 实现候选 CI 终态与剩余阻塞
+
+实现修复提交 `fe835ab435b86e814ce48aafe9197dd2e08a4181` 的 [主 CI 39729036993](https://github.com/wangbinquan/agent-workflow/actions/runs/39729036993) 已结束：**47 个 job 成功、2 个 job 失败**。失败为 [backend 12/24，119659567973](https://github.com/wangbinquan/agent-workflow/actions/runs/39729036993/job/119659567973) 的一项旧表计数断言，以及据此失败的 `CI required` 汇总门；不是两个独立根因，也不是整体通过。
+
+- [backend 16/24，119659568129](https://github.com/wangbinquan/agent-workflow/actions/runs/39729036993/job/119659568129)：**1007 pass / 0 fail / 1 skip**，包含 SQLite、PostgreSQL 两条完整 RFC-396 HTTP 用例，已证明 422 断言修复。
+- 最新提交的类型/lint/格式/shared/system mock、全部前端分片、真实 PostgreSQL、三种 OS 二进制构建及 **Linux 3 + macOS 3 + Windows 4 个浏览器分片全部通过**。
+- 同一失败 backend 分片内，canonical JSON/Markdown 与运行时合同一致性、表归属、digest、归档表边界与变异负面对照均通过；唯一失败仍为已提交旧测试的 `Expected length: 217 / Received length: 222`。日志为 `rfc396-ci-http-job-119659567973.txt`，完整 job 状态快照为 `rfc396-ci-final-fe835.json`。
+- 前序 `b8d1f9fcc` 的主 CI 终态为 46 success / 3 failure（schema 与 HTTP 两个失败 job，加汇总门），其后真实缺陷和报告问题均已分别处置，未抹去历史失败。
+
+截至本段记录仍有三个未关闭条件：
+
+1. **共享 schema 断言发布**：工作区的 `packages/backend/tests/architecture/rfc349-schema-contract.test.ts` 已含 222/216 与精确五表断言；同时含 RFC-395 对未提交 `bootstrap/persistenceSchema.ts` 的新导入及其整组 contribution 依赖。需要依赖形成可发布状态后，再保留全部共同产出发布该文件并消费新 CI。此项仍是本 RFC 的交付欠项；不撤走、改回或单独提交会缺依赖的共享中间态。
+2. **真实模型三场景**：材料发送许可仍待当前会话用户明确批准，未重试被自动审批拒绝的外部调用。预约只到澄清门；三个完整真实模型旅程与固定组合效果对照尚未签收。
+3. **实际托管执行证据**：AC14 要求真实接线和执行，并不要求自动部署业务应用。当前 `rfc396-workspace.test.ts` 真实执行双库、工作区/Git、材料和恢复路径，但 hosted helper 在测试进程内转发到 `executeWorkspaceTaskImageOperation`，不能替代实际托管传输与执行环境证据。因此保留该验收项，不以静态接线或该 fixture 冒签。
+
+本次后续记录提交只更新 RFC 状态和证据，不改变 `fe835ab43` 的生产与测试候选。继续保持 **In Progress**；后继记录提交的 CI 与上述实现候选证据分别看待。
