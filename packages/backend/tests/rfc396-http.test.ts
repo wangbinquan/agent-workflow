@@ -86,7 +86,8 @@ describeEachProviderHttpApplication(
         requestId: 'invalid',
         expectedRevision: 0,
       })
-      expect(invalid.status).toBe(400)
+      // ValidationError uses the repository-wide 422 response contract.
+      expect(invalid.status).toBe(422)
       expect(await invalid.json()).toMatchObject({ code: 'graph-request-invalid' })
       const view = await request(observer.token, '/api/development-designs/design-a/views/overview')
       const rawArtifact = await artifacts.put([

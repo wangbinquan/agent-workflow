@@ -93,7 +93,7 @@
 | PostgreSQL 默认 NULL 排序不同                                        | 权威人工输入查询使用既有 `descNullsLast` 合同                                                                                                   |
 | 新增五张内容表/迁移造成旧精确计数及最后一步切片过期                  | 明确 222 源表/216 active、261 迁移；逐一锁定五张图表；RFC-374 前缀定位 `0036_rfc374_node_run_seq`，继续证明真实历史升级                         |
 | 新类型、图弹窗和第二个验证命令消费者未登记                           | 两种类型各初始化一次；原重复装配负面对照仍各两次；登记七个实际 Dialog 实例与确切工厂转发点                                                      |
-| 22 个图 HTTP 路由未登记、两种错误缺少 HTTP 断言                      | 完整端点登记；真实应用中验证 404/400 错误码；MCP 逐叶登记当前 Case/UI 范围，未凭空声称新增外部模型工具                                          |
+| 22 个图 HTTP 路由未登记、两种错误缺少 HTTP 断言                      | 完整端点登记；真实应用中验证 404/422 错误码（422 断言纠正见下文）；MCP 逐叶登记当前 Case/UI 范围，未凭空声称新增外部模型工具                                          |
 | 公开类型直接派生整套装配；领域文件包含跨域适配/资源模板              | 明确 SourceControl DTO/参与者；HTTP 挂载不进入公共 DTO；类型注册/codec/内置资源移入 application，HTTP 归 infrastructure，组合根只构造完整参与者 |
 | 能力台账、模式清单和 POSIX 夹具跳过项未同步                          | 配套既有机器清单，保留范围解释；不增加宽泛排除，不删除原用例                                                                                    |
 | Windows 真实启动报 `ENAMETOOLONG`                                    | 完整图模型/schema 通过既有 `seedFiles` 物化到 invocation 工作区；命令行仅含材料路径，不截断材料；夹具读取同一文件                               |
@@ -121,3 +121,22 @@ schema contribution 的导出修复后，重新生成 canonical JSON/Markdown。
 HTTP 适配器迁到 `infrastructure/http` 后，错误码覆盖扫描现继续显式包含其确切路径，避免移动文件使原有检查消失。该文件的四项检查全部通过。schema 联合检查首轮为 `10 pass / 2 fail`（`rfc396-schema-final-check.txt`）：本 RFC 五表名称断言遗漏排序，已修正；另一个失败为 RFC-395 新 schema 声明入口被原归档表 consumer 扫描识别，不改动其在制迁移。随后限定计数与生成报告两项复验 `2 pass / 0 fail`、26 assertions，见 `rfc396-schema-final-targeted.txt`。
 
 共享 `tests/architecture/rfc349-schema-contract.test.ts` 同时包含本 RFC 的计数/五表断言与 RFC-395 的新 bootstrap 导入。完整保留这些改动；在其依赖仍未提交时，不单独发布这个共享文件制造缺依赖提交。canonical 报告和路由覆盖修复可独立发布；共享断言的发布及其 CI 仍需后续收齐。未重复运行全量本地 gate。
+
+
+## Windows 旅程闭环与 HTTP 断言纠正
+
+schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb450882f9b` 推送；推送后 `main == origin/main`、差异 `0/0`、共享 index 为空。该提交的 [主 CI 39725816019](https://github.com/wangbinquan/agent-workflow/actions/runs/39725816019) 尚在执行。
+
+生产修复候选 `b8d1f9fcc` 的 hosted 结果截至本段取证：
+
+- [Windows 平台 39725052080](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052080)、[视觉回归 39725052043](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052043)（59 passed）及 [integration-opencode 39725052079](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052079) 全部成功。
+- 主 CI 的类型/lint/格式/shared/system mock、全部六个前端分片、真实 PostgreSQL、三种 OS 的生产二进制构建、三个 macOS 浏览器分片与四个 Windows 浏览器分片通过。
+- [Windows shard 3/4，job 119653946843](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119653946843) 为 **138 passed**，明确包含预约 39.8s、通知 1.2m、已有模块 43.5s 三条完整 RFC-396 旅程。该结果验证了材料文件传递及 Pin 保存等待的实际 Windows 路径；仍是确定性 system mock，不能替代 AC17 的真实模型。
+- 主 CI 当时为 43 个 job 成功、2 个失败、3 个 Linux 浏览器分片排队；不是整体绿。失败逐项如下。
+
+| 失败 job | 已确认根因 | 处理 |
+| --- | --- | --- |
+| [119646933434，backend 12/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933434) | 217/211 的旧计数断言及旧 canonical 报告；1131 pass / 2 fail | 报告已由 `baf4ac293` 更新；计数/五表断言在共享文件中完成，仍依赖 RFC-395 未提交导入，保留全部共同产出 |
+| [119646933476，backend 16/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933476) | 本 RFC 新增 HTTP 断言误写 400；既有 `ValidationError` 一直定义为 422；1005 pass / 2 fail / 1 skip | 改正断言为 422，继续精确断言 `graph-request-invalid`；不改生产错误合同 |
+
+`baf4ac293` 的 [backend 16/24，job 119649325233](https://github.com/wangbinquan/agent-workflow/actions/runs/39725816019/job/119649325233) 是同一个尚未包含修复的 400/422 断言失败，未认领为其他原因。修复后的完整 HTTP 用例在本地 SQLite 与真实 PostgreSQL 同次复验 **2 pass / 0 fail，42 assertions**，日志 `rfc396-http-status-repair.txt`。复验包含读取、深链、原始证据导出、编辑、版本冲突、独立展示状态、历史版本与冻结依据导出，未缩成只检查状态码。后续 hosted exact-SHA 结果仍需收齐。
