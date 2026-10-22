@@ -75,8 +75,8 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [x] 核心 Task / NodeRun 字段去向、双 provider 原则、一次切换和首写回退边界
 - [x] 文档静态检查：217 表无漏项 / 重复；Task 70 列、NodeRun 62 列恰好各有一个去向；32 个本地 Markdown 链接有效；共享索引原内容完整保留；`git diff --check` 通过
 - [x] RFC 索引与 STATE 登记；具体文档 commit / push 证据以 Git 历史和本次交接为准
-- [ ] 独立功能设计门
-- [ ] 用户批准生产实现
+- [ ] 独立功能设计门（接手会话按惯例免，可推翻；见 §6）
+- [x] 用户批准生产实现（2026-10-21 交接手会话分解并指挥 Codex 实施；不含 T19 真实实例操作）
 
 ### 5.2 实现与运行（未开始）
 
@@ -88,3 +88,72 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [ ] 真实实例 MigrationPlan、操作批准、切换回执和切换后验收
 
 文档完成、设计获批、实现完成、真实搬迁、线上验收是五个不同状态。不得用本节第一组复选框将 RFC 置 Done。
+
+## 6. 实施分解（2026-10-21 本会话接手）
+
+用户 2026-10-21 将本 RFC 交本会话做任务分解并指挥 Codex 实施，视为批准生产实现；T19 对真实实例的预检、搬迁与切换仍按实例逐次批准。
+按本会话惯例免设计门与实现门（可推翻）。分解依据是同日四路只读研究（基线 `2a6b366f9`）：provider 查询面与方案、测试面、合同与迁移机制、
+重建字段的全部读写点。研究原文在本会话 scratchpad，结论摘入本节。
+
+### 6.1 研究结论摘要
+
+- **查询面**：337 个生产文件含查询，modules 内全部在 `infrastructure/`；builder 语句 2,931 条，另有 32 处原始执行；SQLite 专属终端
+  `.get/.all/.run` 876 处（97 个文件）。drizzle-orm 0.45.2 自带原生 `drizzle-orm/bun-sql`，PostgreSQL 连接池本就是 Bun.SQL，无需新依赖。
+- **T3 方案**：采用「方案 B」——显式合同生成 SQLite 与 PostgreSQL 两套原生表、会话提供表集、业务写在约 25 个 builder 方法的窄中立接口上，
+  运行时直接是原生 bun-sqlite / bun-sql。类型原型已验证可行；每模块两份适配器（重建 RFC-359 刚合掉的 153 对孪生）与「底层换驱动、
+  上层仍 sqlite 类型」均不采用。
+- **合同**：现合同从 SQLite 声明反射，owner 按前缀、codec 按列名正则推断，实测至少 8 个 JSON 列被判为 `text`；两 provider 实测差异
+  有 7 个仅 SQLite 的 trigger、8 条仅 SQLite 的 FK、`tasks.name` 可空性不一致、42 张表列序不同。
+- **测试面**：目标模型下必改 664 个测试文件（1,887 个写入点，上界约 726）；473 个文件各自写本地造任务函数，只改共享 helper 最多省
+  42 个文件。采用目标模型造数 builder + AST codemod，不做按旧列名映射的测试兼容层。
+- **重建读写点**：T4～T10 直接访问文件数依次约 71 / 36 / 53 / 28 / 20 / 53 / 15。
+
+### 6.2 落地顺序（阶段 I 单独落地待用户确认）
+
+| 阶段 | 内容 | 交付方式 |
+| --- | --- | --- |
+| I-a | T1 机器可读库存与源指纹基础 + T2a：217 表按今日声明等价重述为各领域显式 contribution，`@/db/schema` 导出编译出的表，336 个引用方不动 | 不改物理 schema、不搬数据；全部开发与用例写完后集中验证一次，单独提交 |
+| I-b | T3（方案 B）：中立查询接口、会话提供表集、原生 bun-sqlite / bun-sql，删除 sqlite-proxy、SQL 修补与进程级表投影 | 同上；单行 INSERT 往返合并的性能须以原生方式保持 |
+| II-0 | 本会话修订设计：§6.4 缺口逐条裁决，写回 design / migration / table-mapping | 文档 |
+| II | T2b、T4～T17：目标模型造数 builder 与 codemod、领域重建、转换器、回执与切换、兼容投影、删除清单 | 全部开发与用例写完后集中验证（T18），一次激活交付 |
+| III | T19：每个真实实例只读预检 → MigrationPlan → 用户批准 → 备份、搬迁、验收 | 逐实例批准 |
+
+阶段 I 在现有物理 schema 上完成，现有双引擎测试即等价判据，不产生 schema epoch，符合本 plan §4「前置提交不激活新合同」。
+
+### 6.3 阶段 I 的 Codex 工作包
+
+| 包 | 内容 | 验收 |
+| --- | --- | --- |
+| I-a | `platform/persistence/schema/`（contribution DSL、codec 目录、表达式 AST、registry、合同 / SQLite plan / PostgreSQL plan 编译器、drizzle 物化）；各模块 `infrastructure/persistence` 的 contribution；`bootstrap/persistenceSchema.ts` 唯一汇集；platform 内对合同的默认值调用改为注入；冻结的 legacy v2 投影 | 四条机械证明：legacy v2 合同 digest 相等（不能逐字节时规范化相等并注明）；PostgreSQL plan 逐条相等且真引擎 catalog 相等；SQLite 编译 DDL 与迁移 replay 的差异等于已审账本；两套 drizzle 表投影逐列相等；负例 |
+| I-b1 | S0～S2：PostgreSQL 表固化为显式表；中立类型改名；清除 SQLite 专属终端与原始执行并加守卫 | 现有双引擎测试全绿；守卫负例 |
+| I-b2 | S3～S5：会话提供表集、删除进程级投影与切换调用；PostgreSQL 改原生 bun-sql 会话、写闸只做语句分类；业务 SQL 不再依赖 PostgreSQL 同名函数 | 同上；PostgreSQL 客户端行为合同测试保持；性能对拍 |
+
+I-b1 与 I-b2 在开发上前后衔接，作为一次交付集中验证。
+
+### 6.4 阶段 II 实施前须修订的设计缺口
+
+1. 宿主 workflow 共 4 个（另有数字员工宿主 `00000000000000DIGEMPHOST0`），`subject_kind` 缺数字员工与 code-round；宿主行被评审 join、
+   内置布局、workflowName、记忆 scope、闭包 / intent 哈希隐性依赖。
+2. 旧行形状已写进持久化 JSON（人工门续跑 payload、澄清 / 评审开门 manifest），新库需 v1 解码，否则迁移前等待人工的任务恢复后被拒。
+3. 「当前选中哪次运行」约 77 处各自计算（9 种槽位键、5 种排序），先立统一选择端口，再拆表。
+4. 拆表后变成多表 CAS：任务生命周期 CAS（状态 + prune 认领 + fence 同句）、node_run 状态 CAS、merge-state CAS。
+5. 子任务树删除依赖 `tasks.parent_task_id` 的级联；移到 `task_launch_contexts` 会改变删除语义。
+6. 「主仓 = ordinal 0 投影」的例外：延后准备的占位任务无挂载；`tasks.worktree_path` 兼作「未绑定」标记并参与 CAS；无 `task_repos`
+   时合成 `repos[]` 的回落。
+7. D 清单补项：`pre_snapshot` 自 RFC-130 起无新写入、`pre_snapshot_repos_json` 无写入点；启动期 seq 与 frame 回填。
+8. `envelope_nonce` 在每行铸造时生成，与「运行态只给需要的角色建行」冲突。
+9. design 内部待定：`merge_state` 归属（§4 与 §5.3）；`isolation_root_ref` 与 `iso_worktree_path` 重叠；per-repo map 的键是
+   `worktree_dir_name`；快照四态；脑图下问题快照会被改写；consumed 记录只到源节点粒度；`review_iteration` 兼作并发令牌；
+   `operation_generation` 与 `generation_seq` 两轴。
+10. 前端严格解析：投影须精确；Agent / Workgroup 任务的 `Task.workflowId`；`NodeRun.seq` 非空与 `nodeRunOrder` 兜底退出；
+    `worktreeDirName` / `repoCount` 是否保留投影；`parentNodeRunId` 保持「历史 parent」含义。
+11. 迁移机制待决：新 epoch 后 SQLite 的演进机制；行处置粒度与存放；SQLite 目标文件位置与 pointer v2；provider 差异的目标裁决
+    （7 trigger、8 FK、`tasks.name`、partial 与 full unique）；种子行 contribution；跨 epoch 备份恢复；`migrationRole` 退役。
+12. 疑似现存缺陷：只有一个非根成员的仓库组任务，`isoNodeTree` 可能存为 NULL（崩溃重放报 node_tree missing）；先复现，属实则单独修复。
+13. 先删 test-only 与死代码（`startTask`、`getTaskNodeRuns`、`systemWorkspaceGc` 的 DB 函数、intent 引擎 converge、
+    `services/bundle/provider.ts`、无调用方的 `decideIntentApplyConverge`）可缩小 T4～T6 与 T10 的改动面。
+
+### 6.5 并发约束
+
+RFC-396 正在工作树中实施，改动 `db/schema.ts`、SQLite 迁移链与 `platform/persistence/schemaContract.ts` 等；阶段 I 重写的正是这些文件。
+阶段 I 的代码实施在 RFC-396 的持久化改动提交后开始；之后新增的表须同时提供 contribution（I-a 的结构锁会要求）。

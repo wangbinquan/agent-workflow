@@ -1,6 +1,7 @@
 # RFC-395：数据库阶段目标模型与一次迁移
 
-- **状态**：Draft（2026-10-21）。用户要求全面调研数据库并「落地 RFC」；本次交付设计，尚未批准生产实现或执行真实数据迁移。
+- **状态**：In Progress（2026-10-21 用户将本 RFC 交接手会话做任务分解并指挥 Codex 实施，视为批准生产实现；真实实例的预检、搬迁与切换仍按 T19 逐实例批准。
+  分解、落地顺序与实施前须修订的设计缺口见 [plan §6](./plan.md)。原状态：Draft，用户要求全面调研数据库并「落地 RFC」）。
 - **代码基线**：`3fcb14dbf8ab27cf451934942ea6b9cd647077f8`，`main`；源码逻辑合同摘要 `sha256:8e6510d4d0927d538692ecf22cde0b1fa9a97c733a9e044af8d9768418ecb956`。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)，承接 schema contribution、NodeRun 身份 / provenance、AtomicApply 与 provider 中立持久化目标；不代表 RFC-294 全部退出。
 - **阅读顺序**：本文 → [技术设计](./design.md) → [迁移合同](./migration.md) → [逐表处置](./table-mapping.md) → [实施计划](./plan.md)。调研证据见 [research.md](./research.md)。
