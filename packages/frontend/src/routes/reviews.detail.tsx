@@ -284,8 +284,14 @@ function ReviewDetailPage() {
   const [decisionDialog, setDecisionDialog] = useState<
     | null
     | { kind: 'approve'; draftCount: number; commentCount: number }
-    | { kind: 'iterate'; willRerun: string; noComments: boolean }
-    | { kind: 'reject'; willRerun: string; reason: string; reasonError: boolean }
+    | { kind: 'iterate'; willRerun: string; noComments: boolean; returnDecision?: boolean }
+    | {
+        kind: 'reject'
+        willRerun: string
+        reason: string
+        reasonError: boolean
+        returnDecision?: boolean
+      }
   >(null)
 
   const onApprove = useCallback(async () => {
@@ -321,7 +327,13 @@ function ReviewDetailPage() {
     // empty does NOT emit `review-rerunnable-empty-on-reject`"). Showing
     // "(none)" here told users nothing would re-run, which was a lie.
     const willRerun = detail.data.rerunnableOnReject.join(', ') || t('reviews.rerunDirectUpstream')
-    setDecisionDialog({ kind: 'reject', willRerun, reason: '', reasonError: false })
+    setDecisionDialog({
+      kind: 'reject',
+      willRerun,
+      reason: '',
+      reasonError: false,
+      returnDecision: detail.data.decisionHandling === 'return-decision',
+    })
   }, [detail.data, t])
 
   const onIterate = useCallback(() => {
@@ -331,6 +343,7 @@ function ReviewDetailPage() {
       kind: 'iterate',
       willRerun,
       noComments: detail.data.comments.length === 0,
+      returnDecision: detail.data.decisionHandling === 'return-decision',
     })
   }, [detail.data, t])
 
@@ -798,8 +811,14 @@ function ReviewDetailPage() {
 // iterate are pure confirms with kind-specific copy.
 type DecisionDialogState =
   | { kind: 'approve'; draftCount: number; commentCount: number }
-  | { kind: 'iterate'; willRerun: string; noComments: boolean }
-  | { kind: 'reject'; willRerun: string; reason: string; reasonError: boolean }
+  | { kind: 'iterate'; willRerun: string; noComments: boolean; returnDecision?: boolean }
+  | {
+      kind: 'reject'
+      willRerun: string
+      reason: string
+      reasonError: boolean
+      returnDecision?: boolean
+    }
 
 function DecisionDialog({
   state,
@@ -862,12 +881,20 @@ function DecisionDialog({
           {state.noComments && (
             <p className="review-decision-dialog__warn">{t('reviews.iterateNoCommentsWarning')}</p>
           )}
-          <p>{t('reviews.iterateConfirm', { willRerun: state.willRerun })}</p>
+          <p>
+            {state.returnDecision
+              ? t('reviews.returnIterationConfirm')
+              : t('reviews.iterateConfirm', { willRerun: state.willRerun })}
+          </p>
         </>
       )}
       {state.kind === 'reject' && (
         <>
-          <p>{t('reviews.rejectPrompt', { willRerun: state.willRerun })}</p>
+          <p>
+            {state.returnDecision
+              ? t('reviews.returnRejectionConfirm')
+              : t('reviews.rejectPrompt', { willRerun: state.willRerun })}
+          </p>
           <label className="review-decision-dialog__label">
             {t('reviews.rejectReasonLabel')}
             <TextArea

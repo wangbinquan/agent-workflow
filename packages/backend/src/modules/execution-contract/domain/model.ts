@@ -362,6 +362,8 @@ export const executionContractGuideSchema = z
   })
 
 export interface ExecutionContractRegistration {
+  /** Closed, contract-owned opt-in; existing contracts keep their original workflow grammar. */
+  readonly workflowHumanGates?: readonly ('clarify' | 'clarify-cross-agent' | 'review')[]
   readonly contractRef: ExecutionContractRef
   readonly guideJson: string
   /** Projects the platform-owned host envelope to the tool's direct business input. */

@@ -14,12 +14,43 @@ export function createCrewStationVerificationCommandEffectsFactory(input: {
   readonly retainWorkspace: (reference: string, retained: boolean) => void
 }): VerificationCommandEffectsFactory {
   return {
+    async environment(workspaceRef) {
+      const source = input.locate(workspaceRef)
+      return await input.helper.call(source.taskId, 'verification-command', {
+        method: 'environment',
+        path: source.path,
+      })
+    },
     create({ evidence }) {
       const programs = new WeakMap<
         VerificationProgramRef,
         { programRef: string; argsRef: string | null; workspaceRef: string; id: string }
       >()
       return {
+        async invokeBehavior(request) {
+          const source = input.locate(request.workspaceRef)
+          input.retainWorkspace(request.workspaceRef, true)
+          const result = await input.helper.call<{
+            exitCode: number
+            timedOut: boolean
+            outputJson: string
+            error: string
+          }>(
+            source.taskId,
+            'verification-command',
+            {
+              method: 'behavior',
+              path: source.path,
+              id: randomUUID(),
+              programRef: request.programRef,
+              inputJson: request.inputJson,
+              timeoutMs: request.timeoutMs,
+            },
+            { timeoutMs: request.timeoutMs + 30_000 },
+          )
+          input.retainWorkspace(request.workspaceRef, false)
+          return result
+        },
         async resolveProgram(request) {
           const source = input.locate(request.workspaceRef)
           if (

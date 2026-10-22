@@ -14,7 +14,7 @@ export function createExecutionContractResourceAdapterFromLookup(
   }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],
 ): ExecutionContractResourcePort {
   return {
-    async inspect({ implementation, expectedOutputPort }) {
+    async inspect({ implementation, expectedOutputPort, humanGates }) {
       if (implementation.kind === 'agent') {
         const agent = await lookup.loadAgent(implementation.agentRef.id)
         if (agent === null || agent.updatedAt !== implementation.agentRef.revision) return null
@@ -38,6 +38,7 @@ export function createExecutionContractResourceAdapterFromLookup(
       const closure = inspectExecutionContractWorkflowDefinition(
         workflow.definition,
         expectedOutputPort,
+        humanGates,
       )
       return {
         kind: 'workflow',

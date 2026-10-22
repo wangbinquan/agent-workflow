@@ -10,6 +10,21 @@ import {
 import type { CollaborationCommandContext, ReviewActor } from './types'
 import type { ReviewNodeReviewerConfig, ReviewSummary, TaskFeedback } from '@agent-workflow/shared'
 import type { ClarifyDirective } from '@agent-workflow/shared'
+import type { CollaborationHumanInputQueries } from './types'
+
+export function readCollaborationHumanInputs(
+  queries: CollaborationHumanInputQueries,
+  taskId: string,
+) {
+  return queries.clarificationRounds(taskId)
+}
+export function readCollaborationReviewDecision(
+  queries: CollaborationHumanInputQueries,
+  taskId: string,
+  nodeRunId: string,
+) {
+  return queries.reviewDecision(taskId, nodeRunId)
+}
 import {
   filterReviewSummariesForActor as filterReviewSummariesForActorInternal,
   getReviewNodeReviewerConfig as getReviewNodeReviewerConfigInternal,

@@ -158,7 +158,7 @@ export interface EmployeeTypePackage {
     }>
     advancedOptions?: Array<{
       optionRef: string
-      control: 'repository-branch'
+      control: 'repository-branch' | 'repository-publication-branch'
       label: LocalizedText
       description: LocalizedText
     }>

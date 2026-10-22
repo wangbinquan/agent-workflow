@@ -7,6 +7,7 @@ import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import type { CachedRepo, CaseMembers, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
+import { GraphDesignWorkspace } from '@/components/digital-employees/GraphDesignWorkspace'
 import type {
   DigitalEmployeeDefinition,
   EmployeeTypePackage,
@@ -496,6 +497,7 @@ function EmployeeCaseDetailPage(): ReactElement {
   // 查询失效（owner 转移 / 成员变更后 canOperate 与恢复按钮随之收敛，不必刷新）。
   useTasksSync()
   const canResumePoint = usePermission('development-missions:retry')
+  const canInteract = usePermission('development-missions:interact')
   // RFC-330 D19 —— 恢复按钮 = 权限点 ∧ 成员面的 canOperate（observer 只能看）。
   // 成员面尚未取到 / 取失败时**不**渲染按钮：这是一个会发起写的控件，不能靠乐观值。
   const members = useQuery<CaseMembers>({
@@ -771,6 +773,17 @@ function EmployeeCaseDetailPage(): ReactElement {
           label: zh ? '详细信息' : 'Details',
           description: zh ? '全部参数与上下文' : 'All parameters and contexts',
         },
+        ...(data.case.typeRef.typeId === 'graph-development'
+          ? [
+              {
+                key: 'design' as const,
+                label: zh ? '设计工作区' : 'Design workspace',
+                description: zh
+                  ? '澄清、图组合、实现依据与验证'
+                  : 'Clarification, views, implementation and evidence',
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -888,6 +901,34 @@ function EmployeeCaseDetailPage(): ReactElement {
             }
           />
 
+          {tab === 'design' && data.case.typeRef.typeId === 'graph-development' && (
+            <GraphDesignWorkspace
+              caseId={caseId}
+              initialSelection={search.designSelection}
+              initialView={search.designView}
+              canOperate={canInteract && members.data?.canOperate === true}
+              executionAvailable={execution.available}
+            />
+          )}
+          {tab === 'overview' && data.case.typeRef.typeId === 'graph-development' && (
+            <NoticeBanner
+              tone="info"
+              action={
+                <Link
+                  to="/tasks/employee-cases/$caseId"
+                  params={{ caseId }}
+                  search={{ tab: 'design' }}
+                  className="btn btn--primary"
+                >
+                  {zh ? '打开设计工作区' : 'Open design workspace'}
+                </Link>
+              }
+            >
+              {zh
+                ? '在图上澄清需求、调整图组合，并审核实现依据和验证结果。'
+                : 'Clarify requirements, adapt the views, and review the implementation basis and evidence.'}
+            </NoticeBanner>
+          )}
           {tab === 'overview' ? (
             <>
               <NoticeBanner

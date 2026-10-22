@@ -1,7 +1,11 @@
 import { isAbsolute } from 'node:path'
 import { ulid } from 'ulid'
 
-import { describeRepositoryRemote, PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
+import {
+  describeRepositoryRemote,
+  PLATFORM_WORKSPACE_DIR,
+  type RepositoryContentBaseline,
+} from '@agent-workflow/shared'
 import type { RepositoryCandidateGitOutcome } from './ports/repositoryCandidateEffects'
 import type {
   EmployeeCaseGitOperand,
@@ -257,15 +261,35 @@ export async function resolveEmployeeWorkspaceBaseline(
     readonly baselineRepoPath: string
     readonly preferredBranch: string | null
     readonly sourceBranch: string | null
+    readonly allowUnborn?: boolean
   },
   effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<{
   readonly baselineSha: string
   readonly targetBranch: string
   readonly remoteHeadSha: string | null
+  readonly contentBaseline?: RepositoryContentBaseline
 }> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     const targetBranch = input.preferredBranch ?? 'main'
+    const committed = async (baselineSha: string, remoteHeadSha: string | null) => {
+      if (!input.allowUnborn) return { baselineSha, targetBranch, remoteHeadSha }
+      const tree = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands(['rev-parse', '--verify', `${baselineSha}^{tree}`]),
+      )
+      if (tree.exitCode !== 0) throw new Error('employee workspace baseline tree is unavailable')
+      return {
+        baselineSha,
+        targetBranch,
+        remoteHeadSha,
+        contentBaseline: {
+          kind: 'commit',
+          commitSha: baselineSha,
+          treeOid: tree.stdout.trim(),
+        } as const,
+      }
+    }
     if (input.sourceBranch !== null) {
       const valid = await scope.runGit(
         input.baselineRepoPath,
@@ -284,7 +308,7 @@ export async function resolveEmployeeWorkspaceBaseline(
       )
       const remoteHeadSha = remoteSource.stdout.trim()
       if (remoteSource.exitCode === 0 && /^[0-9a-f]{40}$/.test(remoteHeadSha)) {
-        return { baselineSha: remoteHeadSha, targetBranch, remoteHeadSha }
+        return await committed(remoteHeadSha, remoteHeadSha)
       }
     }
     const candidates = [
@@ -304,7 +328,51 @@ export async function resolveEmployeeWorkspaceBaseline(
       )
       const baselineSha = resolved.stdout.trim()
       if (resolved.exitCode === 0 && /^[0-9a-f]{40}$/.test(baselineSha)) {
-        return { baselineSha, targetBranch, remoteHeadSha: null }
+        return await committed(baselineSha, null)
+      }
+    }
+    if (input.allowUnborn) {
+      const anyCommit = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands(['rev-list', '--all', '--max-count=1']),
+      )
+      const head = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands(['symbolic-ref', '--quiet', 'HEAD']),
+      )
+      const validBranch = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands(['check-ref-format', '--branch', targetBranch]),
+      )
+      if (
+        anyCommit.exitCode === 0 &&
+        !anyCommit.stdout.trim() &&
+        head.exitCode === 0 &&
+        head.stdout.trim().startsWith('refs/heads/') &&
+        validBranch.exitCode === 0
+      ) {
+        const tree = await scope.runGit(
+          input.baselineRepoPath,
+          literalGitOperands(['hash-object', '-t', 'tree', '-w', '--stdin']),
+          { stdin: '' },
+        )
+        if (tree.exitCode !== 0) throw new Error('employee empty tree could not be materialized')
+        const emptyTreeOid = tree.stdout.trim()
+        const content = `tree ${emptyTreeOid}\nauthor Agent Workflow <noreply@agent-workflow.local> 0 +0000\ncommitter Agent Workflow <noreply@agent-workflow.local> 0 +0000\n\nInternal empty materialization anchor.\n`
+        const anchor = await scope.runGit(
+          input.baselineRepoPath,
+          literalGitOperands(['hash-object', '-t', 'commit', '-w', '--stdin']),
+          { stdin: content },
+        )
+        if (anchor.exitCode !== 0)
+          throw new Error('employee empty materialization anchor could not be created')
+        const materializationCommitSha = anchor.stdout.trim()
+        return {
+          baselineSha: materializationCommitSha,
+          targetBranch,
+          remoteHeadSha: null,
+          contentBaseline: { kind: 'unborn', targetBranch, emptyTreeOid, materializationCommitSha },
+        }
       }
     }
     throw new Error(`cannot resolve repository baseline for ${targetBranch}`)

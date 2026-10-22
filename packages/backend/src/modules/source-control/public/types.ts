@@ -1,3 +1,8 @@
+import type { bindEmployeeCaseWorkspaceParticipant } from '../composition'
+import type {
+  bindChangeCandidateParticipant,
+  bindCandidateDeliveryParticipant,
+} from '../composition/repositoryCandidate'
 import type { WorkspaceMaintenanceFilesystem } from '../application/ports/workspaceMaintenance'
 import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
 import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
@@ -286,3 +291,9 @@ export type {
   RepositoryRefresh,
   RepositoryRegistration,
 } from '../application/ports/repositoryMirrors'
+/** RFC-396: the same candidate/workspace operations serve both employee types. */
+export type EmployeeCaseWorkspaceParticipant = ReturnType<
+  typeof bindEmployeeCaseWorkspaceParticipant
+>
+export type ChangeCandidateParticipant = ReturnType<typeof bindChangeCandidateParticipant>
+export type CandidateDeliveryParticipant = ReturnType<typeof bindCandidateDeliveryParticipant>

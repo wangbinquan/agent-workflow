@@ -291,6 +291,7 @@ async function executeEmployeeCaseOperation(
           baselineRepoPath: workPath(input.baselineRepoPath),
           preferredBranch: (input.preferredBranch as string | null | undefined) ?? null,
           sourceBranch: (input.sourceBranch as string | null | undefined) ?? null,
+          ...(input.allowUnborn === true ? { allowUnborn: true } : {}),
         },
         effects,
       )

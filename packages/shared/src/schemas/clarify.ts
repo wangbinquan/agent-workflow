@@ -1,3 +1,4 @@
+import { ArtifactElementAnchorSchema } from './artifactElementAnchor'
 import { ClarifyDecisionSchema } from './clarifyDecision'
 // Clarify schemas (RFC-023). The clarify node lets an agent emit a structured
 // "I need answers before I can produce output" envelope. The framework parks
@@ -64,6 +65,7 @@ const ClarifyOptionInputSchema = z.preprocess((v) => {
 /** One question the agent asked. The framework appends a 5th "free-text" row
  *  in the UI automatically; agents must NOT include a free-text option here. */
 export const ClarifyQuestionSchema = z.object({
+  artifactAnchor: ArtifactElementAnchorSchema.optional(),
   mindmap: ClarifyQuestionMindmapSchema.optional(),
   /** Stable identifier chosen by the agent. ≤ 64 chars. */
   id: z.string().min(1).max(64),

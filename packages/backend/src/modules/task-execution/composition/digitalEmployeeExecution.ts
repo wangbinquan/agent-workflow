@@ -393,6 +393,10 @@ export interface DigitalEmployeeExecutionDependencies {
     inspect(executionRef: string): Promise<DigitalEmployeeHumanReviewCoreSnapshot>
   }>
   readonly workspace?: DigitalEmployeeWorkspacePort
+  /** Observe committed intermediate artifacts during the existing execution inspection. */
+  readonly committedProgress?: {
+    observe(input: { readonly roundRef: string; readonly executionRef: string }): Promise<void>
+  }
   readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
 }
 
@@ -665,6 +669,9 @@ function buildDigitalEmployeeExecution(
       )
     }
     const executionMetadata = await deps.executionMetadata.load(executionRef)
+    if (executionMetadata?.roundRef && deps.committedProgress) {
+      await deps.committedProgress.observe({ roundRef: executionMetadata.roundRef, executionRef })
+    }
     if (
       digitalEmployeeExecutionIsLive({
         status: task.status,

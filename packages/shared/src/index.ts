@@ -190,3 +190,6 @@ export * from './schemas/executionStatus'
 export * from './schemas/clarifyDecision'
 
 export * from './nodeRunOrder'
+export * from './schemas/repositoryContentBaseline'
+export * from './schemas/graphDesign'
+export * from './schemas/artifactElementAnchor'

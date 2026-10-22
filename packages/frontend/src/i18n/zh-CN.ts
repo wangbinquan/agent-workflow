@@ -814,6 +814,8 @@ export interface Resources {
     detailHint: string
     rejectPrompt: string
     rejectReasonRequired: string
+    returnIterationConfirm: string
+    returnRejectionConfirm: string
     iterateConfirm: string
     iterateNoCommentsWarning: string
     approveDraftWarning: string
@@ -7429,6 +7431,8 @@ export const zhCN: Resources = {
     detailHint: '当前版本 · 已迭代 {{iteration}} 轮 · 决策：{{decision}}',
     rejectPrompt: '请输入退回原因（提交后将回滚并重跑：{{willRerun}}）：',
     rejectReasonRequired: '退回必须填写原因。',
+    returnIterationConfirm: '提交迭代意见并结束本次审核。后续设计修改将使用新的审核请求。',
+    returnRejectionConfirm: '驳回本次材料并结束审核。请填写理由，后续修改后的材料需重新送审。',
     iterateConfirm: '将基于上方评审意见重跑：{{willRerun}}。继续？',
     iterateNoCommentsWarning:
       '当前未提交任何评审意见。继续迭代会让 agent 收到空意见列表 — 仍然继续吗？',

@@ -92,6 +92,7 @@ import {
   joinMarkdownDocs,
   LOCAL_DECIDER,
   REVIEW_APPROVAL_META_PORT,
+  REVIEW_DECISION_META_PORT,
   REVIEW_APPROVED_PORT_MULTI,
   REVIEW_APPROVED_PORT_SINGLE,
   SYSTEM_DECIDER,
@@ -937,6 +938,12 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // and approved inside one transaction, so no visible human gate exists at
     // any commit boundary and the task remains running.
     if (drafts.length === 0) {
+      if ((node as Record<string, unknown>).decisionHandling === 'return-decision')
+        return {
+          kind: 'failed',
+          summary: 'Independent review requires explicit material; no approval was recorded.',
+          message: 'review-decision-material-empty',
+        }
       const decidedAt = Date.now()
       const acceptedKind = itemsInline ? 'list<markdown>' : 'list<path<md>>'
       let reviewNodeRunId = reuse?.status === 'pending' || refreshAwaitingReview ? reuse.id : ''
@@ -1317,6 +1324,12 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // resume re-enters this dispatch with pendingDocVersions=[] and falls
     // into this branch.
     if (docs.length === 0) {
+      if ((node as Record<string, unknown>).decisionHandling === 'return-decision')
+        return {
+          kind: 'failed',
+          summary: 'Independent review requires explicit material; no approval was recorded.',
+          message: 'review-decision-material-empty',
+        }
       const decidedAt = Date.now()
       const acceptedKind = itemsInline ? 'list<markdown>' : 'list<path<md>>'
       // RFC-099 prompt isolation: approval_meta is a downstream-consumable
@@ -2093,6 +2106,7 @@ export async function getReviewDetail(
   const taskRow = taskRows[0]
   let rerunnableOnReject: string[] = []
   let rerunnableOnIterate: string[] = []
+  let decisionHandling: 'rerun-upstream' | 'return-decision' = 'rerun-upstream'
   if (taskRow !== undefined) {
     try {
       const def = migrateWorkflowDefinitionToLatest(
@@ -2100,6 +2114,8 @@ export async function getReviewDetail(
       )
       const node = def.nodes.find((n) => n.id === summary.reviewNodeId)
       if (node !== undefined) {
+        if ((node as Record<string, unknown>).decisionHandling === 'return-decision')
+          decisionHandling = 'return-decision'
         const cfgReject = (node as Record<string, unknown>).rerunnableOnReject
         const cfgIterate = (node as Record<string, unknown>).rerunnableOnIterate
         if (Array.isArray(cfgReject))
@@ -2119,6 +2135,7 @@ export async function getReviewDetail(
     comments,
     rerunnableOnReject,
     rerunnableOnIterate,
+    decisionHandling,
     ...(documents !== undefined ? { documents } : {}),
   }
 }
@@ -3327,10 +3344,18 @@ async function submitReviewDecisionUnlocked(
   // Widened to the lookup view (RFC-149): `rerun` is absent on approve and the
   // full re-run policy on reject / iterate — the ONE place the path forks.
   const policy: ReviewDecisionPolicy = REVIEW_DECISION_POLICY[args.decision]
+  const reviewDefinition = migrateWorkflowDefinitionToLatest(
+    JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
+  )
+  const reviewConfiguration = reviewDefinition.nodes.find((node) => node.id === run.nodeId)
+  const returnDecision =
+    (reviewConfiguration as Record<string, unknown> | undefined)?.decisionHandling ===
+    'return-decision'
   // The review row closes (`done`) when the decision carries no re-run slot and
   // re-opens (`pending`) otherwise — read off the policy table (RFC-149), not a
   // second decision comparison.
-  const targetSelfStatus: NodeRunStatus = policy.rerun === undefined ? 'done' : 'pending'
+  const targetSelfStatus: NodeRunStatus =
+    returnDecision || policy.rerun === undefined ? 'done' : 'pending'
   const memberBefore =
     args.actor === undefined
       ? false
@@ -3477,9 +3502,9 @@ async function submitReviewDecisionUnlocked(
 
   // ── prepare E: approve payload ────────────────────────────────────────────
   const decidedAt = Date.now()
-  let outputs: PreparedOutput[] | null = null
+  let outputs: PreparedOutput[] | null = returnDecision ? [] : null
   let distillSourceEventId = dv.id
-  if (args.decision === 'approved') {
+  if (args.decision === 'approved' && !returnDecision) {
     outputs = isMultiDoc
       ? await planMultiDocApprove(db, run, effectiveDvs, readBody, decidedAt)
       : await planSingleDocApprove(db, run, dv, readBody, decidedAt)
@@ -3488,7 +3513,7 @@ async function submitReviewDecisionUnlocked(
 
   // ── prepare F: re-run plan (reject / iterate) ─────────────────────────────
   let rerun: PreparedRerun | null = null
-  if (policy.rerun !== undefined) {
+  if (policy.rerun !== undefined && !returnDecision) {
     rerun = await planRerun(args, run, taskRow, dv)
   }
 
@@ -3558,7 +3583,8 @@ async function submitReviewDecisionUnlocked(
   const operations = new DatabaseHumanGateOperationJournal()
 
   // ── commit: one transaction ───────────────────────────────────────────────
-  const nextIter = policy.bumpsIteration ? run.reviewIteration + 1 : run.reviewIteration
+  const nextIter =
+    policy.bumpsIteration && !returnDecision ? run.reviewIteration + 1 : run.reviewIteration
   const committed = await databaseSessionFor(db).transaction(async (tx) => {
     // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发决定 / 取消靠任务聚合根行锁串行
     // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。
@@ -3765,6 +3791,41 @@ async function submitReviewDecisionUnlocked(
       await tx.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id))
     }
 
+    if (returnDecision && outputs !== null) {
+      const decidedDocuments = await tx
+        .select()
+        .from(docVersions)
+        .where(
+          inArray(
+            docVersions.id,
+            dvs.map((document) => document.id),
+          ),
+        )
+      outputs.push({
+        portName: REVIEW_DECISION_META_PORT,
+        kind: null,
+        archiveJson: null,
+        content: JSON.stringify({
+          schemaVersion: 1,
+          receiptId: begun.operation.id,
+          taskId: run.taskId,
+          nodeRunId: run.id,
+          decision: args.decision,
+          decidedAt,
+          reviewIteration: run.reviewIteration,
+          reason: decidedDocuments
+            .map((document) => document.decisionReason)
+            .filter(Boolean)
+            .join('\n\n'),
+          documents: effectiveDvs.map((document) => ({
+            docVersionId: document.id,
+            sourceNodeId: document.sourceNodeId,
+            sourcePortName: document.sourcePortName,
+            contentDigest: sha256Hex(readBody(document)),
+          })),
+        }),
+      })
+    }
     if (outputs !== null) {
       // 4a. approve — publish the declared output ports into node_run_outputs so
       //     downstream bindings + the task-detail Outputs tab can resolve them.
@@ -3788,7 +3849,7 @@ async function submitReviewDecisionUnlocked(
       await transitionNodeRunStatusTx({
         tx,
         nodeRunId: args.nodeRunId,
-        event: { kind: policy.lifecycleEvent },
+        event: { kind: returnDecision ? 'return-review-decision' : policy.lifecycleEvent },
         extra: { finishedAt: decidedAt },
       })
     } else if (rerun !== null) {
@@ -4721,7 +4782,7 @@ export async function buildSiblingOutputsBlock(
 // Row → DTO conversions.
 // ---------------------------------------------------------------------------
 
-function rowToDocVersion(row: typeof docVersions.$inferSelect): DocVersion {
+export function rowToDocVersion(row: typeof docVersions.$inferSelect): DocVersion {
   return {
     id: row.id,
     taskId: row.taskId,

@@ -36,6 +36,18 @@ export interface VerificationProcessFacts {
 }
 
 export interface VerificationCommandEffects {
+  /** Executes a candidate-owned behavior adapter; the caller compares observed values. */
+  invokeBehavior?(input: {
+    readonly workspaceRef: string
+    readonly programRef: string
+    readonly inputJson: string
+    readonly timeoutMs: number
+  }): Promise<{
+    readonly exitCode: number
+    readonly timedOut: boolean
+    readonly outputJson: string
+    readonly error: string
+  }>
   resolveProgram(input: {
     readonly programRef: string
     readonly argsRef: string | null
@@ -54,5 +66,8 @@ export interface VerificationCommandEffects {
 
 /** One complete selected receiver is created for each profile run. */
 export interface VerificationCommandEffectsFactory {
+  environment?(
+    workspaceRef: string,
+  ): Promise<{ readonly digest: string; readonly description: string }>
   create(input: { readonly evidence: EvidenceArtifactPort }): VerificationCommandEffects
 }

@@ -140,6 +140,10 @@ export const INTENT_NODE_TEACHING = {
   review: {
     availability: { kind: 'public' },
     fields: {
+      decisionHandling: {
+        form: "decisionHandling:'rerun-upstream'|'return-decision' (default rerun-upstream; return-decision emits decision_meta for every human decision without rerunning upstream)",
+        required: false,
+      },
       rerunnableOnReject: { form: 'rerunnableOnReject:[nodeId]', required: true },
       rerunnableOnIterate: { form: 'rerunnableOnIterate:[nodeId]', required: true },
       rollbackFilesOnReject: { form: 'rollbackFilesOnReject', required: false },

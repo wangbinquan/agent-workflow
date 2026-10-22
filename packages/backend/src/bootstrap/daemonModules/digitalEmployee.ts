@@ -66,10 +66,34 @@ import type { DaemonRepositoryCredentials } from './repositoryCredentials'
 import type { DaemonIntegrationModules } from './integration'
 import type { DaemonTaskExecutionModules } from './taskExecution'
 import type { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
+import {
+  composeGraphDevelopment,
+  createGraphCaseIntake,
+  graphEmployeeTypePackage,
+  graphEmployeeRuntimeCodec,
+  graphExecutionContractRegistrations,
+  isGraphPlan,
+} from '@/modules/development-automation/composition/graphDevelopment'
+import { composeGraphBuiltinResources } from '@/modules/development-automation/composition/graphBuiltinResources'
+import { composeBuiltinWorkflowCatalog } from '@/modules/resource-catalog/composition/builtinWorkflowCatalog'
+import { createCommittedHumanInputQueries } from '@/modules/collaboration/composition'
+import { createEmployeeExecutionArtifactQueries } from '@/modules/task-execution/composition'
+import { composeDesignAssistGeneration } from '@/modules/task-execution/composition/designAssistGeneration'
+import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
+import {
+  createGraphDevelopmentArtifactBinding,
+  createGraphDevelopmentVerificationBinding,
+  graphDevelopmentRequestArtifacts,
+} from '@/modules/development-automation/composition/graphDevelopmentBindings'
+import { composeBuiltinEmployeeJobs } from '@/modules/digital-employee/composition/builtinJobTemplates'
 
 type EmployeeOptions = Parameters<typeof composeDigitalEmployee>[0]
 type WorkItemsInput = Parameters<typeof composeDevelopmentEmployeePlatformWorkItems>[0]
 export interface DaemonDigitalEmployeeInput {
+  readonly graphAssist: Parameters<typeof composeDesignAssistGeneration>[0]
+  readonly verificationCommands?: Parameters<typeof createGraphDevelopmentVerificationBinding>[0]
+  readonly repositoryRevisionContent?: Parameters<typeof composeGraphDevelopment>[0]['content']
+  readonly reviewReader?: Parameters<typeof createCommittedHumanInputQueries>[0]['reviewReader']
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly configuration: ApplicationConfigurationQueries
@@ -127,20 +151,48 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       db,
       developmentImplicitAgentContractDeclarations,
     ),
-    registrations: developmentExecutionContractRegistrations,
+    registrations: [
+      ...developmentExecutionContractRegistrations,
+      ...graphExecutionContractRegistrations,
+    ],
     programFixtures: createExecutionContractProgramFixtureAdapter({
       appHome,
       programs: programToolSource,
       process: input.adapters?.programFixtureProcess,
     }),
   })
-  const platformTools = composeDigitalEmployeeBuiltinToolCatalog({
+  const legacyPlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
     agentTemplates: resources.digitalEmployeeAgentTemplates,
     typePackageDescriptorJsons: async () => [
       ...(await composeDigitalEmployeeBootstrapReadsFor(db).listTypePackageDescriptorJsons()),
       developmentEmployeeTypePackage.descriptorJson,
     ],
   })
+  const graphPlatformTools = composeGraphBuiltinResources({
+    agents: resources.digitalEmployeeAgentTemplates,
+    workflows: composeBuiltinWorkflowCatalog(db),
+  })
+  const platformTools: typeof legacyPlatformTools = {
+    async load() {
+      await legacyPlatformTools.load()
+      await graphPlatformTools.load()
+    },
+    listJson(ref, item) {
+      return JSON.stringify([
+        ...JSON.parse(legacyPlatformTools.listJson(ref, item)),
+        ...JSON.parse(graphPlatformTools.listJson(ref, item)),
+      ])
+    },
+    getRevisionJson(ref) {
+      return graphPlatformTools.getRevisionJson(ref) ?? legacyPlatformTools.getRevisionJson(ref)
+    },
+    isPlatformTool(id) {
+      return graphPlatformTools.isPlatformTool(id) || legacyPlatformTools.isPlatformTool(id)
+    },
+    resolveCompatibleRevisionJson(...args) {
+      return legacyPlatformTools.resolveCompatibleRevisionJson?.(...args) ?? null
+    },
+  }
   const writerCutover = composeDigitalEmployeeWriterCutoverFor(db)
   const employeeInputArtifacts =
     input.adapters?.employeeInputArtifacts ??
@@ -152,6 +204,73 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const sourceControl = bindEmployeeCaseWorkspaceParticipant({
     publicationTransport: repository.repositoryPublicationTransport,
     effects: input.adapters?.employeeCaseWorkspaceEffects,
+  })
+  const candidates = {
+    ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
+    ...bindCandidateDeliveryParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
+      publicationTransport: repository.repositoryPublicationTransport,
+    }),
+  }
+  const humanInputs = createCommittedHumanInputQueries({
+    db,
+    appHome,
+    reviewReader: input.reviewReader,
+  })
+  const graphArtifacts = createGraphDevelopmentArtifactBinding(appHome, input.evidenceArtifacts)
+  const graphCases = createGraphCaseIntake({
+    readCase: (caseId) => module.runtime.queries.getCase(caseId),
+    owner: (caseId) => module.runtime.queries.getCaseAcl(caseId),
+    launchWork: (request) => module.runtime.commands.launchWork(request),
+    cancelTask: (taskId) => taskExecution.routes.tasks.cancel(taskId),
+    events: integration.eventCenter.participant,
+    humanInputs,
+    artifacts: graphDevelopmentRequestArtifacts(graphArtifacts),
+  })
+  const graph = composeGraphDevelopment({
+    db,
+    appHome,
+    cases: graphCases,
+    readCase: (caseId) => module.runtime.queries.getCase(caseId),
+    artifacts: graphArtifacts,
+    rounds: reactionRounds,
+    humanInputs,
+    executions: createEmployeeExecutionArtifactQueries(db),
+    workspace: {
+      factory: input.workspaceEffects.automationWorkspaceEffects,
+      sourceControl,
+      repositoryPreparation: repository.developmentWorkspaceRepositoryPreparation,
+      inputArtifacts: employeeInputArtifacts,
+    },
+    candidates,
+    publication: {
+      async remoteUrl(repositoryId) {
+        const binding = await repository.developmentDeliveryProvider.resolveRepository(repositoryId)
+        if (!binding) throw new Error('graph-publication-repository-missing')
+        return binding.remoteUrl
+      },
+    },
+    content: input.repositoryRevisionContent ?? composeLocalRepositoryRevisionContent(),
+    verification: createGraphDevelopmentVerificationBinding(input.verificationCommands),
+    assist: composeDesignAssistGeneration(input.graphAssist),
+    changed: (caseId) => {
+      void Promise.all([
+        module.runtime.queries.getCaseAcl(caseId),
+        module.runtime.queries.listCaseMembers(caseId),
+      ])
+        .then(([owner, members]) => {
+          const visibleUserIds = new Set(members.map((member) => member.userId))
+          if (owner?.ownerUserId) visibleUserIds.add(owner.ownerUserId)
+          tasksListBroadcaster.broadcast(
+            TASKS_LIST_CHANNEL,
+            { type: 'employee-case.changed', caseId },
+            { kind: 'employee-case.members-changed-audience', caseId, visibleUserIds },
+          )
+        })
+        .catch((error) =>
+          log.warn('graph design refresh unavailable', { caseId, error: String(error) }),
+        )
+    },
   })
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     automationWorkspaceEffects: input.workspaceEffects.automationWorkspaceEffects,
@@ -169,7 +288,19 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     appHome,
     programs: programToolSource,
     tasks: taskExecution.routes.tasks,
-    workspace: employeeWorkspace,
+    workspace: {
+      prepare: (request) =>
+        isGraphPlan(request.planJson)
+          ? graph.workspace.prepare(request)
+          : employeeWorkspace.prepare(request),
+      async validate(request) {
+        const frozen = await reactionRounds.frozenPlan(request.roundRef)
+        return frozen && isGraphPlan(frozen.planJson)
+          ? await graph.workspace.validate(request)
+          : await employeeWorkspace.validate(request)
+      },
+    },
+    committedProgress: graph.progress,
     executionContracts,
   })
   const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
@@ -186,11 +317,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     ),
     conflictMerge,
     sourceControl: {
-      ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
-      ...bindCandidateDeliveryParticipant({
-        candidateEffects: input.repositoryCandidateEffects,
-        publicationTransport: repository.repositoryPublicationTransport,
-      }),
+      ...candidates,
       ...sourceControl,
     },
   })
@@ -202,7 +329,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     appHome,
     writerCutover,
     programArtifacts: employeePrograms,
-    typePackages: [developmentEmployeeTypePackage],
+    typePackages: [developmentEmployeeTypePackage, graphEmployeeTypePackage],
     typePackageDriftPolicy: input.typePackageDriftPolicy,
     platformTools,
     executionContracts,
@@ -224,10 +351,15 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     connectionCatalog: integration.developmentToolConnections,
     runtime: {
       eventCenter: integration.eventCenter.participant,
-      codecs: [developmentEmployeeRuntimeCodec],
-      detailProjectionParticipants: [caseDetailProjection],
+      codecs: [developmentEmployeeRuntimeCodec, graphEmployeeRuntimeCodec],
+      detailProjectionParticipants: [caseDetailProjection, graph.detailProjection],
       reactionExecution,
-      platformWorkItems: employeePlatformWorkItems,
+      platformWorkItems: {
+        execute: (plan, context) =>
+          isGraphPlan(JSON.stringify(plan))
+            ? graph.platformWorkItems.execute(plan, context)
+            : employeePlatformWorkItems.execute(plan, context),
+      },
     },
   })
   const workStart = Object.freeze<DigitalEmployeeWorkStartPort>({
@@ -255,6 +387,43 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   })
   return Object.freeze({
     module,
+    graph,
+    async initializeGraph() {
+      await graph.recover()
+      const defaults = ['design-and-clarify', 'review-design', 'implement-change'].map(
+        (workItemRef) => {
+          const tools = JSON.parse(
+            graphPlatformTools.listJson(
+              JSON.stringify({ typeId: 'graph-development', revision: 1 }),
+              workItemRef,
+            ),
+          ) as { id: string; publishedRevision: number }[]
+          const tool = tools[0]
+          if (!tool) throw new Error(`graph-default-tool-missing:${workItemRef}`)
+          return {
+            workItemRef,
+            slotRef: 'default',
+            registrationRef: { id: tool.id, revision: tool.publishedRevision },
+          }
+        },
+      )
+      await composeBuiltinEmployeeJobs(db, (request) =>
+        module.commands.publishJobTemplate(request),
+      ).ensure({
+        id: 'platform:graph-development:job:v1',
+        name: '图驱动研发',
+        content: {
+          schemaVersion: 1,
+          typeRef: { typeId: 'graph-development', revision: 1 },
+          description: '自适应视图设计、澄清、批准依据、代码和测试生成与实际验证。',
+          defaultToolBindings: defaults,
+          defaultAdapterBindings: [],
+          defaultCollaborationBindings: [],
+          orderedDispatchConfigurations: [],
+          reactionLaneOrder: [],
+        },
+      })
+    },
     executionContracts,
     platformTools,
     writerCutover,

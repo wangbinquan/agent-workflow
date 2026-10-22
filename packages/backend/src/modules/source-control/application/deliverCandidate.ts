@@ -14,7 +14,12 @@
 // ref/远端）上是否已有 tree==treeOid 且 parent==baseline 的 commit，有则复用。
 
 import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
-import type { RepositoryPublicationReceipt } from '@agent-workflow/shared'
+import {
+  repositoryBusinessParent,
+  repositoryMaterializationCommit,
+  type RepositoryContentBaseline,
+  type RepositoryPublicationReceipt,
+} from '@agent-workflow/shared'
 import {
   candidateCommitMessage,
   missionGitRefComponent,
@@ -53,6 +58,7 @@ async function readCommitTreeIdentity(
 }
 
 export interface CommitCandidateInput {
+  readonly repositoryBaseline?: RepositoryContentBaseline
   readonly baselineRepoPath: string
   readonly baselineSha: string
   readonly overlayRoot: string
@@ -94,6 +100,18 @@ export async function commitCandidate(
   input: CommitCandidateInput,
   factory: RepositoryCandidateStepEffectsFactory,
 ): Promise<CommitCandidateResult> {
+  const parent = input.repositoryBaseline
+    ? repositoryBusinessParent(input.repositoryBaseline)
+    : input.baselineSha
+  if (
+    input.repositoryBaseline &&
+    repositoryMaterializationCommit(input.repositoryBaseline) !== input.baselineSha
+  )
+    return {
+      ok: false,
+      code: 'candidate-drifted',
+      detail: 'repository baseline does not match materialization anchor',
+    }
   const localRef = missionCandidateRef(input.missionId)
   const session = await factory.acquire({
     baselineReference: input.baselineRepoPath,
@@ -108,7 +126,7 @@ export async function commitCandidate(
       if (
         identity !== null &&
         identity.tree === input.expectedTreeOid &&
-        identity.parent === input.baselineSha
+        identity.parent === parent
       ) {
         return { ok: true, commitSha: sha, localRef, reused: true }
       }
@@ -139,7 +157,7 @@ export async function commitCandidate(
         ...(input.contextEnvelope === undefined ? {} : { contextEnvelope: input.contextEnvelope }),
       })
       const committed = await staged.workspace.run(
-        ['commit-tree', staged.treeOid, '-p', input.baselineSha, '-m', message],
+        ['commit-tree', staged.treeOid, ...(parent === null ? [] : ['-p', parent]), '-m', message],
         { env: { ...AW_INTERNAL_GIT_IDENTITY } },
       )
       if (committed.exitCode !== 0) {
@@ -161,6 +179,7 @@ export async function commitCandidate(
 }
 
 export interface PushCandidateInput {
+  readonly repositoryBaseline?: RepositoryContentBaseline
   readonly baselineRepoPath: string
   readonly commitSha: string
   /** push 目标（本地 bare 路径或 URL；测试用 file remote）。 */
@@ -248,6 +267,15 @@ export async function pushCandidate(
     readonly localFixtureSession?: (remoteUrl: string) => CandidatePublicationSession | null
   } = {},
 ): Promise<PushCandidateResult> {
+  const parent = input.repositoryBaseline
+    ? repositoryBusinessParent(input.repositoryBaseline)
+    : input.baselineSha
+  if (input.repositoryBaseline?.kind === 'unborn' && input.expectedRemoteSha !== null)
+    return {
+      ok: false,
+      code: 'remote-head-changed',
+      detail: 'unborn repository must be rebaselined after the target branch appears',
+    }
   const transport =
     publication.transport === undefined ? input.publicationTransport : publication.transport
   const remoteRef = `refs/heads/${input.branch}`
@@ -309,7 +337,7 @@ export async function pushCandidate(
       if (
         identity !== null &&
         identity.tree === input.expectedTreeOid &&
-        identity.parent === input.baselineSha
+        identity.parent === parent
       ) {
         return {
           ok: true,

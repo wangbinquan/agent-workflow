@@ -104,6 +104,7 @@ type PortRefLike = { nodeId: string; portName: string }
  * approved-document port (nodePorts.ts declaration + review.ts publish sites).
  */
 export const REVIEW_APPROVAL_META_PORT = 'approval_meta' as const
+export const REVIEW_DECISION_META_PORT = 'decision_meta' as const
 
 /**
  * RFC-079/081: the downstream output port name a review node publishes for the

@@ -330,3 +330,18 @@ export type {
 } from '../application/ports/workspaceUploads'
 
 export type { ArchivedEventsReader as TaskArchivedEventsReader } from '@/platform/background/eventsArchiveContent'
+/** Committed artifacts of a Case-bound Task; unfinished runs are never exposed. */
+export interface EmployeeExecutionArtifactQueries {
+  read(input: { readonly caseId: string; readonly executionRef: string }): Promise<{
+    readonly taskId: string
+    readonly roundRef: string
+    readonly status: string
+    readonly artifacts: readonly {
+      readonly nodeRunId: string
+      readonly portName: string
+      readonly content: string
+      readonly digest: string
+    }[]
+    readonly reviewRunIds: readonly string[]
+  } | null>
+}

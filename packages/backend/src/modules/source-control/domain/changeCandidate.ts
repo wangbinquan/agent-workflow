@@ -1,3 +1,4 @@
+import type { RepositoryContentBaseline } from '@agent-workflow/shared'
 // RFC-310 PR-4 T48 —— ChangeCandidate 的纯判定面（design §9.1）。
 //
 // candidate 相对 pinned baseline 由平台独立计算（绝不信 Agent 自报的
@@ -132,6 +133,7 @@ export function verifyUploadLineage(
 }
 
 export interface ChangeCandidateReceipt {
+  readonly repositoryBaseline?: RepositoryContentBaseline
   /** receipt 核心字段的 canonical digest——跨 context 引用只用这个 ref。 */
   readonly candidateRef: string
   readonly baselineSnapshotRef: string

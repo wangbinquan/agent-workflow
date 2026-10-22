@@ -465,7 +465,7 @@ const workIntakeAuthoringManifestSchema = z
         z
           .object({
             optionRef: machineIdSchema,
-            control: z.literal('repository-branch'),
+            control: z.enum(['repository-branch', 'repository-publication-branch']),
             label: localizedTextSchema,
             description: localizedTextSchema,
           })
@@ -594,6 +594,8 @@ const reactionRuleSchema = z
     eventTypeId: machineIdSchema,
     priority: z.number().int().min(0).max(100_000),
     preemptsContinuation: z.boolean(),
+    /** Explicit work requests may resume a blocked Case after inbox admission. */
+    resumesBlocked: z.boolean().optional(),
     requiredContextTypes: z.array(machineIdSchema).min(1).max(20),
     /** Existing Contexts to freeze when present without making the reaction unavailable. */
     optionalContextTypes: z.array(machineIdSchema).max(20).default([]),

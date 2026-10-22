@@ -19,6 +19,10 @@ const RULES: WsInvalidationRules<TasksListWsMessage> = {
   // （恢复按钮门）重取。刻意**不碰** `['employee-case-members', …]`——那是成员面板的编辑快照
   // key，与 TASK_QUERY_KEYS.members 同一条规则：打成 fetching 会让 owner 保存后被判
   // 「失去管理权」、弹窗不关闭（e2e 旅程实撞）。
+  'employee-case.changed': (msg) => [
+    ['employee-case', msg.caseId],
+    ['graph-design', msg.caseId],
+  ],
   'employee-case.members.changed': (msg) => [
     TASK_QUERY_KEYS.root(),
     ['employee-case', msg.caseId],

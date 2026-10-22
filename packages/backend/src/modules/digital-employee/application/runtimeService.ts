@@ -772,7 +772,11 @@ export class DigitalEmployeeRuntimeService {
     }
     for (const [optionRef, value] of Object.entries(parsedIntake.advanced.typeOptions)) {
       const definition = advancedOptionByRef.get(optionRef)!
-      if (definition.control === 'repository-branch' && !validateRepositoryBranchOption(value)) {
+      if (
+        (definition.control === 'repository-branch' ||
+          definition.control === 'repository-publication-branch') &&
+        !validateRepositoryBranchOption(value)
+      ) {
         throw new ValidationError(
           'employee-intake-working-branch-invalid',
           `invalid repository branch for employee intake option: ${optionRef}`,
@@ -2948,6 +2952,23 @@ export class DigitalEmployeeRuntimeService {
 
   async planOneReaction(): Promise<ReactionRoundRecord | null> {
     for (const caseRecord of await this.#store.listCases()) {
+      // An explicitly authorized request resumes through the existing Case transition,
+      // only after Event Center delivery is durably admitted. Active work is never interrupted.
+      if (caseRecord.state === 'blocked' && caseRecord.activeRoundId === null) {
+        const descriptor = await this.#descriptor(caseRecord)
+        const pending = (await this.#store.listInbox(caseRecord.id)).find(
+          (item) => item.state === 'pending',
+        )
+        if (
+          pending &&
+          descriptor.reactionRules.some(
+            (rule) => rule.eventTypeId === pending.eventTypeRef.id && rule.resumesBlocked === true,
+          )
+        ) {
+          await this.#store.resumeCase(caseRecord.id, this.#now())
+          break
+        }
+      }
       if (
         (await this.#automaticallyResumeRecoveredToolBinding(caseRecord)) ||
         (await this.#automaticallyResumeCompatibleInvocationUpgrade(caseRecord))

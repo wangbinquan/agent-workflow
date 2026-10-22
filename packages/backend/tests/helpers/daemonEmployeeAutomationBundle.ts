@@ -16,6 +16,7 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { taskBundleInput } from './daemonTaskExecutionBundle'
 import type { ProviderDatabaseHarness } from './eachProvider'
 
@@ -94,6 +95,11 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     conflictWorkspaceSelected: false,
   })
   const employeeInput: DaemonDigitalEmployeeInput = {
+    graphAssist: {
+      registry: core.runtimeRegistry,
+      getDefaultRuntime: async () => DEFAULT_CONFIG.defaultRuntime,
+      binding: composeLocalSystemAgentRunFamily({ appHome: () => appHome }),
+    },
     db,
     appHome,
     configuration: { read: async () => DEFAULT_CONFIG },

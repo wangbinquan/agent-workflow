@@ -38,6 +38,7 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ArtifactElementLink } from '@/components/ArtifactElementLink'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
 import { CLARIFY_MAX_CUSTOM_TEXT_LEN } from '@agent-workflow/shared'
 import { TextArea } from '@/components/Form'
@@ -305,6 +306,7 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
           <span className="clarify-question__title">{question.title}</span>
         </div>
       )}
+      {question.artifactAnchor && <ArtifactElementLink anchor={question.artifactAnchor} />}
       <div className="clarify-question__options" role={isSingle ? 'radiogroup' : 'group'}>
         {question.options.map((opt, idx) => {
           const checked = isSingle

@@ -1,0 +1,72 @@
+.graph-design {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.graph-design__columns {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 3fr);
+  gap: 1rem;
+  align-items: start;
+}
+.graph-design__stack {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.graph-design__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.graph-design__diagram {
+  overflow: auto;
+  max-width: 100%;
+  max-height: 38rem;
+}
+.graph-design__diagram svg {
+  min-width: 20rem;
+}
+.graph-design__diagram [aria-pressed='true'] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.graph-design__diagram [role='button'] {
+  cursor: pointer;
+}
+.graph-design__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.graph-design__list .btn {
+  white-space: normal;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.graph-design__diff {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.graph-design pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+.graph-design code {
+  overflow-wrap: anywhere;
+}
+.graph-design__selected {
+  border-inline-start: 3px solid var(--accent);
+  padding-inline-start: 0.75rem;
+}
+@media (max-width: 720px) {
+  .graph-design__columns,
+  .graph-design__diff {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

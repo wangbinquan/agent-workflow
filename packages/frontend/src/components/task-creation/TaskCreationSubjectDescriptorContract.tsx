@@ -83,6 +83,7 @@ export function TaskCreationSubjectDescriptorContract(
   const [executionOptions, setExecutionOptions] = useState<Record<string, boolean>>({})
   const [collaborators, setCollaborators] = useState<UserPublic[]>([])
   const [workingBranch, setWorkingBranch] = useState('')
+  const [publicationBranch, setPublicationBranch] = useState('')
   const [maxDurationMin, setMaxDurationMin] = useState<number | undefined>(undefined)
   const [maxTotalTokens, setMaxTotalTokens] = useState<number | undefined>(undefined)
   const actor = useActor()
@@ -106,6 +107,11 @@ export function TaskCreationSubjectDescriptorContract(
       ),
   })
   const descriptor = typeQuery.data
+  const publicationBranchOption = descriptor?.workIntakeAuthoring.advancedOptions?.find(
+    (option) => option.control === 'repository-publication-branch',
+  )
+  const publicationBranchInvalid =
+    publicationBranch.trim() !== '' && !isLooseValidBranchName(publicationBranch.trim())
   const repositoryBranchOption = descriptor?.workIntakeAuthoring.advancedOptions?.find(
     (option) => option.control === 'repository-branch',
   )
@@ -245,6 +251,9 @@ export function TaskCreationSubjectDescriptorContract(
   useEffect(() => {
     if (repositoryBranchOption === undefined) setWorkingBranch('')
   }, [repositoryBranchOption])
+  useEffect(() => {
+    setPublicationBranch('')
+  }, [employeeId])
 
   const needsRepositories =
     descriptor?.workIntakeAuthoring.targetFields.some(
@@ -403,7 +412,8 @@ export function TaskCreationSubjectDescriptorContract(
     targetComplete &&
     taskNameComplete &&
     contentComplete &&
-    advancedValidation.valid
+    advancedValidation.valid &&
+    !publicationBranchInvalid
 
   const launch = useMutation({
     mutationFn: async () => {
@@ -451,14 +461,14 @@ export function TaskCreationSubjectDescriptorContract(
                 ? {}
                 : { maxDurationMs: Math.round(maxDurationMin * 60_000) }),
               ...(maxTotalTokens === undefined ? {} : { maxTotalTokens }),
-              ...(repositoryBranchOption === undefined ||
-              advancedValidation.workingBranchTrim === ''
-                ? {}
-                : {
-                    typeOptions: {
-                      [repositoryBranchOption.optionRef]: advancedValidation.workingBranchTrim,
-                    },
-                  }),
+              typeOptions: {
+                ...(repositoryBranchOption && advancedValidation.workingBranchTrim
+                  ? { [repositoryBranchOption.optionRef]: advancedValidation.workingBranchTrim }
+                  : {}),
+                ...(publicationBranchOption && publicationBranch.trim()
+                  ? { [publicationBranchOption.optionRef]: publicationBranch.trim() }
+                  : {}),
+              },
             },
             idempotencyKey: `ui-case-${crypto.randomUUID()}`,
           },
@@ -692,6 +702,25 @@ export function TaskCreationSubjectDescriptorContract(
                       disabled={launch.isPending}
                       onChange={setWorkingBranch}
                     />
+                  ) : null}
+                  {publicationBranchOption && repositorySpaceResolved ? (
+                    <Field
+                      label={localized(publicationBranchOption.label, language)}
+                      hint={localized(publicationBranchOption.description, language)}
+                      error={
+                        publicationBranchInvalid
+                          ? zh
+                            ? '请输入有效分支名'
+                            : 'Enter a valid branch name'
+                          : undefined
+                      }
+                    >
+                      <TextInput
+                        value={publicationBranch}
+                        onChange={setPublicationBranch}
+                        disabled={launch.isPending}
+                      />
+                    </Field>
                   ) : null}
                 </>
               ) : null}
@@ -1000,6 +1029,16 @@ export function TaskCreationSubjectDescriptorContract(
 
           {step === 3 ? (
             <dl className="wizard-summary" data-testid="wizard-summary">
+              {publicationBranchOption && (
+                <div className="wizard-summary__row">
+                  <dt>{localized(publicationBranchOption.label, language)}</dt>
+                  <dd>
+                    {publicationBranch.trim() ||
+                      (zh ? '仅交付内部候选' : 'Internal candidate only')}
+                    {summaryEdit(1)}
+                  </dd>
+                </div>
+              )}
               <div className="wizard-summary__row">
                 <dt>{t('taskWizard.kindLabel')}</dt>
                 <dd data-testid="employee-case-summary-employee">

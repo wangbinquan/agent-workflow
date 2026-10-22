@@ -2,6 +2,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
+import { graphEmployeeTypePackage } from '@/modules/development-automation/composition/graphDevelopment'
 import { createEmployeeAutomationWorkStartProvider } from '@/modules/digital-employee/composition'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
@@ -166,6 +167,7 @@ export function composeDaemonIntegrationModules(input: {
       customObserverPrograms: input.adapters?.customObserverPrograms,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
+        graphEmployeeTypePackage.descriptorJson,
         codeHostEventCatalogJson,
         taskLifecycleEventCatalogJson,
         collaborationCommittedEventCatalogJson,

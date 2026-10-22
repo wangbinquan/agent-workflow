@@ -510,6 +510,7 @@ function extractTaskIdFromListMessage(msg: TasksListWsMessage): string | null {
     case 'lifecycle.alert.resolved':
       return msg.taskId
     case 'employee-case.members.changed':
+    case 'employee-case.changed':
       // RFC-330 —— not a task frame; gated by its own audience snapshot below.
       return null
     case 'lifecycle.alert':
@@ -634,7 +635,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     // canViewTask short-circuits internally on `tasks:read:all`, keeping those frames on
     // the same async path as before the registry.
     frameGate: async (ctx, msg, deliveryContext) => {
-      if (msg.type === 'employee-case.members.changed') {
+      if (msg.type === 'employee-case.members.changed' || msg.type === 'employee-case.changed') {
         // RFC-330 —— employee cases have no per-row visibility oracle on this
         // channel; the frame is delivered ONLY to the before ∪ after audience
         // frozen by the mutation (or to tasks:read:all). No snapshot ⇒ drop.

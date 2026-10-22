@@ -8,9 +8,9 @@
 
 **进行中 RFC（设计阶段）**：[RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)，用户要求全面数据库调研并落地 RFC。以 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8` / schema digest `8e6510d4d0927d538692ecf22cde0b1fa9a97c733a9e044af8d9768418ecb956` 为基线，六份文档明确 217 张源表处置、Task / NodeRun / workspace / 澄清 / 资源引用 / 内容模型、双 provider 原生合同及离线转换后一次切换。重点删除 host workflow、主仓镜像、单仓/多仓快照双形态、运行时 seq/ID 回退与旧 provider 适配；保留事件、Case/Reaction/Task、观测与领域 effect 边界。当前仅文档，未改生产代码或真实数据库；独立功能设计门与实现批准待完成（本会话无可调用 openai-codex review 工具）。完整任务与验收矩阵见 RFC plan；真实切换需另有具体 MigrationPlan 和实例操作批准。
 
-## 2026-10-21 RFC-396 Draft：自适应图驱动研发数字人
+## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
-用户要求基于脑图澄清提案新增数字人，并明确“根据不同需求，自适应生成最优的图组合”，本轮授权为“落地 RFC”。[RFC-396](design/RFC-396-adaptive-graph-development/proposal.md) 三件套已写：`graph-development@1` 覆盖图上澄清、代码与测试生成、实际验证和证据交付；关注问题驱动选图，图的种类、数量、粒度与组合可随需求变化，不固化 4+1 或其他图清单。共享语义模型归 development-automation，复用既有 Case、Workflow、clarify/review 和候选交付链；实现基线、候选内容和证据分别绑定版本。源码核对基线 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8`，按 RFC-393 后的 `bootstrap/daemonModules/` 落位；18 项 AC、T00～T16 和双 provider/双部署验收矩阵见配套设计与计划。**当前仅 Draft**：未改生产和测试，原型审核、独立功能设计门、用户实现批准均待完成。下一步是可交互原型和功能设计审查。编号避让并发的 RFC-395 数据库方案。
+用户已明确授权“完整实现RFC并提交上库到远端”。[RFC-396](design/RFC-396-adaptive-graph-development/proposal.md) 保持自适应图组合与澄清、代码生成、实际验证完整范围。三场景交互原型已由本代理在 Chrome 操作，390px/320px 无横向溢出；独立功能设计门的 5 项 P2 已关闭，见 [设计记录](design/RFC-396-adaptive-graph-development/design-gate.md)。新增合同明确审核 return-decision、封口 round 的新宿主受理、unborn 仓库材料锚点与无父业务提交；保留旧默认行为。T03～T12 的完整实现、接线和用例已编写，集中验证进行中。架构 230/0、后端兼容 135/0（含双库）、前端兼容 21、共享合同 96/0、原始报告与候选验证 16/0（双库）、工作区 UI 8 项通过；独立实现门 5 项 P2 已关闭。真实浏览器发现并修复等待人工门时产物读取及未变设计遗漏新增回答两项缺陷，双库回归 16/0；预约、通知与已有模块三条完整确定性浏览器旅程均已通过（分别 1 passed 和 2 passed）；后续运行时、审核材料、脚本与证据重放恢复缺陷已修复并通过限定功能复核。真实模型预约已进入原生澄清门，继续调用的外部材料发送许可仍待用户明确批准；三个完整真实模型旅程、实际部署旅程和实现 exact-SHA CI 未完成。详见 [验收记录](design/RFC-396-adaptive-graph-development/validation.md) 与 [实现门](design/RFC-396-adaptive-graph-development/implementation-gate.md)，未宣称 RFC Done。基线 `ddfabc6a7786e8260d95ce6548f3eb705a7a473b`；原 RFC 文档提交 `a80a14123` 已在远端。
 
 ## 2026-10-21 RFC-294 后继 S2c：RFC-393 Done
 

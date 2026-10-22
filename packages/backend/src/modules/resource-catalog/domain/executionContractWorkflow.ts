@@ -12,6 +12,7 @@ const CONTRACT_WORKFLOW_NODE_KINDS = new Set([
 export function inspectExecutionContractWorkflowDefinition(
   storedDefinition: WorkflowDefinition,
   expectedOutputPort = 'agent-result',
+  humanGates: readonly ('clarify' | 'clarify-cross-agent' | 'review')[] = [],
 ): {
   readonly ok: boolean
   readonly detail: string
@@ -34,12 +35,25 @@ export function inspectExecutionContractWorkflowDefinition(
   const forbiddenKinds = [
     ...new Set(
       definition.nodes
-        .filter((node) => !CONTRACT_WORKFLOW_NODE_KINDS.has(node.kind))
+        .filter(
+          (node) =>
+            !CONTRACT_WORKFLOW_NODE_KINDS.has(node.kind) &&
+            !humanGates.some((kind) => kind === node.kind),
+        )
         .map((node) => node.kind),
     ),
   ].sort()
   if (forbiddenKinds.length > 0)
     violations.push(`forbidden node kinds: ${forbiddenKinds.join(', ')}`)
+  if (
+    humanGates.includes('review') &&
+    definition.nodes.some(
+      (node) => node.kind === 'review' && node.decisionHandling !== 'return-decision',
+    )
+  )
+    violations.push(
+      'contract review gates must return the original decision without rerunning upstream',
+    )
   // RFC-354 (schema v6): an output node's ports ARE its inbound edges.
   const outputNodeIds = new Set(
     definition.nodes.filter((node) => node.kind === 'output').map((node) => node.id),

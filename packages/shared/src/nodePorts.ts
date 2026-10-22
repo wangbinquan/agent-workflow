@@ -43,6 +43,7 @@ import { declaredScriptOutputs } from './scriptNode'
 import { deriveWrapperFanoutOutputs, resolveNodeAgent, type AgentLookup } from './wrapperFanout'
 import {
   REVIEW_APPROVAL_META_PORT,
+  REVIEW_DECISION_META_PORT,
   reviewApprovedPortName,
   reviewInputSource,
 } from './reviewMultiDoc'
@@ -331,10 +332,13 @@ const PORT_DERIVERS = {
     ...NO_PORTS,
     // RFC-005/079/081: approved outlet name depends on the input kind
     // (multi-doc list<markdownish> ⇒ 'accepted', else 'approved_doc').
-    dataOutputs: [
-      { name: reviewApprovedPortName(resolveReviewInputKind(node, defn, agents)) },
-      { name: REVIEW_APPROVAL_META_PORT },
-    ],
+    dataOutputs:
+      (node as Record<string, unknown>).decisionHandling === 'return-decision'
+        ? [{ name: REVIEW_DECISION_META_PORT }]
+        : [
+            { name: reviewApprovedPortName(resolveReviewInputKind(node, defn, agents)) },
+            { name: REVIEW_APPROVAL_META_PORT },
+          ],
   }),
   clarify: (): DeclaredPorts => ({
     ...NO_PORTS,

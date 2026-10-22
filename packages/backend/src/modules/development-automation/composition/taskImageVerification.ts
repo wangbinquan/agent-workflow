@@ -20,8 +20,18 @@ import { requireEvidenceWorkPath } from './taskImageEvidence'
 import { verificationStepSchema } from '../domain/verificationProfile'
 import { assertEvidenceRelativePath } from '../infrastructure/crewstation/evidenceArtifacts'
 import { sha256Hex } from '@/util/hash'
+import { readVerificationEnvironment } from '../infrastructure/local/verificationEnvironment'
 
 const Request = z.discriminatedUnion('method', [
+  z.object({ method: z.literal('environment'), path: z.string() }),
+  z.object({
+    method: z.literal('behavior'),
+    path: z.string(),
+    id: z.string().uuid(),
+    programRef: z.string(),
+    inputJson: z.string().max(1024 * 1024),
+    timeoutMs: z.number().int().positive().max(300_000),
+  }),
   z.object({
     method: z.literal('resolve'),
     path: z.string(),
@@ -61,6 +71,41 @@ export async function executeTaskImageVerification(
     return
   }
   const path = requireEvidenceWorkPath(input.path, root)
+  if (input.method === 'environment') return await readVerificationEnvironment(path)
+  if (input.method === 'behavior') {
+    const program = resolver.resolve({
+      programRef: input.programRef,
+      argsRef: null,
+      workspacePath: path,
+    })
+    if (!program)
+      return { exitCode: -1, timedOut: false, outputJson: '', error: 'behavior-adapter-missing' }
+    requireEvidenceWorkPath(program.argv[0]!, root)
+    const writer = retainWorkVolumeWriter(root, `behavior:${input.id}`, path)
+    const result = await runManagedProcess({
+      argv: program.argv,
+      cwd: path,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+      stdin: { mode: 'pipe', data: input.inputJson },
+      timeoutMs: input.timeoutMs,
+      signal,
+      captureRawStdout: true,
+      requireSpawnReceipt: true,
+      onSpawned: (receipt) => writer.spawned(receipt),
+    })
+    if (result.outcome === 'child-unkillable') throw new Error('hosted-behavior-writer-unreaped')
+    writer.release()
+    return {
+      exitCode: result.exitCode ?? -1,
+      timedOut: result.outcome === 'timeout',
+      outputJson: result.rawStdout ?? '',
+      error: result.spawnError ?? result.stderrTail,
+    }
+  }
   if (input.method === 'collect') {
     assertEvidenceRelativePath(input.pattern)
     const result: string[] = []

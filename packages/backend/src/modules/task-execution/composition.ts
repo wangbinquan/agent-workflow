@@ -240,3 +240,4 @@ export function createTaskExecutionShutdownController(
     },
   }
 }
+export { createEmployeeExecutionArtifactQueries } from './infrastructure/employeeExecutionArtifacts'

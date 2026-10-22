@@ -51,3 +51,4 @@ export {
 // 经本 barrel 取用会把整个 collaboration 的实现面拖进依赖图，W7 之后当场闭掉 9 条
 // `no-circular`。本 barrel 此后**只导出装配用的工厂**，不再转售 domain 纯函数——
 // 想用 domain / application 的函数请直接 import 定义模块。
+export { createCommittedHumanInputQueries } from './infrastructure/committedHumanInputQueries'

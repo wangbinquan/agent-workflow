@@ -12836,6 +12836,28 @@
           "test": "RFC-319 WG-X4: 任务显示的组名冻在启动那一刻——事后改组名不动它；冻结配置坏掉时降级成破折号而不是让整张列表 5xx @nightly"
         }
       ]
+    },
+    {
+      "id": "GRAPH-DEVELOPMENT-01",
+      "domain": "数字人",
+      "title": "自适应图组合贯穿澄清、冻结审核、实现、实际候选与验收",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc396-graph-development.spec.ts",
+          "test": "RFC-396 booking journey adapts graphs and delivers an explicitly accepted candidate"
+        },
+        {
+          "file": "e2e/rfc396-graph-development.spec.ts",
+          "test": "RFC-396 notification journey adapts graphs for duplicate and out-of-order constraints"
+        },
+        {
+          "file": "e2e/rfc396-graph-development.spec.ts",
+          "test": "RFC-396 existing-module journey preserves the interface and adds exception rules"
+        }
+      ]
     }
   ],
   "gapIds": [],

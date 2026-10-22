@@ -14,6 +14,10 @@ import type {
   RepositoryCandidateWorkspace,
 } from './ports/repositoryCandidateEffects'
 import {
+  repositoryMaterializationCommit,
+  type RepositoryContentBaseline,
+} from '@agent-workflow/shared'
+import {
   CANDIDATE_PLATFORM_DIR,
   candidateReceiptRef,
   changedPathSet,
@@ -26,6 +30,7 @@ import {
 import { parseNameStatusZ, type RepositoryGit } from './repositoryCommit'
 
 export interface DeriveChangeCandidateInput {
+  readonly repositoryBaseline?: RepositoryContentBaseline
   readonly baselineRepoPath: string
   readonly baselineSha: string
   /** 已通过 workspace validator 的业务树根（`.git` 不拷；平台目录若在其中会在 diff 层被固定阻断）。 */
@@ -255,6 +260,15 @@ export async function deriveChangeCandidate(
   input: DeriveChangeCandidateInput,
   factory: RepositoryCandidateStepEffectsFactory,
 ): Promise<DeriveChangeCandidateResult> {
+  if (
+    input.repositoryBaseline &&
+    repositoryMaterializationCommit(input.repositoryBaseline) !== input.baselineSha
+  )
+    return {
+      ok: false,
+      code: 'candidate-workspace-failed',
+      detail: 'repository baseline does not match materialization anchor',
+    }
   const session = await factory.acquire({
     baselineReference: input.baselineRepoPath,
     overlayReference: input.overlayRoot,
@@ -331,6 +345,9 @@ export async function deriveChangeCandidate(
       }
 
       const core = {
+        ...(input.repositoryBaseline === undefined
+          ? {}
+          : { repositoryBaseline: input.repositoryBaseline }),
         baselineSnapshotRef: `git:${input.baselineSha}`,
         treeOid: staged.treeOid,
         changed: summary,

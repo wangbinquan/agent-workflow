@@ -558,6 +558,16 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   })
   const { webhookTerminalControl, eventCenter } = integrationModules
   const digitalEmployeeModules = composeDaemonDigitalEmployeeModules({
+    graphAssist: {
+      registry: core.runtimeRegistry,
+      getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
+      binding: observationModules.narrativeSystemAgentBinding,
+    },
+    verificationCommands: input.verificationCommands,
+    repositoryRevisionContent: input.repositoryRevisionContent,
+    reviewReader: {
+      read: (finalPath) => readCommittedReviewArtifactBody(boundCollaborationContext, finalPath),
+    },
     db: input.db,
     appHome: input.appHome,
     configuration,
@@ -854,6 +864,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
     'employee-authoring-ready': async () => {
       await digitalEmployee.maintenance.ready()
+      await digitalEmployeeModules.initializeGraph()
     },
     'employee-writer-state': async () => {
       const writer = await employeeWriterCutover.activate()
@@ -939,6 +950,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     await eventCenter.initialize()
     await digitalEmployeePlatformTools.load()
     await phase.scope.trackReady(digitalEmployee.maintenance.ready())
+    await digitalEmployeeModules.initializeGraph()
   }
   const app = createComposedApp(composeProviderAppDeps(http.composition))
   const webSocket = buildWebSocketAdapter({

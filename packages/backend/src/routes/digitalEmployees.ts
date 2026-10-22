@@ -30,6 +30,7 @@ import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import { jsonDocumentResponse } from '@/util/jsonDocument'
+import type { GraphDevelopment } from '@/modules/development-automation/public/types'
 
 function parseEmployeeTypeRef(value: string): {
   readonly typeId: string
@@ -142,6 +143,7 @@ export function mountDigitalEmployeeRoutes(
   module: DigitalEmployeeModule,
   activityOperations: DevelopmentActivityOperations,
   contexts: DirectAuthorityBinding,
+  graph?: GraphDevelopment,
 ): void {
   const maxUploadBytes = 32 * 1024 * 1024
   const adapterVisibilitySubject = (c: Parameters<typeof actorOf>[0]) =>
@@ -370,6 +372,12 @@ export function mountDigitalEmployeeRoutes(
 
   if (module.runtime !== null) {
     const runtime = module.runtime
+    graph?.mountRoutes(app, {
+      authorize: (actor, caseId, edit) =>
+        edit
+          ? requireCaseOperator(runtime, actor, caseId)
+          : loadVisibleCase(runtime, actor, caseId),
+    })
 
     registerRoute(
       app,

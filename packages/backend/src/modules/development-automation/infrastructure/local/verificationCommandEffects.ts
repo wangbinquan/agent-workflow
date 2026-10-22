@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { killProcessTree, reapDetachedGroup } from '@/util/process'
+import { runManagedProcess } from '@/platform/execution/local/managedProcess'
+import { readVerificationEnvironment } from './verificationEnvironment'
 import type { EvidenceArtifactPort } from '../../application/ports/evidenceArtifacts'
 import type {
   VerificationCommandEffects,
@@ -83,6 +85,33 @@ export function createLocalVerificationCommandEffects(deps: {
 }): VerificationCommandEffects {
   const programs = new WeakMap<VerificationProgramRef, ResolvedVerificationProgram>()
   return {
+    async invokeBehavior(request) {
+      const resolved = deps.resolver.resolve({
+        programRef: request.programRef,
+        argsRef: null,
+        workspacePath: request.workspaceRef,
+      })
+      if (!resolved)
+        return { exitCode: -1, timedOut: false, outputJson: '', error: 'behavior-adapter-missing' }
+      const run = await runManagedProcess({
+        argv: resolved.argv,
+        cwd: request.workspaceRef,
+        env: Object.fromEntries(
+          Object.entries(process.env).filter(
+            (entry): entry is [string, string] => entry[1] !== undefined,
+          ),
+        ),
+        stdin: { mode: 'pipe', data: request.inputJson },
+        timeoutMs: request.timeoutMs,
+        captureRawStdout: true,
+      })
+      return {
+        exitCode: run.exitCode ?? -1,
+        timedOut: run.outcome === 'timeout',
+        outputJson: run.rawStdout ?? '',
+        error: run.spawnError ?? run.stderrTail,
+      }
+    },
     resolveProgram(input) {
       const resolved = deps.resolver.resolve({
         programRef: input.programRef,
@@ -168,6 +197,7 @@ export function createLocalVerificationCommandEffects(deps: {
 
 export function createLocalVerificationCommandEffectsFactory(): VerificationCommandEffectsFactory {
   return {
+    environment: readVerificationEnvironment,
     create(input) {
       return createLocalVerificationCommandEffects({
         evidence: input.evidence,

@@ -21,3 +21,4 @@ export const DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF = {
   id: 'approval.status.changed',
   revision: 1,
 } as const
+export type { GraphDevelopment } from '../composition/graphDevelopment'

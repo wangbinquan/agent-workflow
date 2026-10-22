@@ -12,6 +12,7 @@ export interface ExecutionContractResourcePort {
       { kind: 'agent' | 'workflow' }
     >
     readonly expectedOutputPort: string
+    readonly humanGates?: readonly ('clarify' | 'clarify-cross-agent' | 'review')[]
   }): Promise<ExecutionContractResourceProjection | null>
 }
 

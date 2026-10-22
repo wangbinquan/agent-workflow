@@ -314,6 +314,7 @@ export interface ProviderDigitalDevelopmentRouteComposition {
     readonly module: Parameters<typeof mountDigitalEmployeeRoutes>[2]
     readonly activityOperations: Parameters<typeof mountDigitalEmployeeRoutes>[3]
     readonly contexts: Parameters<typeof mountDigitalEmployeeRoutes>[4]
+    readonly graph: Parameters<typeof mountDigitalEmployeeRoutes>[5]
   }>
   readonly developmentConfig: Readonly<{
     readonly aclRoutes: Parameters<typeof mountDevelopmentConfigRoutes>[1]
@@ -532,6 +533,7 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
         input.digitalDevelopment.digitalEmployees.module,
         input.digitalDevelopment.digitalEmployees.activityOperations,
         input.digitalDevelopment.digitalEmployees.contexts,
+        input.digitalDevelopment.digitalEmployees.graph,
       ),
     developmentConfig: (app: Hono) =>
       mountDevelopmentConfigRoutes(

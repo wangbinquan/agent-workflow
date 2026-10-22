@@ -51,6 +51,13 @@ const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
 // RFC-371 v2: one row per runtime call, its per-model usage, append-only CNY prices.
 export { observationCalls, observationCallModels, observationPrices } from './observation'
+export {
+  developmentDesigns,
+  developmentDesignRevisions,
+  developmentDesignProposals,
+  developmentDesignBaselines,
+  developmentDesignLinks,
+} from './graphDevelopment'
 
 // -----------------------------------------------------------------------------
 // agents — DB is source of truth. Frontmatter fields are split into columns.

@@ -91,6 +91,9 @@ export const ReviewNodeSchema = z
     title: z.string().default(''),
     description: z.string().default(''),
 
+    /** Independent reviews return every decision; legacy reviews rerun upstream. */
+    decisionHandling: z.enum(['rerun-upstream', 'return-decision']).default('rerun-upstream'),
+
     /**
      * On reject: which upstream nodes get rolled back & re-run. Default set by
      * the editor at creation time = [direct upstream] + all its reachable
@@ -614,6 +617,7 @@ export const ReviewDetailSchema = z.object({
   /** Lightweight rerun candidate list for the readonly "will rerun" modal. */
   rerunnableOnReject: z.array(z.string()),
   rerunnableOnIterate: z.array(z.string()),
+  decisionHandling: z.enum(['rerun-upstream', 'return-decision']).optional(),
   /**
    * RFC-079: present (non-empty) only for a multi-document review round. Lists
    * every document in `item_index` order; `currentVersion`/`currentBody`/

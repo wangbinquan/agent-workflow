@@ -333,6 +333,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       module: digitalEmployee,
       activityOperations: developmentActivityOperations,
       contexts: identityAccess.directAuthority,
+      graph: digitalEmployeeModules.graph,
     }),
     developmentConfig: Object.freeze({
       aclRoutes: developmentAclRoutes,

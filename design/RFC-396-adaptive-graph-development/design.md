@@ -1,6 +1,6 @@
 # RFC-396 技术设计：自适应图驱动研发数字人
 
-> 状态：Draft；基线 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8`（2026-10-21）。
+> 状态：In Progress；调研基线 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8`（2026-10-21）。
 > 本文所有 `Graph*` / `Design*` 新合同及路径均为拟新增设计，除明确标为现有者外，不表示源码已存在。
 > 产品范围、裁决及 AC 见 [proposal](./proposal.md)，工程任务与证据状态见 [plan](./plan.md)。
 
@@ -261,6 +261,22 @@ Case 的 graph Context 保存 designId、当前已消费版本、基线/实现/�
 
 启动/恢复/终止、Reaction 排队与预算仍走 DE。批准的实现请求通过原 Case 命令/事件受理，映射到既有 Reaction；同一基线/目标/请求的响应重放返回原 executionRef。请求受理与实际执行分开显示，不能在图 HTTP 路由再次 launch Task。
 
+### 6.5 人工门结束后的继续设计
+
+现有 review 的 rejected/iterated 默认会重跑上游，不能直接用作独立基线审核的返回值。本 RFC 为通用 review 配置增加显式的 `decisionHandling: rerun-upstream | return-decision`，默认保持 `rerun-upstream`。新审核 Workflow 选择 `return-decision`：三种决定都以原人工门回执提交，完成当前 review 节点并输出决定、理由和材料版本；拒绝或迭代不重跑冻结基线的上游。Case 的类型 settlement 按决定转回设计或等待实现请求。B1 的拒绝只结束 B1 审核，修改后的 B2 必须生成新审核请求。人工门响应丢失仍按原 request/receipt 重放；其他 review 保持原有语义。新增配置、执行分支、输出合同和前端文案都纳入回归。
+
+图上追问按宿主状态处理：
+
+| 当前状态             | 明确行为                                                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 有可写 clarify round | 通过原 draft/follow-up/submit 命令编辑或追加，保持 round 身份。                                                                                                                    |
+| 原 round 已提交      | 原回答只读；“补充/修正回答”产生新的 clarification request，引用旧 round/question/confirmedBasis 与当前图锚点，由 Case 受理新的设计 Workflow 和新 round。原回答不覆盖、不重新打开。 |
+| 正在审核             | 请求先明确撤回此基线审核，经原 Task 取消与 Case 结算后进入新设计；保留旧审核及撤回记录。                                                                                           |
+| 正在实现             | 新请求进入既有 Case 待办，界面说明在途实现继续使用旧基线；在其结束后处理，或由用户显式取消旧执行。                                                                                 |
+| Case 已终结          | 通过既有新工作入口创建后续 Case，引用前序设计/回答和候选，不复活终态 Case。                                                                                                        |
+
+新的澄清请求是业务工作项受理，不能走 §6.3 的只读短动作。语义修正保存为新提案并引用旧回答，不改写人的原话。相同 requestId 重放返回同一受理结果，刷新后可从 Case 查回宿主。
+
 ## 7. 实现依据、代码和回写
 
 ### 7.1 ImplementationBasis
@@ -284,6 +300,14 @@ review receipt 绑定 basis digest，执行输入冻结为同一 artifact manife
 实现工具输出 `TraceLink` 提案，将需求/规则/场景映射到候选文件、符号或测试。平台核对路径、候选 blob 与实际测试引用存在；语义充分性通过设计检查和实际验证判断。仅存在一个链接不计为实现完成。
 
 代码变化可提出模型更新建议；已确认业务决定保持原样，必须说明是实现偏差、设计修订还是来源失效。不能反向把测试通过解释为需求已经改变。
+
+### 7.4 已登记空仓库
+
+空仓库不是一个不存在的 commit。source-control 的共享候选接点显式接受 `RepositoryBaseline = {kind: commit, commitSha, treeOid} | {kind: unborn, targetBranch, emptyTreeOid, materializationCommitSha}`；持久化、实现依据与产物均保存 kind。无 commit 且无可解析分支时才判定 unborn，普通未知分支不降级为空仓库。
+
+为复用已有运行时 checkout，source-control 在对象库内创建内容为空的确定性内部提交，作为材料准备锚点；不移动用户分支，不把它展示为用户已有提交。候选 tree 仍从实际生成内容派生、验证和绑定。正式生成第一个业务 commit 时 unborn 基线使用无父提交，不带内部锚点作为 parent；有 commit 的现有仓库维持原 parent。导出或提交候选不要求创建代码托管项目；配置的发布沿既有 source-control 端口执行，目标分支应仍未创建，若期间出现真实提交则提示重新基线，不能覆盖。
+
+材料准备、候选派生、首个提交及发布统一消费该判别合同；类型专属 Context 不靠空字符串 SHA 表示 unborn。空仓库与普通仓库、单机与托管分别覆盖；现有 development 调用保持 commit 基线行为。内部材料锚点是 Git 机制，不是新业务生命周期。
 
 ## 8. 验证与证据合同
 
@@ -344,6 +368,8 @@ DA 持有设计文档当前版本指针、不可变版本、proposal/规划记�
 | `POST /api/development-designs/:id/implementation-requests`     | 引用已批准基线，经 Case 受理，不直接创建 Task               |
 | `GET /api/development-designs/:id/evidence`                     | 按义务/版本读取执行、人工与发布证据                         |
 
+另增 `POST /api/development-designs/:id/clarification-requests`：图锚点与前序回答引用进入既有 Case 受理；已封口 round 保持不可变，具体行为见 §6.5。
+
 所有命令通过模块公开 application 合同。受影响版本冲突时返回当前版本及可重试说明，保留客户端输入。WS 只发送已提交变更提示，刷新回读事实源；不依赖浏览器在线维持工作。
 
 ### 9.3 故障与恢复
@@ -375,3 +401,13 @@ Case 顶层增加“设计”入口，内部按 ViewPlan 呈现业务视图目�
 全部生产实现、双 provider 接线与测试编写完成后集中验证。纯规则使用确定性 fixture；选择质量用带可接受组合集合/必要关注点的真实需求案例；语义改动、依赖变化、旧流程、恢复与实际消费需要集成回归。真实模型与真实 UI 完整旅程另记证据，不能用 mock 代签。
 
 不以本文合同已写完宣称设计门通过。所有开放准备项、实现依赖、测试矩阵与正式退出条件见 [plan](./plan.md)。
+
+### 实现接线补充：先提交设计，再进入原生澄清
+
+既有 TaskAgentRun 严格要求 workflow-output 与 workflow-clarify 二选一；澄清轮不会写业务输出。内置 design-and-clarify Workflow 因而采用“designer 提交 design-model → clarifier 消费已提交设计并进入原生 clarify → 返回最终 agent-result”的顺序。等待人工时显示上游已提交版本，后续问题仍属于原生循环；最终修改导入与并发编辑保持 read-set 检查，不把尚未提交的模型文本显示成正式设计。图内短调用仍只产生待应用提案。
+
+显式图工作请求在原 Event Center/Case inbox 受理；该类型的 reaction 声明 preemptsContinuation 和可选 resumesBlocked，只有已进入 inbox 的明确请求才经既有 Case resume 转换恢复失败案例。活动 round 保持执行，审核撤回仍调用原 Task cancel，结束后再处理排队请求。旧类型未声明 resumesBlocked，保持既有行为。
+
+### T06 实施接点澄清
+
+候选 derive/stage/commit 已是 source-control 的正式 public participants，旧 development 与新 graph-development 均注入这些 owner 接点；profile 执行复用同一 `runVerificationProfileWithEffects`。因此无需再新增只转发参数的候选/交付 facade。图领域只增加冻结依据、追溯核对和证据编排，不复制 Git 或命令执行引擎。实现报告的 limitations 阻止自动交付，并回写待用户明确应用的 code-feedback 提案。

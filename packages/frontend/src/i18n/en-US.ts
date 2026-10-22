@@ -1785,6 +1785,10 @@ export const enUS: Resources = {
     rejectPrompt:
       'Enter a rejection reason (the following nodes will roll back & re-run: {{willRerun}}):',
     rejectReasonRequired: 'A reason is required to reject.',
+    returnIterationConfirm:
+      'Return the requested changes and finish this review. Revised material will need a new review request.',
+    returnRejectionConfirm:
+      'Reject this material and finish the review. Enter a reason; revised material must be submitted for review again.',
     iterateConfirm: 'Re-run based on submitted comments: {{willRerun}}. Continue?',
     iterateNoCommentsWarning:
       'No comments submitted yet. Iterating will send the agent an empty comments list. Continue?',

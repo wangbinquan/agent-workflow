@@ -21,6 +21,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useId, useRef } from 'react'
 import { Field, Switch, TextArea } from '@/components/Form'
+import { Select } from '@/components/Select'
 import { RuntimeParameterPicker } from '@/components/RuntimeParameterPicker'
 import { buildRuntimeParameterCatalog } from '@/components/runtime-parameters/catalog'
 import { MultiSelect } from '@/components/MultiSelect'
@@ -89,7 +90,8 @@ export function ReviewEdit({
   onTransition,
   onHistoryBoundary,
 }: EditProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const zh = i18n.language.startsWith('zh')
   const rec = node as unknown as Record<string, unknown>
   // RFC-354: the review input is the source of its `__review_input__` edge.
   const reviewEdge = definition.edges.find(
@@ -258,6 +260,40 @@ export function ReviewEdit({
     <div className="inspector-sections">
       <InspectorSection title={t('inspector.sectionBasics')}>
         <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
+        <Field
+          label={zh ? '决定后的行为' : 'After a decision'}
+          hint={
+            zh
+              ? '返回决定会结束该审核节点，交由后续工作项处理；不自动重跑被审核的材料。'
+              : 'Return decision completes the review and leaves follow-up work to its caller.'
+          }
+        >
+          <Select
+            value={
+              rec.decisionHandling === 'return-decision' ? 'return-decision' : 'rerun-upstream'
+            }
+            options={[
+              {
+                value: 'rerun-upstream',
+                label: zh ? '拒绝或迭代时重跑上游' : 'Rerun upstream on reject or iterate',
+              },
+              {
+                value: 'return-decision',
+                label: zh ? '返回原始决定' : 'Return the original decision',
+              },
+            ]}
+            onChange={(decisionHandling) =>
+              patchReview(
+                { decisionHandling },
+                atomicNodeInspectorChange(
+                  node.id,
+                  'decisionHandling',
+                  zh ? '决定后的行为' : 'After a decision',
+                ),
+              )
+            }
+          />
+        </Field>
         <Field
           label={t('inspector.fieldReviewDescription')}
           hint={t('inspector.fieldReviewDescriptionHint')}

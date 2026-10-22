@@ -2,6 +2,34 @@
 // Module-internal details are imported directly from their owners.
 
 import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
+import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
+
+/** Exact committed content provenance for consumers of human decisions. */
+export interface CollaborationHumanInputQueries {
+  clarificationRounds(taskId: string): Promise<
+    readonly {
+      readonly id: string
+      readonly taskId: string
+      readonly askingNodeRunId: string
+      readonly intermediaryNodeRunId: string
+      readonly status: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned'
+      readonly questions: readonly ClarifyQuestion[]
+      readonly answers: readonly ClarifyAnswer[]
+    }[]
+  >
+  reviewDecision(
+    taskId: string,
+    nodeRunId: string,
+  ): Promise<{
+    readonly receiptId: string
+    readonly taskId: string
+    readonly nodeRunId: string
+    readonly decision: 'approved' | 'rejected' | 'iterated'
+    readonly decidedAt: number
+    readonly reason: string
+    readonly documentDigests: readonly string[]
+  } | null>
+}
 
 export type { ReviewAnchorRequest } from '../domain/reviewAnchor'
 

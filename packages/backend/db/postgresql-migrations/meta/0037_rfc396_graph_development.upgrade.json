@@ -1,0 +1,1113 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743', 216, 6)"
+    },
+    "beforeDigest": "sha256:10d4f5bec332ede06a95051e3b61a40d1db8046fb331ba000318466b64dd87e1"
+  },
+  "digest": "sha256:586d35b149283332f3b584cade3d749889168fe8f5635b9809f9a8d900668b6d",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "development_designs",
+      "sql": "CREATE TABLE \"agent_workflow\".\"development_designs\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"case_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"presentation_json\" TEXT COLLATE \"C\" NOT NULL DEFAULT '{}',\n  \"presentation_revision\" BIGINT NOT NULL DEFAULT 1,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_designs_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "development_design_revisions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"development_design_revisions\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"artifact_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_revisions_pkey\" PRIMARY KEY (\"design_id\", \"revision\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "development_design_proposals",
+      "sql": "CREATE TABLE \"agent_workflow\".\"development_design_proposals\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"status\" TEXT COLLATE \"C\" NOT NULL,\n  \"version\" BIGINT NOT NULL,\n  \"payload_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_proposals_pkey\" PRIMARY KEY (\"design_id\", \"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "development_design_baselines",
+      "sql": "CREATE TABLE \"agent_workflow\".\"development_design_baselines\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"artifact_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_baselines_pkey\" PRIMARY KEY (\"design_id\", \"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "development_design_links",
+      "sql": "CREATE TABLE \"agent_workflow\".\"development_design_links\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"payload_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_links_pkey\" PRIMARY KEY (\"design_id\", \"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "development_designs:index:development_designs_case_uq",
+      "sql": "CREATE UNIQUE INDEX \"development_designs_case_uq\" ON \"agent_workflow\".\"development_designs\" (\"case_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "development_design_revisions:index:development_design_revisions_request_uq",
+      "sql": "CREATE UNIQUE INDEX \"development_design_revisions_request_uq\" ON \"agent_workflow\".\"development_design_revisions\" (\"design_id\", \"request_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "development_design_proposals:index:development_design_proposals_status_idx",
+      "sql": "CREATE INDEX \"development_design_proposals_status_idx\" ON \"agent_workflow\".\"development_design_proposals\" (\"design_id\", \"kind\", \"status\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "development_design_baselines:index:development_design_baselines_digest_idx",
+      "sql": "CREATE INDEX \"development_design_baselines_digest_idx\" ON \"agent_workflow\".\"development_design_baselines\" (\"design_id\", \"digest\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "development_design_links:index:development_design_links_kind_idx",
+      "sql": "CREATE INDEX \"development_design_links_kind_idx\" ON \"agent_workflow\".\"development_design_links\" (\"design_id\", \"kind\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "development_designs:check:development_designs_revision_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"development_designs\" ADD CONSTRAINT \"development_designs_revision_ck\" CHECK (\"revision\" > 0 AND \"presentation_revision\" > 0)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "development_design_revisions:check:development_design_revisions_revision_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"development_design_revisions\" ADD CONSTRAINT \"development_design_revisions_revision_ck\" CHECK (\"revision\" > 0)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "development_design_proposals:check:development_design_proposals_version_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"development_design_proposals\" ADD CONSTRAINT \"development_design_proposals_version_ck\" CHECK (\"version\" > 0)"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743', active_table_count = 216, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:8e6510d4d0927d538692ecf22cde0b1fa9a97c733a9e044af8d9768418ecb956' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:8e6510d4d0927d538692ecf22cde0b1fa9a97c733a9e044af8d9768418ecb956",
+    "planDigest": "sha256:86888e9e7e363919c7b2478937ed2499fa683623a4da78a9372028a836494e1c"
+  },
+  "id": "0037_rfc396_graph_development",
+  "indexAdditions": [
+    {
+      "position": 43,
+      "statement": {
+        "kind": "table",
+        "logicalId": "development_designs",
+        "sql": "CREATE TABLE \"agent_workflow\".\"development_designs\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"case_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"presentation_json\" TEXT COLLATE \"C\" NOT NULL DEFAULT '{}',\n  \"presentation_revision\" BIGINT NOT NULL DEFAULT 1,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_designs_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 44,
+      "statement": {
+        "kind": "table",
+        "logicalId": "development_design_revisions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"development_design_revisions\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"artifact_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_revisions_pkey\" PRIMARY KEY (\"design_id\", \"revision\")\n)"
+      }
+    },
+    {
+      "position": 45,
+      "statement": {
+        "kind": "table",
+        "logicalId": "development_design_proposals",
+        "sql": "CREATE TABLE \"agent_workflow\".\"development_design_proposals\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"status\" TEXT COLLATE \"C\" NOT NULL,\n  \"version\" BIGINT NOT NULL,\n  \"payload_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_proposals_pkey\" PRIMARY KEY (\"design_id\", \"id\")\n)"
+      }
+    },
+    {
+      "position": 46,
+      "statement": {
+        "kind": "table",
+        "logicalId": "development_design_baselines",
+        "sql": "CREATE TABLE \"agent_workflow\".\"development_design_baselines\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"artifact_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_baselines_pkey\" PRIMARY KEY (\"design_id\", \"id\")\n)"
+      }
+    },
+    {
+      "position": 47,
+      "statement": {
+        "kind": "table",
+        "logicalId": "development_design_links",
+        "sql": "CREATE TABLE \"agent_workflow\".\"development_design_links\" (\n  \"design_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"payload_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"development_design_links_pkey\" PRIMARY KEY (\"design_id\", \"id\")\n)"
+      }
+    },
+    {
+      "position": 287,
+      "statement": {
+        "kind": "index",
+        "logicalId": "development_designs:index:development_designs_case_uq",
+        "sql": "CREATE UNIQUE INDEX \"development_designs_case_uq\" ON \"agent_workflow\".\"development_designs\" (\"case_id\")"
+      }
+    },
+    {
+      "position": 288,
+      "statement": {
+        "kind": "index",
+        "logicalId": "development_design_revisions:index:development_design_revisions_request_uq",
+        "sql": "CREATE UNIQUE INDEX \"development_design_revisions_request_uq\" ON \"agent_workflow\".\"development_design_revisions\" (\"design_id\", \"request_id\")"
+      }
+    },
+    {
+      "position": 289,
+      "statement": {
+        "kind": "index",
+        "logicalId": "development_design_proposals:index:development_design_proposals_status_idx",
+        "sql": "CREATE INDEX \"development_design_proposals_status_idx\" ON \"agent_workflow\".\"development_design_proposals\" (\"design_id\", \"kind\", \"status\")"
+      }
+    },
+    {
+      "position": 290,
+      "statement": {
+        "kind": "index",
+        "logicalId": "development_design_baselines:index:development_design_baselines_digest_idx",
+        "sql": "CREATE INDEX \"development_design_baselines_digest_idx\" ON \"agent_workflow\".\"development_design_baselines\" (\"design_id\", \"digest\")"
+      }
+    },
+    {
+      "position": 291,
+      "statement": {
+        "kind": "index",
+        "logicalId": "development_design_links:index:development_design_links_kind_idx",
+        "sql": "CREATE INDEX \"development_design_links_kind_idx\" ON \"agent_workflow\".\"development_design_links\" (\"design_id\", \"kind\")"
+      }
+    },
+    {
+      "position": 683,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "development_designs:check:development_designs_revision_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"development_designs\" ADD CONSTRAINT \"development_designs_revision_ck\" CHECK (\"revision\" > 0 AND \"presentation_revision\" > 0)"
+      }
+    },
+    {
+      "position": 684,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "development_design_revisions:check:development_design_revisions_revision_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"development_design_revisions\" ADD CONSTRAINT \"development_design_revisions_revision_ck\" CHECK (\"revision\" > 0)"
+      }
+    },
+    {
+      "position": 685,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "development_design_proposals:check:development_design_proposals_version_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"development_design_proposals\" ADD CONSTRAINT \"development_design_proposals_version_ck\" CHECK (\"version\" > 0)"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 39,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"development_designs\".\"revision\" > 0 AND \"development_designs\".\"presentation_revision\" > 0",
+            "name": "development_designs_revision_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "case_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"{}\"",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "presentation_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'{}'",
+              "sqlite": "'{}'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "1",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "presentation_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "1",
+              "sqlite": "1"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "development_designs",
+        "indexes": [
+          {
+            "columns": ["case_id"],
+            "name": "development_designs_case_uq",
+            "unique": true,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "development-automation",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "development_designs",
+          "sqlite": "development_designs"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "development-automation",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "developmentDesigns",
+        "sourceTable": "development_designs",
+        "unique": [
+          {
+            "columns": ["case_id"],
+            "expression": null,
+            "name": "development_designs_case_uq"
+          }
+        ]
+      }
+    },
+    {
+      "position": 40,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"development_design_revisions\".\"revision\" > 0",
+            "name": "development_design_revisions_revision_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "design_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "artifact_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "development_design_revisions",
+        "indexes": [
+          {
+            "columns": ["design_id", "request_id"],
+            "name": "development_design_revisions_request_uq",
+            "unique": true,
+            "where": null
+          }
+        ],
+        "migrationKey": ["design_id", "revision"],
+        "ownerContext": "development-automation",
+        "primaryKey": ["design_id", "revision"],
+        "providerTables": {
+          "postgresql": "development_design_revisions",
+          "sqlite": "development_design_revisions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "development-automation",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "developmentDesignRevisions",
+        "sourceTable": "development_design_revisions",
+        "unique": [
+          {
+            "columns": ["design_id", "request_id"],
+            "expression": null,
+            "name": "development_design_revisions_request_uq"
+          }
+        ]
+      }
+    },
+    {
+      "position": 41,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"development_design_proposals\".\"version\" > 0",
+            "name": "development_design_proposals_version_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "design_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "kind",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "status",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "version",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "payload_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "development_design_proposals",
+        "indexes": [
+          {
+            "columns": ["design_id", "kind", "status"],
+            "name": "development_design_proposals_status_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["design_id", "id"],
+        "ownerContext": "development-automation",
+        "primaryKey": ["design_id", "id"],
+        "providerTables": {
+          "postgresql": "development_design_proposals",
+          "sqlite": "development_design_proposals"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "development-automation",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "developmentDesignProposals",
+        "sourceTable": "development_design_proposals",
+        "unique": []
+      }
+    },
+    {
+      "position": 42,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "design_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "artifact_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "development_design_baselines",
+        "indexes": [
+          {
+            "columns": ["design_id", "digest"],
+            "name": "development_design_baselines_digest_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["design_id", "id"],
+        "ownerContext": "development-automation",
+        "primaryKey": ["design_id", "id"],
+        "providerTables": {
+          "postgresql": "development_design_baselines",
+          "sqlite": "development_design_baselines"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "development-automation",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "developmentDesignBaselines",
+        "sourceTable": "development_design_baselines",
+        "unique": []
+      }
+    },
+    {
+      "position": 43,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "design_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "kind",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "payload_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "development_design_links",
+        "indexes": [
+          {
+            "columns": ["design_id", "kind"],
+            "name": "development_design_links_kind_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["design_id", "id"],
+        "ownerContext": "development-automation",
+        "primaryKey": ["design_id", "id"],
+        "providerTables": {
+          "postgresql": "development_design_links",
+          "sqlite": "development_design_links"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "development-automation",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "developmentDesignLinks",
+        "sourceTable": "development_design_links",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:d4c8a21020afe10c914a65056374c4db8482096e7e5d195647f9c1954824f8cc",
+  "sequence": 37,
+  "sqlDigest": "sha256:2b4873d2af1b6dd8089e659c2187b3bfdf6b935b33cb4e34000b80b490817bb1",
+  "sqlFile": "0037_rfc396_graph_development.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1792632000000,
+        "hash": "e2663a94c3ed31563f44189ee9281351e0fcaa48f01fc77cbe5814ad066e632a",
+        "index": 260,
+        "tag": "0261_rfc396_graph_development"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:56f03e04cd79699f592ee14535e59e492a79c8292fe8fb5cd55395900f174b5d",
+      "count": 260,
+      "last": {
+        "folderMillis": 1792277862027,
+        "hash": "8612d0f09fcdb22b2852ec4e6c32f9fef3b78849d1a8c5b94817008042c57032",
+        "index": 259,
+        "tag": "0260_rfc374_node_run_seq"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:6c24417c3c131324f58984c307cb2b542a9e73649e3f11e096c7bd711e3f756f",
+      "count": 261,
+      "last": {
+        "folderMillis": 1792632000000,
+        "hash": "e2663a94c3ed31563f44189ee9281351e0fcaa48f01fc77cbe5814ad066e632a",
+        "index": 260,
+        "tag": "0261_rfc396_graph_development"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743",
+    "planDigest": "sha256:f44eb752fa49d7c4736e5ad3be6516b56862c92297f82aac1e88f437e2654815"
+  },
+  "version": 2
+}

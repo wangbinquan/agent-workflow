@@ -70,12 +70,13 @@ export function createFileEmployeeCaseWorkspaceEffectsFactory(): EmployeeCaseWor
         move(source, target) {
           renameSync(source, target)
         },
-        runGit(cwdReference, operands) {
+        runGit(cwdReference, operands, options) {
           return runGit(
             cwdReference,
             operands.map((operand) =>
               operand.kind === 'literal' ? operand.value : operand.reference,
             ),
+            options,
           )
         },
         close() {},

@@ -1,6 +1,7 @@
 import type {
   RepositoryCandidateFileFacts,
   RepositoryCandidateGitOutcome,
+  RepositoryCandidateGitOptions,
 } from './repositoryCandidateEffects'
 
 type Completion<T> = T | Promise<T>
@@ -27,6 +28,7 @@ export interface EmployeeCaseWorkspaceEffects {
   runGit(
     cwdReference: string,
     operands: readonly EmployeeCaseGitOperand[],
+    options?: RepositoryCandidateGitOptions,
   ): Completion<RepositoryCandidateGitOutcome>
   close(): Completion<void>
 }

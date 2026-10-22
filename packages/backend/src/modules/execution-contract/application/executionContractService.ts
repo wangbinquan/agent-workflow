@@ -162,6 +162,8 @@ export class ExecutionContractService {
       const projection = await this.#resources.inspect({
         implementation,
         expectedOutputPort: transport?.outputPort ?? EXECUTION_CONTRACT_RESULT_PORT,
+        humanGates: this.#registrations.get(executionContractRefKey(guide.contractRef))
+          ?.workflowHumanGates,
       })
       checks.push(
         projection === null

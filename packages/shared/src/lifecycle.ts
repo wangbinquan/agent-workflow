@@ -44,6 +44,7 @@ export type NodeRunTransitionEvent =
   // review flow
   | { kind: 'park-review' } // pending|running → awaiting_review
   | { kind: 'approve-review' } // awaiting_review → done
+  | { kind: 'return-review-decision' } // awaiting_review → done; preserves approved/rejected/iterated receipt
   | { kind: 'iterate-review' } // awaiting_review → pending
   | { kind: 'reject-review' } // awaiting_review → pending
   // clarify flow
@@ -115,6 +116,7 @@ export function nextNodeRunStatus(cur: NodeRunStatus, ev: NodeRunTransitionEvent
       if (cur === 'pending' || cur === 'running') return 'awaiting_review'
       throw new IllegalNodeRunTransition(cur, ev.kind)
     case 'approve-review':
+    case 'return-review-decision':
       if (cur === 'awaiting_review') return 'done'
       throw new IllegalNodeRunTransition(cur, ev.kind)
     case 'iterate-review':
