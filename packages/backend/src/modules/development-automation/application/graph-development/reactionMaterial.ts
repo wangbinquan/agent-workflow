@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { graphContext } from '../../domain/graph-development/employeeCodec'
-import { GRAPH_EMPLOYEE_TYPE } from '../../domain/graph-development/employeeType'
+import { graphContext } from './employeeCodec'
+import { GRAPH_EMPLOYEE_TYPE } from './employeeType'
 import type { GraphDesignCommands } from './designCommands'
 import type { GraphDesignStore } from '../ports/graphDesignStore'
 import type { GraphDesignArtifacts, GraphArtifactReference } from '../ports/graphDesignArtifacts'

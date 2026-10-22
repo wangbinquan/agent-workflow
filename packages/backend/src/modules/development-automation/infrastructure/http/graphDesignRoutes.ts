@@ -9,7 +9,7 @@ import {
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import type { GraphDevelopment } from '../../public/types'
+import type { GraphDevelopment } from '../../composition/graphDevelopment'
 
 const id = z.string().min(1).max(200),
   revision = z.number().int().positive()

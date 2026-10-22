@@ -1170,6 +1170,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await page.goto(`${requireDaemon().baseUrl}/digital-employees`)
     await expect(page.getByTestId('digital-employee-type-list')).toBeVisible()
     await expect(page.getByTestId('digital-employee-type-development')).toBeVisible()
+    await expect(page.getByTestId('digital-employee-type-graph-development')).toBeVisible()
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('digital-employees.png', SNAPSHOT_OPTS)
   })

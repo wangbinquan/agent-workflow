@@ -78,7 +78,13 @@ describeEachProvider(
         const runtime = harness.applicationBinding.runtime,
           pool = runtime.providerPool()
         const history = await loadPostgresqlMigrationHistory(),
-          prefix = replayPostgresqlMigrationHistory(history.root, history.steps.slice(0, -1))
+          prefix = replayPostgresqlMigrationHistory(
+            history.root,
+            history.steps.slice(
+              0,
+              history.steps.findIndex((step) => step.id === '0036_rfc374_node_run_seq'),
+            ),
+          )
         expect(prefix.steps.at(-1)!.id).toBe('0035_rfc370_hosted_deployment')
         await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')

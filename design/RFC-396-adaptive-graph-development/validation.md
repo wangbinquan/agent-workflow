@@ -1,6 +1,6 @@
 # RFC-396 实现候选验收记录
 
-日期：2026-10-21。状态：确定性集中验证和限定功能实现门已完成，真实模型及实际部署验收未闭环。用户批准完整实现与远端交付；此记录分别说明已证实内容和尚未证实内容，不以单个通过结果宣称 RFC Done。
+日期：2026-10-21。状态：实现候选已发布，首轮 exact-SHA CI 失败已归因并修复中；真实模型及实际部署验收未闭环。用户批准完整实现与远端交付；此记录分别说明已证实内容和尚未证实内容，不以单个通过结果宣称 RFC Done。
 
 ## 候选与环境
 
@@ -34,7 +34,7 @@
 | 独立功能实现门                                     | 首轮 5 P2 关闭；后续原生链路、运行时和证据恢复修复限定复核均通过                                       | [实现门记录](./implementation-gate.md)                                                                                   |
 | 三条确定性浏览器旅程                               | 预约 1 passed（34.8s）；通知与已有模块 2 passed（48.8s），分别运行并保留结果                           | `rfc396-e2e-16.txt`、`rfc396-e2e-final-remaining.txt`；源码 `e2e/rfc396-graph-development.spec.ts`                       |
 | 三条真实模型完整旅程                               | 未完成；预约已到原生人工澄清门                                                                         | 下节                                                                                                                     |
-| 实现提交、hosted exact-SHA CI                      | 未执行                                                                                                 | 待发布后记录                                                                                                             |
+| 实现提交、hosted exact-SHA CI                      | `5f11d185754398c8d2aaa9307866a6b8643428ff` 已推送；首轮 CI 红，见下节                                  | [CI 39721967331](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967331)                                 |
 
 三个浏览器旅程覆盖原生人工回答、动态视图变化、短调用取消/重试、固定视图、320/390px 布局、冻结依据预览/导出、独立审核、代码候选、原始证据查看/下载、人工验收和终态后的后续工作。它们使用模型协议夹具，不能替代 AC17 的真实模型质量与完整旅程。最终构建包含后续证据恢复修复；该恢复分支另有双库针对性回归。
 
@@ -77,3 +77,34 @@
 | AC17             | 预约模型已到原生澄清门                                                            | 三个完整真实模型旅程                 |
 
 未声称生产部署、远端业务仓库发布、长期认知效果或通用设计最优。所有未完成项关闭且 CI 结论明确之后才更新 RFC 最终状态。
+
+## 首轮发布与 CI 修复（2026-10-21 本地 / 2026-10-22 UTC）
+
+实现提交 `5f11d185754398c8d2aaa9307866a6b8643428ff` 已提交远端，142 个确切路径。发布后与远端同步；随后共享 main 正常包含 `ab9dcc36e` 与 `93332d3ea`。这些后继提交没有替代本 RFC 的 exact-SHA CI。
+
+- 主 CI [39721967331](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967331)：48 个工作 job 中 27 成功、21 失败；汇总 `CI required` 在取证时排队，不能宣称整体通过。全部 Linux/macOS 浏览器分片通过，Windows shard 3/4 的三个新增图旅程失败，其余 Windows 分片通过。
+- [windows-platform 39721967315](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967315)：验证命令工厂新增第二个消费者后，旧单消费者结构断言失败。
+- [visual-regression-nightly 39721967294](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967294)：58 通过，数字人类型目录 1 张基线变化。
+- [git-protocols-e2e 39721967433](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967433)、[integration-opencode 39721967290](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967290)、[maintenance-soak-nightly 39721967287](https://github.com/wangbinquan/agent-workflow/actions/runs/39721967287) 成功。
+
+| 首轮失败归因                                                         | 本轮处理与保留的断言                                                                                                                            |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 审核先解析坏快照盖过终态错误；新返回决定入口抛原始 JSON 错误         | 先做既有终态检查；与重跑路径共用 `workflow-snapshot-corrupt` 读取器，保留回放、准入及事务原逻辑                                                 |
+| PostgreSQL 默认 NULL 排序不同                                        | 权威人工输入查询使用既有 `descNullsLast` 合同                                                                                                   |
+| 新增五张内容表/迁移造成旧精确计数及最后一步切片过期                  | 明确 222 源表/216 active、261 迁移；逐一锁定五张图表；RFC-374 前缀定位 `0036_rfc374_node_run_seq`，继续证明真实历史升级                         |
+| 新类型、图弹窗和第二个验证命令消费者未登记                           | 两种类型各初始化一次；原重复装配负面对照仍各两次；登记七个实际 Dialog 实例与确切工厂转发点                                                      |
+| 22 个图 HTTP 路由未登记、两种错误缺少 HTTP 断言                      | 完整端点登记；真实应用中验证 404/400 错误码；MCP 逐叶登记当前 Case/UI 范围，未凭空声称新增外部模型工具                                          |
+| 公开类型直接派生整套装配；领域文件包含跨域适配/资源模板              | 明确 SourceControl DTO/参与者；HTTP 挂载不进入公共 DTO；类型注册/codec/内置资源移入 application，HTTP 归 infrastructure，组合根只构造完整参与者 |
+| 能力台账、模式清单和 POSIX 夹具跳过项未同步                          | 配套既有机器清单，保留范围解释；不增加宽泛排除，不删除原用例                                                                                    |
+| Windows 真实启动报 `ENAMETOOLONG`                                    | 完整图模型/schema 通过既有 `seedFiles` 物化到 invocation 工作区；命令行仅含材料路径，不截断材料；夹具读取同一文件                               |
+| Windows 图旅程保存固定视图未完成即发起下一步，出现 revision conflict | 等待保存后的 `Unpin` 按钮可用，再提交绑定新 revision 的请求，不重试绕过版本检查                                                                 |
+
+手工浏览器走查发现图类型总览仍显示旧研发类型的“工作区未准备”和 MR 承诺，已改为真实说明：目标仓库、冻结依据、候选和交付位于设计工作区。提案和短调用列表显示顺序/时间/用途，操作继续使用稳定 ID。新增总览回归后，本地三个完整旅程同一次执行 **3 passed（1.3m）**，日志 `rfc396-e2e-overview-final.txt`；这是后续 Windows 材料文件修复之前的候选证据。
+
+视觉基线按仓库 README 的人工检查流程更新：Darwin 由精确目录用例生成并再次零差异通过，Linux 取自上述 exact-SHA artifact。已查看 actual/expected/diff，仅接受新增图类型卡片及随之发生的双列布局；已有的运行观测导航来自已提交旧功能，也保留在基线中。没有改变阈值或其他页面基线。日志 `rfc396-visual-darwin-update.txt`、`rfc396-visual-darwin-verify.txt`。
+
+本轮早期修复验证：后端 58/0（5 files，含双库）、迁移针对性 2/0（261 assertions）、工厂接线 4/0、前端向导/弹窗清单 55 passed、总览与工作区 UI 16 passed，后端完整类型检查曾 exit 0。日志分别为 `rfc396-ci-backend-repair.txt`、`rfc396-ci-journal-repair.txt`、`rfc396-ci-verification-wiring.txt`、`rfc396-ci-frontend-repair.txt`、`rfc396-ui-overview-tests.txt`、`rfc396-ci-backend-type-repair.txt`。
+
+随后 RFC-395 在共享树迁移 schema contribution，导致本轮复验出现 `RFC349_DEFER_TABLES` 导出不存在、schema 类型字段暂失、历史迁移接口在修改中的错误。保留 `rfc396-ci-repair-behavior-2.txt`（37 pass / 9 errors）及 `rfc396-ci-repair-contracts-2.txt`（62 pass / 5 fail，其中三项加载错误）原记录；这些不是本 RFC 新发布 SHA 的 CI，也不是可宣称的整套通过。图领域/HTTP 层次、公开面合同、组合根 holder、API 源码登记、skip 清单和能力账本在该轮对应检查通过。SourceControl 新 DTO 的错误导入另行归因并自行修正，未把它归到并发工作。
+
+大请求和实际运行时选择的独立回归已通过，见 `rfc396-design-assist-transport.test.ts`、`rfc396-assist-transport-test.txt`。本次后端确切修复路径 lint 通过；最终修复候选仍须消费新的 hosted exact-SHA CI。共享 schema 清单测试的并发导入与本 RFC 五表断言完整保留，生成的 schema 报告与最终复验待共享依赖形成可运行候选后完成；不临时撤走他人产物制造绿树。

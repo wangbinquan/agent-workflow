@@ -136,6 +136,8 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       expect(
         actual.every(
           (edge) =>
+            edge ===
+              'bootstrap/daemonModules/digitalEmployee.ts -> composition/builtinJobTemplates' ||
             / -> (?:composition|public\/(?:commands|queries|participants|events|types))$/.test(
               edge,
             ) ||

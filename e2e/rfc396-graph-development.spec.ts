@@ -192,6 +192,9 @@ async function journey(page: Page, scenario: string, followup: string) {
   expect(human.decision?.validationOwner).toBeUndefined()
   await page.reload()
   await page.getByRole('button', { name: 'Pin this view', exact: true }).click()
+  // The semantic pin edit advances the revision. Wait for the response/refetch
+  // before starting requests that deliberately bind that revision (Windows CI).
+  await expect(page.getByRole('button', { name: 'Unpin', exact: true })).toBeEnabled()
   await api(
     `/api/content-links/${encodeURIComponent(identity!.id)}?selection=%5B%22requirement%22%5D&viewId=overview`,
   )
@@ -243,7 +246,7 @@ async function journey(page: Page, scenario: string, followup: string) {
   const proposal = (await workspace()).proposals.find(
     (p) => p.id.startsWith('action:') && !p.id.endsWith(':cancel'),
   )!
-  await page.getByRole('button', { name: `Compare · ${proposal.id}`, exact: true }).click()
+  await page.getByTestId(`graph-proposal-${proposal.id}`).click()
   await expect(page.getByRole('dialog')).toContainText('Exception rules')
   await page.getByRole('button', { name: 'Apply proposal', exact: true }).click()
   await expect
@@ -349,6 +352,16 @@ async function journey(page: Page, scenario: string, followup: string) {
     body: await page.screenshot({ fullPage: true }),
     contentType: 'image/png',
   })
+  // Graph work does not use the development employee's MR/workspace projection.
+  // A delivered graph Case must not claim its workspace is still unprepared.
+  await page.getByRole('link', { name: /^Overview Input,/ }).click()
+  await expect(page.getByTestId('employee-case-overview-repo')).toContainText(
+    'The frozen baseline, candidate and delivery are in the design workspace.',
+  )
+  await expect(
+    page.getByText('The workspace is not prepared; this is the task target.'),
+  ).toHaveCount(0)
+  await expect(page.getByTestId('employee-case-overview-mr')).toHaveCount(0)
   if (scenario.startsWith('Booking:')) {
     const current = await workspace()
     const receipt = await api<{ caseId: string }>(`${base}/clarification-requests`, {

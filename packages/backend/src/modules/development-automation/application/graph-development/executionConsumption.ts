@@ -9,10 +9,7 @@ import type { GraphHumanInputFacts, GraphExecutionFacts } from '../ports/graphHo
 import { sha256Hex } from '@/util/hash'
 import { graphContentRefs, graphDigest } from '../../domain/graph-development/model'
 import { selectGraphViews } from '../../domain/graph-development/selectViews'
-import {
-  graphToolResultSchema,
-  graphResultSchemas,
-} from '../../domain/graph-development/toolContracts'
+import { graphToolResultSchema, graphResultSchemas } from './toolContracts'
 import type { GraphDesignStore } from '../ports/graphDesignStore'
 import type { GraphDesignArtifacts } from '../ports/graphDesignArtifacts'
 import type { GraphDesignCommands } from './designCommands'

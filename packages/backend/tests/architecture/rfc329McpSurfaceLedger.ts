@@ -34,6 +34,117 @@ export interface ExemptLeaf {
 
 /** 每条叶子一个元素——见文件头。只许缩。 */
 export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
+  // RFC-396: explicit UI/Case scope, matching the existing employee Case surface.
+  {
+    leaf: 'GET /api/content-links/:id',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/employee-cases/:id/design',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/views/:id',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/proposals/:id',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/bases/:id',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/evidence',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/evidence/:id/artifacts',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/verification-profiles',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/development-designs/:id/bases/:id/export',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/changes',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'PUT /api/development-designs/:id/presentation',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/actions',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/actions/:id/cancel',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/actions/:id/retry',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/proposals/:id/apply',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/baseline-previews',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/review-requests',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/implementation-requests',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/clarification-requests',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/acceptance',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/development-designs/:id/verification-requests',
+    group: '/api/development-designs',
+    category: 'not-in-scope',
+  },
   // RFC-390: the default test dispatcher now mounts the same existing code-host callback as production.
   { leaf: 'POST /webhooks/:id/:id', group: '(code-host callback)', category: 'deliberate' },
   // RFC-370 v2: UI execution status of a hosted instance (standalone is always active).
@@ -1217,6 +1328,8 @@ export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
     '三类 / 四类：该做但不在 RFC-329 范围（proposal §2.3 / §2.4），等后续 RFC；RFC-330 新增的工具 `/acl` 对（GET 同组 not-in-scope，PUT 按 D5/D6 never）。',
   '/api/digital-employee-types':
     '三类 / 四类：该做但不在 RFC-329 范围（proposal §2.3 / §2.4），等后续 RFC。',
+  '/api/development-designs':
+    'RFC-396 proposal §5：本次交付现有 Case 中的图设计工作区；数字人经职责/执行合同使用能力，不新增外部 MCP 工具。22 条 HTTP 叶子逐项登记，后续外部 MCP 设计独立补齐。',
   '/api/digital-employees':
     '三类 / 四类：该做但不在 RFC-329 范围（proposal §2.3 / §2.4），等后续 RFC。',
   '/api/docs':

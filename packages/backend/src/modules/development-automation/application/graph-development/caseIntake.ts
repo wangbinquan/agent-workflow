@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { GraphHumanInputFacts, GraphRequestObservation } from '../ports/graphHostFacts'
-import { GRAPH_EVENT_SOURCE, GRAPH_CONTEXT_TYPE } from '../../domain/graph-development/employeeType'
-import { GraphEmployeeContextSchema } from '../../domain/graph-development/employeeCodec'
+import { GRAPH_EVENT_SOURCE, GRAPH_CONTEXT_TYPE } from './employeeType'
+import { GraphEmployeeContextSchema } from './employeeCodec'
 import type { GraphDesignCasePort } from '../ports/graphDesignExecution'
 import type { GraphDesignArtifacts } from '../ports/graphDesignArtifacts'
 

@@ -18,6 +18,7 @@ type OverlayFamily =
   | 'workflow-authoring'
   | 'task-execution'
   | 'review-and-clarify'
+  | 'graph-development'
   | 'memory-and-fusion'
   | 'workgroup'
   | 'shell-navigation'
@@ -58,6 +59,10 @@ const OVERLAY_FAMILY_OWNERS = {
   },
   'review-and-clarify': {
     owner: 'clarify-detail-route.test.tsx',
+    mobileOwner: MOBILE_OWNER,
+  },
+  'graph-development': {
+    owner: 'rfc396-graph-workspace.test.tsx',
     mobileOwner: MOBILE_OWNER,
   },
   'memory-and-fusion': {
@@ -248,6 +253,13 @@ const OVERLAY_CALLSITES = {
   'components/code/DigitalEmployeePlaybookEditor.tsx': {
     family: 'resource-management',
     count: 1,
+  },
+  // RFC-396: graph proposals, frozen bases, design edits and original evidence.
+  'components/digital-employees/GraphDesignEditors.tsx': { family: 'graph-development', count: 1 },
+  'components/digital-employees/GraphDesignEvidence.tsx': { family: 'graph-development', count: 2 },
+  'components/digital-employees/GraphDesignWorkspace.tsx': {
+    family: 'graph-development',
+    count: 4,
   },
   // RFC-323: the lane-scoped Adapter resource/binding editor is a compact
   // shared Dialog with its own rendered behavior coverage.

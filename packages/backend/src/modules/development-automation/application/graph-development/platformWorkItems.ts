@@ -1,15 +1,12 @@
 import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
 import type { CandidateDeliveryParticipant } from '@/modules/source-control/public/types'
 import { graphDigest } from '../../domain/graph-development/model'
-import {
-  graphToolResultSchema,
-  graphResultSchemas,
-} from '../../domain/graph-development/toolContracts'
+import { graphToolResultSchema, graphResultSchemas } from './toolContracts'
 import type { GraphDesignCommands } from './designCommands'
 import type { GraphDesignArtifacts } from '../ports/graphDesignArtifacts'
 import type { GraphDesignStore } from '../ports/graphDesignStore'
 import type { GraphVerificationWorkspace, createGraphVerification } from './verification'
-import type { GraphEmployeeContext } from '../../domain/graph-development/employeeCodec'
+import type { GraphEmployeeContext } from './employeeCodec'
 import { GraphReactionPlanSchema, graphWork } from './reactionMaterial'
 
 export function createGraphPlatformWorkItems(deps: {

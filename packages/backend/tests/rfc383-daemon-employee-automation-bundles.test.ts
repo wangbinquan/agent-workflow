@@ -55,6 +55,8 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
       expect(Object.keys(employee).sort()).toEqual(
         [
           'module',
+          'graph',
+          'initializeGraph',
           'executionContracts',
           'platformTools',
           'writerCutover',
@@ -105,7 +107,7 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
     test(`${former ? 'former SQLite split' : 'shared session'}: HTTP authoring after boot ${former ? 'initializes twice' : 'reuses initialized module'}`, async () => {
       const f = employeeAutomationFixture(harness, home())
       const original = authoringStore.createDigitalEmployeeAuthoringPersistence
-      let initializations = 0
+      const initializations: Record<string, number> = {}
       const persistence = spyOn(
         authoringStore,
         'createDigitalEmployeeAuthoringPersistence',
@@ -114,7 +116,8 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         return {
           ...store,
           async ensureTypePackage(...args) {
-            initializations++
+            const typeId = args[0].descriptor.typeRef.typeId
+            initializations[typeId] = (initializations[typeId] ?? 0) + 1
             return store.ensureTypePackage(...args)
           },
         }
@@ -123,10 +126,15 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         const session = composeDaemonDigitalEmployeeModules(f.employeeInput)
         const http = former ? composeDaemonDigitalEmployeeModules(f.employeeInput) : session
         await session.module.maintenance.ready()
-        const afterBoot = initializations
+        const afterBoot = { ...initializations }
         await http.module.queries.listTypes()
-        expect(afterBoot).toBe(1)
-        expect(initializations).toBe(former ? 2 : 1)
+        expect(afterBoot).toEqual({ development: 1, 'graph-development': 1 })
+        // Preserve the former-wiring control for each registered type: a second
+        // module initializes both twice; shared HTTP reuses each boot instance.
+        expect(initializations).toEqual({
+          development: former ? 2 : 1,
+          'graph-development': former ? 2 : 1,
+        })
         expect(http.module === session.module).toBe(!former)
         expect(http.activityOperations === session.activityOperations).toBe(!former)
       } finally {

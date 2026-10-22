@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 260 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 261 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -586,8 +586,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // one additive migration that squashes the unreleased M1-M3 increments.
     // RFC-374: 0260 allocates per-task node-run mint sequences (identity table,
     // nullable node_runs.seq appended last, unique (task_id, seq)).
-    // Journal tags begin at 0001, so the reviewed 0260 head contains 260 entries.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(260)
+    // RFC-396: 0261 adds the graph design identity, revision, record, basis and link tables.
+    // Journal tags begin at 0001, so the reviewed 0261 head contains 261 entries.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(261)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

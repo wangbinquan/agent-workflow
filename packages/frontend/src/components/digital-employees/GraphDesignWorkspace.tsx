@@ -716,24 +716,33 @@ export function GraphDesignWorkspace({
       </div>
       <Card title={zh ? '待应用提案与调用' : 'Proposals and calls'}>
         <div className="graph-design__stack">
-          {data.proposals.map((proposal) => (
+          {data.proposals.map((proposal, index) => (
             <div key={proposal.id} className="graph-design__actions">
               <button
                 type="button"
                 className="btn btn--sm"
+                data-testid={`graph-proposal-${proposal.id}`}
                 onClick={() => setProposalId(proposal.id)}
               >
-                {zh ? '查看差异' : 'Compare'} · {proposal.id}
+                {zh ? '查看提案差异' : 'Compare proposal'} {index + 1} ·{' '}
+                {new Date(proposal.createdAt).toLocaleString()}
               </button>
               <span>{proposal.status}</span>
             </div>
           ))}
           {data.requests
             .filter((request) => ['action', 'import'].includes(request.kind))
-            .map((request) => (
+            .map((request, index) => (
               <div key={request.id}>
                 <strong>
-                  {request.id} · {request.status}
+                  {request.kind === 'import'
+                    ? zh
+                      ? '设计导入'
+                      : 'Design import'
+                    : zh
+                      ? '设计调用'
+                      : 'Design call'}{' '}
+                  {index + 1} · {request.status}
                 </strong>
                 {request.kind === 'action' &&
                   ['running', 'failed', 'interrupted', 'canceled'].includes(request.status) && (

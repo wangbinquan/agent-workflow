@@ -3117,6 +3117,16 @@ function assertActingMember(
  * the external phase (nothing destructive on a stale view), and inside the
  * transaction (the commit point). One function, called with the row just read.
  */
+function assertReviewTaskOpen(run: { taskId: string }, task: { status: string }): void {
+  // RFC-202's hard seal is deliberately the UNREVIVABLE pair only.
+  if (task.status === 'done' || task.status === 'canceled') {
+    throw new ConflictError(
+      'task-terminal',
+      `task ${run.taskId} is '${task.status}'; this review round is closed and no longer accepts decisions`,
+    )
+  }
+}
+
 function assertDecisionAdmissible(
   args: SubmitReviewDecisionArgs,
   run: { status: string; reviewIteration: number; taskId: string },
@@ -3128,13 +3138,7 @@ function assertDecisionAdmissible(
   isMember: boolean,
   targetSelfStatus: NodeRunStatus,
 ): TaskActorRole | null {
-  // RFC-202's hard seal is deliberately the UNREVIVABLE pair only.
-  if (task.status === 'done' || task.status === 'canceled') {
-    throw new ConflictError(
-      'task-terminal',
-      `task ${run.taskId} is '${task.status}'; this review round is closed and no longer accepts decisions`,
-    )
-  }
+  assertReviewTaskOpen(run, task)
   if (run.status !== 'awaiting_review') {
     throw new ConflictError(
       'review-not-awaiting',
@@ -3341,12 +3345,12 @@ async function submitReviewDecisionUnlocked(
   }
   const replay = await replayCommittedReviewDecision(args, run.taskId)
   if (replay !== null) return replay
+  // Terminal admission must precede parsing any legacy workflow snapshot.
+  assertReviewTaskOpen(run, taskRow)
   // Widened to the lookup view (RFC-149): `rerun` is absent on approve and the
   // full re-run policy on reject / iterate — the ONE place the path forks.
   const policy: ReviewDecisionPolicy = REVIEW_DECISION_POLICY[args.decision]
-  const reviewDefinition = migrateWorkflowDefinitionToLatest(
-    JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
-  )
+  const reviewDefinition = readReviewWorkflowSnapshot(taskRow)
   const reviewConfiguration = reviewDefinition.nodes.find((node) => node.id === run.nodeId)
   const returnDecision =
     (reviewConfiguration as Record<string, unknown> | undefined)?.decisionHandling ===
@@ -4213,16 +4217,9 @@ async function planMultiDocApprove(
  * (`workflow-snapshot-corrupt`, `review-node-missing-from-snapshot`) now happens
  * here, ahead of the external phase and the transaction.
  */
-async function planRerun(
-  args: SubmitReviewDecisionArgs,
-  run: typeof nodeRuns.$inferSelect,
-  taskRow: typeof tasks.$inferSelect,
-  dv: DocVersion,
-): Promise<PreparedRerun> {
-  const { db } = args
-  let definition: WorkflowDefinition | null = null
+function readReviewWorkflowSnapshot(taskRow: typeof tasks.$inferSelect): WorkflowDefinition {
   try {
-    definition = migrateWorkflowDefinitionToLatest(
+    return migrateWorkflowDefinitionToLatest(
       JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
     )
   } catch {
@@ -4231,6 +4228,16 @@ async function planRerun(
       `task ${taskRow.id} workflowSnapshot is invalid JSON`,
     )
   }
+}
+
+async function planRerun(
+  args: SubmitReviewDecisionArgs,
+  run: typeof nodeRuns.$inferSelect,
+  taskRow: typeof tasks.$inferSelect,
+  dv: DocVersion,
+): Promise<PreparedRerun> {
+  const { db } = args
+  const definition = readReviewWorkflowSnapshot(taskRow)
   const reviewNode = definition.nodes.find((n) => n.id === dv.reviewNodeId)
   if (reviewNode === undefined) {
     throw new ValidationError(

@@ -36,16 +36,19 @@ import { createGraphDesignStore } from '../infrastructure/graph-development/desi
 import { createGraphDesignArtifacts } from '../infrastructure/graph-development/designArtifacts'
 import { createGraphEmployeeWorkspace } from '../infrastructure/graph-development/employeeWorkspace'
 import { createVerificationProfilePersistence } from '../infrastructure/configResourceStore'
-import { GraphEmployeeContextSchema } from '../domain/graph-development/employeeCodec'
-import { GRAPH_CONTEXT_TYPE, GRAPH_EMPLOYEE_TYPE } from '../domain/graph-development/employeeType'
+import { GraphEmployeeContextSchema } from '../application/graph-development/employeeCodec'
+import {
+  GRAPH_CONTEXT_TYPE,
+  GRAPH_EMPLOYEE_TYPE,
+} from '../application/graph-development/employeeType'
 import { graphDigest, staleGraphReads } from '../domain/graph-development/model'
-import { mountGraphDesignRoutes } from '../inbound/http/graphDesignRoutes'
+import { mountGraphDesignRoutes } from '../infrastructure/http/graphDesignRoutes'
 import type { Hono } from 'hono'
 import type { Actor } from '@/auth/actor'
 
-export { graphEmployeeTypePackage } from '../domain/graph-development/employeeType'
-export { graphEmployeeRuntimeCodec } from '../domain/graph-development/employeeCodec'
-export { graphExecutionContractRegistrations } from '../domain/graph-development/toolContracts'
+export { graphEmployeeTypePackage } from '../application/graph-development/employeeType'
+export { graphEmployeeRuntimeCodec } from '../application/graph-development/employeeCodec'
+export { graphExecutionContractRegistrations } from '../application/graph-development/toolContracts'
 export { createGraphCaseIntake } from '../application/graph-development/caseIntake'
 export { isGraphPlan } from '../application/graph-development/reactionMaterial'
 

@@ -144,7 +144,7 @@ describe('createBackup', () => {
       // RFC-370 v3 V11's single hosted-deployment migration adds the remote execution,
       // workspace command, object publication, backup, recovery and event inbox tables.
       // RFC-374 adds the NodeRun identity allocation table.
-      activeTableCount: 211,
+      activeTableCount: 216,
       archiveOnlyTableCount: 6,
     })
   })

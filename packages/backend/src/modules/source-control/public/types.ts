@@ -1,8 +1,10 @@
-import type { bindEmployeeCaseWorkspaceParticipant } from '../composition'
+import type { RepositoryContentBaseline } from '@agent-workflow/shared'
+import type { UploadLineageEntry } from '../domain/changeCandidate'
 import type {
-  bindChangeCandidateParticipant,
-  bindCandidateDeliveryParticipant,
-} from '../composition/repositoryCandidate'
+  DeriveChangeCandidateResult,
+  StageCandidateTreeResult,
+} from '../application/changeCandidate'
+import type { CommitCandidateResult, PushCandidateResult } from '../application/deliverCandidate'
 import type { WorkspaceMaintenanceFilesystem } from '../application/ports/workspaceMaintenance'
 import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
 import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
@@ -291,9 +293,116 @@ export type {
   RepositoryRefresh,
   RepositoryRegistration,
 } from '../application/ports/repositoryMirrors'
-/** RFC-396: the same candidate/workspace operations serve both employee types. */
-export type EmployeeCaseWorkspaceParticipant = ReturnType<
-  typeof bindEmployeeCaseWorkspaceParticipant
->
-export type ChangeCandidateParticipant = ReturnType<typeof bindChangeCandidateParticipant>
-export type CandidateDeliveryParticipant = ReturnType<typeof bindCandidateDeliveryParticipant>
+/** RFC-396: effect-free requests shared by employee types. Composition supplies
+ * Git/process factories; callers cannot smuggle execution functions in a DTO. */
+export interface EmployeeCaseWorkspaceParticipant {
+  materialize(input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+  }): Promise<{ readonly workspacePath: string }>
+  rematerialize(input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly currentWorkspacePath: string
+  }): Promise<{ readonly workspacePath: string }>
+  fetchRemoteHead(input: {
+    readonly baselineRepoPath: string
+    readonly remoteUrl: string
+    readonly branch: string
+    readonly expectedHeadSha: string
+    readonly publicationSubject?: RepositoryPublicationSubject
+  }): Promise<
+    | { readonly ok: true; readonly headSha: string }
+    | {
+        readonly ok: false
+        readonly code: 'remote-head-moved'
+        readonly expectedHeadSha: string
+        readonly actualHeadSha: string
+      }
+  >
+  checkpoint(input: {
+    readonly workspacePath: string
+    readonly checkpointRoot: string
+  }): Promise<{ readonly checkpointDigest: string }>
+  restore(input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly checkpointRoot: string
+    readonly expectedCheckpointDigest: string
+  }): Promise<{ readonly workspacePath: string }>
+  discard(caseRoot: string): Promise<void>
+  resolveBaseline(input: {
+    readonly baselineRepoPath: string
+    readonly preferredBranch: string | null
+    readonly sourceBranch: string | null
+    readonly allowUnborn?: boolean
+  }): Promise<{
+    readonly baselineSha: string
+    readonly targetBranch: string
+    readonly remoteHeadSha: string | null
+    readonly contentBaseline?: RepositoryContentBaseline
+  }>
+  importCommit(input: {
+    readonly baselineRepoPath: string
+    readonly sourceRepoPath: string
+    readonly commitSha: string
+  }): Promise<void>
+}
+
+export interface ChangeCandidateParticipant {
+  derive(input: {
+    readonly repositoryBaseline?: RepositoryContentBaseline
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly overlayRoot: string
+    readonly excludePolicyDigest: string
+    readonly agentOutcomeRef: string
+    readonly protectedRoots?: readonly string[]
+    readonly uploadPlan?: {
+      readonly planDigest: string
+      readonly entries: readonly UploadLineageEntry[]
+    } | null
+    readonly uploadsAlreadyPublished?: boolean
+  }): Promise<DeriveChangeCandidateResult>
+}
+
+export interface CandidateUploadEntries {
+  readonly entries: readonly {
+    readonly targetPath: string
+    readonly disposition: 'create' | 'replace' | 'already-present'
+    readonly fileMode: 'regular' | 'executable'
+  }[]
+}
+
+export interface CandidateDeliveryParticipant {
+  stage(input: {
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly overlayRoot: string
+    readonly uploadPlan?: CandidateUploadEntries | null
+  }): Promise<StageCandidateTreeResult>
+  commit(input: {
+    readonly repositoryBaseline?: RepositoryContentBaseline
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly overlayRoot: string
+    readonly expectedTreeOid: string
+    readonly missionId: string
+    readonly summarySource: string
+    readonly uploadPlan?: CandidateUploadEntries | null
+  }): Promise<CommitCandidateResult>
+  push(input: {
+    readonly repositoryBaseline?: RepositoryContentBaseline
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly commitSha: string
+    readonly remoteUrl: string
+    readonly branch: string
+    readonly expectedRemoteSha: string | null
+    readonly expectedTreeOid: string
+    readonly publicationSubject?: RepositoryPublicationSubject
+  }): Promise<PushCandidateResult>
+}

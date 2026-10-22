@@ -1,5 +1,5 @@
 // Deterministic protocol fixture, not model-quality evidence. All product state remains real.
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { readScenarioAnswers } from './mindmapDesignScenario'
 import {
   parseInvocation,
@@ -193,7 +193,9 @@ export function run(argv: readonly string[]) {
     process.stdout.write('1.0.0\n')
     return
   }
-  const prompt = call.prompt
+  const prompt = call.prompt.includes('Read graph-design-request.json in the current workspace.')
+    ? readFileSync('graph-design-request.json', 'utf8')
+    : call.prompt
   if (!prompt.includes('INPUT_JSON') && prompt.includes('"outputSchema"')) {
     if (prompt.includes('rfc396-cancelable-call')) Bun.sleepSync(3000)
     const input = objectAfter(prompt, '')

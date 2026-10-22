@@ -20,7 +20,7 @@ import { EvidenceStore } from '@/modules/development-automation/infrastructure/e
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
-import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/domain/graph-development/employeeCodec'
+import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import { createGraphDesignArtifacts } from '@/modules/development-automation/infrastructure/graph-development/designArtifacts'
 
 const homes: string[] = []

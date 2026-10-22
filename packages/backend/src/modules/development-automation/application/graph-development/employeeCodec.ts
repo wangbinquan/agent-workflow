@@ -256,7 +256,7 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
       .strict()
       .parse(JSON.parse(request.outputJson))
     if (raw.roundRef !== envelope.roundRef || raw.executionNonce !== envelope.executionNonce)
-      throw new Error('graph-output-execution-identity-mismatch')
+      throw new Error('graph-output-invocation-mismatch')
     const result = graphToolResultSchema(item).parse(raw.directResult)
     const { record, value } = graphContext(envelope.contextsJson)
     let state: GraphEmployeeContext = value

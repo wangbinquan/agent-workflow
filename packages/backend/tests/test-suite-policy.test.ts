@@ -62,6 +62,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // RFC-370 M2：托管验证命令在任务卷里用 POSIX shell 跑真实脚本（任务镜像只有 Linux）；
   // Windows 原生 lane 没有这套 shell 语义，三条真实执行用例按平台显式跳过。
   'packages/backend/tests/rfc370-m2-verification.test.ts#skipIf': 3,
+  // RFC-396: executable shebang/chmod fixtures exercise POSIX verification processes,
+  // including the Linux hosted operation host. Native Windows cannot execute those
+  // fixtures; Linux/macOS run the real scripts, while platform-neutral contracts run everywhere.
+  'packages/backend/tests/rfc396-behavior-execution.test.ts#skipIf': 1,
+  'packages/backend/tests/rfc396-verification.test.ts#skipIf': 5,
   'packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-route-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,

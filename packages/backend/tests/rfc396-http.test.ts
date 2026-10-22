@@ -79,6 +79,15 @@ describeEachProviderHttpApplication(
           headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         })
+      const missing = await request(owner.token, '/api/development-designs/does-not-exist')
+      expect(missing.status).toBe(404)
+      expect(await missing.json()).toMatchObject({ code: 'graph-design-not-found' })
+      const invalid = await request(owner.token, '/api/development-designs/design-a/changes', {
+        requestId: 'invalid',
+        expectedRevision: 0,
+      })
+      expect(invalid.status).toBe(400)
+      expect(await invalid.json()).toMatchObject({ code: 'graph-request-invalid' })
       const view = await request(observer.token, '/api/development-designs/design-a/views/overview')
       const rawArtifact = await artifacts.put([
         { path: 'execution.json', content: '{"exitCode":3}' },

@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseTemplate } from '@agent-workflow/shared'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
-import { graphEmployeeTypePackage } from '@/modules/development-automation/domain/graph-development/employeeType'
+import { graphEmployeeTypePackage } from '@/modules/development-automation/application/graph-development/employeeType'
 import {
   GRAPH_BUILTIN_AGENTS,
   GRAPH_BUILTIN_WORKFLOWS,
-} from '@/modules/development-automation/domain/graph-development/builtinResources'
+} from '@/modules/development-automation/application/graph-development/builtinResources'
 import { inspectExecutionContractWorkflowDefinition } from '@/modules/resource-catalog/domain/executionContractWorkflow'
-import { graphExecutionContractRegistrations } from '@/modules/development-automation/domain/graph-development/toolContracts'
-import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/domain/graph-development/employeeCodec'
+import { graphExecutionContractRegistrations } from '@/modules/development-automation/application/graph-development/toolContracts'
+import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { INTERPRETER_SPEC } from '@/modules/task-execution/infrastructure/local/scriptRun'
@@ -146,7 +146,7 @@ test('implementation contract is shared by Agent, Workflow and Program with expl
 test('native review receipt script uses the Node ESM mode and actual single-newline input delimiter', async () => {
   const workflow = GRAPH_BUILTIN_WORKFLOWS.find((item) => item.item === 'review-design')!
   const node = workflow.definition.definition.nodes.find((node) => node.id === 'receipt')!
-  if (node.kind !== 'script' || typeof node.script !== 'string')
+  if (node.kind !== 'script' || node.language !== 'node' || typeof node.script !== 'string')
     throw new Error('missing review receipt script')
   const root = mkdtempSync(join(tmpdir(), 'rfc396-review-script-'))
   const spec = INTERPRETER_SPEC[node.language]

@@ -309,7 +309,8 @@ test('a failed intermediate import remains visible and is not retried as a model
     updatedAt: 1,
   })
   open()
-  expect(await screen.findByText('import-error:x · failed')).toBeTruthy()
+  expect(await screen.findByText('设计导入 1 · failed')).toBeTruthy()
+  expect(screen.queryByText('import-error:x · failed')).toBeNull()
   expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
 })
 

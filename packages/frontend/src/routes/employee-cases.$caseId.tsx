@@ -743,6 +743,7 @@ function EmployeeCaseDetailPage(): ReactElement {
   const selectedRoundOutput =
     selectedRound === null ? null : parseJsonValue(selectedRound.outputJson)
   const detail = data.detail
+  const isGraphDevelopment = data.case.typeRef.typeId === 'graph-development'
   const delivery = detail.delivery
   const repository = repositories.data?.items.find(
     (candidate) =>
@@ -988,73 +989,83 @@ function EmployeeCaseDetailPage(): ReactElement {
                 >
                   <strong>{repositoryLabel}</strong>
                   <p>
-                    {detail.workspace === null
+                    {isGraphDevelopment
                       ? zh
-                        ? '工作区尚未准备，当前显示任务目标。'
-                        : 'The workspace is not prepared; this is the task target.'
-                      : detail.workspace.repositoryRef}
+                        ? '此处显示任务指定的仓库；实际冻结基线、候选和交付结果见设计工作区。'
+                        : 'This is the requested repository. The frozen baseline, candidate and delivery are in the design workspace.'
+                      : detail.workspace === null
+                        ? zh
+                          ? '工作区尚未准备，当前显示任务目标。'
+                          : 'The workspace is not prepared; this is the task target.'
+                        : detail.workspace.repositoryRef}
                   </p>
                 </Card>
-                <Card
-                  title={zh ? '目标分支' : 'Target branch'}
-                  actions={
-                    targetBranchPlanned ? (
-                      <StatusChip kind="neutral">{zh ? '计划值' : 'Planned'}</StatusChip>
-                    ) : (
-                      <StatusChip kind="success">{zh ? '已冻结' : 'Frozen'}</StatusChip>
-                    )
-                  }
-                  data-testid="employee-case-overview-target-branch"
-                >
-                  <strong>
-                    {targetBranch ?? (zh ? '工作区准备后确定' : 'Determined with workspace')}
-                  </strong>
-                  <p>
-                    {detail.workspace === null
-                      ? zh
-                        ? '仓库默认分支，仅作为工作区创建前的计划值。'
-                        : 'Repository default branch; a planned value until workspace creation.'
-                      : `${zh ? '来源分支' : 'Source branch'}：${sourceBranch}`}
-                  </p>
-                </Card>
-                <Card
-                  title={zh ? '当前 MR' : 'Current MR'}
-                  actions={
-                    delivery === null ? (
-                      <StatusChip kind="neutral">{zh ? '尚未创建' : 'Not created'}</StatusChip>
-                    ) : (
-                      <StatusChip kind={delivery.status === 'active' ? 'info' : 'success'}>
-                        {businessStateLabel(delivery.status, zh)}
-                      </StatusChip>
-                    )
-                  }
-                  data-testid="employee-case-overview-mr"
-                >
-                  {delivery === null ? (
-                    <p>
-                      {zh ? '完成发布职责后会在这里显示 MR。' : 'The MR appears after publishing.'}
-                    </p>
-                  ) : (
-                    <>
-                      <strong>{delivery.ref}</strong>
+                {!isGraphDevelopment && (
+                  <>
+                    <Card
+                      title={zh ? '目标分支' : 'Target branch'}
+                      actions={
+                        targetBranchPlanned ? (
+                          <StatusChip kind="neutral">{zh ? '计划值' : 'Planned'}</StatusChip>
+                        ) : (
+                          <StatusChip kind="success">{zh ? '已冻结' : 'Frozen'}</StatusChip>
+                        )
+                      }
+                      data-testid="employee-case-overview-target-branch"
+                    >
+                      <strong>
+                        {targetBranch ?? (zh ? '工作区准备后确定' : 'Determined with workspace')}
+                      </strong>
                       <p>
-                        {delivery.sourceBranch ?? '-'} → {delivery.targetBranch ?? '-'}
+                        {detail.workspace === null
+                          ? zh
+                            ? '仓库默认分支，仅作为工作区创建前的计划值。'
+                            : 'Repository default branch; a planned value until workspace creation.'
+                          : `${zh ? '来源分支' : 'Source branch'}：${sourceBranch}`}
                       </p>
-                      {delivery.webUrl === null ? (
-                        <small>{zh ? 'MR 链接尚不可用' : 'MR link is not available yet'}</small>
+                    </Card>
+                    <Card
+                      title={zh ? '当前 MR' : 'Current MR'}
+                      actions={
+                        delivery === null ? (
+                          <StatusChip kind="neutral">{zh ? '尚未创建' : 'Not created'}</StatusChip>
+                        ) : (
+                          <StatusChip kind={delivery.status === 'active' ? 'info' : 'success'}>
+                            {businessStateLabel(delivery.status, zh)}
+                          </StatusChip>
+                        )
+                      }
+                      data-testid="employee-case-overview-mr"
+                    >
+                      {delivery === null ? (
+                        <p>
+                          {zh
+                            ? '完成发布职责后会在这里显示 MR。'
+                            : 'The MR appears after publishing.'}
+                        </p>
                       ) : (
-                        <a
-                          className="btn btn--sm btn--primary"
-                          href={delivery.webUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {zh ? '查看 MR' : 'View MR'}
-                        </a>
+                        <>
+                          <strong>{delivery.ref}</strong>
+                          <p>
+                            {delivery.sourceBranch ?? '-'} → {delivery.targetBranch ?? '-'}
+                          </p>
+                          {delivery.webUrl === null ? (
+                            <small>{zh ? 'MR 链接尚不可用' : 'MR link is not available yet'}</small>
+                          ) : (
+                            <a
+                              className="btn btn--sm btn--primary"
+                              href={delivery.webUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {zh ? '查看 MR' : 'View MR'}
+                            </a>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </Card>
+                    </Card>
+                  </>
+                )}
               </section>
 
               {descriptor.isPending ? <LoadingState /> : null}

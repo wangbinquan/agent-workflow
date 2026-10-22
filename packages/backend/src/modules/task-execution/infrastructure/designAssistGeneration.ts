@@ -38,7 +38,11 @@ export function createDesignAssistGeneration(input: {
         },
         systemPrompt:
           'Return one JSON design proposal matching the supplied schema and catalog. Preserve all human answers exactly. A proposal is not a human approval or a test receipt. Never execute the business implementation.',
-        prompt: request.prompt,
+        // Full design/schema material exceeds Windows argv limits. The selected
+        // material owner creates this file in the invocation workspace on both deployments.
+        prompt:
+          'Read graph-design-request.json in the current workspace. It contains the complete request, design, capability catalog and outputSchema. Return only the JSON proposal specified there.',
+        seedFiles: [{ path: 'graph-design-request.json', content: request.prompt }],
         protocol: runtime.protocol,
         runtimeBinding: runtime.runtimeBinding,
         configDirEnv: runtime.configDir.env,

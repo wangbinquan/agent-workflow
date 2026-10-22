@@ -161,7 +161,8 @@ describe('决策分支棘轮（args.decision 散装比较清零，白名单=路�
     // pending rows overlaid with the batch selections — hence `effectiveDvs`.
     expect(hits).toEqual([
       "if (isMultiDoc && args.decision === 'approved' && !allDocumentsDecided(effectiveDvs)) {",
-      "if (args.decision === 'approved') {",
+      // RFC-396 return-decision closes the native gate without legacy output propagation.
+      "if (args.decision === 'approved' && !returnDecision) {",
     ])
   })
 

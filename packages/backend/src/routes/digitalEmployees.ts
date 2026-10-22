@@ -30,7 +30,6 @@ import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import { jsonDocumentResponse } from '@/util/jsonDocument'
-import type { GraphDevelopment } from '@/modules/development-automation/public/types'
 
 function parseEmployeeTypeRef(value: string): {
   readonly typeId: string
@@ -143,7 +142,14 @@ export function mountDigitalEmployeeRoutes(
   module: DigitalEmployeeModule,
   activityOperations: DevelopmentActivityOperations,
   contexts: DirectAuthorityBinding,
-  graph?: GraphDevelopment,
+  graph?: {
+    mountRoutes(
+      app: Hono,
+      access: {
+        authorize(actor: Actor, caseId: string, edit: boolean): Promise<unknown>
+      },
+    ): void
+  },
 ): void {
   const maxUploadBytes = 32 * 1024 * 1024
   const adapterVisibilitySubject = (c: Parameters<typeof actorOf>[0]) =>

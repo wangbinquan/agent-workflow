@@ -461,14 +461,22 @@ export function TaskCreationSubjectDescriptorContract(
                 ? {}
                 : { maxDurationMs: Math.round(maxDurationMin * 60_000) }),
               ...(maxTotalTokens === undefined ? {} : { maxTotalTokens }),
-              typeOptions: {
-                ...(repositoryBranchOption && advancedValidation.workingBranchTrim
-                  ? { [repositoryBranchOption.optionRef]: advancedValidation.workingBranchTrim }
-                  : {}),
-                ...(publicationBranchOption && publicationBranch.trim()
-                  ? { [publicationBranchOption.optionRef]: publicationBranch.trim() }
-                  : {}),
-              },
+              ...(publicationBranchOption ||
+              (repositoryBranchOption && advancedValidation.workingBranchTrim)
+                ? {
+                    typeOptions: {
+                      ...(repositoryBranchOption && advancedValidation.workingBranchTrim
+                        ? {
+                            [repositoryBranchOption.optionRef]:
+                              advancedValidation.workingBranchTrim,
+                          }
+                        : {}),
+                      ...(publicationBranchOption && publicationBranch.trim()
+                        ? { [publicationBranchOption.optionRef]: publicationBranch.trim() }
+                        : {}),
+                    },
+                  }
+                : {}),
             },
             idempotencyKey: `ui-case-${crypto.randomUUID()}`,
           },

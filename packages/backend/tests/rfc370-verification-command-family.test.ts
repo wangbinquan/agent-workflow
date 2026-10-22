@@ -727,17 +727,31 @@ describe('RFC-370 verification command composition contract', () => {
       )
     })
   }
-  test('CLI initial construction, PostgreSQL dispatch and SQLite HTTP reassembly forward the same factory', () => {
+  test('RFC-396 application graph forwards the selected factory once to each development consumer', () => {
     const source = readSource('bootstrap/daemonStart.ts')
     expectDeploymentSelection('verificationCommands', 'VerificationCommandEffectsFactory')
     for (const [name, receiver] of [['composeDaemonApplication', 'input']] as const) {
       const forwards = propertiesOf(bodyOf(source, name), source).filter((p) =>
         ts.isPropertyAccessExpression(p.initializer),
       )
-      // RFC-390 removes the dead SQLite HTTP forward; the live bundle receives it once.
-      expect(forwards).toHaveLength(1)
-      for (const forward of forwards)
-        expect(forward.initializer.getText(source)).toBe(receiver + '.verificationCommands')
+      // RFC-390 removed the dead SQLite HTTP forward. RFC-396 adds the graph
+      // employee consumer to the same application graph, using the same selection.
+      // Pin both recipients; a duplicate or a recreated provider path still fails.
+      expect(forwards).toHaveLength(2)
+      const recipients = [
+        'composeDaemonDevelopmentAutomationModules',
+        'composeDaemonDigitalEmployeeModules',
+      ]
+      for (const recipient of recipients) {
+        const calls = descendants(bodyOf(source, name), ts.isCallExpression).filter(
+          (call) => call.expression.getText(source) === recipient,
+        )
+        expect(calls).toHaveLength(1)
+        const selected = propertiesOf(calls[0]!.arguments[0]!, source)
+        expect(selected).toHaveLength(1)
+        expect(forwards).toContain(selected[0]!)
+        expect(selected[0]!.initializer.getText(source)).toBe(receiver + '.verificationCommands')
+      }
     }
   })
   test('RFC-383 each root forwards verification selection into the shared bundle', () => {

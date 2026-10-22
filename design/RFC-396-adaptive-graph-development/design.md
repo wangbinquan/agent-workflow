@@ -74,8 +74,12 @@ modules/development-automation/
     selectViews.ts           # 有界组合选择、覆盖与解释
     impact.ts                # 版本依赖与影响
     implementationBasis.ts   # 实现材料及验收义务
-    employeeType.ts          # 类型描述与确定性业务规则
   application/graph-development/
+    employeeType.ts          # 类型注册适配与职责合同
+    employeeCodec.ts         # 既有数字人协议适配
+    toolContracts.ts         # 执行合同注册与结果 schema
+    builtinResources.ts     # 内置代理/工作流材料
+    builtinCatalog.ts       # 资源初始化与版本核对
     designCommands.ts        # 内容命令、提案应用、实现依据预览
     viewPlanning.ts          # 调用端口、解析候选、选择与生成
     designQueries.ts         # Case 工作区投影
@@ -89,7 +93,7 @@ modules/development-automation/
   infrastructure/graph-development/
     designStore.ts
     designArtifacts.ts       # 复用本域现有产物 provider
-  inbound/graphDevelopment.ts
+  infrastructure/http/graphDesignRoutes.ts
   public/{commands,queries,types,operations}.ts  # 按实际用例增加精确导出
   composition.ts             # 只构造和注入
   composition/required-ports.ts
@@ -411,3 +415,9 @@ Case 顶层增加“设计”入口，内部按 ViewPlan 呈现业务视图目�
 ### T06 实施接点澄清
 
 候选 derive/stage/commit 已是 source-control 的正式 public participants，旧 development 与新 graph-development 均注入这些 owner 接点；profile 执行复用同一 `runVerificationProfileWithEffects`。因此无需再新增只转发参数的候选/交付 facade。图领域只增加冻结依据、追溯核对和证据编排，不复制 Git 或命令执行引擎。实现报告的 limitations 阻止自动交付，并回写待用户明确应用的 code-feedback 提案。
+
+## 14. CI 后接线澄清
+
+HTTP 入口依旧由唯一应用图挂载；其传输对象不作为 public DTO 暴露。SourceControl 对外声明无执行函数的候选/工作区请求与结果合同，具体 Git/文件操作仍由原 composition 选择。内置类型注册、codec 与执行合同适配属于 application；纯图语义、组合选择、影响分析继续位于 domain。内置资源 catalog 的异步内容初始化由 application 负责，组合根只注入完整参与者。
+
+图辅助调用将完整 request/document/catalog/outputSchema 放进既有 SystemAgentRunFamily 的 `seedFiles`，在实际执行工作区生成 `graph-design-request.json`，模型按短提示读取该文件。单机和托管沿各自已有材料 owner；不按 Windows 分叉、不截断 schema、不新建执行通道。

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { ClarifyAnswerSchema, ClarifyQuestionSchema } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -57,7 +58,7 @@ export function createCommittedHumanInputQueries(input: {
             ]),
           ),
         )
-        .orderBy(desc(collaborationGateOperations.resultGateRevision))
+        .orderBy(engineOf(db).descNullsLast(collaborationGateOperations.resultGateRevision))
         .limit(1)
       const operation = operations[0]
       if (!operation) return null

@@ -13,7 +13,7 @@ import type {
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import { sha1Hex, sha256Hex } from '@/util/hash'
 import { graphDigest, validateGraphDocument } from '../../domain/graph-development/model'
-import { graphResultSchemas } from '../../domain/graph-development/toolContracts'
+import { graphResultSchemas } from './toolContracts'
 import { verificationProfileContentSchema } from '../../domain/verificationProfile'
 import { runVerificationProfileWithEffects } from '../verificationRunner'
 import type { VerificationProfilePersistence } from '../ports/configResourceStore'
