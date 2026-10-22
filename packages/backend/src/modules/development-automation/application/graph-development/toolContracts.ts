@@ -10,6 +10,7 @@ export const GRAPH_DESIGN_AUTHORING_RULES = [
   'A decision element may omit its optional decision property. Omit it for model assumptions and whenever no matching committed clarify source is available; even status=unmarked requires a matching source. The platform imports actual human answers, maturity, notes and confirmedBasis.',
   'Each decision-table rows[].ruleId must identify a declared element, for example a behavior element with behaviorKind=action. A row ID alone does not declare an element; the schema has no rule element kind.',
   'Candidate costs use the supplied planningBudget units. Offer a useful affordable combination and expose uncovered concerns; do not assume the model-recommended combination will be selected. Keep candidate material concise and avoid unnecessary semantic objects.',
+  'Candidate coverage may reference only declared concerns whose disposition is not out-of-scope. Describe excluded behavior as a limitation instead of claiming coverage for it; one excluded concern invalidates that candidate.',
   'A provisional decision or unknown owner does not prove implementation or verification impossible. Bind concrete behavior obligations to an actual execution profile or an explicit manual check; retain responsibility gaps separately and use unassigned only when the verification itself is unresolved.',
 ] as const
 export const GraphReviewDecisionOutputSchema = z

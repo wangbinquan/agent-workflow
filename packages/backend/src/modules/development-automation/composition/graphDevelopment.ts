@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 import {
   canonicalJson,
   GraphEvidenceBindingSchema,
@@ -21,7 +20,7 @@ import { createGraphDesignCommands } from '../application/graph-development/desi
 import { createGraphDesignQueries } from '../application/graph-development/designQueries'
 import {
   createGraphViewPlanning,
-  GraphAssistOutputSchema,
+  graphDesignAssistPrompt,
 } from '../application/graph-development/viewPlanning'
 import { createGraphExecutionConsumption } from '../application/graph-development/executionConsumption'
 import { createGraphVerification } from '../application/graph-development/verification'
@@ -172,15 +171,7 @@ export function composeGraphDevelopment(input: {
           caseId: request.caseId,
           requestId: request.request.requestId,
           signal: request.signal,
-          prompt: canonicalJson({
-            request: request.request,
-            document: request.document,
-            readSet: request.readSet,
-            catalog: JSON.parse(request.capabilityCatalogJson),
-            outputSchema: zodToJsonSchema(GraphAssistOutputSchema, { $refStrategy: 'none' }),
-            instructions:
-              'Generate alternatives according to the request; preserve pinned views and original human source records. Return a proposal only.',
-          }),
+          prompt: graphDesignAssistPrompt(request),
         }),
     },
   })

@@ -136,7 +136,8 @@ export function createGraphExecutionConsumption(deps: {
       graphToolResultSchema('design-and-clarify').parse(JSON.parse(input.content)).result,
     )
     const links = await deps.store.links(work.designId)
-    const scenes = (await deps.store.records(work.designId))
+    const records = await deps.store.records(work.designId)
+    const scenes = records
       .filter((row) => row.kind === 'scene' && row.id.startsWith(`scene:${plan.roundRef}:`))
       .sort((a, b) => b.createdAt - a.createdAt)
     if (!scenes[0]) throw new Error('graph-import-scene-missing')
@@ -166,12 +167,26 @@ export function createGraphExecutionConsumption(deps: {
       throw new Error('graph-import-design-mismatch')
     // Human records come from the collaboration owner, including originals omitted by the model.
     const requested: GraphSource[] = [
-      ...output.document.sources.filter(
-        (source) => source.kind === 'clarify' || source.kind === 'review',
-      ),
+      ...new Map(
+        [...output.document.sources, ...frozen.sources]
+          .filter((source) => source.kind === 'clarify' || source.kind === 'review')
+          .map((source) => [source.id, source]),
+      ).values(),
     ]
-    if (input.taskId)
-      for (const round of await deps.humanInputs.clarificationRounds(input.taskId))
+    // A rejected design must not strand its committed human answers when the
+    // same Case recovers in a new Task. Import receipts identify prior tasks;
+    // the execution owner still verifies Case membership before any answer read.
+    const priorTasks = [
+      ...records.filter((record) => record.kind === 'import'),
+      ...links.filter((link) => link.kind === 'import'),
+    ].flatMap((record) => {
+      const value = JSON.parse(record.payloadJson) as { taskId?: unknown }
+      return typeof value.taskId === 'string' ? [value.taskId] : []
+    })
+    const taskIds = new Set([...priorTasks, ...(input.taskId ? [input.taskId] : [])])
+    for (const taskId of taskIds) {
+      if (!(await deps.executions.read({ caseId: work.caseId, executionRef: taskId }))) continue
+      for (const round of await deps.humanInputs.clarificationRounds(taskId))
         for (const answer of round.answers) {
           if (
             !requested.some(
@@ -184,13 +199,14 @@ export function createGraphExecutionConsumption(deps: {
             requested.push({
               kind: 'clarify',
               id: `answer:${round.id}:${answer.questionId}`,
-              taskId: input.taskId,
+              taskId,
               roundId: round.id,
               questionId: answer.questionId,
               confirmedBasis: answer.confirmedBasis ?? null,
               originalAnswer: '',
             })
         }
+    }
     const authoritative = await humanSources(work.caseId, requested)
     const humanIds = new Set(requested.map((source) => source.id))
     const sources = [

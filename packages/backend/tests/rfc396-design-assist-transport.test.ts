@@ -9,6 +9,8 @@ import {
 
 test('design assist reads the live configured runtime and preserves its selected binary and model', async () => {
   const calls: SystemAgentRunOptions[] = []
+  let responseText = '{}'
+  let truncated = false
   const binding = composeLocalSystemAgentRunFamily({
     appHome: () => '/tmp/rfc396-runtime-fixture',
     fixture: {
@@ -17,12 +19,12 @@ test('design assist reads the live configured runtime and preserves its selected
         return {
           status: 'ok',
           exitCode: 0,
-          eventText: '{}',
+          eventText: responseText,
           stderrTail: '',
           durationMs: 1,
           scratchDir: '/tmp/rfc396-runtime-fixture/result',
           scratchRetained: false,
-          outputEvidence: emptySystemAgentOutputEvidence(),
+          outputEvidence: { ...emptySystemAgentOutputEvidence(), eventTextCapHit: truncated },
         }
       },
     },
@@ -77,4 +79,24 @@ test('design assist reads the live configured runtime and preserves its selected
     ['/fixture/local-stub', 'fixture/model'],
     ['/fixture/local-stub', 'fixture/model'],
   ])
+  // A real OpenCode response included progress narration before its final JSON.
+  // Do not corrupt strings, accept competing proposals, or treat a capped prefix as complete.
+  const proposal = {
+    description: 'Literal ```json and braces { } and escaped "quotes"',
+    nested: { ok: true },
+  }
+  responseText = 'I will read the request.\n```json\n' + JSON.stringify(proposal) + '\n```\n'
+  expect(JSON.parse((await assist.generate(request)).outputJson)).toEqual(proposal)
+  for (const invalid of [
+    'No proposal was produced',
+    '{"first":1}\n{"second":2}',
+    '{"first":1}\n{"unfinished":',
+    '{"unfinished":',
+  ]) {
+    responseText = invalid
+    await expect(assist.generate(request)).rejects.toThrow()
+  }
+  responseText = '{}'
+  truncated = true
+  await expect(assist.generate(request)).rejects.toThrow('graph-assist-output-truncated')
 })

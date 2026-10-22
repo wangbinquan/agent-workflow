@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test'
-import { createGraphViewPlanning } from '@/modules/development-automation/application/graph-development/viewPlanning'
+import {
+  createGraphViewPlanning,
+  graphDesignAssistPrompt,
+} from '@/modules/development-automation/application/graph-development/viewPlanning'
+import { GRAPH_DESIGN_AUTHORING_RULES } from '@/modules/development-automation/application/graph-development/toolContracts'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture, bookingView } from './helpers/graphDesign'
 describeEachProvider('RFC-396 observed short design calls', (harness) => {
@@ -8,8 +12,14 @@ describeEachProvider('RFC-396 observed short design calls', (harness) => {
       document = await f.commands.document('design-a')
     const planner = createGraphViewPlanning({
       ...f,
+      budget: { reading: 4, generation: 5 },
       assist: {
-        async generate() {
+        async generate(input) {
+          const material = JSON.parse(graphDesignAssistPrompt(input))
+          expect(material.planningBudget).toEqual({ reading: 4, generation: 5 })
+          expect(material.authoringRules).toEqual(GRAPH_DESIGN_AUTHORING_RULES)
+          expect(material.document).toEqual(document)
+          expect(material.outputSchema).toBeDefined()
           return {
             invocationRef: 'observed-run',
             outputJson: JSON.stringify({

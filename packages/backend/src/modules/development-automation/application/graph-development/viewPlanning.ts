@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 import {
   canonicalJson,
   GraphDesignActionRequestSchema,
@@ -23,6 +24,7 @@ import {
 import type { GraphDesignCommands } from './designCommands'
 import type { GraphDesignAssistPort } from '../ports/graphDesignAssist'
 import type { GraphDesignStore, GraphStoredRecord } from '../ports/graphDesignStore'
+import { GRAPH_DESIGN_AUTHORING_RULES } from './toolContracts'
 
 export const GraphAssistOutputSchema = z
   .object({
@@ -31,6 +33,21 @@ export const GraphAssistOutputSchema = z
     explanation: z.string().min(1).max(20_000),
   })
   .strict()
+
+/** Generation sees the same limits and reference rules that selection will enforce. */
+export function graphDesignAssistPrompt(request: Parameters<GraphDesignAssistPort['generate']>[0]) {
+  return canonicalJson({
+    request: request.request,
+    document: request.document,
+    readSet: request.readSet,
+    catalog: JSON.parse(request.capabilityCatalogJson),
+    planningBudget: request.planningBudget,
+    authoringRules: GRAPH_DESIGN_AUTHORING_RULES,
+    outputSchema: zodToJsonSchema(GraphAssistOutputSchema, { $refStrategy: 'none' }),
+    instructions:
+      'Generate alternatives according to the request; preserve pinned views and original human source records. Return a proposal only.',
+  })
+}
 
 export function createGraphViewPlanning(deps: {
   readonly commands: GraphDesignCommands
@@ -98,6 +115,7 @@ export function createGraphViewPlanning(deps: {
             document,
             readSet,
             capabilityCatalogJson: canonicalJson(GRAPH_VIEW_CAPABILITIES),
+            planningBudget: budget,
             signal: controller.signal,
           })
           if (controller.signal.aborted) return

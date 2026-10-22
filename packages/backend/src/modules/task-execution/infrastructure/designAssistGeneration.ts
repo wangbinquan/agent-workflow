@@ -63,10 +63,16 @@ export function createDesignAssistGeneration(input: {
           throw new Error(
             `graph-assist-${result.status}: ${result.resultError ?? result.stderrTail}`,
           )
-        const text = result.eventText
-          .trim()
-          .replace(/^```(?:json)?\s*/, '')
-          .replace(/\s*```$/, '')
+        // Parsed event text can include the runtime's progress narration before
+        // the final answer. Keep the complete object byte-for-byte; do not strip
+        // fences inside JSON strings or select one of several competing objects.
+        if (result.outputEvidence.eventTextCapHit) throw new Error('graph-assist-output-truncated')
+        const start = result.eventText.indexOf('{')
+        const end = result.eventText.lastIndexOf('}')
+        if (start < 0 || end < start) throw new Error('graph-assist-json-missing')
+        const text = result.eventText.slice(start, end + 1)
+        if (result.eventText.slice(end + 1).includes('{'))
+          throw new Error('graph-assist-output-incomplete')
         JSON.parse(text)
         return {
           invocationRef: `system:graph-design-assist:${request.caseId}:${request.requestId}`,

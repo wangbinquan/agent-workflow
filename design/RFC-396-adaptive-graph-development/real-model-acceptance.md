@@ -46,3 +46,22 @@
 - 已有模块与预约澄清后的调用分别于 07:09:13、07:12:28 UTC 耗尽 480000ms 自动重试，Task failed。失败与原始作答保留；全局默认已通过配置入口恢复为产品的 30 分钟，但已冻结的旧 Task 仍使用原 8 分钟预算，不能靠修改配置冒称旧调用成功。
 - 托管任务镜像首构建 failed，完整日志在系统包安装输出后中断；没有足够证据断言 OOM 或具体终止原因。bootstrap 旧镜像验证 `01a1626a-0db3-7000-aeea-7e6049bda6f6` passed，只用于取得服务构建环境，不作为 RFC-396 任务执行证据。
 - 第一次正式服务 release 返回 412，明确为对象存储后端预算已全部分配。读取配置确认已声明配额 66571993088 bytes，物理空余约 6.48 GB；为本次隔离项目新增 256 MiB 档位 `01a16276-6c78-7000-b3a3-1841d66325f4`，后端预算仅增加 268435456 bytes，未改其他空间或档位。后续重用 v0.1.0 返回标签已存在，保留历史并使用新版本继续。
+
+## 2026-10-22 后续恢复与提案审阅
+
+- 单机已升级至 `285d72ff50da0350ee0ec7d6848602bf857e0d05` 的 CI 编译产物。通知 Case 在原数据库中恢复为 waiting、设计 revision 2，最终澄清结果与三个原始人工来源均已导入；预约恢复 Task `01M5H78JK1B41KMW3FC8EXQMH8` 也完成并导入 revision 2。
+- 该提交的 CI 发现两项本次变更影响的旧测试：RFC-310 结构断言仍锁旧结果选择表达式，RFC-374 的计划选择夹具没有最终 output 节点。`66c084c3eba5719dcc1bc561e4268b58796fc20b` 保留原断言意图与反序 ID 用例并修正夹具，三个相关文件 SQLite / 真实 PostgreSQL 各 46 pass / 0 fail、267 assertions。共享 schema 断言已随 RFC-395 I-a 提交 `4b91ada04` 发布；这不预判后继 CI 终态。
+- 已有模块在原 Case 中通过明确失败回执阻塞，未再每个 cycle 重复异常。原生追加澄清请求 `live-existing-recover-native-v1` 启动 Task `01M5H93075R45MC02VV15MGWF3`，设计随后导入 revision 3。候选包含 out-of-scope 关注点，选择器拒绝两项候选，因此没有选中图；这是当前真实模型质量缺口，不能视为成功选图。
+- 恢复还暴露了人工来源遗漏：旧 Task 已回答，但设计导入失败；新 Task 没有新问题，其设计没有携带旧回答。修正从同一设计的历史成功/失败导入回执发现 Task，先经执行 owner 校验 Case 归属，再从协作 owner 读取原始作答；同时保留冻结设计中被模型省略的人工来源。回归覆盖拒绝设计后恢复、已接受设计后恢复、不可读取其他 Case 回答及重复消费不增版本。
+- 通知首次重规划超时，第二次生成可审阅的“三次 accepted attempts”提案。代理接受为草案后要求进一步消除“第三次 failed 本身仍被接受、第四次才因耗尽被忽略”的歧义，并补足被遗漏的原有视图覆盖。未据此批准实现或签署测试通过。
+- 预约重规划在运行时返回后报 `JSON Parse error: Unexpected identifier "I"`。解析原先把全部 assistant 事件文本当作一个 JSON；修正允许唯一完整 JSON 对象前后的说明文字，同时保留字符串内容，拒绝多个对象、未完成对象和被事件上限截断的输出。业务 schema 与领域校验仍由原 owner 执行。
+- 重规划现在取得与程序选择一致的 `planningBudget` 和 authoring rules；规则明确排除 out-of-scope concern 的覆盖声明，避免整项候选被拒绝。没有改变选择器或为失败输出填造有效图。
+- 上述恢复/解析相关四份测试在 SQLite / 真实 PostgreSQL 各 23 pass / 0 fail、98 assertions；修正测试夹具只读赋值后，受影响文件两库各 10 pass / 0 fail、31 assertions。预算材料与工作区两份测试两库各 6 pass / 0 fail、46 assertions，范围有重叠，不累计成全量结论。目标 lint 通过；本地完整 backend typecheck 仍报并发在制的 `rfc165-scratch-space.test.ts:140` 缺时间戳、`rfc300-workspace-prune.test.ts` 未定义 `id`，没有修改这些其他会话文件。
+
+## 托管候选的实际发布
+
+- 隔离服务 v0.1.1 的源码为 `285d72ff5`，服务镜像 digest `sha256:80b412affb7696266b1a913e71a4a557d3a3186c5076ac37b95b36cdbb25e996`，已 Ready。
+- 第二次任务镜像构建因 BuildKit 拉取服务镜像的 registry 地址超时失败。随后从本项目已 Ready 的精确服务镜像导出 AW 二进制，SHA-256 `6da298099639e2774eedb5afdb8be95d764fe07874356dc56dd997668fe6d543`；以平台当前任务底座构建镜像并加入 Bun。先核对本地底座 config digest 与平台 immutable manifest 一致。
+- 使用平台正式签发的临时 registry 凭据和公开本机网关完成上传，未更改全局 Docker 配置、registry 授权或其他项目。镜像为 `runtime/rfc396/graph-acceptance@sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91`；本机上传途中发生的证书、代理和工具配置错误留在临时验收日志。
+- 登记已有镜像 revision `01a16297-d3b4-7000-81f0-569047a05d90`，检查成功；生成版本 `01a16297-d960-7000-8a61-ae04bd5a10a4`。实际任务验证 `01a16298-f4d8-7000-aff9-4e527600d4b0` passed。
+- 绑定该任务镜像的服务 v0.1.2：release `01a1629d-ce69-7000-bea3-495f2b4a1da2`、journey `01a1629d-cfba-7000-86f8-3897db7833c4`、发布仓库 commit `f637479915f578bd6a36aaf9f31c5a70c0d4598f`，已 Ready。镜像验证和服务就绪仍不代表 AC14 的完整业务执行或 AC17 真实模型闭环完成。

@@ -113,8 +113,12 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
       result: { document, candidates: [bookingView()] },
     })
     let answered = false
+    let activeTaskId = 'task'
+    const answerReads: string[] = []
     const queries: CollaborationHumanInputQueries = {
-      async clarificationRounds() {
+      async clarificationRounds(taskId) {
+        answerReads.push(taskId)
+        if (taskId !== 'task') return []
         return [
           {
             id: 'clarify-round',
@@ -147,10 +151,10 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
     }
     const executions: EmployeeExecutionArtifactQueries = {
       async read(input) {
-        return input.executionRef === 'task'
+        return input.caseId === 'case-a' && ['task', activeTaskId].includes(input.executionRef)
           ? {
-              taskId: 'task',
-              roundRef: 'round',
+              taskId: input.executionRef,
+              roundRef: input.executionRef === 'task' ? 'round' : plan.roundRef,
               status: 'awaiting_clarify',
               artifacts: [
                 { nodeRunId: 'designer', portName: 'design-model', content, digest: 'committed' },
@@ -186,6 +190,22 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
       document,
       consumption,
       plan,
+      answerReads,
+      async continueInNewTask() {
+        activeTaskId = 'recovery-task'
+        plan.roundRef = 'recovery-round'
+        Object.assign(f.host, { executionRef: activeTaskId })
+        const current = await commands.document(document.id)
+        const nextScene = await commands.beginRecord(
+          document.id,
+          'scene:recovery-round:1',
+          'scene',
+          {},
+        )
+        await commands.finishRecord(nextScene, 'ready', {
+          projection: { materials: { document: current } },
+        })
+      },
       setAnswer() {
         answered = true
       },
@@ -288,6 +308,45 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
       ),
     ).toBe(true)
   })
+  for (const previous of ['rejected-design', 'accepted-design'] as const)
+    test(`a new Task preserves original answers from the same Case after ${previous}`, async () => {
+      const f = await fixture()
+      f.setAnswer()
+      if (previous === 'rejected-design') f.setContent('{invalid design')
+      await f.consumption.progress({ roundRef: 'round', executionRef: 'task' })
+      const foreign = await f.commands.beginRecord(
+        f.document.id,
+        'import-error:foreign',
+        'import',
+        {},
+      )
+      await f.commands.finishRecord(foreign, 'failed', { taskId: 'unrelated-task' })
+      await f.continueInNewTask()
+      // A recovery model has no new answers and omits every previous human source.
+      const output = JSON.stringify({
+        summary: 'recovered design',
+        result: { document: f.document, candidates: [bookingView()] },
+      })
+      await f.consumption.consume({ planJson: JSON.stringify(f.plan), outputJson: output })
+      const recovered = await f.commands.document(f.document.id)
+      const human = recovered.sources.filter((source) => source.kind === 'clarify')
+      expect(human).toHaveLength(1)
+      expect(human[0]).toMatchObject({
+        taskId: 'task',
+        roundId: 'clarify-round',
+        originalAnswer: '先到先得\n负责人还不知道',
+        decision: { status: 'provisional', uncertainty: '暂时单地区' },
+      })
+      expect(f.answerReads).not.toContain('unrelated-task')
+      await f.consumption.consume({ planJson: JSON.stringify(f.plan), outputJson: output })
+      expect((await f.commands.document(f.document.id)).revision).toBe(recovered.revision)
+      if (previous === 'rejected-design')
+        expect(
+          (await f.queries.workspace(f.document.id)).requests.some(
+            (row) => row.kind === 'import' && row.status === 'failed',
+          ),
+        ).toBe(true)
+    })
   test('implementation limitations return as an explicit proposal and never silently alter the approved design', async () => {
     const f = await fixture()
     const basis = (
