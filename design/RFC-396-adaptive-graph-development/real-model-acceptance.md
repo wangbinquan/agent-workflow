@@ -179,3 +179,12 @@
 - 第一条路径正文夹具已通过正常 Case API 终止为 `fixture-review-material-invalid`；第二条内联夹具终止为 `fixture-review-digest-mismatch`。原始材料、原生决定和两次失败均保留，不能据它们签署 AC14。脚本路径类型丢失、内联文本空行变化与 Graph 的正确拒绝分别记录，尚未声称这些通用脚本行为已经修复。
 - 新夹具 Case `01M5J5MH5Q3M2ZBAYK0VPT200M`、employee `01M5J5MECE0RMPHDP7GR9V4DFT` 使用岗位 `platform:graph-development:job:v2@1` 和内置审核 workflow `00000000000000GRAPHWFRV1@1`：由 `agent-single` 输出冻结文件路径，原生审核读取文件。独立项目中的 OpenCode profile 经正常配置 API 显式选择用户已允许的 `opencode-go/deepseek-v4.1-flash`，对应已有托管 profile `01a146ce-c2ce-7fe4-97ab-3cddd340967d`；未改 CrewStation 全局配置。设计与实现步骤仍是明确的确定性夹具，不能作为第四个完整真实模型旅程。
 - 新夹具的审核继续要求全文逐字节一致和有效的 Graph 权威回执；实现、独立 profile、候选与 terminal / delivered 仍待取得。当前机器状态见 [hosted-acceptance-status.json](./hosted-acceptance-status.json)，RFC 继续 In Progress。
+
+### 2026-10-22：审核消费的语义失败分类修复
+
+- 原生摘要不符被正确拒绝后，`executionConsumption.consume` 抛出的普通 `Error` 越过工作区既有的 `ValidationError` 边界，造成 OS cycle 反复中断。失败夹具正常终止后，旧 round 仍未结算；新 Case `01M5J5MH5Q3M2ZBAYK0VPT200M` 停在 `understand-request`，尚未创建 Graph 文档。这是本 RFC 消费器的错误分类缺陷，不将其归入平台对象接口的间歇 503。
+- 将 `graph-review-output-not-authoritative` 改为类型化语义拒绝，沿用工作区的 `semantic` 结果及既有 round 重试/失败结算。原生文档 SHA-256、receipt ID、decision、nodeRun ID 的全部比较保持原样，不放宽审核依据，也不修改并发在制的通用调度器。
+- 扩展现有工作区集成回归，直接连接真实消费器：原生审核仅删除冻结正文的末尾换行时必须返回语义失败，不能插入 Graph review link；使用原始正文摘要时正常入账。原有临时产物读取故障仍向上抛出。用例同时覆盖单机与托管工作区适配器。
+- 三个限定文件的 SQLite 测试体为 16 pass / 124 assertions；首条命令未配置 PostgreSQL，另外出现三项缺库配置失败，保留此事实。随后使用本任务隔离 PostgreSQL 完成相同三文件：16 pass / 0 fail / 124 assertions。两组都是当前共享候选的限定证据，未跑全仓本地门禁；并发修改的执行消费测试原样保留，不纳入本次提交。目标 ESLint、Prettier 和 diff 检查通过。
+- 当前共享工作树的全 backend typecheck 未通过：`rfc359-w20-repository-search-conformance.test.ts:164` 的 `sql` 未定义、`rfc359-w21-task-page-non-view-inline-conformance.test.ts:313` / `rfc359-w27-task-prefix-lookup-conformance.test.ts:465` 的联合返回类型无 `.catch`、`rfc359-w47-node-run-mint-program.test.ts:295` 的联合类型无 `.run`。四文件均有并发未提交修改，本次未改动或收编；本次两文件没有诊断。保留类型检查失败，待精确提交 CI 单独裁定，不能声称共享工作树整体通过。
+- 修复发布、exact-SHA CI 与托管升级后恢复仍需单独记录；上述本地结果不表示 AC14 已完成。

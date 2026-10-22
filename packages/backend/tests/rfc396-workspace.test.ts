@@ -1,4 +1,6 @@
 // Graph material uses the selected content and Case-workspace owners on both deployments.
+// RFC-396: a native review of altered bytes must settle as a semantic failure,
+// while transient artifact failures remain retryable instead of poisoning the OS loop.
 import { afterEach, expect, test } from 'bun:test'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -14,6 +16,7 @@ import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/developme
 import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/composition/crewstationWorkspace'
 import { createGraphEmployeeWorkspace } from '@/modules/development-automation/infrastructure/graph-development/employeeWorkspace'
 import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
+import { createGraphExecutionConsumption } from '@/modules/development-automation/application/graph-development/executionConsumption'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
@@ -182,6 +185,7 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
       const upload = join(root, 'upload')
       writeFileSync(upload, 'user supplied reference')
       let consumptionFailure: Error | null = null
+      let committedConsumption: ReturnType<typeof createGraphExecutionConsumption> | null = null
       const workspace = createGraphEmployeeWorkspace({
         ...f,
         appHome: root,
@@ -199,8 +203,9 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
             copyFileSync(upload, physical(target))
           },
         },
-        consumeResult: async () => {
+        consumeResult: async (input) => {
           if (consumptionFailure) throw consumptionFailure
+          await committedConsumption?.consume(input)
         },
         verificationProfiles: async () => [],
       })
@@ -325,6 +330,63 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
       await expect(
         workspace.validate({ roundRef: 'round', taskStatus: 'done', outputJson }),
       ).rejects.toThrow('artifact-store-offline')
+      consumptionFailure = null
+      const frozen = await f.commands.basis(document.id, basis.id)
+      const reviewed = frozen.basis.files.find((file) => file.path === 'implementation.md')!
+      const actual = {
+        id: 'receipt',
+        caseId: 'case-a',
+        taskId: 'task',
+        nodeRunId: 'review',
+        basisDigest: basis.digest,
+        decision: 'approved' as const,
+        reason: '',
+        decidedAt: 1,
+      }
+      f.setReview(actual)
+      let nativeDocumentDigest = sha256Hex(reviewed.content.trimEnd())
+      expect(nativeDocumentDigest).not.toBe(sha256Hex(reviewed.content))
+      committedConsumption = createGraphExecutionConsumption({
+        ...f,
+        rounds: {
+          frozenPlan: async () => ({ caseId: 'case-a', planJson: JSON.stringify(plan) }),
+          lastSettledRound: async () => null,
+        },
+        executions: {
+          read: async () => ({
+            taskId: 'task',
+            roundRef: 'round',
+            status: 'done',
+            artifacts: [],
+            reviewRunIds: ['review'],
+          }),
+        },
+        humanInputs: {
+          clarificationRounds: async () => [],
+          reviewDecision: async () => ({
+            ...actual,
+            receiptId: actual.id,
+            documentDigests: [nativeDocumentDigest],
+          }),
+        },
+      })
+      expect(
+        await workspace.validate({ roundRef: 'round', taskStatus: 'done', outputJson }),
+      ).toMatchObject({
+        ok: false,
+        errorClass: 'semantic',
+        errorCode: 'graph-review-output-not-authoritative',
+      })
+      expect((await f.store.links(document.id)).some((link) => link.id === 'review:receipt')).toBe(
+        false,
+      )
+      nativeDocumentDigest = sha256Hex(reviewed.content)
+      expect(
+        await workspace.validate({ roundRef: 'round', taskStatus: 'done', outputJson }),
+      ).toEqual({ ok: true })
+      expect((await f.store.links(document.id)).some((link) => link.id === 'review:receipt')).toBe(
+        true,
+      )
       if (deployment === 'hosted') {
         expect(operations).toContain('employee-case')
         expect(operations.some((op) => op.includes('development'))).toBe(true)

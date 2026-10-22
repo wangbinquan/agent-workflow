@@ -7,6 +7,7 @@ import {
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import type { GraphHumanInputFacts, GraphExecutionFacts } from '../ports/graphHostFacts'
 import { sha256Hex } from '@/util/hash'
+import { ValidationError } from '@/util/errors'
 import { graphContentRefs, graphDigest } from '../../domain/graph-development/model'
 import {
   GRAPH_DEFAULT_PLANNING_BUDGET,
@@ -380,7 +381,10 @@ export function createGraphExecutionConsumption(deps: {
           actual.decision !== result.receipt.decision ||
           actual.nodeRunId !== result.receipt.nodeRunId
         )
-          throw new Error('graph-review-output-not-authoritative')
+          throw new ValidationError(
+            'graph-review-output-not-authoritative',
+            '审核回执与冻结文档或原生审核决定不一致，请重新审核实现依据',
+          )
         await deps.commands.recordReview(work.designId, actual)
       }
       if (plan.workItemRef === 'implement-change') {
