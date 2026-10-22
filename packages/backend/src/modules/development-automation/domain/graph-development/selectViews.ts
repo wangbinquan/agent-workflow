@@ -94,12 +94,13 @@ export function selectGraphViews(
   }
   function coverage(items: Iterable<GraphViewProposal>): Map<string, number> {
     const result = new Map<string, number>()
-    for (const candidate of items) {
-      const best = new Map<string, number>()
+    // Proposals do not identify disjoint parts of a concern. Summing their
+    // estimates would turn repeated partial explanations into full coverage.
+    // Complementary questions must have distinct concern IDs; for one concern
+    // retain only the strongest declared contribution, regardless of renderer.
+    for (const candidate of items)
       for (const item of candidate.coverage)
-        best.set(item.concernId, Math.max(best.get(item.concernId) ?? 0, item.contribution))
-      for (const [id, value] of best) result.set(id, Math.min(1, (result.get(id) ?? 0) + value))
-    }
+        result.set(item.concernId, Math.max(result.get(item.concernId) ?? 0, item.contribution))
     return result
   }
   function value(items: Iterable<GraphViewProposal>): number {
@@ -172,6 +173,34 @@ export function selectGraphViews(
     const remaining = [...selected.values()].filter((item) => item.id !== candidate.id)
     if (value(remaining) >= value(selected.values())) selected.delete(candidate.id)
   }
+  // Pruning can leave a costly composite after the earlier replacement pass
+  // already visited its cheaper equivalent. Make one bounded cost-only pass;
+  // every concern must retain its coverage and pinned views cannot be replaced.
+  const weightedCost = (item: GraphViewProposal) => item.readingCost + item.generationCost * 0.25
+  for (const candidate of [...valid].sort(
+    (a, b) => weightedCost(a) - weightedCost(b) || a.id.localeCompare(b.id),
+  )) {
+    if (selected.has(candidate.id)) continue
+    const before = coverage(selected.values())
+    const removed = [...selected.values()]
+      .filter((item) => !pinned.some((view) => view.id === item.id))
+      .sort((a, b) => weightedCost(b) - weightedCost(a) || a.id.localeCompare(b.id))
+      .find((item) => {
+        if (weightedCost(candidate) >= weightedCost(item)) return false
+        const next = [...selected.values()].filter((view) => view.id !== item.id).concat(candidate)
+        const used = cost(next)
+        const after = coverage(next)
+        return (
+          used.reading <= budget.reading &&
+          used.generation <= budget.generation &&
+          [...before].every(([id, contribution]) => (after.get(id) ?? 0) >= contribution)
+        )
+      })
+    if (removed) {
+      selected.delete(removed.id)
+      selected.set(candidate.id, candidate)
+    }
+  }
   const attained = coverage(selected.values())
   for (const candidate of valid) {
     const included = selected.has(candidate.id)
@@ -196,7 +225,7 @@ export function selectGraphViews(
     })
   const used = cost(selected.values())
   return {
-    policyVersion: 1,
+    policyVersion: 2,
     catalogVersion: 1,
     readSet: graphContentRefs(document),
     selectedIds: [...selected.keys()],

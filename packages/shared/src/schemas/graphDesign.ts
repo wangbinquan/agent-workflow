@@ -345,7 +345,7 @@ export type GraphViewProposal = z.infer<typeof GraphViewProposalSchema>
 
 export const GraphViewPlanSchema = z
   .object({
-    policyVersion: z.literal(1),
+    policyVersion: z.union([z.literal(1), z.literal(2)]),
     catalogVersion: z.literal(1),
     readSet: z.array(GraphContentRefSchema),
     selectedIds: ids,

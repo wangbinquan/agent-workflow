@@ -211,6 +211,10 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
       const projection = JSON.parse(first.contractProjectionJson)
       expect(projection.materials.authoringRules.join('\n')).toContain('rows[].ruleId')
       expect(projection.materials.authoringRules.join('\n')).toContain('omit its optional decision')
+      expect(projection.materials.authoringRules.join('\n')).toContain('not additive across views')
+      expect(projection.materials.authoringRules.join('\n')).toContain(
+        'repository-relative test paths',
+      )
       expect(projection.materials.planningBudget).toEqual({ reading: 12, generation: 24 })
       const state = await workspace.state(work.designId)
       expect(state.uploadPlan?.entries[0]?.targetPath).toBe('explicit-upload.txt')

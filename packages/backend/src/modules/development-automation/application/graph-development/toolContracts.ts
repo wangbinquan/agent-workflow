@@ -11,6 +11,8 @@ export const GRAPH_DESIGN_AUTHORING_RULES = [
   'Each decision-table rows[].ruleId must identify a declared element, for example a behavior element with role=action. A row ID alone does not declare an element; the schema has no rule element kind.',
   'Candidate costs use the supplied planningBudget units. Offer a useful affordable combination and expose uncovered concerns; do not assume the model-recommended combination will be selected. Keep candidate material concise and avoid unnecessary semantic objects.',
   'Candidate coverage may reference only declared concerns whose disposition is not out-of-scope. Describe excluded behavior as a limitation instead of claiming coverage for it; one excluded concern invalidates that candidate.',
+  'Coverage of the same concern is not additive across views. Describe independently answerable questions as distinct concerns; repeating partial coverage in another renderer does not complete a concern.',
+  'Execution obligation testRefs and implementation testRefs must be exact repository-relative test paths, optionally followed by #test-name, such as src/normalize.test.ts#invalid-data. Do not use repo: or planned: prefixes or :: separators for testRefs; repo: is for the verification profile programRef. A runner script alone is not a test.',
   'A provisional decision or unknown owner does not prove implementation or verification impossible. Bind concrete behavior obligations to an actual execution profile or an explicit manual check; retain responsibility gaps separately and use unassigned only when the verification itself is unresolved.',
 ] as const
 export const GraphReviewDecisionOutputSchema = z

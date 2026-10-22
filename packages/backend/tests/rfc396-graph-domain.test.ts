@@ -27,6 +27,7 @@ import {
   enumerateGraphStatePaths,
 } from '../src/modules/development-automation/domain/graph-development/behaviorChecks'
 import { renderGraphModel } from '../src/modules/development-automation/domain/graph-development/renderViews'
+import { GraphViewPlanSchema } from '@agent-workflow/shared'
 
 function document(): GraphDesignDocument {
   return {
@@ -186,6 +187,78 @@ describe('RFC-396 adaptive expression', () => {
     )
     expect(new Set(result.selectedIds)).toEqual(new Set(['availability-view', 'priority-view']))
     expect(result.uncoveredConcernIds).toEqual([])
+  })
+  // Real-model acceptance selected both component views and their composite:
+  // repeated fractional claims incorrectly added up to complete coverage.
+  test('repeated partial explanations cannot fill the same concern gap', () => {
+    const partial = (id: string): GraphViewProposal => ({
+      ...candidate(id),
+      coverage: [{ concernId: 'availability', contribution: 0.6, explanation: '仅解释单请求' }],
+    })
+    const result = selectGraphViews(document(), [partial('a'), partial('b'), partial('c')], {
+      reading: 10,
+      generation: 10,
+    })
+    expect(result.selectedIds).toEqual(['a'])
+    expect(result.uncoveredConcernIds).toEqual(['availability'])
+    expect(result.decisions.find((item) => item.candidateId === 'b')?.marginalValue).toBe(0)
+    expect(result.policyVersion).toBe(2)
+    expect(GraphViewPlanSchema.safeParse(result).success).toBe(true)
+    expect(GraphViewPlanSchema.safeParse({ ...result, policyVersion: 1 }).success).toBe(true)
+  })
+  test('a stronger composite replaces overlapping components without multiplying claims', () => {
+    const current = document()
+    current.concerns.push({ ...current.concerns[0]!, id: 'compatibility' })
+    const rated = (id: string, a: number, b: number, cost: number): GraphViewProposal => ({
+      ...candidate(id, [], cost),
+      coverage: [
+        { concernId: 'availability', contribution: a, explanation: '预约约束' },
+        { concernId: 'compatibility', contribution: b, explanation: '兼容约束' },
+      ],
+    })
+    const candidates = [
+      rated('rules', 0.9, 0.25, 2.5),
+      rated('flow', 0.3, 0.8, 1.5),
+      { ...rated('combined', 0.9, 0.85, 3.6), capabilityRef: { id: 'composite', version: 1 } },
+      {
+        ...rated('expensive-combined', 0.9, 0.85, 4.2),
+        capabilityRef: { id: 'composite', version: 1 },
+      },
+    ]
+    const result = selectGraphViews(current, candidates, { reading: 12, generation: 24 })
+    expect(result.selectedIds).toEqual(['combined'])
+    expect(new Set(result.uncoveredConcernIds)).toEqual(new Set(['availability', 'compatibility']))
+    expect(
+      selectGraphViews(current, [...candidates].reverse(), { reading: 12, generation: 24 }),
+    ).toEqual(result)
+  })
+  test('partial duplicate removal preserves an explicitly pinned reading path', () => {
+    const current = document()
+    const pinned = candidate('pinned')
+    current.views.push({
+      id: pinned.id,
+      revision: 1,
+      title: pinned.title,
+      purpose: pinned.purpose,
+      capabilityRef: pinned.capabilityRef,
+      modelIds: pinned.modelIds,
+      elementIds: pinned.elementIds,
+      relationIds: pinned.relationIds,
+      sourceIds: pinned.sourceIds,
+      concernIds: ['availability'],
+      status: 'current',
+      pinned: true,
+      explanation: '用户保留',
+      limitations: [],
+    })
+    const result = selectGraphViews(current, [pinned, candidate('duplicate')], {
+      reading: 10,
+      generation: 10,
+    })
+    expect(result.selectedIds).toEqual(['pinned'])
+    expect(result.decisions.find((item) => item.candidateId === 'pinned')?.reason).toBe(
+      'user-pinned',
+    )
   })
   test('budget exhaustion and unsupported expressions retain required gaps', () => {
     const unavailable = {

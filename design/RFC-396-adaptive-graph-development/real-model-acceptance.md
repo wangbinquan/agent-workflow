@@ -74,3 +74,14 @@
 - 修复选择完整 stdin 传输大提示，保留小提示既有 argv 协议和 argv-only guard，两个统一装配入口均传递 stdin；不裁掉设计、原回答或审批材料。[本机 OpenCode 1.19.0 对应源码](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/opencode/src/cli/cmd/run.ts#L400) 明确在分派前读取 piped input。增加真实子进程大段 CJK/多行/尾部哨兵和业务、系统装配回归；真实模型上的修复效果待新候选继续验收。
 - 独立托管 v0.1.2 已从 Ready 切到 prod，release journey `01a1629d-cfba-7000-86f8-3897db7833c4` 为 succeeded，激活 `01a162ab-407b-7000-afef-248060b34ce0`。仅该项目的部署就绪，不代表托管业务链路完成。
 - CI `66c084c3` 的两个剩余根失败是 provider 函数语料 47/门槛48，以及新增 `rfc395-head-history-injection.test.ts` 假 PG runtime 未登记；RFC-395 自行提交 `228f726c0` 修复，已为 `cfe25471e` 祖先。旧 CI 仍按自己的失败记录保存，后继 exact-SHA CI 另记。
+
+### 2026-10-22 真实恢复后的组合计分修正
+
+- 已有模块恢复 Task `01M5HC4NWJ495P7X2EZVTWEER8` 已完成，revision 4 恢复三条原始人工来源，无新增问题。候选选择同时留下决策表、流程图和包含二者的复合图，暴露同一 concern 的部分覆盖被错误相加；不同渲染器不证明新增覆盖。
+- 选择策略升级到 version 2：同一 concern 只取最大声明贡献，保留真实缺口，冗余清除和固定视图规则继续生效；旧计划仍可读取。增加部分覆盖不可叠加、复合图替代重叠组件、固定图保留和顺序稳定回归。仍需真实候选回放与限定验证，不据此宣称算法全局最优。
+- 通知通过正常人工编辑入口修正 `repo:` 测试引用前缀，冻结 revision 5、basis digest `8a3738fe1c1fbf654422cb4de0f5bc78cd473686c99f9043e59e3a06201434bd`，三条原回答保持。已有模块另出现 `planned:path::name` 引用；提示规则明确实际仓库相对测试路径及可选 `#test-name`，执行验证仍按真实文件与追溯核对，不放宽合同。
+- 单机已运行 `12081efd2d5ace933fe64f0b3fdc48d5cc5bd1f3`；通知原生评审正文与冻结 `implementation.md` 89021 bytes 逐字一致，review NodeRun `01M5HDENSGG57RMK5QFV2HNH79` 已批准，真实 receipt `01M5HDH4NXPET600MVF1T72S15`。实现请求 `live-notifications-implement-v5` 已受理，代码和执行证据另验。
+- 真实已有模块候选以策略 v2 回放，从三个重叠视图变为 `cand-dt-flow-recommended`，仍包含决策表与调用流两个语义模型，六项部分覆盖/责任缺口仍在。该候选比另一复合表达在 c-empty 和 c-compat 各高 0.05；不能把它说成“更贵的等价表达”。人工采纳并修正测试引用，保持三条原始来源。验收脚本初次漏建新的选中视图，revision 5 评审取消；通过正常编辑生成 revision 6 和新 basis `92510c77e328b7d23f4d322724137dffd6c5ee472b4311c94d69200d3c48bd02`，不把脚本错误算作模型失败。
+- 限定三文件 SQLite 30 pass / 0 fail、113 assertions；规划/工作区真实 PostgreSQL 6 pass / 0 fail、50 assertions。完善等覆盖成本检查后，受影响纯领域文件 24 pass / 0 fail、63 assertions，属于前述范围复验。目标 lint 和完整 backend typecheck 通过；首次缺 PostgreSQL 环境变量的运行保留为验收配置错误，未跳过其红灯。
+- `12081efd2` 的 [exact-SHA CI 39748578316](https://github.com/wangbinquan/agent-workflow/actions/runs/39748578316) 已终态成功，49 个 job success。它不包含本节尚待发布的策略 v2 修正，也不替代真实业务验收。
+- 托管 v0.1.3 首次源码发布收到 `source-publication-http-400`，原因未证实；正常重试成功，155 个文件动作、GitLab commit `0acbb6d4e087549c302832e1b42825580d8d5ffe`、release `01a162da-f222-7000-847f-30e3153f6967`。截至本记录处于 migrating，未将它记作激活或业务链路通过。RFC 保持 In Progress。
