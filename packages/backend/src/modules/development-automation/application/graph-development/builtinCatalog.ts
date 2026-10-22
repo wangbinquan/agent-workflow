@@ -19,7 +19,14 @@ export interface GraphBuiltinCatalogInput {
 /** Reconciles immutable built-in resource versions once per application lifetime. */
 export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
   let records:
-    | { id: string; revision: number; item: string; implementation: unknown; label: string }[]
+    | {
+        id: string
+        revision: number
+        item: string
+        implementation: unknown
+        label: string
+        historical?: boolean
+      }[]
     | undefined
   let loading: Promise<void> | undefined
   const prefix = 'platform:graph-development:'
@@ -94,7 +101,7 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
         records = [
           ...workflows,
           {
-            id: `${prefix}implement-change`,
+            id: `${prefix}implement-change:v2`,
             revision: agent.updatedAt,
             item: 'implement-change',
             implementation: {
@@ -104,6 +111,35 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
             label: '根据批准依据生成代码与测试',
           },
         ]
+        // Employee revisions freeze exact tool refs. Keep the installed v1
+        // registration resolvable without advertising it to new definitions.
+        const legacy = await input.agents.get('00000000000000GRAPHBUILD1')
+        if (legacy) {
+          if (!legacy.builtin || legacy.name !== 'graph-development-implementer-v1')
+            throw new Error(`graph-builtin-agent-content-conflict:${legacy.id}`)
+          records.push({
+            id: `${prefix}implement-change`,
+            revision: legacy.updatedAt,
+            item: 'implement-change',
+            implementation: {
+              kind: 'agent',
+              agentRef: { id: legacy.id, revision: legacy.updatedAt },
+            },
+            label: '根据批准依据生成代码与测试',
+            historical: true,
+          })
+        }
+        // 3f487ddd also exposed v2 under the original registration ID. Its
+        // exact revision remains readable; the versioned ID avoids collisions
+        // between independently created Agent versions in future snapshots.
+        records.push({
+          id: `${prefix}implement-change`,
+          revision: agent.updatedAt,
+          item: 'implement-change',
+          implementation: { kind: 'agent', agentRef: { id: agent.id, revision: agent.updatedAt } },
+          label: '根据批准依据生成代码与测试',
+          historical: true,
+        })
       })())
     },
     listJson(refJson, item) {
@@ -111,7 +147,7 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
       return canonicalJson(
         ref.typeId === GRAPH_EMPLOYEE_TYPE.typeId && ref.revision === 1
           ? current()
-              .filter((value) => value.item === item)
+              .filter((value) => value.item === item && !value.historical)
               .map(record)
           : [],
       )

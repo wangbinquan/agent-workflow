@@ -410,7 +410,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       await composeBuiltinEmployeeJobs(db, (request) =>
         module.commands.publishJobTemplate(request),
       ).ensure({
-        id: 'platform:graph-development:job:v1',
+        id: 'platform:graph-development:job:v2',
         name: '图驱动研发',
         content: {
           schemaVersion: 1,

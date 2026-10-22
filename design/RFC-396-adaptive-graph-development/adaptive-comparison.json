@@ -1,0 +1,97 @@
+[
+  {
+    "key": "booking",
+    "designId": "design:01M5H550KMNV5RQX7S9RP7S5GX",
+    "revision": 5,
+    "scope": "Matched projections of the same frozen semantic document. No independent model call, no invented absent diagrams, no human timing or causal benefit claim.",
+    "groups": [
+      {
+        "id": "adaptive",
+        "modelIds": [
+          "model-booking-lifecycle",
+          "model-request-and-cancel-rules",
+          "model-batch-order"
+        ],
+        "absentSlots": [],
+        "modelCount": 3,
+        "renderBytes": 2204
+      },
+      {
+        "id": "fixed-flow-state-decision",
+        "modelIds": ["model-booking-lifecycle", "model-request-and-cancel-rules"],
+        "absentSlots": ["flow"],
+        "modelCount": 2,
+        "renderBytes": 1598
+      },
+      {
+        "id": "fixed-all-five",
+        "modelIds": [
+          "model-booking-lifecycle",
+          "model-request-and-cancel-rules",
+          "model-batch-order"
+        ],
+        "absentSlots": ["flow", "data"],
+        "modelCount": 3,
+        "renderBytes": 2204
+      }
+    ]
+  },
+  {
+    "key": "notifications",
+    "designId": "design:01M5H59S2462BFFJBJWGMF4SY9",
+    "revision": 7,
+    "scope": "Matched projections of the same frozen semantic document. No independent model call, no invented absent diagrams, no human timing or causal benefit claim.",
+    "groups": [
+      {
+        "id": "adaptive",
+        "modelIds": ["model-state", "model-decision"],
+        "absentSlots": [],
+        "modelCount": 2,
+        "renderBytes": 3536
+      },
+      {
+        "id": "fixed-flow-state-decision",
+        "modelIds": ["model-state", "model-decision"],
+        "absentSlots": ["flow"],
+        "modelCount": 2,
+        "renderBytes": 3536
+      },
+      {
+        "id": "fixed-all-five",
+        "modelIds": ["model-state", "model-decision"],
+        "absentSlots": ["flow", "sequence", "data"],
+        "modelCount": 2,
+        "renderBytes": 3536
+      }
+    ]
+  },
+  {
+    "key": "existing-module",
+    "designId": "design:01M5H59TF3767SKWW9T280J4K3",
+    "revision": 8,
+    "scope": "Matched projections of the same frozen semantic document. No independent model call, no invented absent diagrams, no human timing or causal benefit claim.",
+    "groups": [
+      {
+        "id": "adaptive",
+        "modelIds": ["m-decision", "m-flow"],
+        "absentSlots": [],
+        "modelCount": 2,
+        "renderBytes": 959
+      },
+      {
+        "id": "fixed-flow-state-decision",
+        "modelIds": ["m-decision", "m-flow"],
+        "absentSlots": ["state"],
+        "modelCount": 2,
+        "renderBytes": 959
+      },
+      {
+        "id": "fixed-all-five",
+        "modelIds": ["m-decision", "m-flow"],
+        "absentSlots": ["state", "sequence", "data"],
+        "modelCount": 2,
+        "renderBytes": 959
+      }
+    ]
+  }
+]

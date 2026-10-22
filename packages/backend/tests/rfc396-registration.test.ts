@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseTemplate } from '@agent-workflow/shared'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
+import { composeBuiltinEmployeeJobs } from '@/modules/digital-employee/composition/builtinJobTemplates'
 import { graphEmployeeTypePackage } from '@/modules/development-automation/application/graph-development/employeeType'
 import {
   GRAPH_BUILTIN_AGENTS,
@@ -95,7 +96,7 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
   afterEach(() => {
     for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
   })
-  test.each(['original', '3a36ce4c7'])(
+  test.each(['original', '3a36ce4c7', '3f487ddd'])(
     'the actual session bundle preserves installed %s v1 and publishes a reusable graph job',
     async (installedVersion) => {
       const home = mkdtempSync(join(tmpdir(), 'rfc396-registration-'))
@@ -113,7 +114,7 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
         'utf8',
       )
       const publishedBody =
-        installedVersion === 'original'
+        installedVersion !== '3a36ce4c7'
           ? originalBody
           : originalBody.replace(
               '无法实现的部分如实写 limitations。',
@@ -128,8 +129,79 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
       await f.employee.platformTools.load()
       expect(await agents.get(legacyId)).toEqual(installed)
       expect((await agents.get(implementer.id))?.bodyMd).toBe(implementer.definition.bodyMd)
+      const legacyRefJson = JSON.stringify({
+        id: 'platform:graph-development:implement-change',
+        revision: installed!.updatedAt,
+      })
+      const exactLegacy = f.employee.platformTools.getRevisionJson(legacyRefJson)
+      expect(JSON.parse(exactLegacy!).content.implementation.agentRef).toEqual({
+        id: legacyId,
+        revision: installed!.updatedAt,
+      })
+      const currentTools = JSON.parse(
+        f.employee.platformTools.listJson(
+          JSON.stringify({ typeId: 'graph-development', revision: 1 }),
+          'implement-change',
+        ),
+      )
+      expect(currentTools).toHaveLength(1)
+      expect(currentTools[0].id).toBe('platform:graph-development:implement-change:v2')
+      expect(currentTools[0].content.implementation.agentRef.id).toBe(implementer.id)
+      const oldJobToolRef =
+        installedVersion === '3f487ddd'
+          ? {
+              id: 'platform:graph-development:implement-change',
+              revision: currentTools[0].publishedRevision,
+            }
+          : JSON.parse(legacyRefJson)
+      expect(
+        JSON.parse(f.employee.platformTools.getRevisionJson(JSON.stringify(oldJobToolRef))!).content
+          .implementation.agentRef.id,
+      ).toBe(installedVersion === '3f487ddd' ? implementer.id : legacyId)
       await f.employee.module.maintenance.ready()
+      const typeRef = { typeId: 'graph-development', revision: 1 }
+      await composeBuiltinEmployeeJobs(harness.db, (request) =>
+        f.employee.module.commands.publishJobTemplate(request),
+      ).ensure({
+        id: 'platform:graph-development:job:v1',
+        name: '原始图驱动研发岗位',
+        content: {
+          schemaVersion: 1,
+          typeRef,
+          description: 'Previously published job with frozen v1 tool references',
+          defaultToolBindings: ['design-and-clarify', 'review-design', 'implement-change'].map(
+            (workItemRef) => {
+              const tool = JSON.parse(
+                f.employee.platformTools.listJson(JSON.stringify(typeRef), workItemRef),
+              )[0]
+              return {
+                workItemRef,
+                slotRef: 'default',
+                registrationRef:
+                  workItemRef === 'implement-change'
+                    ? oldJobToolRef
+                    : { id: tool.id, revision: tool.publishedRevision },
+              }
+            },
+          ),
+          defaultAdapterBindings: [],
+          defaultCollaborationBindings: [],
+          orderedDispatchConfigurations: [],
+          reactionLaneOrder: [],
+        },
+      })
+      const legacyJob = (await f.employee.module.queries.listJobTemplates(typeRef)).find(
+        (job) => job.id === 'platform:graph-development:job:v1',
+      )
+      expect(legacyJob).toBeDefined()
       await f.employee.initializeGraph()
+      const jobs = await f.employee.module.queries.listJobTemplates(typeRef)
+      expect(jobs.find((job) => job.id === 'platform:graph-development:job:v1')).toEqual(legacyJob)
+      expect(
+        jobs.some(
+          (job) => job.id === 'platform:graph-development:job:v2' && job.publishedRevision !== null,
+        ),
+      ).toBe(true)
       const tools = JSON.parse(
         f.employee.platformTools.listJson(
           JSON.stringify({ typeId: 'graph-development', revision: 1 }),
@@ -153,9 +225,11 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
       expect(f.employee.graph).toBeDefined()
       const restarted = employeeAutomationFixture(harness, home)
       await restarted.employee.platformTools.load()
+      await restarted.employee.initializeGraph()
       expect(
         await restarted.tasks.resourceCatalog.digitalEmployeeAgentTemplates.get(legacyId),
       ).toEqual(installed)
+      expect(restarted.employee.platformTools.getRevisionJson(legacyRefJson)).toBe(exactLegacy)
     },
     30_000,
   )

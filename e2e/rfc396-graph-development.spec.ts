@@ -61,7 +61,7 @@ test.beforeAll(async () => {
       `/api/digital-employee-types/${typeRef}/job-templates`,
     )
   ).items
-  const job = jobs.find((row) => row.id === 'platform:graph-development:job:v1')!
+  const job = jobs.find((row) => row.id === 'platform:graph-development:job:v2')!
   employeeId = (
     await api<{ id: string }>(`/api/digital-employee-types/${typeRef}/employees`, {
       name: `Graph employee ${tag}`,
