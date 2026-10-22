@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-22T16:04:41Z",
+  "observedAt": "2026-10-22T18:10:17Z",
   "rfc": "RFC-396",
   "rfcStatus": "In Progress",
   "acceptanceCriterion": "AC14",
@@ -10,19 +10,22 @@
     "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
     "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
     "projectSlug": "rfc396-graph-acceptance",
-    "releaseId": "01a16383-b997-7000-93d3-910a448addd9",
-    "releaseVersion": "0.1.6",
-    "sourceCommit": "ccde54fafcee93c21ca0d66ca79d574f14ef34fc",
-    "serviceImageDigest": "sha256:770bad2cf80068a2b5662a38d18bacddd554bf9db28483a72db2efb0b0543c90",
-    "releaseJourneyId": "01a16383-bab3-7000-a976-54c7e37dc1f7",
-    "activationId": "01a16395-b4e5-7000-b887-a61e0aa4465b",
+    "releaseId": "01a16484-de19-7000-b60c-4ba2b51f2bcd",
+    "releaseVersion": "0.1.7",
+    "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+    "serviceImageDigest": "sha256:48b6900402c2874e3c3efdbb5869557e7fe9582e39bf47eb74d2e3fa49ed0321",
+    "releaseJourneyId": "01a16484-e5eb-7000-a281-8da7c9046436",
+    "activationId": "01a1649a-5661-7000-9481-cf38479b5657",
     "activationResult": "succeeded",
-    "manualRouteReconciliation": true,
+    "manualRouteReconciliation": false,
     "actualTaskParentId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
     "actualTaskGeneration": 1,
     "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
     "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
-    "actualTaskImageUpgradeObserved": false
+    "actualTaskImageUpgradeObserved": false,
+    "productionRouteObserved": "rfc396-graph-acceptance-blue",
+    "previewRouteObserved": "rfc396-graph-acceptance-blue",
+    "routeScope": "Production target matched the newly activated release without manual reconciliation in this release. The preview target is only an observation; no preview-switch equivalence claim."
   },
   "failedInlineFixture": {
     "caseId": "01M5HWSH80PTX0K0ER0WADS9FF",
@@ -65,6 +68,15 @@
       "testCount": 1,
       "assertionCount": 6,
       "executed": false
+    },
+    "recoveryAfterSemanticFailureFix": {
+      "observedAt": "2026-10-22T17:30:24.383Z",
+      "activeRoundId": null,
+      "roundId": "01M5J26KXESQZNXBT21RQDJRER",
+      "roundState": "obsolete",
+      "attemptOrdinal": 1,
+      "terminalKindPreserved": "fixture-review-digest-mismatch",
+      "graphReviewReceiptAccepted": false
     }
   },
   "fixture": {
@@ -75,11 +87,14 @@
     "reviewWorkflowVersion": 1,
     "reviewModel": "opencode-go/deepseek-v4.1-flash",
     "hostedAgentProfileId": "01a146ce-c2ce-7fe4-97ab-3cddd340967d",
-    "designTaskId": null,
-    "designTaskStatus": "not-observed",
-    "designRevision": null,
+    "designTaskId": "01M5J6MGFDZKC7S81ZS7Q19XTR",
+    "designTaskStatus": "done",
+    "designRevision": 2,
     "freezeRequestId": "hosted-clamp-native-basis-v2",
-    "basisReceipt": null,
+    "basisReceipt": {
+      "id": "basis:hosted-clamp-native-basis-v2",
+      "digest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9"
+    },
     "reviewReceipt": null,
     "candidate": null,
     "verificationReceipt": null,
@@ -91,6 +106,25 @@
       "testCount": 1,
       "assertionCount": 6,
       "executed": false
+    },
+    "reviewExecution": {
+      "roundId": "01M5JAY36499QEA29XXNZ7YEKN",
+      "preallocatedTaskId": "01M5JAY3G3WYAFAY0KX986JXG7",
+      "actualTaskObserved": true,
+      "lastObservedTaskStatus": "running",
+      "materialNodeRunId": "01M5JBRHH6X77XZC54Y1AKAYCF",
+      "agentSubtask": {
+        "id": "01a164be-b8b5-7000-bfac-b9e4cda64522",
+        "observedAt": "2026-10-22T18:05:57.698Z",
+        "state": "succeeded",
+        "exitCode": 0,
+        "agentProfileId": "01a146ce-c2ce-7fe4-97ab-3cddd340967d",
+        "startedAt": "2026-10-22T17:55:37.992Z",
+        "stdoutBytes": 2176,
+        "stderrBytes": 0
+      },
+      "nativeGateReceipt": null,
+      "stageBoundary": "A preallocated execution identity initially returned task-not-found. The Task was later observed running with its input complete and material agent running; platform agent success does not establish native approval."
     }
   },
   "documentationCi": {
@@ -126,7 +160,13 @@
     },
     "applicationGatewayWindow": {
       "scope": "Only object requests originating from this service pod",
-      "httpStatusCounts": { "200": 258, "201": 1, "202": 2, "502": 1, "503": 4 },
+      "httpStatusCounts": {
+        "200": 258,
+        "201": 1,
+        "202": 2,
+        "502": 1,
+        "503": 4
+      },
       "lastObservedAt": "2026-10-22T14:44:00Z",
       "lastReferenceFailureAt": "2026-10-22T14:39:37Z",
       "lastReferenceFailureStatus": 502
@@ -134,11 +174,65 @@
     "rootCause": "unconfirmed"
   },
   "resumeRequirements": [
-    "Freeze the same revision and request ID through the normal Graph API.",
     "Read the complete frozen implementation.md and compare the native review body byte for byte.",
-    "Approve only that verified native review and obtain its actual receipt.",
-    "Request implementation using that basis and review receipt.",
+    "Approve only that verified native review and obtain its actual Graph receipt.",
+    "Request implementation using basis:hosted-clamp-native-basis-v2 and that receipt.",
     "Collect the actual candidate, independent profile result and terminal delivered Case.",
-    "Record actual service and task image versions; retain prior failures and manual routing intervention."
-  ]
+    "Record actual service and task image versions; retain the prior failures and deployment history."
+  ],
+  "deploymentHistory": [
+    {
+      "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
+      "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
+      "projectSlug": "rfc396-graph-acceptance",
+      "releaseId": "01a16383-b997-7000-93d3-910a448addd9",
+      "releaseVersion": "0.1.6",
+      "sourceCommit": "ccde54fafcee93c21ca0d66ca79d574f14ef34fc",
+      "serviceImageDigest": "sha256:770bad2cf80068a2b5662a38d18bacddd554bf9db28483a72db2efb0b0543c90",
+      "releaseJourneyId": "01a16383-bab3-7000-a976-54c7e37dc1f7",
+      "activationId": "01a16395-b4e5-7000-b887-a61e0aa4465b",
+      "activationResult": "succeeded",
+      "manualRouteReconciliation": true,
+      "actualTaskParentId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+      "actualTaskGeneration": 1,
+      "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
+      "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
+      "actualTaskImageUpgradeObserved": false
+    }
+  ],
+  "sourceCi": {
+    "commit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+    "runId": 39814553963,
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "success",
+    "successJobs": 49,
+    "totalJobs": 49,
+    "requiredCheckId": 119960898866,
+    "requiredCheckCompletedAt": "2026-10-22T16:53:25Z",
+    "activationProof": "All 49 terminal jobs and the exact-SHA CI required check passed while the run aggregate still appeared in_progress. The aggregate was subsequently observed completed/success."
+  },
+  "publicationRecovery": {
+    "initialResult": "First of two batches committed; second batch returned 400 Stream removed (Deadline Exceeded).",
+    "partialCommit": "59f61c9de0dee4b81077794818f33a1d0da7ee4c",
+    "remainingActions": 295,
+    "resumedBatches": 9,
+    "batchLimitActions": 40,
+    "batchLimitBytes": 1048576,
+    "finalGitlabCommit": "69566e94ff694e8f2ede7a3b3f27d6dfaa7bce90",
+    "preservedGuards": ["expected remote head", "per-file revision", "exact committed source"]
+  },
+  "serviceRecoveryObservation": {
+    "observedAt": "2026-10-22T18:03:17Z",
+    "release": "0.1.7",
+    "pod": "rfc396-graph-acceptance-blue-597b58f584-5whsw",
+    "observedRestartCount": 2,
+    "epoch": 39,
+    "leaseAcquiredAt": "2026-10-22T18:02:49.715Z",
+    "leaseLostAt": "2026-10-22T18:03:07.380Z",
+    "reason": "platform-unreachable",
+    "effect": "Service endpoint temporarily unavailable; workspace command detached for the next owner. Agent result remained persisted in the platform.",
+    "rootCause": "unconfirmed"
+  },
+  "currentAcceptancePosition": "Frozen revision 2; actual approved-profile review-material agent succeeded. Await service recovery, exact native review body and receipt, then candidate/profile execution and delivery."
 }
