@@ -497,8 +497,19 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
         workspace: f.workspace,
       })
       expect(result.passed).toBe(false)
-      const accept = async (id: string, state: 'passed' | 'failed', at: number) =>
-        f.store.insertLink({
+      const accept = async (id: string, state: 'passed' | 'failed', at: number) => {
+        const artifact = await f.artifacts.put([
+          {
+            path: 'acceptance.json',
+            content: canonicalJson({
+              id,
+              result: state,
+              comment: 'Observed the exact candidate',
+              recordedAt: at,
+            }),
+          },
+        ])
+        return await f.store.insertLink({
           designId: 'design-a',
           id,
           kind: 'evidence',
@@ -515,14 +526,15 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
             profileRef: null,
             environmentDigest: null,
             executionRef: null,
-            artifactRef: 'manual',
-            artifactDigest: 'a'.repeat(64),
+            artifactRef: artifact.artifactRef,
+            artifactDigest: artifact.digest,
             result: state,
             summary: state,
             limitations: [],
             recordedAt: at,
           }),
         })
+      }
       await accept('accept', 'passed', 100)
       expect(
         (await f.verification.run({ designId: 'design-a', roundRef: 'v2', workspace: f.workspace }))

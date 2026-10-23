@@ -51,6 +51,7 @@ const packageEventCatalogSchema = z.object({
     z.object({
       eventTypeId: z.string().min(1),
       version: z.number().int().positive(),
+      ownerTypeId: z.string().min(1).optional(),
       subjectTypeId: z.string().min(1),
       payloadSchemaId: z.string().min(1),
       displayName: z.object({ 'zh-CN': z.string(), 'en-US': z.string() }),
@@ -149,7 +150,7 @@ export class EventCenterService {
           schemaVersion: 1,
           eventTypeRef: { id: eventType.eventTypeId, revision: eventType.version },
           sourceRef: eventType.sourceRef,
-          ownerTypeId: catalog.typeRef.typeId,
+          ownerTypeId: eventType.ownerTypeId ?? catalog.typeRef.typeId,
           subjectTypeId: eventType.subjectTypeId,
           payloadSchemaId: eventType.payloadSchemaId,
           displayName: eventType.displayName,

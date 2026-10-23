@@ -10,6 +10,7 @@ import { GRAPH_EVENT_SOURCE } from '@/modules/development-automation/application
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { memoryGraphArtifacts } from './helpers/graphDesign'
+import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
 describeEachProvider('RFC-396 durable Case work requests', (harness) => {
   const homes: string[] = []
@@ -21,12 +22,15 @@ describeEachProvider('RFC-396 durable Case work requests', (harness) => {
     homes.push(home)
     const f = employeeAutomationFixture(harness, home),
       module = f.employee.module
+    await ensureDigitalEmployeeAgentTemplates(f.tasks.resourceCatalog.digitalEmployeeAgentTemplates)
     await f.employee.platformTools.load()
     await module.maintenance.ready()
     await f.employee.initializeGraph()
     await f.employeeInput.integration.eventCenter.initialize()
-    const typeRef = { typeId: 'graph-development', revision: 1 }
-    const job = (await module.queries.listJobTemplates(typeRef))[0]!
+    const typeRef = { typeId: 'graph-development', revision: 2 }
+    const job = (await module.queries.listJobTemplates(typeRef)).find(
+      (candidate) => candidate.id === 'platform:graph-development:job:mr-v1',
+    )!
     const employee = await module.commands.createEmployee({
       typeRef,
       actorUserId: null,
@@ -104,95 +108,117 @@ describeEachProvider('RFC-396 durable Case work requests', (harness) => {
   }, 30_000)
 })
 
-test('review withdrawal cancels the original task, while follow-on intake uses the strict advanced-options shape and original material', async () => {
-  const artifacts = memoryGraphArtifacts(),
-    canceled: string[] = [],
-    launches: unknown[] = []
-  const context = {
-    caseId: 'case',
-    designId: 'design',
-    repositoryId: 'repo',
-    request: { body: 'old', kind: 'body', targetBranch: 'main', uploads: [] },
-    consumedRevision: 1,
-    basisId: null,
-    basisDigest: null,
-    reviewReceiptId: null,
-    reviewDecision: null,
-    candidateRef: null,
-    candidateTreeOid: null,
-    evidenceIds: [],
-    result: 'awaiting-request',
-  }
-  const payload = await artifacts.put([
-    {
-      path: 'request.json',
-      content: JSON.stringify({ document: { title: '原始设计' }, instruction: '新条件' }),
-    },
-  ])
-  const events = {
-    async observe() {
-      return { eventId: 'event' }
-    },
-    async subscribe() {},
-    async unsubscribe() {},
-    async pendingDeliveries() {
-      return []
-    },
-    async acceptDelivery() {},
-  }
-  const intake = createGraphCaseIntake({
-    readCase: async () => ({
-      projectionJson: JSON.stringify({
-        case: {
-          id: 'case',
-          employeeRef: { id: 'employee' },
-          state: 'waiting',
-          currentWorkItemRef: 'review-design',
-        },
-        contexts: [
-          { typeId: 'graph-development.design-context', stateJson: JSON.stringify(context) },
-        ],
-        activeRound: { workItemRef: 'review-design', executionRef: 'review-task' },
-      }),
-    }),
-    owner: async () => ({ ownerUserId: 'owner' }),
-    cancelTask: async (id) => {
-      canceled.push(id)
-    },
-    launchWork: async (request) => {
-      launches.push(request)
-      return { caseRef: { id: 'follow-on' } }
-    },
-    events: events as unknown as Parameters<typeof createGraphCaseIntake>[0]['events'],
-    humanInputs: { clarificationRounds: async () => [], reviewDecision: async () => null },
-    artifacts,
-  })
-  expect(
-    (
-      await intake.requestWork({
-        caseId: 'case',
-        requestId: 'clarify',
-        kind: 'clarification',
-        withdrawReview: true,
-        payloadRef: payload,
-      })
-    ).queued,
-  ).toBe(true)
-  expect(canceled).toEqual(['review-task'])
-  expect(
-    await intake.followOn({
+test.each([
+  { revision: 1, deliveryMode: undefined },
+  { revision: 2, deliveryMode: 'merge-request' },
+] as const)(
+  'graph@$revision review withdrawal and follow-on preserve original material with independent MR source branches',
+  async ({ revision, deliveryMode }) => {
+    const artifacts = memoryGraphArtifacts(),
+      canceled: string[] = [],
+      launches: unknown[] = []
+    const context = {
       caseId: 'case',
-      requestId: 'next',
-      body: '新条件',
-      artifactRef: payload,
-    }),
-  ).toEqual({ caseId: 'follow-on' })
-  expect(launches[0]).toMatchObject({
-    actorUserId: 'owner',
-    intake: {
-      advanced: { typeOptions: { 'working-branch': 'main' } },
-      idempotencyKey: 'graph-follow-on:case:next',
-      body: expect.stringContaining('原始设计'),
-    },
-  })
-})
+      designId: 'design',
+      repositoryId: 'repo',
+      request: {
+        body: 'old',
+        kind: 'body',
+        targetBranch: 'main',
+        publicationBranch: 'existing-mr-source',
+        ...(deliveryMode === undefined ? {} : { deliveryMode }),
+        uploads: [],
+      },
+      consumedRevision: 1,
+      basisId: null,
+      basisDigest: null,
+      reviewReceiptId: null,
+      reviewDecision: null,
+      candidateRef: null,
+      candidateTreeOid: null,
+      evidenceIds: [],
+      result: 'awaiting-request',
+    }
+    const payload = await artifacts.put([
+      {
+        path: 'request.json',
+        content: JSON.stringify({ document: { title: '原始设计' }, instruction: '新条件' }),
+      },
+    ])
+    const events = {
+      async observe() {
+        return { eventId: 'event' }
+      },
+      async subscribe() {},
+      async unsubscribe() {},
+      async pendingDeliveries() {
+        return []
+      },
+      async acceptDelivery() {},
+    }
+    const intake = createGraphCaseIntake({
+      readCase: async () => ({
+        projectionJson: JSON.stringify({
+          case: {
+            id: 'case',
+            typeRef: { typeId: 'graph-development', revision },
+            employeeRef: { id: 'employee' },
+            state: 'waiting',
+            currentWorkItemRef: 'review-design',
+          },
+          contexts: [
+            { typeId: 'graph-development.design-context', stateJson: JSON.stringify(context) },
+          ],
+          activeRound: { workItemRef: 'review-design', executionRef: 'review-task' },
+        }),
+      }),
+      owner: async () => ({ ownerUserId: 'owner' }),
+      cancelTask: async (id) => {
+        canceled.push(id)
+      },
+      launchWork: async (request) => {
+        launches.push(request)
+        return { caseRef: { id: 'follow-on' } }
+      },
+      events: events as unknown as Parameters<typeof createGraphCaseIntake>[0]['events'],
+      humanInputs: { clarificationRounds: async () => [], reviewDecision: async () => null },
+      artifacts,
+    })
+    expect(
+      (
+        await intake.requestWork({
+          caseId: 'case',
+          requestId: 'clarify',
+          kind: 'clarification',
+          withdrawReview: true,
+          payloadRef: payload,
+        })
+      ).queued,
+    ).toBe(true)
+    expect(canceled).toEqual(['review-task'])
+    expect(
+      await intake.followOn({
+        caseId: 'case',
+        requestId: 'next',
+        body: '新条件',
+        artifactRef: payload,
+      }),
+    ).toEqual({ caseId: 'follow-on' })
+    expect(launches[0]).toMatchObject({
+      actorUserId: 'owner',
+      intake: {
+        advanced: { typeOptions: { 'working-branch': 'main' } },
+        idempotencyKey: 'graph-follow-on:case:next',
+        body: expect.stringContaining('原始设计'),
+      },
+    })
+    expect(
+      (launches[0] as { intake: { advanced: { typeOptions: Record<string, string> } } }).intake
+        .advanced.typeOptions,
+    ).toEqual(
+      revision === 1
+        ? { 'working-branch': 'main', 'publication-branch': 'existing-mr-source' }
+        : { 'working-branch': 'main' },
+    )
+  },
+)

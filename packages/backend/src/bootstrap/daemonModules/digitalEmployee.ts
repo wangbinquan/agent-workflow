@@ -37,6 +37,7 @@ import {
   bindCandidateDeliveryParticipant,
 } from '@/modules/source-control/composition'
 import { buildDevelopmentDeliveryDeps } from '@/services/developmentDeliveryDeps'
+import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import { type DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import {
@@ -86,6 +87,11 @@ import {
   graphDevelopmentRequestArtifacts,
 } from '@/modules/development-automation/composition/graphDevelopmentBindings'
 import { composeBuiltinEmployeeJobs } from '@/modules/digital-employee/composition/builtinJobTemplates'
+import { buildGraphDeliveryJobs } from '@/modules/development-automation/composition/graphDeliveryJob'
+import {
+  composeGraphDeliveryLifecycleTypePackage,
+  composeGraphDeliveryLifecycleRuntimeCodec,
+} from '@/modules/development-automation/composition/graphDeliveryLifecycle'
 
 type EmployeeOptions = Parameters<typeof composeDigitalEmployee>[0]
 type WorkItemsInput = Parameters<typeof composeDevelopmentEmployeePlatformWorkItems>[0]
@@ -144,6 +150,8 @@ export interface DaemonDigitalEmployeeInput {
 /** RFC-383: the authoring, HTTP, work-start and OS worker all share this passive session graph. */
 export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployeeInput) {
   const { db, appHome, resources, repository, integration, taskExecution, log } = input
+  const graphDeliveryTypePackage =
+    composeGraphDeliveryLifecycleTypePackage(graphEmployeeTypePackage)
   const employeePrograms = input.adapters?.employeePrograms ?? createProgramArtifactStore(appHome)
   const programToolSource = createArtifactProgramToolSource(employeePrograms)
   const executionContracts = composeExecutionContract({
@@ -166,6 +174,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     typePackageDescriptorJsons: async () => [
       ...(await composeDigitalEmployeeBootstrapReadsFor(db).listTypePackageDescriptorJsons()),
       developmentEmployeeTypePackage.descriptorJson,
+      graphDeliveryTypePackage.descriptorJson,
     ],
   })
   const graphPlatformTools = composeGraphBuiltinResources({
@@ -174,6 +183,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   })
   const platformTools: typeof legacyPlatformTools = {
     async load() {
+      await ensureDigitalEmployeeAgentTemplates(resources.digitalEmployeeAgentTemplates)
       await legacyPlatformTools.load()
       await graphPlatformTools.load()
     },
@@ -281,6 +291,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     repositoryPreparation: repository.developmentWorkspaceRepositoryPreparation,
     sourceControl,
     conflictMerge,
+    graphDelivery: graph.care,
   })
   const reactionExecution = composeReactionExecutionProvider({
     ...composeDatabaseDigitalEmployeeExecutionPorts(db),
@@ -316,6 +327,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       input.developmentPurposeRoot.pipeline.staging,
     ),
     conflictMerge,
+    graphDelivery: graph.care,
     sourceControl: {
       ...candidates,
       ...sourceControl,
@@ -329,7 +341,11 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     appHome,
     writerCutover,
     programArtifacts: employeePrograms,
-    typePackages: [developmentEmployeeTypePackage, graphEmployeeTypePackage],
+    typePackages: [
+      developmentEmployeeTypePackage,
+      graphEmployeeTypePackage,
+      graphDeliveryTypePackage,
+    ],
     typePackageDriftPolicy: input.typePackageDriftPolicy,
     platformTools,
     executionContracts,
@@ -351,7 +367,10 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     connectionCatalog: integration.developmentToolConnections,
     runtime: {
       eventCenter: integration.eventCenter.participant,
-      codecs: [developmentEmployeeRuntimeCodec, graphEmployeeRuntimeCodec],
+      codecs: [
+        developmentEmployeeRuntimeCodec,
+        composeGraphDeliveryLifecycleRuntimeCodec(graphEmployeeRuntimeCodec),
+      ],
       detailProjectionParticipants: [caseDetailProjection, graph.detailProjection],
       reactionExecution,
       platformWorkItems: {
@@ -423,6 +442,12 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
           reactionLaneOrder: [],
         },
       })
+      const mrJobs = buildGraphDeliveryJobs({ catalog: platformTools })
+      const builtinJobs = composeBuiltinEmployeeJobs(db, (request) =>
+        module.commands.publishJobTemplate(request),
+      )
+      await builtinJobs.ensure(mrJobs.defaultJob)
+      await builtinJobs.ensureDraft(mrJobs.pipelineJobDraft)
     },
     executionContracts,
     platformTools,

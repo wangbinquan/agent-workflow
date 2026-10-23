@@ -16,6 +16,7 @@ import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/appl
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { INTERPRETER_SPEC } from '@/modules/task-execution/infrastructure/local/scriptRun'
+import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
 test('graph type has six responsibilities while view combinations are selected within design', () => {
   const type = employeeTypePackageDescriptorSchema.parse(
@@ -108,6 +109,7 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
         (agent) => agent.definition.name === 'graph-development-implementer-v2',
       )!
       const agents = f.tasks.resourceCatalog.digitalEmployeeAgentTemplates
+      await ensureDigitalEmployeeAgentTemplates(agents)
       const legacyId = '00000000000000GRAPHBUILD1'
       const originalBody = readFileSync(
         join(import.meta.dir, 'fixtures/rfc396-implementer-v1.txt'),
@@ -196,6 +198,36 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
       expect(legacyJob).toBeDefined()
       await f.employee.initializeGraph()
       const jobs = await f.employee.module.queries.listJobTemplates(typeRef)
+      const mrJobs = await f.employee.module.queries.listJobTemplates({
+        typeId: 'graph-development',
+        revision: 2,
+      })
+      expect(
+        mrJobs.find((job) => job.id === 'platform:graph-development:job:mr-v1')?.publishedRevision,
+      ).toBe(1)
+      expect(
+        mrJobs.find((job) => job.id === 'platform:graph-development:job:mr-ci-v1')
+          ?.publishedRevision,
+      ).toBeNull()
+      for (const item of [
+        'design-and-clarify',
+        'review-design',
+        'implement-change',
+        'repair-feedback',
+        'classify-pipeline',
+        'repair-pipeline',
+        'repair-conflict',
+      ]) {
+        const available = JSON.parse(
+          f.employee.platformTools.listJson(
+            JSON.stringify({ typeId: 'graph-development', revision: 2 }),
+            item,
+          ),
+        )
+        expect(
+          available.some((tool: { selection: string }) => tool.selection === 'selectable'),
+        ).toBe(true)
+      }
       expect(jobs.find((job) => job.id === 'platform:graph-development:job:v1')).toEqual(legacyJob)
       expect(
         jobs.some(

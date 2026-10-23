@@ -17,6 +17,7 @@ import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
 import { createEmployeeWorkspacePersistence } from '../infrastructure/employeeWorkspacePersistence'
+import type { GraphMrCare } from '../application/graph-development/mrCare'
 import { GIT_METADATA_SKIP_PREFIXES } from '../infrastructure/attemptSupport'
 import {
   protectedRootSnapshotDigest,
@@ -143,6 +144,7 @@ interface DevelopmentEmployeeWorkspaceParticipant {
         readonly baselineSha: string
         readonly platformInputPaths: readonly string[]
         readonly contractProjectionJson?: string
+        readonly materialInstructions?: string
       }
   >
   validate(input: {
@@ -593,6 +595,7 @@ export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
 
 export interface DevelopmentEmployeeWorkspaceCompositionInput {
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly graphDelivery?: Pick<GraphMrCare, 'repairMaterial'>
   readonly persistence: EmployeeWorkspacePersistence
   readonly appHome: string
   /**
@@ -760,9 +763,16 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
       const platformCaseKey = stableIdentityComponent(plan.caseRef.id)
       if (plan.workspacePolicy.mode === 'none') return { kind: 'scratch' }
       const issue = resolveIssue(plan)
+      const graphMaterial = await input.graphDelivery?.repairMaterial({
+        caseId: plan.caseRef.id,
+        roundRef: plan.roundRef,
+      })
+      const graphMaterialInstructions = graphMaterial
+        ? `开始修复前读取 ${graphMaterial.materialDirectory}/care.json 和同目录 implementation.md。${graphMaterial.summary} 保留批准依据、原始决定和测试追溯；需要改变设计时先返回图设计澄清与审核。平台将在发布前重新执行图验证，旧结果不代表当前候选通过。`
+        : null
       const hydrateArtifacts = (targetWorkspacePath: string) =>
-        withAutomationWorkspaceEffects(factory, (effects) =>
-          hydrateFrozenPlatformArtifacts(
+        withAutomationWorkspaceEffects(factory, async (effects) => {
+          const artifacts = await hydrateFrozenPlatformArtifacts(
             {
               appHome: input.appHome,
               workspacePath: targetWorkspacePath,
@@ -770,8 +780,31 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
             },
             factory,
             effects,
-          ),
-        )
+          )
+          if (graphMaterial) {
+            for (const file of graphMaterial.files) {
+              const relative = repoRelativePathSchema.parse(
+                `${graphMaterial.materialDirectory}/${file.path}`,
+              )
+              await ensurePlainDirectoryPath(
+                targetWorkspacePath,
+                relative.split('/').slice(0, -1).join('/'),
+                factory,
+                effects,
+              )
+              const target = factory.resolve(targetWorkspacePath, relative)
+              if (await effects.exists(target)) {
+                if ((await effects.readText(target)) !== file.content)
+                  throw new Error('graph-mr-repair-material-changed')
+              } else await effects.writeText(target, file.content)
+            }
+            artifacts.push({
+              path: graphMaterial.materialDirectory,
+              sourceCaseKey: platformCaseKey,
+            })
+          }
+          return artifacts
+        })
       const platformInputPaths = (
         artifacts: readonly FrozenPlatformArtifactRef[],
       ): readonly string[] => [
@@ -1032,6 +1065,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
           workspacePath: conflict.workspacePath,
           baselineSha: conflict.sourceSha,
           contractProjectionJson: JSON.stringify({ conflictFiles: conflict.conflictPaths }),
+          ...(graphMaterialInstructions ? { materialInstructions: graphMaterialInstructions } : {}),
           platformInputPaths: platformInputPaths(artifacts),
         }
       }
@@ -1146,6 +1180,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         workspacePath: workspacePath(plan.caseRef.id),
         baselineSha: row.baselineSha,
         platformInputPaths: platformInputPaths(artifacts),
+        ...(graphMaterialInstructions ? { materialInstructions: graphMaterialInstructions } : {}),
       }
     },
 

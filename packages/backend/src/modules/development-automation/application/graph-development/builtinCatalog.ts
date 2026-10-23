@@ -26,6 +26,7 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
         implementation: unknown
         label: string
         historical?: boolean
+        typeRevision?: number
       }[]
     | undefined
   let loading: Promise<void> | undefined
@@ -38,7 +39,7 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
     const contractRef = { contractId: `graph-development.${value.item}`, version: 1 }
     const content = {
       schemaVersion: 1,
-      typeRef: GRAPH_EMPLOYEE_TYPE,
+      typeRef: { ...GRAPH_EMPLOYEE_TYPE, revision: value.typeRevision ?? 1 },
       workItemRef: value.item,
       workContractRef: contractRef,
       roleRef: 'primary',
@@ -59,7 +60,7 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
     }
     return {
       id: value.id,
-      typeRef: GRAPH_EMPLOYEE_TYPE,
+      typeRef: content.typeRef,
       workItemRef: value.item,
       content,
       validationReceipt: { ...receipt, receiptDigest: graphDigest(receipt) },
@@ -140,14 +141,28 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
           label: '根据批准依据生成代码与测试',
           historical: true,
         })
+        records.push(
+          ...records
+            .filter((value) => !value.historical)
+            .map((value) => ({
+              ...value,
+              id: value.id.replace(prefix, `${prefix}type-v2:`),
+              typeRevision: 2,
+            })),
+        )
       })())
     },
     listJson(refJson, item) {
       const ref = JSON.parse(refJson) as { typeId: string; revision: number }
       return canonicalJson(
-        ref.typeId === GRAPH_EMPLOYEE_TYPE.typeId && ref.revision === 1
+        ref.typeId === GRAPH_EMPLOYEE_TYPE.typeId && [1, 2].includes(ref.revision)
           ? current()
-              .filter((value) => value.item === item && !value.historical)
+              .filter(
+                (value) =>
+                  value.item === item &&
+                  !value.historical &&
+                  (value.typeRevision ?? 1) === ref.revision,
+              )
               .map(record)
           : [],
       )

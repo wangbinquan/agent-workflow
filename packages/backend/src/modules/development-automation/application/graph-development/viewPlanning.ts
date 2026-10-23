@@ -7,7 +7,6 @@ import {
   GraphViewProposalSchema,
   type GraphDesignActionRequest,
   type GraphProposal,
-  type GraphViewSpec,
 } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
@@ -19,12 +18,19 @@ import { GRAPH_VIEW_CAPABILITIES } from '../../domain/graph-development/viewCapa
 import {
   GRAPH_DEFAULT_PLANNING_BUDGET,
   selectGraphViews,
+  materializeGraphViewPlan,
   type GraphPlanningBudget,
 } from '../../domain/graph-development/selectViews'
 import type { GraphDesignCommands } from './designCommands'
 import type { GraphDesignAssistPort } from '../ports/graphDesignAssist'
 import type { GraphDesignStore, GraphStoredRecord } from '../ports/graphDesignStore'
 import { GRAPH_DESIGN_AUTHORING_RULES } from './toolContracts'
+import type { GraphDesignArtifacts } from '../ports/graphDesignArtifacts'
+import { readAcceptedGraphViewPlan } from './viewPlanningHistory'
+import {
+  graphPlanningScope,
+  mergeGraphPlanningDocument,
+} from '../../domain/graph-development/localPlanningScope'
 
 export const GraphAssistOutputSchema = z
   .object({
@@ -45,13 +51,14 @@ export function graphDesignAssistPrompt(request: Parameters<GraphDesignAssistPor
     authoringRules: GRAPH_DESIGN_AUTHORING_RULES,
     outputSchema: zodToJsonSchema(GraphAssistOutputSchema, { $refStrategy: 'none' }),
     instructions:
-      'Generate alternatives according to the request; preserve pinned views and original human source records. Return a proposal only.',
+      'Generate alternatives according to the request; preserve pinned views and original human source records. Return a proposal only. An anchored local action receives only its dependency-closed scope. Do not invent unseen existing identities or change the global title/goals in a local action. For update-view, return a refreshed candidate with the exact target view ID; a valid candidate may refresh that stale pinned view while keeping it pinned. For other selected-element or selected-path actions, an anchor view ID is only a locator and does not expand the supplied scope.',
   })
 }
 
 export function createGraphViewPlanning(deps: {
   readonly commands: GraphDesignCommands
   readonly store: GraphDesignStore
+  readonly artifacts?: GraphDesignArtifacts
   readonly assist: GraphDesignAssistPort
   readonly budget?: GraphPlanningBudget
   readonly now?: () => number
@@ -101,18 +108,20 @@ export function createGraphViewPlanning(deps: {
           proposalStatus: existingProposal.status,
         })
       const controller = new AbortController()
+      const scope = graphPlanningScope(document, request)
+      const previousPlan = await readAcceptedGraphViewPlan({ ...deps, document: scope.document })
       const running = await deps.commands.finishRecord(record, 'running', {
         request,
-        readSet: graphContentRefs(document),
+        readSet: scope.readSet,
       })
       const key = keyOf(id, request.requestId)
       const promise = (async () => {
         try {
-          const readSet = graphContentRefs(document)
+          const readSet = scope.readSet
           const result = await deps.assist.generate({
             caseId: document.caseId,
             request,
-            document,
+            document: scope.document,
             readSet,
             capabilityCatalogJson: canonicalJson(GRAPH_VIEW_CAPABILITIES),
             planningBudget: budget,
@@ -130,40 +139,18 @@ export function createGraphViewPlanning(deps: {
             output.document.repositoryId !== document.repositoryId
           )
             throw new Error('graph-assist-repository-change')
-          const planningDocument = { ...output.document, views: document.views }
-          invalidateGraphViews(document, planningDocument)
-          const plan = selectGraphViews(planningDocument, output.candidates, budget)
-          const selected = new Set(plan.selectedIds)
-          const candidates = new Map(
-            output.candidates.map((candidate) => [candidate.id, candidate]),
-          )
-          const previous = new Map(document.views.map((view) => [view.id, view]))
-          const views: GraphViewSpec[] = plan.selectedIds.map((viewId) => {
-            const candidate = candidates.get(viewId)
-            const old = previous.get(viewId)
-            if (!candidate) {
-              if (!old) throw new Error('graph-view-plan-selected-missing')
-              return old
-            }
-            return {
-              id: candidate.id,
-              revision: old?.revision ?? 1,
-              title: candidate.title,
-              purpose: candidate.purpose,
-              capabilityRef: candidate.capabilityRef,
-              concernIds: [...new Set(candidate.coverage.map((c) => c.concernId))],
-              modelIds: candidate.modelIds,
-              elementIds: candidate.elementIds,
-              relationIds: candidate.relationIds,
-              sourceIds: candidate.sourceIds,
-              status: 'current',
-              pinned: old?.pinned ?? false,
-              explanation: candidate.rationale,
-              limitations: candidate.limitations,
-            }
+          const planningDocument = { ...output.document, views: scope.document.views }
+          invalidateGraphViews(scope.document, planningDocument)
+          const plan = selectGraphViews(planningDocument, output.candidates, budget, previousPlan, {
+            ...(request.action === 'update-view' && request.anchor?.viewId
+              ? { refreshViewId: request.anchor.viewId }
+              : {}),
           })
-          for (const view of document.views)
-            if (!selected.has(view.id)) views.push({ ...view, status: 'archived' })
+          const views = materializeGraphViewPlan(planningDocument, plan)
+          const proposedDocument = mergeGraphPlanningDocument(document, scope, {
+            ...output.document,
+            views,
+          })
           const proposal: GraphProposal = {
             schemaVersion: 1,
             id: `action:${request.requestId}`,
@@ -174,7 +161,7 @@ export function createGraphViewPlanning(deps: {
             invocationRef: result.invocationRef,
             status: 'proposed',
             explanation: output.explanation,
-            document: { ...output.document, views },
+            document: proposedDocument,
             plan,
             createdAt: now(),
           }

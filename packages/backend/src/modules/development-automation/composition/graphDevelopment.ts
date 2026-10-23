@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   canonicalJson,
   GraphEvidenceBindingSchema,
+  repositoryMaterializationCommit,
   type GraphImplementationBasis,
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -44,6 +45,11 @@ import { graphDigest, staleGraphReads } from '../domain/graph-development/model'
 import { mountGraphDesignRoutes } from '../infrastructure/http/graphDesignRoutes'
 import type { Hono } from 'hono'
 import type { Actor } from '@/auth/actor'
+import { createGraphDeliveryBridge } from './graphDeliveryBridge'
+import { createEmployeeWorkspacePersistence } from '../infrastructure/employeeWorkspacePersistence'
+import { createEmployeePlatformWorkItemPersistence } from '../infrastructure/employeePlatformWorkItemPersistence'
+import { createDevelopmentEmployeeCaseWorkspaceDetailReader } from './digitalEmployeeWorkspace'
+import { projectDevelopmentEmployeeCaseDetail } from './employeeCaseDetailProjection'
 
 export { graphEmployeeTypePackage } from '../application/graph-development/employeeType'
 export { graphEmployeeRuntimeCodec } from '../application/graph-development/employeeCodec'
@@ -126,6 +132,9 @@ export function composeGraphDevelopment(input: {
       return (await workspace.resolveBaseline(request.repositoryId, target)).baseline
         .contentBaseline!
     },
+    async resolveImplementationBaseline({ designId }) {
+      return (await care.continuationWorkspace(designId))?.baseline ?? null
+    },
   }
   const dependencies = { store, artifacts, cases: input.cases, execution, changed: input.changed }
   const commands = createGraphDesignCommands(dependencies)
@@ -159,10 +168,12 @@ export function composeGraphDevelopment(input: {
             }
           }),
       ),
+    continuationWorkspace: (designId) => care.continuationWorkspace(designId),
   })
   const queries = createGraphDesignQueries({ ...dependencies, commands })
   const planning = createGraphViewPlanning({
     store,
+    artifacts,
     commands,
     changed: input.changed,
     assist: {
@@ -185,6 +196,18 @@ export function composeGraphDevelopment(input: {
     verification: input.verification,
     evidence: input.artifacts,
   })
+  const care = createGraphDeliveryBridge({
+    appHome: input.appHome,
+    factory: input.workspace.factory,
+    sourceControl: input.workspace.sourceControl,
+    candidates: input.candidates,
+    workspacePersistence: createEmployeeWorkspacePersistence(input.db),
+    platformPersistence: createEmployeePlatformWorkItemPersistence(input.db),
+    store,
+    commands,
+    execution,
+    verification,
+  })
   const platformWorkItems = createGraphPlatformWorkItems({
     publication: input.publication,
     store,
@@ -193,6 +216,7 @@ export function composeGraphDevelopment(input: {
     workspace,
     verification,
     candidates: input.candidates,
+    mergeRequestDelivery: care,
   })
   async function latestVerification(id: string) {
     const record = (await store.records(id))
@@ -208,12 +232,38 @@ export function composeGraphDevelopment(input: {
         })
       : null
   }
+  async function currentEvidenceTarget(id: string) {
+    const continuation = await care.continuationWorkspace(id)
+    const current = continuation ?? (await workspace.state(id))
+    const candidate = await input.candidates.derive({
+      repositoryBaseline: current.baseline,
+      baselineRepoPath: current.baselineRepoPath,
+      baselineSha: repositoryMaterializationCommit(current.baseline),
+      overlayRoot: current.workspacePath,
+      uploadPlan: current.uploadPlan,
+      uploadsAlreadyPublished: current.uploadsAlreadyPublished,
+      excludePolicyDigest: graphDigest(['.git', '.agent-workflow']),
+      agentOutcomeRef: `graph-evidence:${id}`,
+    })
+    return {
+      candidateTreeOid: candidate.ok ? candidate.receipt.treeOid : null,
+      commitSha: continuation?.remoteHeadSha ?? null,
+      environmentDigest:
+        (await input.verification.environment?.(current.workspacePath))?.digest ?? null,
+    }
+  }
   const detailProjection: EmployeeCaseDetailProjectionParticipant = {
     typeId: GRAPH_EMPLOYEE_TYPE.typeId,
     async projectJson(json) {
       const value = JSON.parse(json) as EmployeeCaseDetailProjectionInputV1
       const context = value.contexts.find((context) => context.typeId === GRAPH_CONTEXT_TYPE)
       const work = context ? GraphEmployeeContextSchema.parse(JSON.parse(context.stateJson)) : null
+      const deliveryDetail = projectDevelopmentEmployeeCaseDetail({
+        snapshot: value,
+        workspace: await createDevelopmentEmployeeCaseWorkspaceDetailReader(input.db).getByCaseId(
+          value.case.id,
+        ),
+      })
       return canonicalJson({
         schemaVersion: 1,
         input: {
@@ -230,9 +280,9 @@ export function composeGraphDevelopment(input: {
             ? { 'working-branch': work.request.targetBranch }
             : {},
         },
-        workspace: null,
-        changeCandidate: null,
-        delivery: null,
+        workspace: deliveryDetail.workspace,
+        changeCandidate: deliveryDetail.changeCandidate,
+        delivery: deliveryDetail.delivery,
       })
     },
   }
@@ -247,6 +297,7 @@ export function composeGraphDevelopment(input: {
     queries,
     planning,
     workspace,
+    care,
     platformWorkItems,
     detailProjection,
     progress: { observe: consumption.progress },
@@ -265,20 +316,45 @@ export function composeGraphDevelopment(input: {
         : null
       const currentProfiles: Record<string, string> = {}
       for (const profile of await profiles.list())
-        if (profile.publishedRevision)
-          currentProfiles[profile.id] =
+        if (profile.publishedRevision && !profile.archivedAt) {
+          const digest =
             (await profiles.getRevision(profile.id, profile.publishedRevision))?.contentDigest ?? ''
-      const workspaceState = latest ? await workspace.state(id) : null
-      const environment = workspaceState
-        ? await input.verification.environment?.(workspaceState.workspacePath)
-        : null
-      return await queries.evidence(id, {
+          currentProfiles[profile.id] = digest
+          currentProfiles[`${profile.id}@${profile.publishedRevision}`] = digest
+        }
+      // Approved work pins an immutable profile revision. Publishing or
+      // archiving its resource does not silently replace or revoke that pin.
+      for (const link of links.filter((link) => link.kind === 'evidence')) {
+        const ref = GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson)).profileRef
+        if (ref)
+          currentProfiles[`${ref.id}@${ref.revision}`] =
+            (await profiles.getRevision(ref.id, ref.revision))?.contentDigest ?? ''
+      }
+      // A retained passing receipt describes an earlier tree. Read the active
+      // workspace so a repair invalidates it even before the next verification.
+      const current = latest ? await currentEvidenceTarget(id).catch(() => null) : null
+      const projected = await queries.evidence(id, {
         basisDigest: latest?.basisDigest ?? null,
-        candidateTreeOid: latest?.candidate.treeOid ?? null,
+        candidateTreeOid: current?.candidateTreeOid ?? null,
         profileDigests: currentProfiles,
-        environmentDigest: environment?.digest ?? null,
-        commitSha,
+        environmentDigest: current?.environmentDigest ?? null,
+        commitSha: current?.commitSha ?? commitSha,
       })
+      const approvedBasis =
+        latest && current?.candidateTreeOid === latest.candidate.treeOid
+          ? await commands.basis(id, latest.basisId).catch(() => null)
+          : null
+      const candidate =
+        approvedBasis &&
+        staleGraphReads(await commands.document(id), approvedBasis.basis.readSet).length === 0
+          ? {
+              basisId: approvedBasis.basis.id,
+              basisDigest: approvedBasis.basis.digest,
+              candidateTreeOid: current!.candidateTreeOid!,
+              obligationIds: approvedBasis.basis.obligationIds,
+            }
+          : null
+      return { ...projected, candidate }
     },
     async verificationProfiles() {
       return await Promise.all(
@@ -309,16 +385,20 @@ export function composeGraphDevelopment(input: {
     ) {
       const basis = (await commands.basis(id, request.basisId)).basis
       const current = await latestVerification(id)
+      const target = await currentEvidenceTarget(id)
       if (
         !current ||
         current.basisDigest !== basis.digest ||
-        current.candidate.treeOid !== request.candidateTreeOid
+        current.candidate.treeOid !== request.candidateTreeOid ||
+        target.candidateTreeOid !== request.candidateTreeOid ||
+        staleGraphReads(await commands.document(id), basis.readSet).length > 0
       )
         throw new Error('graph-acceptance-candidate-mismatch')
       if (
         !request.obligationIds.length ||
         request.obligationIds.some(
           (id) =>
+            !basis.obligationIds.includes(id) ||
             !basis.document.obligations.some(
               (obligation) => obligation.id === id && obligation.verification.kind === 'manual',
             ),

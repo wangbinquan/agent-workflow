@@ -19,6 +19,7 @@ export const GraphEmployeeContextSchema = z
         kind: z.enum(['body', 'files', 'body-and-files']),
         targetBranch: z.string().nullable(),
         publicationBranch: z.string().nullable().optional(),
+        deliveryMode: z.enum(['internal-candidate', 'merge-request']).optional(),
         uploads: z.array(
           z
             .object({
@@ -47,6 +48,7 @@ export const GraphEmployeeContextSchema = z
       'verification-failed',
       'verified',
       'delivered',
+      'monitoring',
     ]),
   })
   .strict()
@@ -262,6 +264,7 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
     let state: GraphEmployeeContext = value
     let status: 'ok' | 'needs-input' | 'blocked' = 'ok'
     let artifactRefs = record.artifactRefs
+    const deliveryPatches: z.infer<typeof normalizedOutputSchema>['contextPatches'] = []
     switch (item) {
       case 'understand-request': {
         const data = graphResultSchemas[item].parse(result.result)
@@ -307,7 +310,28 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
       }
       case 'deliver-result': {
         const data = graphResultSchemas[item].parse(result.result)
-        state = { ...value, result: 'delivered' }
+        const mrDelivery = value.request.deliveryMode === 'merge-request'
+        if (mrDelivery && !data.mergeRequestDelivery)
+          throw new Error('graph-mr-delivery-handoff-missing')
+        state = { ...value, result: mrDelivery ? 'monitoring' : 'delivered' }
+        if (mrDelivery) {
+          const contexts = contextsSchema.parse(JSON.parse(envelope.contextsJson))
+          for (const [typeId, stateJson] of [
+            ['development.issue-handling', data.mergeRequestDelivery!.issueStateJson],
+            ['development.change-candidate', data.mergeRequestDelivery!.candidateStateJson],
+          ] as const) {
+            const current = contexts.find((context) => context.typeId === typeId)
+            deliveryPatches.push({
+              contextId: current?.id ?? null,
+              contextTypeId: typeId,
+              schemaVersion: 1,
+              expectedRevision: current?.revision ?? null,
+              lifecycleState: 'active',
+              stateJson,
+              artifactRefs: data.artifactRefs,
+            })
+          }
+        }
         artifactRefs = [...new Set([...artifactRefs, ...data.artifactRefs])]
         break
       }
@@ -326,7 +350,7 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
             schemaVersion: 1,
             expectedRevision: record.revision,
             lifecycleState:
-              item === 'deliver-result'
+              state.result === 'delivered'
                 ? 'terminal'
                 : status === 'needs-input'
                   ? 'waiting'
@@ -334,6 +358,7 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
             stateJson: JSON.stringify(state),
             artifactRefs,
           },
+          ...deliveryPatches,
         ],
         effectSuggestions: [],
         artifactRefs,
@@ -346,7 +371,14 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
       .passthrough()
       .parse(JSON.parse(json))
     const output = normalizedOutputSchema.parse(JSON.parse(request.outputJson))
-    const terminal = request.workItemRef === 'deliver-result' && output.status === 'ok'
+    const graphPatch = output.contextPatches.find(
+      (patch) => patch.contextTypeId === GRAPH_CONTEXT_TYPE,
+    )
+    const terminal =
+      request.workItemRef === 'deliver-result' &&
+      output.status === 'ok' &&
+      graphPatch !== undefined &&
+      GraphEmployeeContextSchema.parse(JSON.parse(graphPatch.stateJson)).result === 'delivered'
     const next =
       output.status === 'ok' && !terminal ? (request.allowedNextWorkItemRefs[0] ?? null) : null
     return JSON.stringify({

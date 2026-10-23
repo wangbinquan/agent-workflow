@@ -116,8 +116,9 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         return {
           ...store,
           async ensureTypePackage(...args) {
-            const typeId = args[0].descriptor.typeRef.typeId
-            initializations[typeId] = (initializations[typeId] ?? 0) + 1
+            const { typeId, revision } = args[0].descriptor.typeRef
+            const key = typeId === 'graph-development' ? `${typeId}@${revision}` : typeId
+            initializations[key] = (initializations[key] ?? 0) + 1
             return store.ensureTypePackage(...args)
           },
         }
@@ -128,12 +129,17 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         await session.module.maintenance.ready()
         const afterBoot = { ...initializations }
         await http.module.queries.listTypes()
-        expect(afterBoot).toEqual({ development: 1, 'graph-development': 1 })
+        expect(afterBoot).toEqual({
+          development: 1,
+          'graph-development@1': 1,
+          'graph-development@2': 1,
+        })
         // Preserve the former-wiring control for each registered type: a second
-        // module initializes both twice; shared HTTP reuses each boot instance.
+        // module initializes every revision twice; shared HTTP reuses each boot instance.
         expect(initializations).toEqual({
           development: former ? 2 : 1,
-          'graph-development': former ? 2 : 1,
+          'graph-development@1': former ? 2 : 1,
+          'graph-development@2': former ? 2 : 1,
         })
         expect(http.module === session.module).toBe(!former)
         expect(http.activityOperations === session.activityOperations).toBe(!former)

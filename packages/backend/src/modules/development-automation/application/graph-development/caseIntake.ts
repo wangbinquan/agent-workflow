@@ -96,7 +96,9 @@ export function createGraphCaseIntake(input: {
           advanced: {
             typeOptions: {
               ...(work.request.targetBranch ? { 'working-branch': work.request.targetBranch } : {}),
-              ...(work.request.publicationBranch
+              // A follow-on MR has its own candidate and remote-head history. Omitting the
+              // source branch lets delivery allocate the new Case's branch independently.
+              ...(work.request.deliveryMode !== 'merge-request' && work.request.publicationBranch
                 ? { 'publication-branch': work.request.publicationBranch }
                 : {}),
             },

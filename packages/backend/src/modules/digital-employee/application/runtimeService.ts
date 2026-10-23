@@ -887,6 +887,7 @@ export class DigitalEmployeeRuntimeService {
             schemaVersion: 1,
             caseRef: caseId,
             employeeRef,
+            employeeTypeRef: revision.content.typeRef,
             workScopeJson: JSON.stringify(scope.encodedScope),
             receivedAt: now,
             intake: {
@@ -2401,6 +2402,8 @@ export class DigitalEmployeeRuntimeService {
               JSON.stringify({
                 schemaVersion: 1,
                 invocationRef: invocationId,
+                caseRef: childCaseId,
+                employeeTypeRef: target.content.typeRef,
                 parentCaseRef: { id: parentCase.id, revision: parentCase.revision },
                 targetEmployeeRef: binding.targetEmployeeRef,
                 targetWorkScopeJson: JSON.stringify(targetScope.encodedScope),

@@ -21,8 +21,11 @@ export function createGraphImplementationBasis(input: {
   for (const id of included)
     if (!document.elements.some((item) => item.id === id))
       throw new Error(`graph-baseline-unknown-element:${id}`)
+  const scopeRefs = graphScopeContentRefs(document, [...included])
+  const scopeIds = new Set(scopeRefs.map((ref) => ref.id))
   for (const concern of document.concerns) {
-    if (concern.priority === 'required' && concern.disposition === 'open')
+    const relevant = scopeIds.has(concern.id) || concern.resolutionIds.length === 0
+    if (relevant && concern.priority === 'required' && concern.disposition === 'open')
       throw new Error(`graph-baseline-unresolved-concern:${concern.id}`)
   }
   const obligations = document.obligations.filter((item) =>
@@ -138,7 +141,7 @@ export function createGraphImplementationBasis(input: {
     includedElementIds: [...included].sort(),
     excludedElementIds,
     obligationIds: obligations.map((item) => item.id),
-    readSet: graphScopeContentRefs(document, [...included]),
+    readSet: scopeRefs,
     toolContractVersion: 1,
     files,
     digest: graphDigest(files),

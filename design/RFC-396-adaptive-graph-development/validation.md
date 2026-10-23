@@ -1,5 +1,27 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-22 MR 能力补齐与全面回顾：当前候选
+
+本轮生产和用例已完成，集中验证正在收口，RFC 仍 In Progress。旧版内部交付证据在下方保留，不外推为新的 MR 能力通过。
+
+| 范围 | 本轮结果与证据界限 |
+| --- | --- |
+| PostgreSQL，全部 `rfc396-*.test.ts` | **156 pass / 0 fail，909 expect，24 files，168.47s**；真实专用 PostgreSQL，不是 SQLite 推断。日志 `/tmp/rfc396-mr-postgresql-central.log` |
+| SQLite，首轮 24 files | **147 pass / 8 fail，862 expect**；原失败如实保留。2 个 runtime 新断言形状、4 个局部 fixture 非法修改来源、1 个旧人工验收 fixture 不可读、1 个应用装配缺共享 MR 修复工具初始化 |
+| SQLite，失败范围复验 | runtime/jobs/intake **17/0**；local-planning/review-regressions **17/0**；verification **13/0**；HTTP/registration 通过。未重跑未变化的整个集合，不将重叠结果重复累计 |
+| 既有装配回归 | RFC-383 guard 分别追踪 graph@1 / graph@2，保留 former-wiring 对照；修后 **12/0，57 expect**。默认 MR 工具在 load 时先确保共享内置 agents，真实 HTTP 应用启动通过 |
+| 前端交互 | 终止态 **6/0**；人工验收候选/范围变化 **11/0**；工作区修后 **26/0**（含实现门发现的两条恢复旅程）；合计覆盖 **43 个独立用例**，三文件结果分别记录 |
+| 独立实现门 | **PASS**；两处 UI 旅程回归修复后定向复核通过，详见 [implementation-gate](./implementation-gate.md) |
+| 静态 | backend / frontend 初轮修后 `tsc --noEmit` 通过；backend 默认 Node 4 GiB heap OOM，8 GiB 完成。末次共享树前端检查又出现 3 处并发错误：非本任务 `shared/src/schemas/task.ts` 的 `taskExecutionKind` 新增 `digital-employee`，而 `TaskSubjectLink.tsx` / `tasks.new.tsx` 尚未覆盖。实际 diff 已核实，未代改或纳入提交；本任务新增测试的参数类型已修。任务路径 ESLint 通过，最终整仓结论以本次 exact-SHA CI 为准 |
+| MR E2E | 三个既有图旅程已适配 graph@2，保留主要图/审核/证据断言，并增加同 Case MR 创建、缺 CI 不误绿、外部 merged/closed 观测终结；模型与 code host 是受控 fixture。当前尚未执行 |
+| 真人浏览器 | 当前 CUA inventory 为 apps=[] / browsers=[]，创建 iab 返回 `Browser is not available: iab`；不宣称本轮真人界面验收通过 |
+| 发布与 hosted CI | 本轮候选尚未提交。最终必须记录实际提交与 exact-SHA hosted CI；此前 `67795ed462` 的结果不能证明新代码 |
+
+新增实现与恢复边界见 [全面回顾](./review-and-mr-parity.md)，岗位与 CI 连接使用方式见 [usage](./usage.md)。本轮未修改旧托管实例或其镜像。
+
+
+**2026-10-22 全面回顾后的当前裁决：需要修改后再验收。** 以下“功能验收完成”是前一轮范围的历史记录。本轮确认 R01～R10 功能/可用性缺口，以及 MR 提交和持续看护未接入；新增范围见 [review-and-mr-parity.md](./review-and-mr-parity.md)。原浏览器旅程含 API 建立工作和提交澄清，不能当成全程 UI 可用性证明。新的 MR 生命周期、修复和 UI 验收尚未完成。
+
 2026-10-22 当前功能验收已完成：三个真实模型旅程已交付（预约 24/0、通知 44/0、已有模块 13/0）；实际托管 Case 已 terminal / graph-development.delivered，独立测试 1/0、6 assertions，原始证据和产品入口均已读回。最新修复源码 `67795ed462` 的主 CI 39814553963 为 49/49 success；共享 main 后继整体 CI 尚有失败，RFC 保持 In Progress，功能验收与最终仓库 CI 分列。精确版本见 [真实模型汇总](./real-model-summary.json)、[托管完整回执](./hosted-completion-evidence.json) 和 [失败及恢复历史](./real-model-acceptance.md)。
 
 以下为 2026-10-21 首轮候选及后续修复的历史验证记录；最新状态见上方和真实验收文档。用户批准完整实现与远端交付；此记录分别说明已证实内容和尚未证实内容，不以单个通过结果宣称 RFC Done。

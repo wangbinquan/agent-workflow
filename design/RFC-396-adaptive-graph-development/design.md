@@ -3,6 +3,7 @@
 > 状态：In Progress；调研基线 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8`（2026-10-21）。
 > 本文保留设计阶段的架构合同与研究基线；实际实现落点见 §1.1，发布与运行证据见 [validation](./validation.md)。不能将下列历史基线行号当作当前 HEAD 行号。
 > 产品范围、裁决及 AC 见 [proposal](./proposal.md)，工程任务与证据状态见 [plan](./plan.md)。
+> 2026-10-22 增补：MR 全生命周期、版本兼容、同 Case 工作区交接、修复后图验证和全面回顾修复合同见 [review-and-mr-parity](./review-and-mr-parity.md)。这是当前实施范围，优先于下文历史上“内部提交即完成”的表述。
 
 ## 1. 基线与接入依据
 

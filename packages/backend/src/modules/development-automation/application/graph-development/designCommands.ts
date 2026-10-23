@@ -340,9 +340,30 @@ export function createGraphDesignCommands(deps: GraphDesignDependencies) {
       const record = await beginRecord(id, `preview:${input.requestId}`, 'preview', input)
       if (record.status === 'completed')
         return await basis(id, (JSON.parse(record.payloadJson) as { basisId: string }).basisId)
-      const current = await document(id)
-      if (current.revision !== input.expectedRevision)
+      const rebaseRequestId = `preview-baseline:${input.requestId}`
+      const rebased = await deps.store.record(id, `change:${rebaseRequestId}`)
+      let current = rebased
+        ? await readRevision(JSON.parse(rebased.payloadJson) as GraphStoredRevision)
+        : await document(id)
+      if (!rebased && current.revision !== input.expectedRevision)
         throw new ConflictError('graph-design-revision-conflict', `当前版本为 ${current.revision}`)
+      if (!rebased) {
+        const baseline = await deps.execution.resolveImplementationBaseline?.({
+          caseId: current.caseId,
+          designId: id,
+          repositoryId: current.repositoryId,
+        })
+        if (baseline && graphDigest(baseline) !== graphDigest(current.repositoryBaseline)) {
+          const next = { ...current, revision: current.revision + 1, repositoryBaseline: baseline }
+          invalidateGraphViews(current, next)
+          current = await save(
+            next,
+            current.revision,
+            rebaseRequestId,
+            graphDigest({ input, baseline }),
+          )
+        }
+      }
       let value: GraphImplementationBasis
       try {
         value = createGraphImplementationBasis({

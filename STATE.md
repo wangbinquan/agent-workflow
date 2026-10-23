@@ -18,6 +18,10 @@
 
 ## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
+**2026-10-22 本轮 MR 补齐进度**：graph@2 共享原 MR 生命周期、同 Case 候选交接/修复/独立重验、完整 CI 岗位配置入口与界面复核修复已落代码。真实 PostgreSQL 156/0；SQLite 首轮失败按原因修复，相关范围复验通过；43 项独立前端交互与双包类型检查已有证据。CUA 无可用浏览器，本轮真人界面、MR E2E、真实企业连接与 exact-SHA CI 仍单列待结论，未部署旧托管实例。详细记录见 [本轮验收](design/RFC-396-adaptive-graph-development/validation.md) 与 [完整问题账本](design/RFC-396-adaptive-graph-development/review-and-mr-parity.md)。
+
+**2026-10-22 回顾与范围补齐进行中**：用户要求全面复盘易用性/可读性/功能正确性，并明确新数字人必须继承原数字人的 MR 提交和监控能力，允许本任务内多个 agent 并行执行。已确认当前 graph@1 只到内部提交/可选分支推送；此前“只剩 CI 收尾”不再成立。R01～R10 与 graph@2 的 MR 创建更新、评审/CI/冲突修复、审批协同、外部合入/关闭和修复后图验证见 [补充合同](design/RFC-396-adaptive-graph-development/review-and-mr-parity.md)。完整开发与用例后集中验收；下文运行证据保留其历史范围。
+
 用户已明确授权“完整实现RFC并提交上库到远端”，并回复“1.这个不阻塞你 2.允许”：并发 RFC-395 不阻止本任务继续，虚构材料可发送到 `opencode-go/deepseek-v4.1-flash`。[RFC-396](design/RFC-396-adaptive-graph-development/proposal.md) 保持澄清、自适应图组合、代码生成、独立验证和交付完整范围；未收缩为固定图集或图编辑器。
 
 **2026-10-22 真实模型三案例已交付**：在同一隔离单机数据库上运行 `ccde54faf`，预约 v9、通知 v9、已有模块 v8 均完成原生审核、代码生成、独立 profile、代理人工核对，Case 为 terminal / delivered。实际测试分别为 24/0、44/0、13/0；图组合分别为 state+decision-table+sequence、state+decision-table、decision-table+flow。预约的二元幂等键碰撞真实反例进入设计变更并经模型修复、测试和独立重放确认。六/三/三条原始回答及 provisional 状态保留，不编造负责人或复查日期；这是代理虚构案例验收，不是长期用户效果研究。版本、tree、候选提交、profile 和 receipt 见 [机器可读汇总](design/RFC-396-adaptive-graph-development/real-model-summary.json)、[真实验收](design/RFC-396-adaptive-graph-development/real-model-acceptance.md) 与 [自适应对照](design/RFC-396-adaptive-graph-development/adaptive-comparison.md)。

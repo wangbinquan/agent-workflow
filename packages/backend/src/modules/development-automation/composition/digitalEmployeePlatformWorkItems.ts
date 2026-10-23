@@ -13,6 +13,10 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { EmployeePlatformWorkItemPersistence } from '../application/ports/employeePlatformWorkItemPersistence'
+import type {
+  GraphMrBeforePublishInput,
+  GraphMrPublicationVerdict,
+} from '../application/graph-development/mrCare'
 import { createEmployeePlatformWorkItemPersistence } from '../infrastructure/employeePlatformWorkItemPersistence'
 import type {
   ApprovalGatewayPort,
@@ -39,6 +43,10 @@ import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifact
 import { EvidenceStore } from '../infrastructure/evidenceStore'
 import { createSelectedPipelineImportAdapter } from '../application/pipelineEvidenceImport'
 import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
+import {
+  usesMinimalMergeRequestToolContracts,
+  usesTargetAwareMergeRequestPipeline,
+} from '../domain/mergeRequestLifecycle'
 
 interface DevelopmentReactionPlan {
   readonly roundRef: string
@@ -251,11 +259,11 @@ function contextsOf(plan: DevelopmentReactionPlan): Context[] {
 }
 
 function isTargetAwarePipelinePlan(plan: DevelopmentReactionPlan): boolean {
-  return plan.employeeTypeRef?.typeId === 'development' && plan.employeeTypeRef.revision >= 8
+  return usesTargetAwareMergeRequestPipeline(plan.employeeTypeRef)
 }
 
 function usesMinimalToolContracts(plan: DevelopmentReactionPlan): boolean {
-  return plan.employeeTypeRef?.typeId === 'development' && plan.employeeTypeRef.revision >= 9
+  return usesMinimalMergeRequestToolContracts(plan.employeeTypeRef)
 }
 
 function issueOf(contexts: readonly Context[]) {
@@ -447,6 +455,10 @@ export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
   readonly reactionRounds: EmployeeReactionRoundQueryPort
   readonly approvalGateway?: ApprovalGatewayPort
   readonly pipelineEvidence?: PipelineEvidencePort
+  /** Graph care revalidates the exact repaired tree against its approved basis. */
+  readonly graphDelivery?: {
+    beforePublish(request: GraphMrBeforePublishInput): Promise<GraphMrPublicationVerdict>
+  }
   readonly repoRemote: RepoRemotePort
   readonly mrEffects: {
     reply(
@@ -688,7 +700,7 @@ export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
   readonly now?: () => number
 }
 
-function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
+export function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
   input: DevelopmentEmployeePlatformWorkItemsCompositionInput,
 ): {
   execute(
@@ -740,6 +752,16 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
       const output = (value: Parameters<typeof platformOutput>[1]) => platformOutput(plan, value)
       const contexts = contextsOf(plan)
       const targetAwarePipeline = isTargetAwarePipelinePlan(plan)
+      if (
+        plan.employeeTypeRef?.typeId === 'graph-development' &&
+        plan.employeeTypeRef.revision >= 2 &&
+        ['prepare-change', 'publish-mr', 'publish-conflict'].includes(plan.workItemRef) &&
+        !input.graphDelivery
+      )
+        return output({
+          status: 'blocked',
+          summary: 'graph-mr-verification-binding-missing：图研发发布校验尚未接入，不能提交候选。',
+        })
       if (plan.workItemRef === 'prepare-materials') {
         const issue = issueOf(contexts)
         if (
@@ -1572,6 +1594,21 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
             summary: `无法形成修改候选：${derived.code} · ${derived.detail}`,
           })
         }
+        const verified = await input.graphDelivery?.beforePublish({
+          caseId: plan.caseRef.id,
+          roundRef: plan.roundRef,
+          workItemRef: 'prepare-change',
+          workspacePath: workspacePath(plan.caseRef.id),
+          baselineRepoPath: repository.localPath,
+          baselineSha: row.baselineSha,
+          expectedTreeOid: derived.receipt.treeOid,
+          expectedCandidateRef: derived.receipt.candidateRef,
+        })
+        if (verified && !verified.ok)
+          return output({
+            status: 'blocked',
+            summary: `图设计校验未通过：${verified.code} · ${verified.detail}`,
+          })
         const timestamp = now()
         await input.persistence.insertCandidate({
           candidateRef: derived.receipt.candidateRef,
@@ -1646,6 +1683,21 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
           })
           .passthrough()
           .parse(JSON.parse(candidate.receiptJson) as unknown)
+        const verified = await input.graphDelivery?.beforePublish({
+          caseId: plan.caseRef.id,
+          roundRef: plan.roundRef,
+          workItemRef: 'publish-mr',
+          workspacePath: workspacePath(plan.caseRef.id),
+          baselineRepoPath: repository.localPath,
+          baselineSha: candidate.baselineSha,
+          expectedTreeOid: candidate.treeOid,
+          expectedCandidateRef: candidate.candidateRef,
+        })
+        if (verified && !verified.ok)
+          return output({
+            status: 'blocked',
+            summary: `图设计校验未通过：${verified.code} · ${verified.detail}`,
+          })
         const committed =
           candidate.commitSha === null
             ? await delivery.commit({
@@ -1874,6 +1926,20 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
             summary: `平台收口冲突修复失败：${finished.code} · ${finished.detail}`,
           })
         }
+        const verified = await input.graphDelivery?.beforePublish({
+          caseId: plan.caseRef.id,
+          roundRef: plan.roundRef,
+          workItemRef: 'publish-conflict',
+          workspacePath: conflict.workspacePath,
+          baselineRepoPath: repository.localPath,
+          baselineSha: conflict.sourceSha,
+          expectedTreeOid: finished.treeOid,
+        })
+        if (verified && !verified.ok)
+          return output({
+            status: 'blocked',
+            summary: `图设计校验未通过：${verified.code} · ${verified.detail}`,
+          })
         const alreadyPublished =
           row.baselineSha === finished.mergeCommitSha &&
           row.remoteHeadSha === finished.mergeCommitSha

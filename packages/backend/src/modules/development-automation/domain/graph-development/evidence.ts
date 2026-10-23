@@ -25,7 +25,8 @@ export function projectGraphEvidence(
     reasons.push('different-candidate-content')
   if (
     evidence.profileRef &&
-    target.profileDigests[evidence.profileRef.id] !== evidence.profileRef.digest
+    (target.profileDigests[`${evidence.profileRef.id}@${evidence.profileRef.revision}`] ??
+      target.profileDigests[evidence.profileRef.id]) !== evidence.profileRef.digest
   )
     reasons.push('different-verification-profile')
   if (

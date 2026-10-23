@@ -5,7 +5,19 @@ import type { ReactNode } from 'react'
 import { api, ApiError } from '@/api/client'
 import { GraphDesignWorkspace } from '@/components/digital-employees/GraphDesignWorkspace'
 import { GraphDesignEvidence } from '@/components/digital-employees/GraphDesignEvidence'
-import type { GraphWorkspaceData } from '@/components/digital-employees/graphDesignModel'
+import {
+  graphDocumentChanges,
+  rebaseGraphDraft,
+  type GraphWorkspaceData,
+  type GraphEvidenceData,
+} from '@/components/digital-employees/graphDesignModel'
+import { GraphDesignDelivery } from '@/components/digital-employees/GraphDesignDelivery'
+import {
+  graphDeliveryStatus,
+  projectGraphDeliveryCare,
+  type GraphDeliveryProgress,
+  type GraphMergeRequestDelivery,
+} from '@/components/digital-employees/graphDeliveryModel'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -136,17 +148,155 @@ afterEach(() => {
   for (const client of clients.splice(0)) client.clear()
   vi.restoreAllMocks()
 })
-function open(canOperate = true) {
+function open(canOperate = true, deliveryProgress?: GraphDeliveryProgress) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   clients.push(client)
   render(
     <QueryClientProvider client={client}>
-      <GraphDesignWorkspace caseId="case" canOperate={canOperate} executionAvailable />
+      <GraphDesignWorkspace
+        caseId="case"
+        canOperate={canOperate}
+        executionAvailable
+        deliveryProgress={deliveryProgress}
+      />
     </QueryClientProvider>,
   )
 }
+
+test('a local proposal preview does not describe unread branches as deletions', () => {
+  data.document.elements.push({
+    ...data.document.elements[0]!,
+    id: 'notifications',
+    label: '独立通知',
+  })
+  const local = structuredClone(data.document)
+  local.elements = [local.elements[0]!]
+  local.elements[0]!.description = '预约新规则'
+  const changes = graphDocumentChanges(data.document, local, [{ id: 'booking' }])
+  expect(changes.map((change) => change.id)).toEqual(['elements:booking'])
+  local.elements.push({ ...local.elements[0]!, id: 'cancel', label: '取消预约' })
+  expect(
+    graphDocumentChanges(data.document, local, [{ id: 'booking' }]).map((change) => change.id),
+  ).toEqual(['elements:booking', 'elements:cancel'])
+})
+
+test('selection actions do not expand to the whole displayed view', async () => {
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: '预约规则' }))
+  fireEvent.click(screen.getByRole('button', { name: '解释所选内容' }))
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).getByText(/booking（含关联依赖）/)).toBeTruthy()
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '解释预约唯一性' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: '提交请求' }))
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(api.post).mock.calls[0]?.[1]).toMatchObject({
+    action: 'explain',
+    anchor: { elementIds: ['booking'] },
+  })
+  expect((vi.mocked(api.post).mock.calls[0]?.[1] as { anchor: unknown }).anchor).not.toHaveProperty(
+    'viewId',
+  )
+})
+
+test('switching JSON and form editing preserves changes and refuses to discard invalid JSON', async () => {
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: '编辑设计与验证安排' }))
+  const dialog = screen.getByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox', { name: '设计标题' }), {
+    target: { value: '表单中的标题' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: '编辑完整语义模型' }))
+  expect(within(dialog).queryByRole('textbox', { name: '设计标题' })).toBeNull()
+  const input = within(dialog).getByRole('textbox', {
+    name: '语义模型（含关系和子模型）',
+  }) as HTMLTextAreaElement
+  expect(JSON.parse(input.value).title).toBe('表单中的标题')
+  const next = { ...JSON.parse(input.value), title: 'JSON 中补充的标题' }
+  fireEvent.change(input, { target: { value: '{ invalid' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: '返回表单编辑' }))
+  expect(within(dialog).getByDisplayValue('{ invalid')).toBeTruthy()
+  expect(within(dialog).queryByRole('textbox', { name: '设计标题' })).toBeNull()
+  fireEvent.change(input, { target: { value: JSON.stringify(next) } })
+  fireEvent.click(within(dialog).getByRole('button', { name: '返回表单编辑' }))
+  expect(within(dialog).getByDisplayValue('JSON 中补充的标题')).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: '预览修改' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存这些修改' }))
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(api.post).mock.calls[0]?.[1]).toMatchObject({
+    document: { title: 'JSON 中补充的标题' },
+  })
+})
+
+test('a large directory searches all relations and navigates beyond the element page count', async () => {
+  const original = vi.mocked(api.get).getMockImplementation()!
+  vi.mocked(api.get).mockImplementation((async (
+    path: string,
+    query?: { offset?: number; search?: string },
+  ) => {
+    if (path.includes('/views/'))
+      return {
+        view: data.document.views[0],
+        available: true,
+        renderings: [],
+        elements: query?.offset ? [] : data.document.elements,
+        relations: [
+          {
+            id: 'edge',
+            from: 'booking',
+            to: 'booking',
+            label: '有空位时继续',
+            condition: 'remaining > 0',
+          },
+        ],
+        scope: {
+          total: 1,
+          completeTotal: 301,
+          offset: query?.offset ?? 0,
+          limit: 50,
+          truncated: false,
+        },
+        relationScope: {
+          total: query?.search ? 1 : 300,
+          completeTotal: 300,
+          offset: query?.offset ?? 0,
+          limit: 50,
+          truncated: true,
+        },
+      }
+    return original(path, query)
+  }) as typeof api.get)
+  open()
+  expect(await screen.findByText('当前视图较大，使用分页目录定位')).toBeTruthy()
+  expect(screen.getByRole('button', { name: /remaining > 0/ })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(api.get)
+        .mock.calls.some(
+          ([path, query]) =>
+            path.includes('/views/') && (query as { offset?: number })?.offset === 50,
+        ),
+    ).toBe(true),
+  )
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索当前视图的元素与关系' }), {
+    target: { value: '有空位' },
+  })
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(api.get)
+        .mock.calls.some(
+          ([path, query]) =>
+            path.includes('/views/') &&
+            (query as { search?: string; offset?: number })?.search === '有空位' &&
+            (query as { offset?: number }).offset === 0,
+        ),
+    ).toBe(true),
+  )
+})
 test('raw command receipts and logs can be inspected and exported by a reader', async () => {
   vi.mocked(api.get).mockResolvedValue({
     files: [
@@ -309,9 +459,397 @@ test('a failed intermediate import remains visible and is not retried as a model
     updatedAt: 1,
   })
   open()
-  expect(await screen.findByText('设计导入 1 · failed')).toBeTruthy()
+  expect(await screen.findByText('设计导入 1 · 失败')).toBeTruthy()
   expect(screen.queryByText('import-error:x · failed')).toBeNull()
   expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+})
+
+// RFC-396 review R01: scope and provenance edits must never disappear from review.
+test('design comparison includes title, goals and original sources', () => {
+  const next = structuredClone(data.document)
+  next.title = '新的预约方案'
+  next.goals = ['允许同一时段重复预约']
+  next.sources.push({
+    id: 'material-2',
+    kind: 'material',
+    artifactRef: 'request',
+    digest: 'f'.repeat(64),
+    label: '新增约束',
+  })
+  const changes = graphDocumentChanges(data.document, next)
+  expect(changes.map((item) => item.field)).toEqual(['title', 'goals', 'sources'])
+  expect(changes.find((item) => item.field === 'goals')).toMatchObject({
+    before: '避免重复预约',
+    after: '允许同一时段重复预约',
+  })
+})
+
+test('a title-only edit is previewed and can be saved without editing JSON', async () => {
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: '编辑设计与验证安排' }))
+  const dialog = await screen.findByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox', { name: '设计标题' }), {
+    target: { value: '预约与取消方案' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: '预览修改' }))
+  expect(within(dialog).getByText('预约与取消方案')).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存这些修改' }))
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(api.post).mock.calls[0]?.[1]).toMatchObject({
+    expectedRevision: 3,
+    document: { title: '预约与取消方案' },
+  })
+})
+
+test('draft merging preserves disjoint edits and requires a decision for divergent fields', () => {
+  const base = data.document
+  const local = structuredClone(base)
+  const remote = structuredClone(base)
+  local.elements[0]!.description = '我补充的规则'
+  remote.revision = 4
+  remote.elements[0]!.revision = 2
+  remote.elements[0]!.label = '同事修改的名称'
+  remote.goals.push('允许取消预约')
+  const merged = rebaseGraphDraft(base, local, remote)
+  expect(merged.conflicts).toEqual([])
+  expect(merged.document).toMatchObject({ revision: 4, goals: ['避免重复预约', '允许取消预约'] })
+  expect(merged.document.elements[0]).toMatchObject({
+    revision: 2,
+    label: '同事修改的名称',
+    description: '我补充的规则',
+  })
+  remote.elements[0]!.description = '同事修改的规则'
+  expect(rebaseGraphDraft(base, local, remote).conflicts).toEqual([
+    { path: 'elements.booking.description', local: '我补充的规则', remote: '同事修改的规则' },
+  ])
+  expect(
+    rebaseGraphDraft(base, local, remote, { 'elements.booking.description': 'local' }).document
+      .elements[0],
+  ).toMatchObject({ label: '同事修改的名称', description: '我补充的规则' })
+  local.elements = []
+  expect(rebaseGraphDraft(base, local, remote).conflicts[0]?.path).toBe('elements.booking')
+})
+
+test('409 can be recovered by comparing, resolving, previewing and saving against the latest revision', async () => {
+  vi.mocked(api.post)
+    .mockImplementationOnce(async () => {
+      data = structuredClone(data)
+      data.currentRevision = 4
+      data.document.revision = 4
+      data.document.elements[0]!.revision = 2
+      data.document.elements[0]!.label = '同事更新的名称'
+      data.document.elements[0]!.description = '同事补充的规则'
+      throw new ApiError(409, 'graph-design-revision-conflict', '当前版本为 4')
+    })
+    .mockResolvedValue({})
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: '编辑设计与验证安排' }))
+  let dialog = await screen.findByRole('dialog')
+  fireEvent.change(within(dialog).getByDisplayValue('不抢占'), {
+    target: { value: '保留我的规则' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: '预览修改' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存这些修改' }))
+  fireEvent.click(await within(dialog).findByRole('button', { name: '读取最新版本并比较' }))
+  expect(await within(dialog).findByText('同事补充的规则', { exact: false })).toBeTruthy()
+  fireEvent.click(
+    within(dialog).getByRole('combobox', { name: '保留哪个值：elements.booking.description' }),
+  )
+  fireEvent.mouseDown(await screen.findByRole('option', { name: '保留我的草稿' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: '采用合并结果并重新预览' }))
+  dialog = screen.getByRole('dialog')
+  expect(await within(dialog).findByText(/草稿基于版本 4，当前版本 4/)).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存这些修改' }))
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
+  expect(vi.mocked(api.post).mock.calls[1]?.[1]).toMatchObject({
+    expectedRevision: 4,
+    document: {
+      revision: 4,
+      elements: [expect.objectContaining({ label: '同事更新的名称', description: '保留我的规则' })],
+    },
+  })
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+
+test('terminal cases show artifacts as the next action and disable new design requests', async () => {
+  data.host.state = 'terminal'
+  open()
+  expect(await screen.findByRole('link', { name: '查看交付产物' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '预览实现依据' })).toBeNull()
+  expect((screen.getByRole('button', { name: '调整图组合' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  )
+  expect(
+    (screen.getByRole('button', { name: '编辑设计与验证安排' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+})
+
+test('terminal designs remain read-only while clarification creates an explicitly linked follow-on', async () => {
+  data.host.state = 'terminal'
+  vi.mocked(api.post).mockResolvedValue({ caseId: 'follow-on' })
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: '新建后续工作' }))
+  const dialog = screen.getByRole('dialog', { name: '新建后续工作' })
+  fireEvent.change(within(dialog).getByRole('textbox'), {
+    target: { value: '在已合入设计上补充取消规则' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: '提交请求' }))
+  expect(await screen.findByRole('link', { name: '打开后续工作' })).toBeTruthy()
+  expect(vi.mocked(api.post).mock.calls[0]).toEqual([
+    '/api/development-designs/design/clarification-requests',
+    expect.objectContaining({ instruction: '在已合入设计上补充取消规则', expectedRevision: 3 }),
+  ])
+  expect(
+    (screen.getByRole('button', { name: '编辑设计与验证安排' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+})
+
+test('an active MR can form a new reviewable basis after its graph design changes', async () => {
+  data.host.state = 'blocked'
+  data.host.workItemRef = 'publish-mr'
+  const original = vi.mocked(api.get).getMockImplementation()!
+  vi.mocked(api.get).mockImplementation((async (
+    path: string,
+    query?: Parameters<typeof api.get>[1],
+    signal?: AbortSignal,
+  ) => {
+    if (path.endsWith('/bases/new-basis'))
+      return {
+        basis: { id: 'new-basis', digest: 'basis-digest', document: data.document, files: [] },
+        staleIds: [],
+      }
+    return original(path, query, signal)
+  }) as typeof api.get)
+  vi.mocked(api.post).mockResolvedValue({ basis: { id: 'new-basis' } })
+  open(true, deliveryProgress())
+  fireEvent.click(await screen.findByRole('button', { name: '预览实现依据' }))
+  const scope = screen.getByRole('dialog', { name: '选择本次实现范围' })
+  fireEvent.click(within(scope).getByRole('button', { name: '生成可审核预览' }))
+  await waitFor(() =>
+    expect(vi.mocked(api.post).mock.calls[0]).toEqual([
+      '/api/development-designs/design/baseline-previews',
+      expect.objectContaining({ expectedRevision: 3, includedElementIds: ['booking'] }),
+    ]),
+  )
+  expect(await screen.findByText('basis-digest')).toBeTruthy()
+})
+
+function deliveryFixture(): GraphMergeRequestDelivery {
+  return {
+    kind: 'merge-request',
+    status: 'active',
+    ref: 'repo!42',
+    webUrl: 'https://example.test/repo/-/merge_requests/42',
+    sourceBranch: 'work/42',
+    targetBranch: 'main',
+    headSha: 'a'.repeat(40),
+    targetSha: 'b'.repeat(40),
+    mergedCommitSha: null,
+    draft: false,
+    mergeableState: 'mergeable',
+    readyToMerge: false,
+    approvalHold: false,
+    unresolvedReviewCount: 2,
+  }
+}
+
+function deliveryProgress(
+  delivery: GraphMergeRequestDelivery | null = deliveryFixture(),
+): GraphDeliveryProgress {
+  return {
+    mode: 'merge-request',
+    caseState: 'waiting',
+    terminalKind: null,
+    blockReason: null,
+    workItemRef: 'observe-mr',
+    nextAction: { tone: 'info', title: '等待关注对象发生变化', body: '收到仓库事件后继续。' },
+    delivery,
+    care: projectGraphDeliveryCare(delivery, []),
+  }
+}
+
+test.each(['headSha', 'targetSha', 'mergeRequestRef'] as const)(
+  'CI success is stale when %s differs from the current MR',
+  (field) => {
+    const delivery = deliveryFixture()
+    const state = {
+      status: 'passed',
+      headSha: delivery.headSha,
+      targetSha: delivery.targetSha,
+      mergeRequestRef: delivery.ref,
+      checks: [{ checkRef: 'unit', name: '单元测试', status: 'passed' }],
+    }
+    const current = projectGraphDeliveryCare(delivery, [
+      { typeId: 'development.pipeline', state, updatedAt: 1 },
+    ])
+    expect(current.pipeline?.current).toBe(true)
+    const stale = projectGraphDeliveryCare(delivery, [
+      {
+        typeId: 'development.pipeline',
+        state: { ...state, [field]: field === 'mergeRequestRef' ? 'other!1' : 'c'.repeat(40) },
+        updatedAt: 2,
+      },
+    ])
+    expect(stale.pipeline?.current).toBe(false)
+    render(<GraphDesignDelivery progress={{ ...deliveryProgress(delivery), care: stale }} zh />)
+    const pipeline = screen.getByRole('region', { name: '流水线检查' })
+    expect(within(pipeline).getByText('CI 流水线 · 尚未确认')).toBeTruthy()
+    expect(within(pipeline).getByText(/旧版本记录，等待重新检查/)).toBeTruthy()
+  },
+)
+
+test('unknown context data does not become successful evidence, and approval/review receipts are version bound', () => {
+  const delivery = deliveryFixture()
+  const care = projectGraphDeliveryCare(delivery, [
+    { typeId: 'development.pipeline', state: { status: 'passed' }, updatedAt: 1 },
+    {
+      typeId: 'development.approval',
+      state: {
+        status: 'approved',
+        mergeRequestRef: delivery.ref,
+        headSha: 'c'.repeat(40),
+        deadlineAt: null,
+      },
+      updatedAt: 2,
+    },
+    {
+      typeId: 'development.review-resolution',
+      state: {
+        status: 'replied',
+        mergeRequestRef: delivery.ref,
+        sourceHeadSha: 'c'.repeat(40),
+        publishedHeadSha: delivery.headSha,
+        threads: [],
+      },
+      updatedAt: 3,
+    },
+  ])
+  expect(care.pipeline).toBeNull()
+  expect(care.approval?.current).toBe(false)
+  expect(care.reviews?.current).toBe(true)
+})
+
+test('MR care exposes exact branches, commits, feedback and a working MR link', () => {
+  render(<GraphDesignDelivery progress={deliveryProgress()} zh />)
+  expect(screen.getByRole('link', { name: '打开 MR' }).getAttribute('href')).toBe(
+    'https://example.test/repo/-/merge_requests/42',
+  )
+  expect(screen.getByText('work/42 → main')).toBeTruthy()
+  expect(screen.getByText('a'.repeat(40))).toBeTruthy()
+  expect(screen.getByText('b'.repeat(40))).toBeTruthy()
+  expect(screen.getByText('未解决评审')).toBeTruthy()
+  expect(screen.getByText('2')).toBeTruthy()
+})
+
+test('an internal candidate is not MR completion and closed is distinct from merged', () => {
+  const pending = graphDeliveryStatus(deliveryProgress(null), true)
+  expect(pending.title).toBe('MR 尚未创建')
+  expect(pending.tone).toBe('info')
+  const progress = deliveryProgress()
+  expect(
+    graphDeliveryStatus(
+      { ...progress, delivery: { ...progress.delivery!, status: 'merged' } },
+      true,
+    ),
+  ).toMatchObject({ title: 'MR 已合入', tone: 'success' })
+  expect(
+    graphDeliveryStatus(
+      { ...progress, delivery: { ...progress.delivery!, status: 'closed' } },
+      true,
+    ),
+  ).toMatchObject({ title: 'MR 已关闭，未合入', tone: 'warning' })
+  expect(
+    graphDeliveryStatus({ ...deliveryProgress(null), mode: 'local-artifact' }, true).title,
+  ).toBe('本地产物交付')
+})
+
+test('manual acceptance shows the expected outcome, steps and owner before recording a result', async () => {
+  data.document.obligations = [
+    {
+      id: 'accept',
+      revision: 1,
+      statement: '重复提交时只保留一个预约',
+      elementIds: ['booking'],
+      concernIds: ['c'],
+      verification: {
+        kind: 'manual',
+        instructions: '打开两个窗口同时提交预约。\n观察只有一个成功结果。',
+        owner: '产品验收人',
+        when: '发布前',
+      },
+    },
+  ]
+  const evidence: GraphEvidenceData = {
+    candidate: {
+      basisId: 'basis',
+      basisDigest: 'b',
+      candidateTreeOid: 'c',
+      obligationIds: ['accept'],
+    },
+    obligations: [{ obligationId: 'accept', state: 'pending', evidenceIds: [] }],
+    traces: [],
+    evidence: [
+      {
+        freshness: 'current',
+        reasons: [],
+        evidence: {
+          id: 'execution',
+          kind: 'execution',
+          result: 'passed',
+          summary: 'passed',
+          limitations: [],
+          obligationIds: [],
+          readSet: [],
+          basisDigest: 'b',
+          candidateTreeOid: 'c',
+          commitSha: null,
+          ci: null,
+          profileRef: null,
+          environmentDigest: 'e',
+          executionRef: 'run',
+          artifactRef: null,
+          artifactDigest: null,
+          recordedAt: 1,
+        },
+      },
+    ],
+  }
+  const onAccept = vi.fn(async () => true)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  clients.push(client)
+  render(
+    <QueryClientProvider client={client}>
+      <GraphDesignEvidence
+        data={evidence}
+        document={data.document}
+        canEdit
+        busy={false}
+        zh
+        onVerify={() => {}}
+        onAccept={onAccept}
+        onLocate={() => {}}
+      />
+    </QueryClientProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: '记录人工验收' }))
+  const dialog = await screen.findByRole('dialog', { name: '记录候选的人工验收' })
+  expect(within(dialog).getByText('重复提交时只保留一个预约')).toBeTruthy()
+  expect(within(dialog).getByText(/打开两个窗口同时提交预约/)).toBeTruthy()
+  expect(within(dialog).getByText(/产品验收人/)).toBeTruthy()
+  expect(onAccept).not.toHaveBeenCalled()
+  fireEvent.change(within(dialog).getByRole('textbox', { name: '操作与观察结果' }), {
+    target: { value: '两个窗口同时提交，一个成功，一个收到冲突提示。' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存验收结论' }))
+  await waitFor(() =>
+    expect(onAccept).toHaveBeenCalledWith(
+      expect.objectContaining({
+        obligationId: 'accept',
+        candidateTreeOid: 'c',
+        comment: '两个窗口同时提交，一个成功，一个收到冲突提示。',
+      }),
+    ),
+  )
 })
 
 // A lost HTTP reply must replay the same business request instead of launching another action.

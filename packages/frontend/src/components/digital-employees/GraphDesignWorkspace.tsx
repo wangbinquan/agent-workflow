@@ -11,7 +11,7 @@ import type {
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
-import { Field, TextArea, Switch } from '@/components/Form'
+import { Field, TextArea, TextInput, Switch } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { EmptyState } from '@/components/EmptyState'
@@ -22,9 +22,14 @@ import { saveBlobAs } from '@/lib/download'
 import { GraphModelView } from './GraphModelView'
 import { GraphDesignEditDialog } from './GraphDesignEditors'
 import { GraphDesignEvidence } from './GraphDesignEvidence'
+import { GraphDesignDelivery } from './GraphDesignDelivery'
+import type { GraphDeliveryProgress } from './graphDeliveryModel'
+import { DecisionReadback } from '@/components/clarify/mindmap/DecisionDetails'
 import {
+  graphChangeLabel,
   graphDocumentChanges,
   graphSelectionAnchor,
+  graphStateLabel,
   type GraphWorkspaceData,
   type GraphViewData,
   type GraphEvidenceData,
@@ -38,12 +43,14 @@ export function GraphDesignWorkspace({
   executionAvailable,
   initialSelection,
   initialView,
+  deliveryProgress,
 }: {
   caseId: string
   canOperate: boolean
   executionAvailable: boolean
   initialSelection?: string[]
   initialView?: string
+  deliveryProgress?: GraphDeliveryProgress
 }) {
   const { i18n } = useTranslation(),
     zh = (i18n.resolvedLanguage ?? i18n.language).startsWith('zh')
@@ -61,6 +68,8 @@ export function GraphDesignWorkspace({
   const [revision, setRevision] = useState('current')
   const [viewId, setViewId] = useState<string | null>(initialView ?? null)
   const [offset, setOffset] = useState(0)
+  const [viewSearch, setViewSearch] = useState('')
+  const [focusId, setFocusId] = useState<string | null>(initialSelection?.[0] ?? null)
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelection ?? [])
   const [editing, setEditing] = useState(false)
   const [action, setAction] = useState<GraphDesignActionRequest['action'] | 'clarification' | null>(
@@ -94,17 +103,24 @@ export function GraphDesignWorkspace({
   const current = Boolean(
     document && document.revision === data?.currentRevision && revision === 'current',
   )
-  const canEdit = canOperate && current
+  const terminal = data?.host.state === 'terminal' || deliveryProgress?.caseState === 'terminal'
+  const canEdit = canOperate && current && !terminal
   const activeView =
     document?.views.find((view) => view.id === viewId) ??
     document?.views.find((view) => view.status !== 'archived')
   const view = useQuery<GraphViewData>({
-    queryKey: [...key, 'view', activeView?.id, document?.revision, offset],
+    queryKey: [...key, 'view', activeView?.id, document?.revision, offset, viewSearch, focusId],
     enabled: Boolean(document && activeView),
     queryFn: ({ signal }) =>
       api.get(
         `${base}/views/${encodeURIComponent(activeView!.id)}`,
-        { revision: document!.revision, offset, limit: 50 },
+        {
+          revision: document!.revision,
+          offset,
+          limit: 50,
+          ...(viewSearch ? { search: viewSearch } : {}),
+          ...(focusId ? { focusId } : {}),
+        },
         signal,
       ),
   })
@@ -161,14 +177,19 @@ export function GraphDesignWorkspace({
   )
   const locate = (selected: string) => {
     setSelectedIds([selected])
+    setOffset(0)
+    setViewSearch('')
+    setFocusId(selected)
     const target = document?.views.find(
       (view) =>
-        view.elementIds.includes(selected) ||
-        view.modelIds.some((id) =>
-          JSON.stringify(document.models.find((model) => model.id === id)).includes(
-            `"${selected}"`,
-          ),
-        ),
+        view.status !== 'archived' &&
+        (view.elementIds.includes(selected) ||
+          view.relationIds.includes(selected) ||
+          view.modelIds.some((id) =>
+            JSON.stringify(document.models.find((model) => model.id === id)).includes(
+              `"${selected}"`,
+            ),
+          )),
     )
     if (target) setViewId(target.id)
   }
@@ -201,7 +222,9 @@ export function GraphDesignWorkspace({
   const selected = new Set(selectedIds)
   const selectedElements = document.elements.filter((element) => selected.has(element.id))
   const selectedRelations = document.relations.filter((relation) => selected.has(relation.id))
-  const changes = proposal.data ? graphDocumentChanges(document, proposal.data.document) : []
+  const changes = proposal.data
+    ? graphDocumentChanges(document, proposal.data.document, proposal.data.readSet)
+    : []
   const reviews = basis.data
     ? data.executionLinks
         .flatMap((link) =>
@@ -211,6 +234,7 @@ export function GraphDesignWorkspace({
     : []
   const approval = reviews[0]?.decision === 'approved' ? reviews[0] : null
   const actionEnabled = canEdit && executionAvailable && !busy
+  const clarificationEnabled = canOperate && current && executionAvailable && !busy
   const presentation = activeView
     ? (data.presentation[activeView.id] ?? {
         viewId: activeView.id,
@@ -229,6 +253,7 @@ export function GraphDesignWorkspace({
     )
   return (
     <div className="graph-design" data-testid="graph-design-workspace">
+      {deliveryProgress && <GraphDesignDelivery progress={deliveryProgress} zh={zh} />}
       <Card
         title={document.title}
         actions={
@@ -265,6 +290,25 @@ export function GraphDesignWorkspace({
                 : 'Viewing a historical snapshot. Return to the current revision to edit.'}
             </NoticeBanner>
           )}
+          {terminal && (
+            <NoticeBanner
+              tone="info"
+              action={
+                <Link
+                  to="/tasks/employee-cases/$caseId"
+                  params={{ caseId }}
+                  search={{ tab: 'artifacts' }}
+                  className="btn btn--sm"
+                >
+                  {zh ? '查看交付产物' : 'View delivery artifacts'}
+                </Link>
+              }
+            >
+              {zh
+                ? '此任务已结束，设计和证据保留供查阅。'
+                : 'This case has ended. Design and evidence remain available for inspection.'}
+            </NoticeBanner>
+          )}
           {command.error && <ErrorBanner error={command.error} onDismiss={() => command.reset()} />}
           {notice && (
             <NoticeBanner
@@ -283,7 +327,7 @@ export function GraphDesignWorkspace({
               {zh ? '打开后续工作' : 'Open follow-on case'}
             </Link>
           )}
-          {data.host.editableClarify && (
+          {!terminal && data.host.editableClarify && (
             <NoticeBanner
               tone="warning"
               action={
@@ -301,7 +345,7 @@ export function GraphDesignWorkspace({
                 : 'Clarification is awaiting your answer. Original choices and judgments are synchronized here.'}
             </NoticeBanner>
           )}
-          {data.host.workItemRef === 'review-design' && data.host.executionRef && (
+          {!terminal && data.host.workItemRef === 'review-design' && data.host.executionRef && (
             <NoticeBanner
               tone="info"
               action={
@@ -344,21 +388,23 @@ export function GraphDesignWorkspace({
             >
               {zh ? '编辑设计与验证安排' : 'Edit design and verification'}
             </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={!canEdit || busy || !document.elements.length}
-              onClick={() => {
-                setScopeIds(
-                  selectedElements.length
-                    ? selectedElements.map((e) => e.id)
-                    : document.elements.map((e) => e.id),
-                )
-                setScopeOpen(true)
-              }}
-            >
-              {zh ? '预览实现依据' : 'Preview implementation basis'}
-            </button>
+            {!terminal && (
+              <button
+                type="button"
+                className={`btn ${!data.host.workItemRef || data.host.workItemRef === 'design-and-clarify' ? 'btn--primary' : ''}`}
+                disabled={!canEdit || busy || !document.elements.length}
+                onClick={() => {
+                  setScopeIds(
+                    selectedElements.length
+                      ? selectedElements.map((e) => e.id)
+                      : document.elements.map((e) => e.id),
+                  )
+                  setScopeOpen(true)
+                }}
+              >
+                {zh ? '预览实现依据' : 'Preview implementation basis'}
+              </button>
+            )}
           </div>
         </div>
       </Card>
@@ -377,6 +423,7 @@ export function GraphDesignWorkspace({
                       onClick={() => {
                         setViewId(view.id)
                         setOffset(0)
+                        setFocusId(null)
                         setSelectedIds([])
                       }}
                     >
@@ -408,7 +455,8 @@ export function GraphDesignWorkspace({
                 <li key={concern.id}>
                   <strong>{concern.statement}</strong>
                   <p>
-                    {concern.priority} · {concern.disposition}
+                    {graphStateLabel(concern.priority, zh)} ·{' '}
+                    {graphStateLabel(concern.disposition, zh)}
                   </p>
                   <p className="muted">{concern.dispositionReason}</p>
                   <div className="graph-design__actions">
@@ -422,7 +470,11 @@ export function GraphDesignWorkspace({
                           type="button"
                           key={view.id}
                           className="btn btn--xs"
-                          onClick={() => setViewId(view.id)}
+                          onClick={() => {
+                            setViewId(view.id)
+                            setOffset(0)
+                            setFocusId(null)
+                          }}
                         >
                           {view.title}
                         </button>
@@ -577,10 +629,18 @@ export function GraphDesignWorkspace({
               <button
                 type="button"
                 className="btn btn--sm"
-                disabled={!actionEnabled || Boolean(data.host.editableClarify)}
+                disabled={
+                  !clarificationEnabled || (!terminal && Boolean(data.host.editableClarify))
+                }
                 onClick={() => openAction('clarification')}
               >
-                {zh ? '围绕此处继续澄清' : 'Clarify this scope'}
+                {terminal
+                  ? zh
+                    ? '新建后续工作'
+                    : 'Start follow-on work'
+                  : zh
+                    ? '围绕此处继续澄清'
+                    : 'Clarify this scope'}
               </button>
               <button
                 type="button"
@@ -608,6 +668,37 @@ export function GraphDesignWorkspace({
                   ? '元素与关系列表（可选择多个组成路径）'
                   : 'Elements and relations (select multiple for a path)'}
               </summary>
+              <Field
+                label={
+                  zh ? '搜索当前视图的元素与关系' : 'Search elements and relations in this view'
+                }
+              >
+                <TextInput
+                  value={viewSearch}
+                  onChange={(value) => {
+                    setViewSearch(value)
+                    setOffset(0)
+                    setFocusId(null)
+                  }}
+                />
+              </Field>
+              {view.data &&
+                !view.data.renderings.length &&
+                view.data.scope.completeTotal !== undefined &&
+                view.data.scope.completeTotal > 250 && (
+                  <NoticeBanner
+                    tone="info"
+                    title={
+                      zh
+                        ? '当前视图较大，使用分页目录定位'
+                        : 'Use the paged directory for this large view'
+                    }
+                  >
+                    {zh
+                      ? '目录可搜索全部元素与关系；当前页不是完整设计的校验结果。'
+                      : 'Search covers all elements and relations. The current page is not a verification of the complete design.'}
+                  </NoticeBanner>
+                )}
               <ul className="graph-design__list">
                 {(view.data?.elements ?? document.elements.slice(offset, offset + 50)).map(
                   (element) => (
@@ -624,43 +715,61 @@ export function GraphDesignWorkspace({
                     </li>
                   ),
                 )}
-                {(view.data?.relations ?? document.relations).map((relation) => (
-                  <li key={relation.id}>
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      aria-pressed={selected.has(relation.id)}
-                      onClick={() => toggleSelection(relation.id)}
-                    >
-                      {selected.has(relation.id) ? '✓ ' : ''}
-                      {document.elements.find((e) => e.id === relation.from)?.label ??
-                        relation.from}{' '}
-                      → {document.elements.find((e) => e.id === relation.to)?.label ?? relation.to}:{' '}
-                      {relation.label}
-                    </button>
-                  </li>
-                ))}
+                {(view.data?.relations ?? document.relations.slice(offset, offset + 50)).map(
+                  (relation) => (
+                    <li key={relation.id}>
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        aria-pressed={selected.has(relation.id)}
+                        onClick={() => toggleSelection(relation.id)}
+                      >
+                        {selected.has(relation.id) ? '✓ ' : ''}
+                        {document.elements.find((e) => e.id === relation.from)?.label ??
+                          relation.from}{' '}
+                        →{' '}
+                        {document.elements.find((e) => e.id === relation.to)?.label ?? relation.to}:{' '}
+                        {relation.label}
+                        {relation.condition ? ` [${relation.condition}]` : ''}
+                      </button>
+                    </li>
+                  ),
+                )}
               </ul>
             </details>
             <div className="graph-design__actions">
               <button
                 type="button"
                 className="btn btn--xs"
-                disabled={!offset}
-                onClick={() => setOffset(Math.max(0, offset - 50))}
+                disabled={!(view.data?.scope.offset ?? offset)}
+                onClick={() => {
+                  setOffset(Math.max(0, (view.data?.scope.offset ?? offset) - 50))
+                  setFocusId(null)
+                }}
               >
                 {zh ? '上一页' : 'Previous'}
               </button>
               <span>
-                {offset + 1}–
-                {Math.min(offset + 50, view.data?.scope.total ?? document.elements.length)} /{' '}
-                {view.data?.scope.total ?? document.elements.length}
+                {zh ? '目录页 ' : 'Directory page '}
+                {Math.floor((view.data?.scope.offset ?? offset) / 50) + 1} ·{' '}
+                {zh ? '元素' : 'Elements'} {view.data?.scope.total ?? document.elements.length} ·{' '}
+                {zh ? '关系' : 'Relations'}{' '}
+                {view.data?.relationScope?.total ?? document.relations.length}
               </span>
               <button
                 type="button"
                 className="btn btn--xs"
-                disabled={offset + 50 >= (view.data?.scope.total ?? document.elements.length)}
-                onClick={() => setOffset(offset + 50)}
+                disabled={
+                  (view.data?.scope.offset ?? offset) + 50 >=
+                  Math.max(
+                    view.data?.scope.total ?? document.elements.length,
+                    view.data?.relationScope?.total ?? document.relations.length,
+                  )
+                }
+                onClick={() => {
+                  setOffset((view.data?.scope.offset ?? offset) + 50)
+                  setFocusId(null)
+                }}
               >
                 {zh ? '下一页' : 'Next'}
               </button>
@@ -675,32 +784,50 @@ export function GraphDesignWorkspace({
                     {element.condition} / {element.unknowns}
                   </p>
                 )}
-                {element.kind === 'decision' && (
-                  <pre>{JSON.stringify(element.decision ?? {}, null, 2)}</pre>
-                )}
+                {element.kind === 'decision' && <DecisionReadback decision={element.decision} />}
                 {document.sources
                   .filter((source) => element.sourceIds.includes(source.id))
                   .map((source) => (
                     <details key={source.id} open>
                       <summary>
-                        {zh ? '来源' : 'Source'} · {source.kind}
+                        {zh ? '来源' : 'Source'} · {graphStateLabel(source.kind, zh)}
                       </summary>
                       {source.kind === 'clarify' ? (
                         <>
                           <blockquote>{source.originalAnswer}</blockquote>
-                          <pre>
-                            {JSON.stringify(
-                              { answer: source.answer, judgment: source.decision },
-                              null,
-                              2,
-                            )}
-                          </pre>
+                          {source.answer?.selectedOptionLabels.length ? (
+                            <p>
+                              {zh ? '选择：' : 'Selected: '}
+                              {source.answer.selectedOptionLabels.join('；')}
+                            </p>
+                          ) : null}
+                          {source.answer?.customText && <p>{source.answer.customText}</p>}
+                          <DecisionReadback decision={source.decision} />
                           <Link to="/tasks/$id" params={{ id: source.taskId }}>
                             {zh ? '打开原问题' : 'Open original question'} · {source.questionId}
                           </Link>
                         </>
+                      ) : source.kind === 'material' ? (
+                        <p>
+                          {source.label} · <code>{source.artifactRef}</code>
+                        </p>
+                      ) : source.kind === 'code' ? (
+                        <p>
+                          <code>{source.path}</code>
+                          {source.symbol ? ` · ${source.symbol}` : ''} ·{' '}
+                          <code>{source.commitSha}</code>
+                        </p>
+                      ) : source.kind === 'review' ? (
+                        <Link to="/tasks/$id" params={{ id: source.taskId }}>
+                          {zh ? '查看审核回执' : 'View review receipt'} ·{' '}
+                          {graphStateLabel(source.decision, zh)}
+                        </Link>
                       ) : (
-                        <pre>{JSON.stringify(source, null, 2)}</pre>
+                        <p>
+                          <code>
+                            {source.kind === 'model' ? source.invocationRef : source.artifactRef}
+                          </code>
+                        </p>
                       )}
                     </details>
                   ))}
@@ -727,52 +854,53 @@ export function GraphDesignWorkspace({
                 {zh ? '查看提案差异' : 'Compare proposal'} {index + 1} ·{' '}
                 {new Date(proposal.createdAt).toLocaleString()}
               </button>
-              <span>{proposal.status}</span>
+              <span>{graphStateLabel(proposal.status, zh)}</span>
             </div>
           ))}
-          {data.requests
-            .filter((request) => ['action', 'import'].includes(request.kind))
-            .map((request, index) => (
-              <div key={request.id}>
-                <strong>
-                  {request.kind === 'import'
-                    ? zh
-                      ? '设计导入'
-                      : 'Design import'
-                    : zh
-                      ? '设计调用'
-                      : 'Design call'}{' '}
-                  {index + 1} · {request.status}
-                </strong>
-                {request.kind === 'action' &&
-                  ['running', 'failed', 'interrupted', 'canceled'].includes(request.status) && (
-                    <button
-                      type="button"
-                      className="btn btn--xs"
-                      disabled={!canEdit || busy}
-                      onClick={() =>
-                        void perform(() =>
-                          api.post(
-                            `${base}/actions/${encodeURIComponent(request.id.slice('action:'.length))}/${request.status === 'running' ? 'cancel' : 'retry'}`,
-                          ),
-                        )
-                      }
-                    >
-                      {request.status === 'running'
-                        ? zh
-                          ? '取消调用'
-                          : 'Cancel'
-                        : zh
-                          ? '重试'
-                          : 'Retry'}
-                    </button>
-                  )}
-                <details>
-                  <summary>{zh ? '调用结果' : 'Call result'}</summary>
-                  <pre>{JSON.stringify(request.payload, null, 2)}</pre>
-                </details>
-              </div>
-            ))}
+          {data.requests.map((request, index) => (
+            <div key={request.id}>
+              <strong>
+                {(
+                  {
+                    import: zh ? '设计导入' : 'Design import',
+                    action: zh ? '设计调用' : 'Design call',
+                    review: zh ? '设计审核' : 'Design review',
+                    implementation: zh ? '代码实现' : 'Implementation',
+                    clarification: zh ? '补充澄清' : 'Clarification',
+                    verification: zh ? '候选验证' : 'Candidate verification',
+                  } as Record<string, string>
+                )[request.kind] ?? (zh ? '工作请求' : 'Work request')}{' '}
+                {index + 1} · {graphStateLabel(request.status, zh)}
+              </strong>
+              {request.kind === 'action' &&
+                ['running', 'failed', 'interrupted', 'canceled'].includes(request.status) && (
+                  <button
+                    type="button"
+                    className="btn btn--xs"
+                    disabled={!canEdit || busy}
+                    onClick={() =>
+                      void perform(() =>
+                        api.post(
+                          `${base}/actions/${encodeURIComponent(request.id.slice('action:'.length))}/${request.status === 'running' ? 'cancel' : 'retry'}`,
+                        ),
+                      )
+                    }
+                  >
+                    {request.status === 'running'
+                      ? zh
+                        ? '取消调用'
+                        : 'Cancel'
+                      : zh
+                        ? '重试'
+                        : 'Retry'}
+                  </button>
+                )}
+              <details>
+                <summary>{zh ? '调用结果' : 'Call result'}</summary>
+                <pre>{JSON.stringify(request.payload, null, 2)}</pre>
+              </details>
+            </div>
+          ))}
         </div>
       </Card>
       <Card title={zh ? '实现依据与审核' : 'Implementation bases and reviews'}>
@@ -850,13 +978,13 @@ export function GraphDesignWorkspace({
             .filter((link) => link.kind === 'delivery')
             .map((link) => (
               <p key={link.commitSha}>
-                {zh ? '已交付内部候选提交：' : 'Delivered internal candidate commit: '}
+                {zh ? '内部候选提交：' : 'Internal candidate commit: '}
                 <code>{link.commitSha}</code> ·{' '}
                 {link.publication
                   ? `${zh ? '已发布到' : 'Published to'} ${link.publication.remoteRef} · ${zh ? 'CI 与部署另有回执' : 'CI and deployment require separate receipts'}`
                   : zh
-                    ? '未发布远端或部署'
-                    : 'Not published or deployed'}
+                    ? '此回执仅记录内部候选；MR 进度见交付与持续看护。'
+                    : 'This receipt records the internal candidate; see Delivery and ongoing care for MR progress.'}
               </p>
             ))}
         </div>
@@ -871,6 +999,12 @@ export function GraphDesignWorkspace({
           busy={busy}
           zh={zh}
           saveError={command.error}
+          onReload={async () => {
+            const latest = await api.get<GraphWorkspaceData>(base)
+            client.setQueryData([...key, 'workspace', id, 'current'], latest)
+            command.reset()
+            return latest.document
+          }}
         />
       )}
       <Dialog
@@ -878,9 +1012,13 @@ export function GraphDesignWorkspace({
         onClose={() => setAction(null)}
         title={
           action === 'clarification'
-            ? zh
-              ? '补充澄清'
-              : 'Further clarification'
+            ? terminal
+              ? zh
+                ? '新建后续工作'
+                : 'Start follow-on work'
+              : zh
+                ? '补充澄清'
+                : 'Further clarification'
             : zh
               ? '生成设计提案'
               : 'Generate a design proposal'
@@ -890,10 +1028,17 @@ export function GraphDesignWorkspace({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!actionEnabled || !instruction.trim()}
+            disabled={
+              !(action === 'clarification' ? clarificationEnabled : actionEnabled) ||
+              !instruction.trim()
+            }
             onClick={() =>
               void perform(async () => {
-                const anchor = graphSelectionAnchor(document, selectedIds, activeView?.id)
+                const anchor = graphSelectionAnchor(
+                  document,
+                  action === 'replan' || action === 'update-view' ? [] : selectedIds,
+                  action === 'update-view' ? activeView?.id : undefined,
+                )
                 if (action === 'clarification') {
                   const receipt = await postRequest<{ caseId: string; queued?: boolean }>(
                     `${base}/clarification-requests`,
@@ -945,7 +1090,13 @@ export function GraphDesignWorkspace({
         <div className="graph-design__stack">
           <p>
             {zh ? '所选范围：' : 'Selected scope: '}
-            {selectedIds.join(', ') || (zh ? '整个设计' : 'Whole design')}
+            {action === 'update-view'
+              ? `${zh ? '当前图' : 'Current view'}: ${activeView?.title ?? activeView?.id ?? ''}`
+              : action === 'replan' || !selectedIds.length
+                ? zh
+                  ? '整个设计'
+                  : 'Whole design'
+                : `${selectedIds.join(', ')}${zh ? '（含关联依赖）' : ' (including dependencies)'}`}
           </p>
           <Field
             label={
@@ -1042,7 +1193,7 @@ export function GraphDesignWorkspace({
           {proposal.data && (
             <>
               <p>{proposal.data.explanation}</p>
-              <strong>{proposal.data.status}</strong>
+              <strong>{graphStateLabel(proposal.data.status, zh)}</strong>
               {proposal.data.plan?.uncoveredConcernIds.length ? (
                 <NoticeBanner tone="warning">
                   {zh ? '尚未覆盖：' : 'Still uncovered: '}
@@ -1066,10 +1217,16 @@ export function GraphDesignWorkspace({
               </ul>
               {changes.map((change) => (
                 <section key={change.id}>
-                  <strong>{change.id}</strong>
+                  <strong>{graphChangeLabel(change, zh)}</strong>
                   <div className="graph-design__diff">
-                    <pre>{change.before}</pre>
-                    <pre>{change.after}</pre>
+                    <div>
+                      <p>{zh ? '修改前' : 'Before'}</p>
+                      <pre>{change.before}</pre>
+                    </div>
+                    <div>
+                      <p>{zh ? '修改后' : 'After'}</p>
+                      <pre>{change.after}</pre>
+                    </div>
                   </div>
                 </section>
               ))}

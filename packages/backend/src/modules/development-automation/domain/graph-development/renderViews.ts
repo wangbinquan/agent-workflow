@@ -1,4 +1,9 @@
-import { canonicalJson, type GraphDesignDocument, type GraphSubmodel } from '@agent-workflow/shared'
+import {
+  canonicalJson,
+  type GraphDesignDocument,
+  type GraphSubmodel,
+  type GraphPredicate,
+} from '@agent-workflow/shared'
 import { graphDigest } from './model'
 
 export interface RenderedGraphModel {
@@ -9,6 +14,22 @@ export interface RenderedGraphModel {
     readonly elementId: string
     readonly label: string
   }[]
+}
+
+function predicateLabel(predicate: GraphPredicate): string {
+  const operators = {
+    eq: '=',
+    neq: '!=',
+    lt: '<',
+    lte: '<=',
+    gt: '>',
+    gte: '>=',
+    in: 'in',
+    exists: 'exists',
+  }
+  return predicate.operator === 'exists'
+    ? `${predicate.field} exists`
+    : `${predicate.field} ${operators[predicate.operator]} ${canonicalJson(predicate.value ?? null)}`
 }
 
 export function renderGraphModel(
@@ -34,7 +55,9 @@ export function renderGraphModel(
       const edges = model.relationIds.flatMap((id) => {
         const relation = relations.get(id)
         return relation
-          ? [`  ${node(relation.from)} -->|${quote(relation.label)}| ${node(relation.to)}`]
+          ? [
+              `  ${node(relation.from)} -->|${quote([relation.label, relation.condition ? `[${relation.condition}]` : ''].filter(Boolean).join(' '))}| ${node(relation.to)}`,
+            ]
           : []
       })
       source = ['flowchart TD', ...nodes, ...edges].join('\n')
@@ -91,9 +114,12 @@ export function renderGraphModel(
         `  [*] --> ${node(model.initialStateId)}`,
         ...model.transitions.flatMap((transition) => {
           const relation = relations.get(transition.relationId)
+          const conditions = [relation?.condition, ...transition.guards.map(predicateLabel)]
+            .filter(Boolean)
+            .join(' ∧ ')
           return relation
             ? [
-                `  ${node(relation.from)} --> ${node(relation.to)}: ${line(transition.event)}${relation.condition ? ` [${line(relation.condition)}]` : ''}`,
+                `  ${node(relation.from)} --> ${node(relation.to)}: ${line(transition.event)}${conditions ? ` [${line(conditions)}]` : ''}`,
               ]
             : []
         }),
@@ -139,7 +165,7 @@ export function renderGraphModel(
         '| --- | --- | --- | --- |',
         ...model.rows.map((row) => {
           node(row.ruleId)
-          return `| ${cell(label(row.ruleId))} | ${cell(row.conditions.map((condition) => `${condition.field} ${condition.operator} ${canonicalJson(condition.value ?? null)}`).join(' ∧ '))} | ${cell(canonicalJson(row.output))} | ${row.priority} |`
+          return `| ${cell(label(row.ruleId))} | ${cell(row.conditions.map(predicateLabel).join(' ∧ '))} | ${cell(canonicalJson(row.output))} | ${row.priority} |`
         }),
       ].join('\n')
       break

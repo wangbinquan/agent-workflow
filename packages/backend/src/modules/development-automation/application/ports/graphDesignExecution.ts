@@ -73,6 +73,12 @@ export interface GraphDesignExecutionPort {
     readonly caseId: string
     readonly repositoryId: string
   }): Promise<RepositoryContentBaseline>
+  /** An explicit new preview may adopt the current MR source head as a new semantic basis. */
+  resolveImplementationBaseline?(input: {
+    readonly caseId: string
+    readonly designId: string
+    readonly repositoryId: string
+  }): Promise<RepositoryContentBaseline | null>
 }
 
 export interface GraphClarificationRequest {

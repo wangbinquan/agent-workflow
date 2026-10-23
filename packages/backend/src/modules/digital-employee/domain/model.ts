@@ -531,6 +531,8 @@ const eventTypeRegistrationSchema = z
   .object({
     eventTypeId: machineIdSchema,
     version: z.number().int().positive(),
+    /** Shared business events keep their original owner across composed employee types. */
+    ownerTypeId: machineIdSchema.optional(),
     subjectTypeId: machineIdSchema,
     payloadSchemaId: machineIdSchema,
     displayName: localizedTextSchema,

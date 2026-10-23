@@ -27,6 +27,7 @@ import { verifyGraphBehavior } from './behaviorVerification'
 export interface GraphVerificationWorkspace {
   readonly targetBranch?: string
   readonly uploadPlan?: Parameters<ChangeCandidateParticipant['derive']>[0]['uploadPlan']
+  readonly uploadsAlreadyPublished?: boolean
   readonly workspacePath: string
   readonly baselineRepoPath: string
   readonly baseline: NonNullable<GraphImplementationBasis['document']['repositoryBaseline']>
@@ -46,9 +47,17 @@ export function createGraphVerification(deps: {
       designId: string
       roundRef: string
       workspace: GraphVerificationWorkspace
+      /** MR repair keeps the approved implementation contract, never the newest unrelated link. */
+      implementationRoundRef?: string
+      expectedBasisDigest?: string
+      expectedCandidateTreeOid?: string
     }) {
       const implementations = (await deps.store.links(input.designId))
-        .filter((link) => link.id.startsWith('implementation:'))
+        .filter((link) =>
+          input.implementationRoundRef
+            ? link.id === `implementation:${input.implementationRoundRef}`
+            : link.id.startsWith('implementation:'),
+        )
         .sort((a, b) => b.createdAt - a.createdAt)
       const link = implementations[0]
       if (!link) throw new Error('graph-verification-implementation-missing')
@@ -61,6 +70,8 @@ export function createGraphVerification(deps: {
       const basis = (await deps.commands.basis(input.designId, implementation.basisId)).basis
       if (basis.digest !== implementation.basisDigest)
         throw new Error('graph-verification-basis-mismatch')
+      if (input.expectedBasisDigest && basis.digest !== input.expectedBasisDigest)
+        throw new Error('graph-verification-approved-basis-mismatch')
       const result = graphResultSchemas['implement-change'].parse(implementation.result)
       const workspace = input.workspace
       const candidateInput = {
@@ -69,6 +80,7 @@ export function createGraphVerification(deps: {
         repositoryBaseline: workspace.baseline,
         overlayRoot: workspace.workspacePath,
         uploadPlan: workspace.uploadPlan,
+        uploadsAlreadyPublished: workspace.uploadsAlreadyPublished,
       }
       const derived = await deps.candidates.derive({
         ...candidateInput,
@@ -84,17 +96,91 @@ export function createGraphVerification(deps: {
           limitations: [`${derived.code}: ${derived.detail}`],
         }
       const candidate = derived.receipt
+      if (input.expectedCandidateTreeOid && candidate.treeOid !== input.expectedCandidateTreeOid)
+        return {
+          candidateRef: candidate.candidateRef,
+          candidateTreeOid: candidate.treeOid,
+          evidenceIds: [],
+          passed: false,
+          limitations: ['待发布候选已变化，必须重新形成候选并校验。'],
+        }
       const record = await deps.commands.beginRecord(
         input.designId,
         `verification:${input.roundRef}`,
         'verification',
         { candidate, basisDigest: basis.digest },
       )
-      if (record.status === 'completed')
-        return graphResultSchemas['verify-change'].parse(
-          (JSON.parse(record.payloadJson) as { result: unknown }).result,
-        )
       const environment = (await deps.verification.environment?.(workspace.workspacePath)) ?? null
+      const obligations = basis.document.obligations.filter((obligation) =>
+        basis.obligationIds.includes(obligation.id),
+      )
+      async function latestAcceptance(obligationId: string) {
+        return (await deps.store.links(input.designId))
+          .filter((link) => link.kind === 'evidence')
+          .map((link) => GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson)))
+          .filter(
+            (e) =>
+              e.kind === 'acceptance' &&
+              e.basisDigest === basis.digest &&
+              e.candidateTreeOid === candidate.treeOid &&
+              e.obligationIds.includes(obligationId),
+          )
+          .sort((a, b) => b.recordedAt - a.recordedAt || b.id.localeCompare(a.id))[0]
+      }
+      async function hasReadableArtifact(evidence: GraphEvidenceBinding | undefined | null) {
+        if (!evidence?.artifactRef || !evidence.artifactDigest) return false
+        try {
+          await deps.artifacts.files({
+            artifactRef: evidence.artifactRef,
+            digest: evidence.artifactDigest,
+          })
+          return true
+        } catch {
+          return false
+        }
+      }
+      if (record.status === 'completed') {
+        const saved = JSON.parse(record.payloadJson) as {
+          result: unknown
+          environmentDigest: string | null
+          profileDigests: Record<string, string>
+        }
+        const previous = graphResultSchemas['verify-change'].parse(saved.result)
+        const unavailable: string[] = []
+        if (saved.environmentDigest !== (environment?.digest ?? null))
+          unavailable.push('校验环境已变化，请启动新的校验，不能复用旧环境的通过结果。')
+        for (const obligation of obligations) {
+          if (obligation.verification.kind === 'manual') {
+            const acceptance = await latestAcceptance(obligation.id)
+            if (acceptance?.result !== 'passed' || !(await hasReadableArtifact(acceptance)))
+              unavailable.push(`需要有效且可读取的人工验收：${obligation.id}`)
+            continue
+          }
+          if (obligation.verification.kind !== 'execution')
+            throw new Error(`graph-baseline-verification-unassigned:${obligation.id}`)
+          const ref = obligation.verification.profileRef
+          const revision = await deps.profiles.getRevision(ref.id, ref.revision)
+          if (
+            !revision ||
+            revision.contentDigest !== ref.digest ||
+            (saved.profileDigests[`${ref.id}@${ref.revision}`] ?? saved.profileDigests[ref.id]) !==
+              ref.digest
+          )
+            unavailable.push(`冻结的校验版本暂不可用：${ref.id}@${ref.revision}`)
+        }
+        const links = await deps.store.links(input.designId)
+        for (const evidenceId of previous.evidenceIds) {
+          const link = links.find((item) => item.kind === 'evidence' && item.id === evidenceId)
+          const evidence = link
+            ? GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson))
+            : null
+          if (!(await hasReadableArtifact(evidence)))
+            unavailable.push(`原始校验证据暂不可读：${evidenceId}`)
+        }
+        return unavailable.length
+          ? { ...previous, passed: false, limitations: [...previous.limitations, ...unavailable] }
+          : previous
+      }
       const evidenceIds: string[] = [],
         limitations = [...result.limitations]
       let passed = environment !== null && result.limitations.length === 0
@@ -245,9 +331,6 @@ export function createGraphVerification(deps: {
             passed = false
             limitations.push(`需求缺少有效代码追溯：${element.id}`)
           }
-        const obligations = basis.document.obligations.filter((obligation) =>
-          basis.obligationIds.includes(obligation.id),
-        )
         const profileRefs = new Map(
           obligations.flatMap((obligation) =>
             obligation.verification.kind === 'execution'
@@ -293,6 +376,7 @@ export function createGraphVerification(deps: {
               throw new Error('graph-verification-recovery-evidence-missing')
             evidenceIds.push(saved.id)
             profileDigests[ref.id] = revision!.contentDigest
+            profileDigests[key] = revision!.contentDigest
             if (saved.result !== 'passed') {
               passed = false
               limitations.push(`保留原执行结果：${key} / ${saved.result}`)
@@ -424,6 +508,7 @@ export function createGraphVerification(deps: {
             limitations.push(`校验未通过或未运行：${key}`)
           }
           profileDigests[ref.id] = revision?.contentDigest ?? ''
+          profileDigests[key] = revision?.contentDigest ?? ''
           const incomplete =
             behavior.some((check) => ['inconclusive', 'not-run'].includes(check.result)) ||
             !environment
@@ -452,22 +537,14 @@ export function createGraphVerification(deps: {
         for (const obligation of obligations.filter(
           (obligation) => obligation.verification.kind === 'manual',
         )) {
-          const acceptance = (await deps.store.links(input.designId))
-            .filter((link) => link.kind === 'evidence')
-            .map((link) => GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson)))
-            .filter(
-              (e) =>
-                e.kind === 'acceptance' &&
-                e.basisDigest === basis.digest &&
-                e.candidateTreeOid === candidate.treeOid &&
-                e.obligationIds.includes(obligation.id),
-            )
-            .sort((a, b) => b.recordedAt - a.recordedAt || b.id.localeCompare(a.id))[0]
-          const accepted = acceptance?.result === 'passed'
+          const acceptance = await latestAcceptance(obligation.id)
+          const accepted =
+            acceptance?.result === 'passed' && (await hasReadableArtifact(acceptance))
           if (!accepted) {
             passed = false
             limitations.push(`待人工验收：${obligation.id}`)
-          }
+          } else if (acceptance && !evidenceIds.includes(acceptance.id))
+            evidenceIds.push(acceptance.id)
         }
         const value = {
           candidateRef: candidate.candidateRef,

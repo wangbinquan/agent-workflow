@@ -111,7 +111,13 @@ export function createGraphDesignQueries(
     async view(
       id: string,
       viewId: string,
-      input: { revision?: number; offset?: number; limit?: number } = {},
+      input: {
+        revision?: number
+        offset?: number
+        limit?: number
+        search?: string
+        focusId?: string
+      } = {},
     ) {
       const document = await deps.commands.document(id, input.revision)
       const view = document.views.find((value) => value.id === viewId)
@@ -129,8 +135,34 @@ export function createGraphDesignQueries(
         members.add(relation.to)
       }
       const elements = document.elements.filter((element) => members.has(element.id))
-      const offset = Math.max(0, Math.floor(input.offset ?? 0)),
-        limit = Math.max(1, Math.min(250, Math.floor(input.limit ?? 100)))
+      const search = input.search?.trim().toLocaleLowerCase() ?? ''
+      const matches = (values: readonly string[]) =>
+        values.some((value) => value.toLocaleLowerCase().includes(search))
+      const visibleElements = search
+        ? elements.filter((element) => matches([element.id, element.label, element.description]))
+        : elements
+      const visibleRelations = search
+        ? relations.filter((relation) =>
+            matches([
+              relation.id,
+              relation.label,
+              relation.condition ?? '',
+              relation.from,
+              relation.to,
+            ]),
+          )
+        : relations
+      const limit = Math.max(1, Math.min(250, Math.floor(input.limit ?? 100)))
+      const focusedIndex = input.focusId
+        ? Math.max(
+            visibleElements.findIndex((element) => element.id === input.focusId),
+            visibleRelations.findIndex((relation) => relation.id === input.focusId),
+          )
+        : -1
+      const offset =
+        focusedIndex >= 0
+          ? Math.floor(focusedIndex / limit) * limit
+          : Math.max(0, Math.floor(input.offset ?? 0))
       return {
         designId: id,
         revision: document.revision,
@@ -140,14 +172,22 @@ export function createGraphDesignQueries(
           capability && elements.length <= 250
             ? models.map((model) => ({ modelId: model.id, ...renderGraphModel(document, model) }))
             : [],
-        elements: elements.slice(offset, offset + limit),
-        relations,
-        scope: {
-          digest: graphDigest({ view, models, elements, relations }),
-          total: elements.length,
+        elements: visibleElements.slice(offset, offset + limit),
+        relations: visibleRelations.slice(offset, offset + limit),
+        relationScope: {
+          total: visibleRelations.length,
+          completeTotal: relations.length,
           offset,
           limit,
-          truncated: offset > 0 || offset + limit < elements.length,
+          truncated: offset > 0 || offset + limit < visibleRelations.length,
+        },
+        scope: {
+          digest: graphDigest({ view, models, elements, relations }),
+          total: visibleElements.length,
+          completeTotal: elements.length,
+          offset,
+          limit,
+          truncated: offset > 0 || offset + limit < visibleElements.length,
         },
       }
     },

@@ -4,14 +4,14 @@ import { api } from '@/api/client'
 import { saveBlobAs } from '@/lib/download'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import type { GraphDesignDocument } from '@agent-workflow/shared'
+import { canonicalJson, type GraphDesignDocument } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { Field, TextArea } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { EmptyState } from '@/components/EmptyState'
 import { Dialog } from '@/components/Dialog'
 import { Select } from '@/components/Select'
-import type { GraphEvidenceData } from './graphDesignModel'
+import { graphStateLabel, type GraphEvidenceData } from './graphDesignModel'
 
 function RetainedFile({ file, zh }: { file: { path: string; content: string }; zh: boolean }) {
   let report: { kind?: string; sourcePath?: string; text?: string | null; base64?: string } | null =
@@ -85,7 +85,12 @@ export function GraphDesignEvidence({
   }): Promise<boolean>
   onLocate(id: string): void
 }) {
-  const [accepting, setAccepting] = useState<string | null>(null)
+  const [accepting, setAccepting] = useState<{
+    documentId: string
+    obligation: GraphDesignDocument['obligations'][number]
+    basisDigest: string
+    candidateTreeOid: string
+  } | null>(null)
   const [comment, setComment] = useState('')
   const [result, setResult] = useState<'passed' | 'failed'>('passed')
   const [viewing, setViewing] = useState<string | null>(null)
@@ -97,9 +102,44 @@ export function GraphDesignEvidence({
         `/api/development-designs/${encodeURIComponent(document.id)}/evidence/${encodeURIComponent(viewing!)}/artifacts`,
       ),
   })
-  const candidate = [...data.evidence]
+  const legacyCandidate = [...data.evidence]
     .filter((item) => item.evidence.candidateTreeOid && item.freshness === 'current')
     .sort((a, b) => b.evidence.recordedAt - a.evidence.recordedAt)[0]?.evidence
+  const candidate =
+    data.candidate !== undefined
+      ? data.candidate
+      : legacyCandidate
+        ? {
+            basisDigest: legacyCandidate.basisDigest,
+            candidateTreeOid: legacyCandidate.candidateTreeOid!,
+            obligationIds: [
+              ...new Set(
+                data.evidence
+                  .filter(
+                    (item) =>
+                      item.freshness === 'current' &&
+                      item.evidence.basisDigest === legacyCandidate.basisDigest &&
+                      item.evidence.candidateTreeOid === legacyCandidate.candidateTreeOid,
+                  )
+                  .flatMap((item) => item.evidence.obligationIds),
+              ),
+            ],
+          }
+        : null
+  const candidateScopeKnown =
+    data.candidate !== undefined
+      ? data.candidate !== null
+      : (candidate?.obligationIds.length ?? 0) > 0
+  const acceptance = accepting?.obligation
+  const currentAcceptance = document.obligations.find((item) => item.id === acceptance?.id)
+  const acceptanceChanged =
+    accepting !== null &&
+    (accepting.documentId !== document.id ||
+      accepting.basisDigest !== candidate?.basisDigest ||
+      accepting.candidateTreeOid !== candidate?.candidateTreeOid ||
+      !candidateScopeKnown ||
+      !candidate?.obligationIds.includes(accepting.obligation.id) ||
+      canonicalJson(accepting.obligation) !== canonicalJson(currentAcceptance ?? null))
   return (
     <Card
       title={zh ? '验证与交付证据' : 'Verification and delivery evidence'}
@@ -137,7 +177,8 @@ export function GraphDesignEvidence({
               .map((item) => (
                 <div key={item.evidence.id} className="graph-design__stack">
                   <strong>
-                    {item.evidence.result} · {item.freshness}
+                    {graphStateLabel(item.evidence.result, zh)} ·{' '}
+                    {graphStateLabel(item.freshness, zh)}
                   </strong>
                   <p>{item.evidence.summary}</p>
                   {item.evidence.artifactRef && (
@@ -178,10 +219,12 @@ export function GraphDesignEvidence({
         ))}
         {data.obligations.map((item) => {
           const obligation = document.obligations.find((o) => o.id === item.obligationId)
+          const inCandidateScope =
+            candidateScopeKnown && candidate?.obligationIds.includes(item.obligationId)
           return (
             <section key={item.obligationId}>
               <strong>
-                {obligation?.statement ?? item.obligationId} · {item.state}
+                {obligation?.statement ?? item.obligationId} · {graphStateLabel(item.state, zh)}
               </strong>
               <div className="graph-design__actions">
                 {obligation?.elementIds.map((id) => (
@@ -195,18 +238,38 @@ export function GraphDesignEvidence({
                     {document.elements.find((e) => e.id === id)?.label ?? id}
                   </button>
                 ))}
-                {canEdit && obligation?.verification.kind === 'manual' && candidate && (
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setAccepting(item.obligationId)
-                      setComment('')
-                    }}
-                  >
-                    {zh ? '记录人工验收' : 'Record acceptance'}
-                  </button>
+                {canEdit && obligation?.verification.kind === 'manual' && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy || !inCandidateScope}
+                      onClick={() => {
+                        if (!candidate || !inCandidateScope) return
+                        setAccepting({
+                          documentId: document.id,
+                          obligation: structuredClone(obligation),
+                          basisDigest: candidate.basisDigest,
+                          candidateTreeOid: candidate.candidateTreeOid,
+                        })
+                        setComment('')
+                        setResult('passed')
+                      }}
+                    >
+                      {zh ? '记录人工验收' : 'Record acceptance'}
+                    </button>
+                    {!inCandidateScope && (
+                      <p className="muted">
+                        {candidateScopeKnown
+                          ? zh
+                            ? '当前实现依据未包含这项验收要求。请先调整实现范围并重新审核。'
+                            : 'This obligation is outside the current implementation basis. Update the scope and review it again first.'
+                          : zh
+                            ? '当前候选的验收范围无法确认，请先重新验证候选。'
+                            : 'The current candidate acceptance scope is unavailable. Verify the candidate again first.'}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </section>
@@ -224,7 +287,8 @@ export function GraphDesignEvidence({
               {document.elements.find((e) => e.id === trace.elementId)?.label ?? trace.elementId}
             </button>
             <p>
-              <code>{trace.path}</code> · {trace.symbol ?? trace.testRef ?? '—'} · {trace.status}
+              <code>{trace.path}</code> · {trace.symbol ?? trace.testRef ?? '—'} ·{' '}
+              {graphStateLabel(trace.status, zh)}
             </p>
             <p className="muted">{trace.reason}</p>
           </section>
@@ -267,13 +331,13 @@ export function GraphDesignEvidence({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={busy || !comment.trim() || !candidate}
+            disabled={busy || !canEdit || !comment.trim() || !accepting || acceptanceChanged}
             onClick={() => {
-              if (candidate?.candidateTreeOid && accepting)
+              if (accepting && !acceptanceChanged && canEdit && !busy && comment.trim())
                 void onAccept({
-                  obligationId: accepting,
-                  basisDigest: candidate.basisDigest,
-                  candidateTreeOid: candidate.candidateTreeOid,
+                  obligationId: accepting.obligation.id,
+                  basisDigest: accepting.basisDigest,
+                  candidateTreeOid: accepting.candidateTreeOid,
                   result,
                   comment,
                 }).then((saved) => {
@@ -286,9 +350,30 @@ export function GraphDesignEvidence({
         }
       >
         <div className="graph-design__stack">
+          {acceptanceChanged && (
+            <NoticeBanner tone="warning">
+              {zh
+                ? '候选内容或实现依据已变化。请关闭此窗口，重新打开并确认当前候选后再记录验收。'
+                : 'The candidate or implementation basis has changed. Close this dialog and reopen it to confirm the current candidate before recording acceptance.'}
+            </NoticeBanner>
+          )}
+          {acceptance?.verification.kind === 'manual' && (
+            <>
+              <strong>{zh ? '应满足的结果' : 'Required outcome'}</strong>
+              <p>{acceptance.statement}</p>
+              <strong>{zh ? '验收步骤与观察要求' : 'Acceptance steps and observations'}</strong>
+              <p className="graph-design__instructions">{acceptance.verification.instructions}</p>
+              <p className="muted">
+                {zh ? '负责人：' : 'Owner: '}
+                {acceptance.verification.owner ?? (zh ? '尚未安排' : 'Unassigned')} ·{' '}
+                {zh ? '复核时间：' : 'Review date: '}
+                {acceptance.verification.when ?? (zh ? '尚未安排' : 'Unassigned')}
+              </p>
+            </>
+          )}
           <p>
             {zh ? '本判断只适用于以下候选内容：' : 'This judgment applies only to this candidate:'}{' '}
-            <code>{candidate?.candidateTreeOid}</code>
+            <code>{accepting?.candidateTreeOid}</code>
           </p>
           <Field label={zh ? '结论' : 'Result'}>
             <Select
@@ -301,7 +386,12 @@ export function GraphDesignEvidence({
             />
           </Field>
           <Field label={zh ? '操作与观察结果' : 'Steps and observations'} required>
-            <TextArea value={comment} onChange={setComment} />
+            <TextArea
+              value={comment}
+              onChange={setComment}
+              aria-label={zh ? '操作与观察结果' : 'Steps and observations'}
+              required
+            />
           </Field>
         </div>
       </Dialog>

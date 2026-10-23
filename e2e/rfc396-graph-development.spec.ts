@@ -1,5 +1,6 @@
-// Synthetic model boundary; real daemon, Case, native clarify/review, Git and design APIs.
-// Actual model-quality acceptance is recorded separately in RFC-396.
+// Model output and the code host are controlled fixtures. The daemon, Case, native
+// clarify/review, Git, MR publication and external-state observation use production paths.
+// Actual model-quality and hosted-provider acceptance are recorded separately in RFC-396.
 import { expect, test, type Page } from '@playwright/test'
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -8,10 +9,12 @@ import type { ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
 
 test.setTimeout(300_000)
 let daemon: DaemonHandle
+let mocks: SystemMockClient
 let employeeId: string
 let repositoryId: string
-const typeRef = 'graph-development@1'
+const typeRef = 'graph-development@2'
 const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+const projectPath = `rfc396/graph-${tag}`
 async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(`${daemon.baseUrl}${path}`, {
     method: method ?? (body === undefined ? 'GET' : 'POST'),
@@ -24,7 +27,7 @@ async function api<T>(path: string, body?: unknown, method?: string): Promise<T>
 }
 test.beforeAll(async () => {
   daemon = await startDaemon({ stubMode: 'graph-development', home: process.env.RFC396_E2E_HOME })
-  const mocks = new SystemMockClient(
+  mocks = new SystemMockClient(
     process.env.AW_SYSTEM_MOCK_CONTROL_URL!,
     process.env.AW_SYSTEM_MOCK_CONTROL_TOKEN!,
   )
@@ -38,7 +41,7 @@ test.beforeAll(async () => {
   )
   const project = await mocks.seedCodeHost({
     provider: 'gitlab',
-    projectPath: `rfc396/graph-${tag}`,
+    projectPath,
     title: 'Graph journey',
     defaultBranch: 'main',
     baseFiles: { 'README.md': '# Existing repository\n' },
@@ -61,7 +64,9 @@ test.beforeAll(async () => {
       `/api/digital-employee-types/${typeRef}/job-templates`,
     )
   ).items
-  const job = jobs.find((row) => row.id === 'platform:graph-development:job:v2')!
+  const job = jobs.find((row) => row.id === 'platform:graph-development:job:mr-v1')
+  expect(job?.publishedRevision).toBeGreaterThan(0)
+  if (!job) throw new Error('graph@2 MR default job is unavailable')
   employeeId = (
     await api<{ id: string }>(`/api/digital-employee-types/${typeRef}/employees`, {
       name: `Graph employee ${tag}`,
@@ -102,6 +107,27 @@ interface Workspace {
     receipt?: { id: string; decision: string; taskId: string }
   }[]
 }
+interface CaseProjection {
+  case: {
+    id: string
+    typeRef: { typeId: string; revision: number }
+    state: 'active' | 'waiting' | 'blocked' | 'terminal'
+    terminalKind: string | null
+  }
+  contexts: { typeId: string }[]
+  detail: {
+    delivery: null | {
+      kind: 'merge-request'
+      status: 'active' | 'merged' | 'closed'
+      ref: string
+      webUrl: string | null
+      sourceBranch: string | null
+      targetBranch: string | null
+      headSha: string
+      readyToMerge: boolean
+    }
+  }
+}
 async function open(page: Page, caseId: string) {
   await page.addInitScript(
     ({ baseUrl, token }) => {
@@ -115,7 +141,12 @@ async function open(page: Page, caseId: string) {
   await expect(page.getByTestId('graph-design-workspace')).toBeVisible()
 }
 
-async function journey(page: Page, scenario: string, followup: string) {
+async function journey(
+  page: Page,
+  scenario: string,
+  followup: string,
+  finalMrState: 'merged' | 'closed' = 'merged',
+) {
   const launched = await api<{ case: { id: string } }>(
     `/api/digital-employees/${employeeId}/cases`,
     {
@@ -131,6 +162,7 @@ async function journey(page: Page, scenario: string, followup: string) {
     },
   )
   const caseId = launched.case.id
+  const caseProjection = () => api<CaseProjection>(`/api/employee-cases/${caseId}`)
   let identity: { id: string } | null = null
   await expect
     .poll(
@@ -346,14 +378,67 @@ async function journey(page: Page, scenario: string, followup: string) {
       { timeout: 90_000 },
     )
     .toBe(true)
+  // The internal candidate receipt is an MR handoff, not the end of this graph@2 Case.
+  await expect
+    .poll(
+      async () => {
+        const state = await caseProjection()
+        return state.case.state === 'waiting' && state.detail.delivery?.status === 'active'
+      },
+      { timeout: 90_000, intervals: [1_000, 2_500, 5_000] },
+    )
+    .toBe(true)
+  const published = await caseProjection()
+  expect(published.case).toMatchObject({
+    id: caseId,
+    typeRef: { typeId: 'graph-development', revision: 2 },
+    terminalKind: null,
+  })
+  expect(['active', 'waiting']).toContain(published.case.state)
+  expect(published.contexts.map((context) => context.typeId)).toEqual(
+    expect.arrayContaining([
+      'graph-development.design-context',
+      'development.issue-handling',
+      'development.change-candidate',
+      'development.merge-request',
+    ]),
+  )
+  const delivery = published.detail.delivery
+  if (!delivery?.sourceBranch || !delivery.webUrl) throw new Error('MR publication is incomplete')
+  expect(delivery.kind).toBe('merge-request')
+  expect(delivery.targetBranch).toBe('main')
+  expect(delivery.sourceBranch).not.toBe(delivery.targetBranch)
+  // This default job has no enterprise CI connection; an absent check cannot establish readiness.
+  expect(delivery.readyToMerge).toBe(false)
+  const project = (await mocks.snapshot()).codeHosts.find(
+    (host) => host.projectPath === projectPath,
+  )
+  const matchingMrs =
+    project?.mergeRequests.filter((mr) => mr.sourceBranch === delivery.sourceBranch) ?? []
+  expect(matchingMrs).toHaveLength(1)
+  const mergeRequest = matchingMrs[0]!
+  expect(mergeRequest).toMatchObject({
+    state: 'opened',
+    headSha: delivery.headSha,
+    targetBranch: 'main',
+  })
+  expect(
+    (await workspace()).executionLinks.filter((link) => link.kind === 'delivery').at(-1)?.commitSha,
+  ).toBe(delivery.headSha)
   await page.reload()
   await expect(page.getByTestId('graph-design-workspace')).toBeVisible()
-  await test.info().attach('delivered-graph-workspace', {
+  const care = page.getByTestId('graph-delivery-care')
+  await expect(care).toContainText(delivery.ref)
+  await expect(care).toContainText(`${delivery.sourceBranch} → main`)
+  await expect(care.getByRole('link', { name: 'Open MR', exact: true })).toHaveAttribute(
+    'href',
+    delivery.webUrl,
+  )
+  await test.info().attach('graph-mr-published-and-waiting', {
     body: await page.screenshot({ fullPage: true }),
     contentType: 'image/png',
   })
-  // Graph work does not use the development employee's MR/workspace projection.
-  // A delivered graph Case must not claim its workspace is still unprepared.
+  // Graph design remains the primary workspace while the same Case owns its MR care contexts.
   await page.getByRole('link', { name: /^Overview Input,/ }).click()
   await expect(page.getByTestId('employee-case-overview-repo')).toContainText(
     'The frozen baseline, candidate and delivery are in the design workspace.',
@@ -361,7 +446,45 @@ async function journey(page: Page, scenario: string, followup: string) {
   await expect(
     page.getByText('The workspace is not prepared; this is the task target.'),
   ).toHaveCount(0)
-  await expect(page.getByTestId('employee-case-overview-mr')).toHaveCount(0)
+  // Change only the external fixture. The real observer must discover the new state
+  // and settle this same Case; no internal event injection or Case termination endpoint is used.
+  await mocks.mutateCodeHost({
+    kind: 'set-mr-state',
+    provider: 'gitlab',
+    projectPath,
+    number: mergeRequest.number,
+    state: finalMrState,
+  })
+  await expect
+    .poll(
+      async () => {
+        const state = await caseProjection()
+        return {
+          caseId: state.case.id,
+          state: state.case.state,
+          terminalKind: state.case.terminalKind,
+          mrRef: state.detail.delivery?.ref,
+          mrStatus: state.detail.delivery?.status,
+        }
+      },
+      { timeout: 90_000, intervals: [1_000, 2_500, 5_000] },
+    )
+    .toEqual({
+      caseId,
+      state: 'terminal',
+      terminalKind: finalMrState,
+      mrRef: delivery.ref,
+      mrStatus: finalMrState,
+    })
+  expect((await workspace()).host.state).toBe('terminal')
+  await open(page, caseId)
+  await expect(page.getByTestId('graph-delivery-care')).toContainText(
+    finalMrState === 'merged' ? 'Merge request merged' : 'Merge request closed without merging',
+  )
+  await test.info().attach(`graph-mr-${finalMrState}`, {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png',
+  })
   if (scenario.startsWith('Booking:')) {
     const current = await workspace()
     const receipt = await api<{ caseId: string }>(`${base}/clarification-requests`, {
@@ -376,7 +499,7 @@ async function journey(page: Page, scenario: string, followup: string) {
   }
 }
 
-test('RFC-396 booking journey adapts graphs and delivers an explicitly accepted candidate', async ({
+test('RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge', async ({
   page,
 }) => {
   await journey(
@@ -385,13 +508,14 @@ test('RFC-396 booking journey adapts graphs and delivers an explicitly accepted 
     'Add a priority rule for concurrent requests',
   )
 })
-test('RFC-396 notification journey adapts graphs for duplicate and out-of-order constraints', async ({
+test('RFC-396 notification journey adapts graphs and observes MR close without merging', async ({
   page,
 }) => {
   await journey(
     page,
     'Notifications: deliver asynchronous messages',
     'Add duplicate and out-of-order handling',
+    'closed',
   )
 })
 test('RFC-396 existing-module journey preserves the interface and adds exception rules', async ({

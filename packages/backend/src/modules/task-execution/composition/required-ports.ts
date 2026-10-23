@@ -14,6 +14,8 @@ export interface DigitalEmployeeWorkspacePort {
         readonly platformInputPaths: readonly string[]
         /** Optional business facts discovered while materializing the scene. */
         readonly contractProjectionJson?: string
+        /** Scene material directions do not alter the tool's frozen business input schema. */
+        readonly materialInstructions?: string
       }
   >
   validate(input: {

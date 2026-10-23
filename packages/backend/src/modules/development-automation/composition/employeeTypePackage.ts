@@ -27,6 +27,11 @@ import {
   developmentWorkContractsV2,
 } from './digitalEmployeeToolContractsV2'
 import { upgradeLegacyDevelopmentProgram } from './legacyDevelopmentProgramUpgrade'
+import {
+  isMergeRequestLifecycleWorkItem,
+  usesMinimalMergeRequestToolContracts,
+  usesTargetAwareMergeRequestPipeline,
+} from '../domain/mergeRequestLifecycle'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
@@ -97,12 +102,8 @@ const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revi
 const runtimeEmployeeTypeRefSchema = z
   .object({ typeId: z.string().min(1), revision: z.number().int().positive() })
   .strict()
-const isTargetAwarePipeline = (
-  employeeTypeRef: z.infer<typeof runtimeEmployeeTypeRefSchema> | null,
-): boolean => employeeTypeRef?.typeId === 'development' && employeeTypeRef.revision >= 8
-const usesMinimalToolContracts = (
-  employeeTypeRef: z.infer<typeof runtimeEmployeeTypeRefSchema> | null,
-): boolean => employeeTypeRef?.typeId === 'development' && employeeTypeRef.revision >= 9
+const isTargetAwarePipeline = usesTargetAwareMergeRequestPipeline
+const usesMinimalToolContracts = usesMinimalMergeRequestToolContracts
 const minimalDirectResultWorkItemRefs = new Set([
   'prepare-materials',
   'analyze-implement',
@@ -3101,6 +3102,38 @@ export const developmentEmployeeTypePackage: EmployeeTypePackageRegistration = {
   },
 }
 
+/** The shared MR delivery/care vocabulary, without the legacy intake and implementation spine. */
+export const mergeRequestLifecycleDescriptor = (() => {
+  const descriptor = runtimePackage.descriptor
+  const workItems = descriptor.authoringManifest.workItems.filter((item) =>
+    isMergeRequestLifecycleWorkItem(item.workItemRef),
+  )
+  const contractKeys = new Set(
+    workItems.map((item) => `${item.workContractRef.contractId}@${item.workContractRef.version}`),
+  )
+  return {
+    lifecycleRegions: descriptor.authoringManifest.lifecycleRegions.filter(
+      (region) => region.regionId === 'care',
+    ),
+    workItems,
+    workContracts: descriptor.workContracts.filter((contract) =>
+      contractKeys.has(`${contract.contractId}@${contract.version}`),
+    ),
+    contextTypes: descriptor.contextTypes,
+    eventSources: descriptor.eventSources.map((source) => ({
+      ...source,
+      ownerTypeId: source.ownerTypeId ?? descriptor.typeRef.typeId,
+    })),
+    eventTypes: descriptor.eventTypes.map((event) => ({
+      ...event,
+      ownerTypeId: descriptor.typeRef.typeId,
+    })),
+    attentionRules: descriptor.attentionRules,
+    reactionRules: descriptor.reactionRules,
+    invocationContracts: descriptor.invocationContracts,
+  }
+})()
+
 const uploadSeedSchema = z
   .object({
     artifactRef: z.string().min(1).max(1_000),
@@ -3617,6 +3650,7 @@ const reactionContextRecordSchema = z
 const initialCaseRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
+    employeeTypeRef: runtimeEmployeeTypeRefSchema.optional(),
     caseRef: z.string().min(1).max(200),
     employeeRef: z
       .object({ id: z.string().min(1).max(200), revision: z.number().int().positive() })
@@ -3653,6 +3687,8 @@ const initialCaseRequestSchema = z
 const invokedCaseRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
+    caseRef: z.string().min(1).optional(),
+    employeeTypeRef: runtimeEmployeeTypeRefSchema.optional(),
     invocationRef: z.string().min(1),
     parentCaseRef: z.object({ id: z.string().min(1), revision: z.number().int().positive() }),
     targetEmployeeRef: z
@@ -5391,4 +5427,24 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       artifactRefs: output.artifactRefs,
     })
   },
+}
+
+/**
+ * Shared behavior is referenced directly, so the established development path
+ * and graph care cannot drift into separate implementations. All methods keep
+ * the caller's frozen employeeTypeRef and select capabilities from that ref.
+ */
+export const mergeRequestLifecycleRuntimeCodec = {
+  validateContextJson: developmentEmployeeRuntimeCodec.validateContextJson,
+  resolveExternalSubjectBindingsJson:
+    developmentEmployeeRuntimeCodec.resolveExternalSubjectBindingsJson!,
+  resolveAttentionSubjectsJson: developmentEmployeeRuntimeCodec.resolveAttentionSubjectsJson,
+  selectReactionToolSlotJson: developmentEmployeeRuntimeCodec.selectReactionToolSlotJson,
+  assembleReactionInputJson: developmentEmployeeRuntimeCodec.assembleReactionInputJson,
+  validateReactionOutputJson: developmentEmployeeRuntimeCodec.validateReactionOutputJson,
+  resolveReactionSettlementJson: developmentEmployeeRuntimeCodec.resolveReactionSettlementJson,
+  buildInvokedCaseJson: developmentEmployeeRuntimeCodec.buildInvokedCaseJson,
+  buildInvocationStartedOutputJson:
+    developmentEmployeeRuntimeCodec.buildInvocationStartedOutputJson,
+  buildInvocationResultOutputJson: developmentEmployeeRuntimeCodec.buildInvocationResultOutputJson,
 }

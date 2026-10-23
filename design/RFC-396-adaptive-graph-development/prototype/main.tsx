@@ -3,7 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { Card } from '../../../packages/frontend/src/components/Card'
 import { PageHeader } from '../../../packages/frontend/src/components/PageHeader'
 import { Field, TextArea } from '../../../packages/frontend/src/components/Form'
+import { GraphDesignDelivery } from '../../../packages/frontend/src/components/digital-employees/GraphDesignDelivery'
+import {
+  projectGraphDeliveryCare,
+  type GraphDeliveryProgress,
+  type GraphMergeRequestDelivery,
+} from '../../../packages/frontend/src/components/digital-employees/graphDeliveryModel'
 import '../../../packages/frontend/src/styles.css'
+import '../../../packages/frontend/src/components/digital-employees/GraphDesignWorkspace.css'
 import './prototype.css'
 
 type View = { id: string; title: string; kind: string; why: string; nodes: string[] }
@@ -112,16 +119,75 @@ function Prototype() {
   const [saved, setSaved] = useState('')
   const [maturity, setMaturity] = useState('未标记')
   const [savedMaturity, setSavedMaturity] = useState('未标记')
-  const [phase, setPhase] = useState<'design' | 'preview' | 'review' | 'approved' | 'result'>(
-    'design',
-  )
+  const [phase, setPhase] = useState<
+    'design' | 'preview' | 'review' | 'approved' | 'result' | 'care'
+  >('design')
   const [revision, setRevision] = useState(1)
   const [notice, setNotice] = useState('当前组合覆盖已知问题；发现新约束后可以调整。')
   const [missing, setMissing] = useState(false)
   const [dark, setDark] = useState(false)
+  const [careStage, setCareStage] = useState('ci')
   const example = examples[scenario]!
   const views: View[] = [...example.initial, ...(expanded ? example.extra : [])]
   const view = views.find((candidate) => candidate.id === selected) ?? views[0]!
+  const mr: GraphMergeRequestDelivery = {
+    kind: 'merge-request',
+    status: careStage === 'merged' ? 'merged' : careStage === 'closed' ? 'closed' : 'active',
+    ref: '示例仓库 !42',
+    webUrl: null,
+    sourceBranch: 'graph/booking-42',
+    targetBranch: 'main',
+    headSha: 'a'.repeat(40),
+    targetSha: 'b'.repeat(40),
+    mergedCommitSha: careStage === 'merged' ? 'c'.repeat(40) : null,
+    draft: false,
+    mergeableState: careStage === 'conflict' ? 'conflict' : 'mergeable',
+    readyToMerge: careStage === 'waiting',
+    approvalHold: careStage === 'approval',
+    unresolvedReviewCount: careStage === 'review' ? 2 : 0,
+  }
+  const care: GraphDeliveryProgress = {
+    mode: 'merge-request',
+    caseState: ['merged', 'closed'].includes(careStage) ? 'terminal' : 'waiting',
+    terminalKind: ['merged', 'closed'].includes(careStage) ? careStage : null,
+    blockReason: null,
+    workItemRef:
+      (
+        {
+          ci: 'repair-pipeline',
+          review: 'repair-feedback',
+          conflict: 'repair-conflict',
+          approval: 'observe-approval',
+          waiting: 'wait-merge',
+        } as Record<string, string>
+      )[careStage] ?? null,
+    nextAction: {
+      tone: 'info',
+      title: '数字人持续看护',
+      body: '演示：收到新的仓库事件后，自动在同一个任务中继续处理。',
+    },
+    delivery: mr,
+    care: projectGraphDeliveryCare(mr, [
+      {
+        typeId: 'development.pipeline',
+        updatedAt: Date.UTC(2026, 9, 22, 12),
+        state: {
+          status: careStage === 'ci' ? 'failed' : 'passed',
+          mergeRequestRef: mr.ref,
+          headSha: careStage === 'stale' ? 'd'.repeat(40) : mr.headSha,
+          targetSha: mr.targetSha,
+          checks: [
+            {
+              checkRef: 'tests',
+              name: '预约并发回归（演示）',
+              status: careStage === 'ci' ? 'failed' : 'passed',
+              summary: careStage === 'ci' ? '重复预约断言失败，进入归因与修复。' : '6 项断言通过。',
+            },
+          ],
+        },
+      },
+    ]),
+  }
   function switchScenario(index: number) {
     setScenario(index)
     setExpanded(false)
@@ -202,6 +268,38 @@ function Prototype() {
         </button>
       </div>
       <p role="status">{notice}</p>
+      <Card title="MR 持续看护原型">
+        <p>这些状态只用于审核交互，不创建 MR、不发送评审回复、不执行合并。</p>
+        <div className="graph-design__actions">
+          {Object.entries({
+            ci: 'CI 失败修复',
+            review: '评审反馈',
+            conflict: '合并冲突',
+            approval: '等待审批',
+            stale: '旧提交结果',
+            waiting: '等待合入',
+            merged: '已合入',
+            closed: '关闭未合入',
+          }).map(([key, label]) => (
+            <button
+              className="btn btn--sm"
+              key={key}
+              aria-pressed={phase === 'care' && careStage === key}
+              onClick={() => {
+                setPhase('care')
+                setCareStage(key)
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Card>
+      {phase === 'care' && (
+        <div className="graph-design">
+          <GraphDesignDelivery progress={care} zh />
+        </div>
+      )}
       <div className="graph-prototype__columns">
         <aside>
           <Card title="目标与关键问题">
@@ -428,8 +526,21 @@ function Prototype() {
                 >
                   从证据定位设计
                 </button>
+                <button
+                  className="btn btn--primary"
+                  onClick={() => {
+                    setPhase('care')
+                    setCareStage('ci')
+                    setNotice(
+                      '演示：修复并通过独立验证后创建 MR；代码生成后的 CI、评审、冲突与审批仍由同一数字人跟进。',
+                    )
+                  }}
+                >
+                  修复并通过验证，创建 MR（演示）
+                </button>
               </>
             )}
+            {phase === 'care' && <p>交付与看护状态见上方。内部候选提交不代表 MR 已合入。</p>}
           </Card>
         </aside>
       </div>

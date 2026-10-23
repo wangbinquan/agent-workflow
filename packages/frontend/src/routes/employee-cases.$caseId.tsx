@@ -8,6 +8,10 @@ import type { CachedRepo, CaseMembers, TaskLaunchOrigin } from '@agent-workflow/
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import { GraphDesignWorkspace } from '@/components/digital-employees/GraphDesignWorkspace'
+import {
+  projectGraphDeliveryCare,
+  deliveryStateLabel,
+} from '@/components/digital-employees/graphDeliveryModel'
 import type {
   DigitalEmployeeDefinition,
   EmployeeTypePackage,
@@ -909,6 +913,16 @@ function EmployeeCaseDetailPage(): ReactElement {
               initialView={search.designView}
               canOperate={canInteract && members.data?.canOperate === true}
               executionAvailable={execution.available}
+              deliveryProgress={{
+                mode: data.case.typeRef.revision >= 2 ? 'merge-request' : 'local-artifact',
+                caseState: data.case.state,
+                terminalKind: data.case.terminalKind,
+                blockReason: data.case.blockReason,
+                workItemRef: data.case.currentWorkItemRef,
+                nextAction: nextActionCopy(data, zh),
+                delivery,
+                care: projectGraphDeliveryCare(delivery, data.contexts),
+              }}
             />
           )}
           {tab === 'overview' && data.case.typeRef.typeId === 'graph-development' && (
@@ -1676,7 +1690,7 @@ function EmployeeCaseDetailPage(): ReactElement {
                       <StatusChip kind="neutral">{zh ? '尚未创建' : 'Not created'}</StatusChip>
                     ) : (
                       <StatusChip kind={delivery.status === 'active' ? 'info' : 'success'}>
-                        {delivery.status}
+                        {deliveryStateLabel(delivery.status, zh)}
                       </StatusChip>
                     )
                   }
@@ -1731,7 +1745,7 @@ function EmployeeCaseDetailPage(): ReactElement {
                         </div>
                         <div>
                           <dt>{zh ? '可合入状态' : 'Mergeability'}</dt>
-                          <dd>{delivery.mergeableState}</dd>
+                          <dd>{deliveryStateLabel(delivery.mergeableState, zh)}</dd>
                         </div>
                         <div>
                           <dt>{zh ? '随时可合入' : 'Ready to merge'}</dt>

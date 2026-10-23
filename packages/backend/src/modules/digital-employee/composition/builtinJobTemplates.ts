@@ -10,6 +10,33 @@ export function composeBuiltinEmployeeJobs(
 ) {
   const store = createDigitalEmployeeAuthoringPersistence(db)
   return {
+    /** Setup templates are user-configurable after the first seed; restart never overwrites edits. */
+    async ensureDraft(input: { id: string; name: string; content: unknown }) {
+      const content = employeeJobTemplateContentSchema.parse(input.content)
+      const existing = await store.getJobTemplate(input.id)
+      if (existing) {
+        if (
+          existing.typeRef.typeId !== content.typeRef.typeId ||
+          existing.typeRef.revision !== content.typeRef.revision
+        )
+          throw new Error(`builtin-employee-job-type-conflict:${input.id}`)
+        return { id: existing.id, publishedRevision: existing.publishedRevision }
+      }
+      const now = Date.now()
+      await store.createJobTemplate({
+        id: input.id,
+        typeRef: content.typeRef,
+        name: input.name,
+        draft: content,
+        publishedRevision: null,
+        ownerUserId: null,
+        visibility: 'public',
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+      })
+      return { id: input.id, publishedRevision: null }
+    },
     async ensure(input: { id: string; name: string; content: unknown }) {
       const content = employeeJobTemplateContentSchema.parse(input.content)
       const existing = await store.getJobTemplate(input.id)

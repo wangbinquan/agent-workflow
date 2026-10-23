@@ -1,10 +1,20 @@
-import type { GraphDesignDocument, GraphViewPlan, GraphViewProposal } from '@agent-workflow/shared'
-import { graphContentRefs } from './model'
+import type {
+  GraphDesignDocument,
+  GraphViewPlan,
+  GraphViewProposal,
+  GraphViewSpec,
+} from '@agent-workflow/shared'
+import { graphContentRefs, graphDependencyRefId, graphDigest } from './model'
+import { graphSemanticClosureIds } from './localPlanningScope'
 import { graphViewCapability } from './viewCapabilities'
 
 export interface GraphPlanningBudget {
   readonly reading: number
   readonly generation: number
+}
+export interface GraphViewSelectionOptions {
+  /** Only a user's explicit update-view action may refresh this stale pinned view. */
+  readonly refreshViewId?: string
 }
 export const GRAPH_DEFAULT_PLANNING_BUDGET: GraphPlanningBudget = Object.freeze({
   reading: 12,
@@ -12,11 +22,67 @@ export const GRAPH_DEFAULT_PLANNING_BUDGET: GraphPlanningBudget = Object.freeze(
 })
 const concernWeight = { required: 8, important: 3, optional: 1 } as const
 
+export function graphViewAssessmentReadSet(document: GraphDesignDocument, view: GraphViewSpec) {
+  const ids = graphSemanticClosureIds(document, [
+    ...view.elementIds,
+    ...view.modelIds,
+    ...view.relationIds,
+    ...view.sourceIds,
+    ...view.concernIds,
+  ])
+  ids.add(`${document.id}:repository`)
+  ids.add(`${document.id}:scope`)
+  for (const element of document.elements)
+    if (ids.has(element.id)) ids.add(graphDependencyRefId(element.id))
+  // Presentation flags and revision bumps are not evidence about the semantics.
+  for (const item of document.views) ids.delete(item.id)
+  return graphContentRefs(document).filter((ref) => ids.has(ref.id))
+}
+
+/** Layout, pinning and the act of accepting a revision do not change an assessment. */
+export function graphViewAssessmentFingerprint(document: GraphDesignDocument, view: GraphViewSpec) {
+  const normalize = <T extends { revision: number }>(items: T[]) =>
+    items.map((item) => ({ ...item, revision: 1 }))
+  return graphDigest(
+    graphViewAssessmentReadSet(
+      {
+        ...document,
+        concerns: normalize(document.concerns),
+        elements: normalize(document.elements),
+        relations: normalize(document.relations),
+        models: normalize(document.models),
+        views: normalize(document.views),
+        obligations: normalize(document.obligations),
+      },
+      view,
+    ),
+  )
+}
+
+export function graphViewMatchesAssessment(view: GraphViewSpec, candidate: GraphViewProposal) {
+  const shape = (value: GraphViewSpec | GraphViewProposal) => ({
+    title: value.title,
+    purpose: value.purpose,
+    capabilityRef: value.capabilityRef,
+    modelIds: [...value.modelIds].sort(),
+    elementIds: [...value.elementIds].sort(),
+    relationIds: [...value.relationIds].sort(),
+    sourceIds: [...value.sourceIds].sort(),
+    concernIds: ('coverage' in value
+      ? value.coverage.map((item) => item.concernId)
+      : [...value.concernIds]
+    ).sort(),
+  })
+  return graphDigest(shape(view)) === graphDigest(shape(candidate))
+}
+
 /** Deterministic bounded recommendation given candidates; candidate generation remains model-driven. */
 export function selectGraphViews(
   document: GraphDesignDocument,
   candidates: readonly GraphViewProposal[],
   budget: GraphPlanningBudget,
+  previousPlan?: GraphViewPlan | null,
+  options: GraphViewSelectionOptions = {},
 ): GraphViewPlan {
   if (
     !Number.isFinite(budget.reading) ||
@@ -63,9 +129,26 @@ export function selectGraphViews(
   }
   const pinned = document.views.filter((view) => view.pinned && view.status !== 'archived')
   const selected = new Map<string, GraphViewProposal>()
+  const retained = new Set<string>()
+  const assessedReads = new Map(previousPlan?.readSet.map((ref) => [ref.id, ref.digest]) ?? [])
   for (const view of pinned) {
     const candidate =
-      view.status === 'current' ? valid.find((item) => item.id === view.id) : undefined
+      view.status === 'current' || options.refreshViewId === view.id
+        ? valid.find((item) => item.id === view.id)
+        : undefined
+    const previous = previousPlan?.candidates.find(
+      (item) =>
+        previousPlan.selectedIds.includes(item.id) &&
+        item.id === view.id &&
+        graphViewMatchesAssessment(view, item),
+    )
+    const assessmentCurrent =
+      view.status === 'current' &&
+      previous !== undefined &&
+      graphViewAssessmentReadSet(document, view).every(
+        (ref) => assessedReads.get(ref.id) === ref.digest,
+      )
+    if (!candidate) retained.add(view.id)
     selected.set(
       view.id,
       candidate ?? {
@@ -77,17 +160,28 @@ export function selectGraphViews(
           .filter((id) => concerns.has(id))
           .map((concernId) => ({
             concernId,
-            contribution: view.status === 'current' ? 1 : 0,
-            explanation: '用户固定的现有视图',
+            contribution: assessmentCurrent
+              ? (previous.coverage.find((item) => item.concernId === concernId)?.contribution ?? 0)
+              : 0,
+            explanation: assessmentCurrent
+              ? (previous.coverage.find((item) => item.concernId === concernId)?.explanation ??
+                '尚未评估该关注点')
+              : '保留用户固定视图；当前覆盖尚未确认。',
           })),
         modelIds: view.modelIds,
         elementIds: view.elementIds,
         relationIds: view.relationIds,
         sourceIds: view.sourceIds,
-        readingCost: 1,
-        generationCost: 0,
+        readingCost: previous?.readingCost ?? Math.max(1, view.modelIds.length),
+        generationCost: previous?.generationCost ?? 0,
         rationale: '用户固定；过期时保留并提示更新。',
-        limitations: view.limitations,
+        limitations: [
+          ...new Set([
+            ...view.limitations,
+            ...(assessmentCurrent ? [] : ['固定视图的覆盖待重新评估；保留不代表已覆盖。']),
+            ...(previous ? [] : ['历史阅读成本不可用，当前为最低估计。']),
+          ]),
+        ],
         replaces: [],
       },
     )
@@ -208,11 +302,13 @@ export function selectGraphViews(
     decisions.push({
       candidateId: candidate.id,
       selected: included,
-      reason: pinned.some((view) => view.id === candidate.id)
-        ? 'user-pinned'
-        : included
-          ? 'additional-concern-coverage'
-          : 'redundant-or-over-budget',
+      reason: retained.has(candidate.id)
+        ? 'user-pinned-preserved'
+        : pinned.some((view) => view.id === candidate.id)
+          ? 'user-pinned'
+          : included
+            ? 'additional-concern-coverage'
+            : 'redundant-or-over-budget',
       marginalValue: value([...others, candidate]) - value(others),
     })
   }
@@ -220,7 +316,7 @@ export function selectGraphViews(
     decisions.push({
       candidateId: view.id,
       selected: true,
-      reason: 'user-pinned',
+      reason: 'user-pinned-preserved',
       marginalValue: 0,
     })
   const used = cost(selected.values())
@@ -236,4 +332,46 @@ export function selectGraphViews(
     ],
     decisions,
   }
+}
+
+/** Materialize only the selector's accepted candidates, including genuine pinned fallbacks. */
+export function materializeGraphViewPlan(
+  document: GraphDesignDocument,
+  plan: GraphViewPlan,
+): GraphViewSpec[] {
+  const candidates = new Map(plan.candidates.map((candidate) => [candidate.id, candidate]))
+  const previous = new Map(document.views.map((view) => [view.id, view]))
+  const preserved = new Set(
+    plan.decisions
+      .filter((decision) => decision.selected && decision.reason === 'user-pinned-preserved')
+      .map((decision) => decision.candidateId),
+  )
+  const views = plan.selectedIds.map((viewId): GraphViewSpec => {
+    const candidate = candidates.get(viewId),
+      old = previous.get(viewId)
+    if (!candidate) throw new Error('graph-view-plan-selected-missing')
+    if (preserved.has(viewId)) {
+      if (!old) throw new Error('graph-view-plan-preserved-missing')
+      return { ...old, limitations: candidate.limitations }
+    }
+    return {
+      id: candidate.id,
+      revision: old?.revision ?? 1,
+      title: candidate.title,
+      purpose: candidate.purpose,
+      capabilityRef: candidate.capabilityRef,
+      concernIds: [...new Set(candidate.coverage.map((item) => item.concernId))],
+      modelIds: candidate.modelIds,
+      elementIds: candidate.elementIds,
+      relationIds: candidate.relationIds,
+      sourceIds: candidate.sourceIds,
+      status: 'current',
+      pinned: old?.pinned ?? false,
+      explanation: candidate.rationale,
+      limitations: candidate.limitations,
+    }
+  })
+  for (const view of document.views)
+    if (!plan.selectedIds.includes(view.id)) views.push({ ...view, status: 'archived' })
+  return views
 }

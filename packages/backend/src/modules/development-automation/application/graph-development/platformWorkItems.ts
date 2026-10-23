@@ -20,6 +20,21 @@ export function createGraphPlatformWorkItems(deps: {
   verification: ReturnType<typeof createGraphVerification>
   candidates: CandidateDeliveryParticipant
   publication?: { remoteUrl(repositoryId: string): Promise<string> }
+  mergeRequestDelivery?: {
+    prepareHandoff(input: {
+      work: GraphEmployeeContext
+      roundRef: string
+      workspace: GraphVerificationWorkspace
+      verification: {
+        candidate: { candidateRef: string; treeOid: string }
+        basisId: string
+        basisDigest: string
+        implementationRoundRef: string
+      }
+      commitSha: string
+      deliveryContent: { commitMessage: string; title: string; description: string }
+    }): Promise<{ issueState: unknown; candidateState: unknown; artifactRefs: readonly string[] }>
+  }
 }) {
   return {
     async execute(
@@ -123,7 +138,7 @@ export function createGraphPlatformWorkItems(deps: {
           newSha: string
           publication: unknown
         } | null = null
-        if (work.request.publicationBranch) {
+        if (work.request.publicationBranch && work.request.deliveryMode !== 'merge-request') {
           if (!deps.publication || !context?.publicationSubject)
             throw new Error('graph-publication-binding-missing')
           const published = await deps.candidates.push({
@@ -146,6 +161,20 @@ export function createGraphPlatformWorkItems(deps: {
           publication = receipt
         }
         const basis = await deps.commands.basis(work.designId, value.basisId)
+        const mergeRequestDelivery =
+          work.request.deliveryMode === 'merge-request'
+            ? await (() => {
+                if (!deps.mergeRequestDelivery) throw new Error('graph-mr-delivery-binding-missing')
+                return deps.mergeRequestDelivery.prepareHandoff({
+                  work,
+                  roundRef: plan.roundRef,
+                  workspace,
+                  verification: value,
+                  commitSha: commit.commitSha,
+                  deliveryContent: output.deliveryContent,
+                })
+              })()
+            : null
         const links = await deps.store.links(work.designId)
         const artifact = await deps.artifacts.put([
           {
@@ -162,17 +191,33 @@ export function createGraphPlatformWorkItems(deps: {
                 .filter((link) => ['trace', 'evidence'].includes(link.kind))
                 .map((link) => JSON.parse(link.payloadJson)),
               limitations: [
-                publication
-                  ? '远端发布已完成；CI 与部署需另有实际回执。'
-                  : '该回执记录内部候选提交；未配置远端发布和部署。',
+                mergeRequestDelivery
+                  ? '候选已交给 MR 提交与持续看护流程；MR 创建、CI 与外部合入仍待各自回执。'
+                  : publication
+                    ? '远端发布已完成；CI 与部署需另有实际回执。'
+                    : '该回执记录内部候选提交；未配置远端发布和部署。',
               ],
             }),
           },
         ])
         result = {
-          artifactRefs: [basis.artifact.artifactRef, artifact.artifactRef],
+          artifactRefs: [
+            ...new Set([
+              basis.artifact.artifactRef,
+              artifact.artifactRef,
+              ...(mergeRequestDelivery?.artifactRefs ?? []),
+            ]),
+          ],
           commitSha: commit.commitSha,
           publication: publication?.remoteRef ?? null,
+          ...(mergeRequestDelivery
+            ? {
+                mergeRequestDelivery: {
+                  issueStateJson: canonicalJson(mergeRequestDelivery.issueState),
+                  candidateStateJson: canonicalJson(mergeRequestDelivery.candidateState),
+                },
+              }
+            : {}),
         }
         await deps.store.insertLink({
           designId: work.designId,
@@ -188,7 +233,9 @@ export function createGraphPlatformWorkItems(deps: {
           }),
           createdAt: Date.now(),
         })
-        summary = '设计、候选提交与验证证据已交付。'
+        summary = mergeRequestDelivery
+          ? '候选与图验证已就绪，继续提交 MR 并持续看护。'
+          : '设计、候选提交与验证证据已交付。'
       } else throw new Error('graph-platform-work-item-unknown')
       return JSON.stringify(graphToolResultSchema(plan.workItemRef).parse({ summary, result }))
     },

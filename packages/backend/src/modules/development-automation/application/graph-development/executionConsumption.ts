@@ -1,17 +1,17 @@
-import {
-  canonicalJson,
-  GraphProposalSchema,
-  type GraphSource,
-  type GraphViewSpec,
-} from '@agent-workflow/shared'
+import { canonicalJson, GraphProposalSchema, type GraphSource } from '@agent-workflow/shared'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import type { GraphHumanInputFacts, GraphExecutionFacts } from '../ports/graphHostFacts'
 import { sha256Hex } from '@/util/hash'
 import { ValidationError } from '@/util/errors'
-import { graphContentRefs, graphDigest } from '../../domain/graph-development/model'
+import {
+  graphContentRefs,
+  graphDigest,
+  invalidateGraphViews,
+} from '../../domain/graph-development/model'
 import {
   GRAPH_DEFAULT_PLANNING_BUDGET,
   selectGraphViews,
+  materializeGraphViewPlan,
 } from '../../domain/graph-development/selectViews'
 import { graphToolResultSchema, graphResultSchemas } from './toolContracts'
 import type { GraphDesignStore } from '../ports/graphDesignStore'
@@ -24,6 +24,7 @@ import {
   graphWork,
   isGraphPlan,
 } from './reactionMaterial'
+import { readAcceptedGraphViewPlan } from './viewPlanningHistory'
 
 export function createGraphExecutionConsumption(deps: {
   readonly rounds: EmployeeReactionRoundQueryPort
@@ -218,31 +219,15 @@ export function createGraphExecutionConsumption(deps: {
     const importId = `import:${graphDigest({ round: plan.roundRef, content: output, sources })}`
     if (links.some((link) => link.id === importId)) return
     const document = { ...output.document, sources, views: frozen.views }
-    const viewPlan = selectGraphViews(document, output.candidates, GRAPH_DEFAULT_PLANNING_BUDGET)
-    const views: GraphViewSpec[] = viewPlan.selectedIds.map((id) => {
-      const candidate = output.candidates.find((value) => value.id === id)
-      const old = frozen.views.find((value) => value.id === id)
-      if (!candidate && old) return old
-      if (!candidate) throw new Error('graph-import-view-missing')
-      return {
-        id,
-        revision: old?.revision ?? 1,
-        title: candidate.title,
-        purpose: candidate.purpose,
-        capabilityRef: candidate.capabilityRef,
-        concernIds: candidate.coverage.map((c) => c.concernId),
-        modelIds: candidate.modelIds,
-        elementIds: candidate.elementIds,
-        relationIds: candidate.relationIds,
-        sourceIds: candidate.sourceIds,
-        status: 'current',
-        pinned: old?.pinned ?? false,
-        explanation: candidate.rationale,
-        limitations: candidate.limitations,
-      }
-    })
-    for (const view of frozen.views)
-      if (!viewPlan.selectedIds.includes(view.id)) views.push({ ...view, status: 'archived' })
+    invalidateGraphViews(frozen, document)
+    const previousPlan = await readAcceptedGraphViewPlan({ ...deps, document })
+    const viewPlan = selectGraphViews(
+      document,
+      output.candidates,
+      GRAPH_DEFAULT_PLANNING_BUDGET,
+      previousPlan,
+    )
+    const views = materializeGraphViewPlan(document, viewPlan)
     const previous = await deps.store.record(work.designId, `proposal:${importId}`)
     const proposal = previous
       ? GraphProposalSchema.parse(

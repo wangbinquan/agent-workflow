@@ -60,6 +60,9 @@
 .graph-design code {
   overflow-wrap: anywhere;
 }
+.graph-design__instructions {
+  white-space: pre-wrap;
+}
 .graph-design__selected {
   border-inline-start: 3px solid var(--accent);
   padding-inline-start: 0.75rem;

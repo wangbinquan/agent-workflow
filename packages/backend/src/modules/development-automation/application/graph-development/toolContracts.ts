@@ -94,6 +94,10 @@ export const graphResultSchemas = {
       artifactRefs: z.array(id),
       commitSha: id.nullable(),
       publication: z.string().nullable(),
+      mergeRequestDelivery: z
+        .object({ issueStateJson: z.string(), candidateStateJson: z.string() })
+        .strict()
+        .optional(),
     })
     .strict(),
 } as const

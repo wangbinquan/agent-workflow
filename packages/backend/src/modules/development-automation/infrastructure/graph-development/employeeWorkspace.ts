@@ -63,6 +63,8 @@ export function createGraphEmployeeWorkspace(deps: {
   readonly inputArtifacts: { copyBlobTo(blobRef: string, target: string): void | Promise<void> }
   readonly consumeResult: (input: { planJson: string; outputJson: string }) => Promise<void>
   readonly verificationProfiles: () => Promise<readonly unknown[]>
+  /** After MR handoff, graph edits and verification share the care workspace's current head. */
+  readonly continuationWorkspace?: (designId: string) => Promise<GraphWorkspaceState | null>
 }) {
   const factory = deps.factory
   async function resolveBaseline(repositoryId: string, targetBranch: string | null) {
@@ -77,6 +79,8 @@ export function createGraphEmployeeWorkspace(deps: {
     return { repository, baseline }
   }
   async function state(designId: string): Promise<GraphWorkspaceState> {
+    const continuation = await deps.continuationWorkspace?.(designId)
+    if (continuation) return continuation
     const record = await deps.store.record(designId, 'workspace')
     if (!record || record.status !== 'ready') throw new Error('graph-workspace-not-ready')
     return JSON.parse(record.payloadJson) as GraphWorkspaceState

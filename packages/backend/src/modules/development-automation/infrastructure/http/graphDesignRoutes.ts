@@ -110,6 +110,8 @@ export function mountGraphDesignRoutes(
           revision: z.coerce.number().int().positive().optional(),
           offset: z.coerce.number().int().nonnegative().optional(),
           limit: z.coerce.number().int().min(1).max(250).optional(),
+          search: z.string().max(200).optional(),
+          focusId: id.optional(),
         })
         .parse(context.req.query())
       return context.json(await graph.queries.view(designId, context.req.param('viewId'), query))
