@@ -5,13 +5,15 @@ import { expect, test, type Page } from '@playwright/test'
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 import { startDaemon, type DaemonHandle } from './harness'
 import { clarifyQuestionSetKey, clarifyAnswerBasis } from '../packages/shared/src/clarifyMindmap'
-import type { ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
+import type { ClarifyAnswer, ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
 
 test.setTimeout(300_000)
 let daemon: DaemonHandle
 let mocks: SystemMockClient
 let employeeId: string
 let repositoryId: string
+let repositoryUrl: string
+let defaultJob: { id: string; name: string; revision: number }
 const typeRef = 'graph-development@2'
 const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const projectPath = `rfc396/graph-${tag}`
@@ -46,6 +48,7 @@ test.beforeAll(async () => {
     defaultBranch: 'main',
     baseFiles: { 'README.md': '# Existing repository\n' },
   })
+  repositoryUrl = project.repoHttpUrl
   const batch = await api<{ batchId: string }>('/api/cached-repos/batch-import', {
     urls: [project.repoHttpUrl],
   })
@@ -60,13 +63,16 @@ test.beforeAll(async () => {
     await api<{ items: { id: string; urlRedacted: string }[] }>('/api/cached-repos')
   ).items.find((row) => row.urlRedacted === project.repoHttpUrl)!.id
   const jobs = (
-    await api<{ items: { id: string; publishedRevision: number }[] }>(
+    await api<{ items: { id: string; name: string; publishedRevision: number | null }[] }>(
       `/api/digital-employee-types/${typeRef}/job-templates`,
     )
   ).items
   const job = jobs.find((row) => row.id === 'platform:graph-development:job:mr-v1')
   expect(job?.publishedRevision).toBeGreaterThan(0)
-  if (!job) throw new Error('graph@2 MR default job is unavailable')
+  if (!job || job.publishedRevision === null)
+    throw new Error('graph@2 MR default job is unavailable')
+  defaultJob = { id: job.id, name: job.name, revision: job.publishedRevision }
+  // The other scenarios share an API fixture; booking creates its own employee in the browser.
   employeeId = (
     await api<{ id: string }>(`/api/digital-employee-types/${typeRef}/employees`, {
       name: `Graph employee ${tag}`,
@@ -90,7 +96,7 @@ interface Workspace {
     sources: {
       kind: string
       originalAnswer?: string
-      decision?: { status?: string; validationOwner?: string }
+      decision?: { status?: string; uncertainty?: string; validationOwner?: string }
     }[]
   }
   host: {
@@ -128,7 +134,7 @@ interface CaseProjection {
     }
   }
 }
-async function open(page: Page, caseId: string) {
+async function primeAuth(page: Page) {
   await page.addInitScript(
     ({ baseUrl, token }) => {
       localStorage.setItem('agent-workflow.baseUrl', baseUrl)
@@ -137,8 +143,165 @@ async function open(page: Page, caseId: string) {
     },
     { baseUrl: daemon.baseUrl, token: daemon.token },
   )
+}
+
+async function open(page: Page, caseId: string) {
+  await primeAuth(page)
   await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}?tab=design`)
   await expect(page.getByTestId('graph-design-workspace')).toBeVisible()
+}
+
+async function createBookingCaseThroughUi(page: Page, scenario: string): Promise<string> {
+  await primeAuth(page)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${daemon.baseUrl}/digital-employees/${encodeURIComponent(typeRef)}`)
+  await page.getByRole('tab', { name: 'Employees', exact: true }).click()
+  await page.getByRole('button', { name: 'Create employee', exact: true }).click()
+  const employeeName = `Graph browser employee ${tag}`
+  const dialog = page.getByRole('dialog', { name: 'Create digital employee', exact: true })
+  await dialog.getByLabel('Employee name').fill(employeeName)
+  await dialog.getByRole('combobox', { name: 'Job template', exact: true }).click()
+  await page.getByRole('option', { name: defaultJob.name, exact: true }).click()
+  await expect(dialog.getByTestId('employee-scope-picker')).toContainText(
+    'Choose repository when starting a task',
+  )
+  const creating = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      decodeURIComponent(new URL(response.url()).pathname) ===
+        `/api/digital-employee-types/${typeRef}/employees`,
+  )
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  const created = await creating
+  expect(created.status()).toBe(201)
+  expect(created.request().postDataJSON()).toMatchObject({
+    name: employeeName,
+    jobTemplateRef: { id: defaultJob.id, revision: defaultJob.revision },
+    workScope: { kind: 'task' },
+  })
+  const employee = (await created.json()) as { id: string }
+  const card = page.locator('.employee-summary-card--employee').filter({ hasText: employeeName })
+  await expect(card).toContainText(defaultJob.name)
+  await card.getByRole('link', { name: 'Create task', exact: true }).click()
+  await expect(page.getByTestId('stepper-step-mode')).toHaveAttribute('aria-current', 'step')
+  await expect(page.getByRole('combobox', { name: 'Digital employee', exact: true })).toContainText(
+    employeeName,
+  )
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('stepper-step-space')).toHaveAttribute('aria-current', 'step')
+  await page.getByTestId('repo-source-recent-urls-0').click()
+  await page.getByRole('option', { name: repositoryUrl, exact: true }).click()
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('stepper-step-content')).toHaveAttribute('aria-current', 'step')
+  await page.getByTestId('wizard-task-name').fill(scenario)
+  await page.getByRole('radio', { name: 'Write request', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Request', exact: true }).fill(scenario)
+  await page.getByTestId('stepper-next').click()
+  await expect(page.getByTestId('stepper-step-confirm')).toHaveAttribute('aria-current', 'step')
+  await expect(page.getByTestId('employee-case-summary-employee')).toContainText(employeeName)
+  await expect(page.getByTestId('employee-case-summary-space')).toContainText(projectPath)
+  await expect(page.getByTestId('employee-case-summary-name')).toContainText(scenario)
+  await expect(page.getByTestId('employee-case-summary-content')).toContainText(scenario)
+  await test.info().attach('graph-booking-create-task', {
+    body: await page.getByTestId('task-wizard').screenshot(),
+    contentType: 'image/png',
+  })
+  const launching = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === `/api/digital-employees/${employee.id}/cases`,
+  )
+  await page.getByTestId('wizard-launch').click()
+  const launched = await launching
+  expect(launched.ok()).toBe(true)
+  expect(launched.request().postDataJSON()).toMatchObject({
+    name: scenario,
+    kind: 'body',
+    body: scenario,
+    target: { repositoryId },
+  })
+  const projection = (await launched.json()) as { case: { id: string } }
+  await expect(page).toHaveURL(
+    (url) => url.pathname === `/tasks/employee-cases/${projection.case.id}`,
+  )
+  return projection.case.id
+}
+
+async function answerOriginalQuestionsThroughUi(
+  page: Page,
+  taskId: string,
+  roundId: string,
+  round: { iteration: number; questions: ClarifyQuestion[] },
+  answer: ClarifyAnswer,
+) {
+  await page.getByRole('link', { name: 'Answer original questions', exact: true }).click()
+  await expect(page).toHaveURL((url) => url.pathname === `/tasks/${taskId}`)
+  await page.locator('[data-task-detail-section-link="task-questions"]').first().click()
+  await expect(page.getByTestId('task-questions-board')).toBeVisible()
+  await page.getByTestId('tq-open-answer-pane').click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Open mindmap to clarify and review', exact: true })
+    .click()
+  await expect(page).toHaveURL((url) => url.pathname === `/clarify/${roundId}`)
+  await expect(page.getByRole('img', { name: 'Clarification mindmap', exact: true })).toBeVisible()
+  const question = round.questions.find((entry) => entry.id === answer.questionId)!
+  await page.getByRole('textbox', { name: 'Search categories or questions' }).fill(question.title)
+  await page.getByRole('option').filter({ hasText: question.title }).click()
+  const questionDialog = page.getByRole('dialog')
+  await expect(
+    questionDialog.getByRole('heading', { name: question.title, exact: true }),
+  ).toBeVisible()
+  await test.info().attach('graph-booking-original-questions', {
+    body: await questionDialog.screenshot(),
+    contentType: 'image/png',
+  })
+  await questionDialog.getByTestId('clarify-custom-radio').check()
+  await questionDialog.getByTestId('clarify-custom-textarea').fill(answer.customText)
+  await questionDialog.locator('summary').filter({ hasText: 'Decision context' }).click()
+  await questionDialog.getByRole('radio', { name: 'Provisional', exact: true }).click()
+  await questionDialog
+    .getByRole('textbox', { name: 'Still unverified', exact: true })
+    .fill(answer.decision!.uncertainty!)
+  await expect(questionDialog.getByRole('textbox', { name: 'Who will validate' })).toHaveValue('')
+  await expect(
+    questionDialog.getByRole('textbox', { name: 'When or under what conditions to revisit' }),
+  ).toHaveValue('')
+  await questionDialog.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
+  await expect(
+    questionDialog.getByRole('button', { name: 'Confirmed', exact: true }),
+  ).toBeDisabled()
+  await questionDialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toBeVisible()
+  await page.getByTestId('mindmap-review-open').click()
+  const review = page.getByTestId('mindmap-review')
+  await expect(review).toContainText(answer.customText)
+  await expect(review).toContainText('Provisional')
+  await expect(review).toContainText(answer.decision!.uncertainty!)
+  await expect(review).toContainText(
+    'This decision is provisional; validation ownership or review timing is still unspecified.',
+  )
+  await expect(page.getByTestId('mindmap-review-submit')).toBeEnabled()
+  await test.info().attach('graph-booking-answer-confirmation', {
+    body: await review.screenshot(),
+    contentType: 'image/png',
+  })
+  const submitting = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === `/api/clarify/${roundId}/answers`,
+  )
+  await page.getByTestId('mindmap-review-submit').click()
+  const submitted = await submitting
+  expect(submitted.ok()).toBe(true)
+  expect(submitted.request().postDataJSON()).toMatchObject({
+    ifMatchIteration: round.iteration,
+    questionSetKey: clarifyQuestionSetKey(round.questions),
+    directive: 'stop',
+    answers: [{ ...answer, confirmedBasis: clarifyAnswerBasis(question, answer) }],
+  })
 }
 
 async function journey(
@@ -147,21 +310,22 @@ async function journey(
   followup: string,
   finalMrState: 'merged' | 'closed' = 'merged',
 ) {
-  const launched = await api<{ case: { id: string } }>(
-    `/api/digital-employees/${employeeId}/cases`,
-    {
-      name: scenario,
-      kind: 'body',
-      body: scenario,
-      externalId: null,
-      target: { repositoryId },
-      uploads: [],
-      executionOptions: {},
-      advanced: { typeOptions: {} },
-      idempotencyKey: `${tag}:${scenario}`,
-    },
-  )
-  const caseId = launched.case.id
+  const booking = scenario.startsWith('Booking:')
+  const caseId = booking
+    ? await createBookingCaseThroughUi(page, scenario)
+    : (
+        await api<{ case: { id: string } }>(`/api/digital-employees/${employeeId}/cases`, {
+          name: scenario,
+          kind: 'body',
+          body: scenario,
+          externalId: null,
+          target: { repositoryId },
+          uploads: [],
+          executionOptions: {},
+          advanced: { typeOptions: {} },
+          idempotencyKey: `${tag}:${scenario}`,
+        })
+      ).case.id
   const caseProjection = () => api<CaseProjection>(`/api/employee-cases/${caseId}`)
   let identity: { id: string } | null = null
   await expect
@@ -202,27 +366,38 @@ async function journey(
     customText: 'Keep exceptions explicit; owner and date are undecided',
     decision: { status: 'provisional' as const, uncertainty: 'Owner and date remain unknown' },
   }
-  await api(`/api/clarify/${roundId}/answers`, {
-    ifMatchIteration: round.iteration,
-    questionSetKey: clarifyQuestionSetKey(round.questions),
-    answers: [
-      {
-        ...answer,
-        confirmedBasis: clarifyAnswerBasis(
-          round.questions.find((question) => question.id === answer.questionId)!,
-          answer,
-        ),
-      },
-    ],
-  })
+  if (booking) {
+    await answerOriginalQuestionsThroughUi(
+      page,
+      host.editableClarify!.taskId,
+      roundId,
+      round,
+      answer,
+    )
+  } else {
+    await api(`/api/clarify/${roundId}/answers`, {
+      ifMatchIteration: round.iteration,
+      questionSetKey: clarifyQuestionSetKey(round.questions),
+      answers: [
+        {
+          ...answer,
+          confirmedBasis: clarifyAnswerBasis(
+            round.questions.find((question) => question.id === answer.questionId)!,
+            answer,
+          ),
+        },
+      ],
+    })
+  }
   await expect
     .poll(async () => (await workspace()).host.executionRef, { timeout: 90_000 })
     .toBeNull()
   const human = (await workspace()).document.sources.find((source) => source.kind === 'clarify')!
   expect(human.originalAnswer).toContain('owner and date are undecided')
   expect(human.decision?.status).toBe('provisional')
+  expect(human.decision?.uncertainty).toBe('Owner and date remain unknown')
   expect(human.decision?.validationOwner).toBeUndefined()
-  await page.reload()
+  await open(page, caseId)
   await page.getByRole('button', { name: 'Pin this view', exact: true }).click()
   // The semantic pin edit advances the revision. Wait for the response/refetch
   // before starting requests that deliberately bind that revision (Windows CI).
@@ -246,7 +421,7 @@ async function journey(
     },
     'PUT',
   )
-  if (scenario.startsWith('Booking:')) {
+  if (booking) {
     const requestId = `${tag}:cancel`
     await api(`${base}/actions`, {
       requestId,
@@ -286,11 +461,28 @@ async function journey(
       async () => (await workspace()).document.views.filter((v) => v.status !== 'archived').length,
     )
     .toBe(2)
+  if (booking) {
+    await page.getByRole('button', { name: 'Business flow', exact: true }).first().click()
+    const graph = page.getByRole('region', { name: 'flow', exact: true })
+    await expect(graph.locator('svg')).toBeVisible()
+    await graph.scrollIntoViewIfNeeded()
+    await test.info().attach('graph-booking-adapted-flow', {
+      body: await graph.screenshot(),
+      contentType: 'image/png',
+    })
+  }
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 })
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true)
+    if (booking) {
+      await page.getByRole('region', { name: 'flow', exact: true }).scrollIntoViewIfNeeded()
+      await test.info().attach(`graph-booking-${width}px`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      })
+    }
   }
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.getByRole('button', { name: 'Preview implementation basis', exact: true }).click()
@@ -444,6 +636,18 @@ async function journey(
     body: await page.screenshot({ fullPage: true }),
     contentType: 'image/png',
   })
+  if (booking) {
+    await care.getByRole('link', { name: 'Configure CI care job', exact: true }).click()
+    await expect(page).toHaveURL(
+      (url) =>
+        decodeURIComponent(url.pathname) === `/digital-employees/${typeRef}` &&
+        url.searchParams.get('view') === 'jobs' &&
+        url.searchParams.get('jobTemplateId') === 'platform:graph-development:job:mr-ci-v1' &&
+        url.searchParams.get('workItem') === 'collect-pipeline',
+    )
+    await expect(page.getByTestId('employee-job-template-editor')).toBeVisible()
+    await open(page, caseId)
+  }
   // Graph design remains the primary workspace while the same Case owns its MR care contexts.
   await page.getByRole('link', { name: /^Overview Input,/ }).click()
   await expect(page.getByTestId('employee-case-overview-repo')).toContainText(
@@ -491,7 +695,7 @@ async function journey(
     body: await page.screenshot({ fullPage: true }),
     contentType: 'image/png',
   })
-  if (scenario.startsWith('Booking:')) {
+  if (booking) {
     const current = await workspace()
     const receipt = await api<{ caseId: string }>(`${base}/clarification-requests`, {
       requestId: `${tag}:followon`,

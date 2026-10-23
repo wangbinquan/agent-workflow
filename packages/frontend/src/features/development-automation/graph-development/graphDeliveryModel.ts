@@ -119,6 +119,17 @@ export function projectGraphDeliveryCare(
 }
 export type GraphDeliveryCare = ReturnType<typeof projectGraphDeliveryCare>
 
+/** An initial empty pending context is a placeholder, not evidence that CI has started. */
+export function graphPipelineStatus(pipeline: GraphDeliveryCare['pipeline']) {
+  if (!pipeline || (pipeline.value.status === 'pending' && pipeline.value.checks.length === 0))
+    return 'unknown'
+  if (!pipeline.current) return 'stale'
+  if (pipeline.value.status !== 'pending') return pipeline.value.status
+  if (pipeline.value.checks.some((check) => check.status === 'running')) return 'running'
+  if (pipeline.value.checks.some((check) => check.status === 'queued')) return 'queued'
+  return 'pending'
+}
+
 export interface GraphDeliveryProgress {
   mode: 'merge-request' | 'local-artifact'
   caseState: string
@@ -152,6 +163,7 @@ export function graphDeliveryStatus(progress: GraphDeliveryProgress, zh: boolean
   // is still active, or its last work item was waiting for approval or a merge.
   if (progress.caseState === 'terminal' || progress.caseState === 'blocked')
     return progress.nextAction
+  if (progress.nextAction.tone === 'warning') return progress.nextAction
   if (progress.mode === 'local-artifact' && !delivery)
     return {
       tone: 'info' as const,
@@ -165,32 +177,97 @@ export function graphDeliveryStatus(progress: GraphDeliveryProgress, zh: boolean
       tone: 'info' as const,
       title: zh ? 'MR 尚未创建' : 'Merge request not yet created',
       body: zh
-        ? '设计批准、实现与独立验证通过后，数字人会发布工作分支并创建 MR，然后继续处理 CI、评审和合并冲突。'
-        : 'After design approval, implementation and independent verification, the employee publishes the working branch, creates an MR, and continues with CI, review feedback and merge conflicts.',
+        ? '设计批准、实现与独立验证通过后，数字人会发布工作分支并创建 MR，继续处理评审和合并冲突。CI 看护需要本工作启动时的岗位已配置企业流水线连接。'
+        : 'After design approval, implementation and independent verification, the employee publishes the working branch, creates an MR, and handles reviews and merge conflicts. CI care requires a pipeline connection in the job configuration frozen when this work started.',
     }
-  if (progress.nextAction.tone === 'warning') return progress.nextAction
-  const stages: Record<string, [string, string]> = {
-    'observe-mr': ['同步 MR 最新状态', 'Synchronize the latest MR state'],
-    'classify-feedback': ['归因评审意见', 'Classify review feedback'],
-    'acknowledge-feedback': ['确认收到评审意见', 'Acknowledge review feedback'],
-    'repair-feedback': ['修复评审问题', 'Repair review findings'],
-    'reply-feedback': ['发布修复并回复评审', 'Publish repairs and reply to reviewers'],
+  const stages: Record<string, [string, string, string, string]> = {
+    'observe-mr': [
+      '同步 MR 最新状态',
+      'Synchronize the latest MR state',
+      '数字人会同步 MR 的源提交、目标分支、评审和冲突状态；仓库确认合入或关闭后结束看护。CI 检查按本工作启动时的岗位配置执行。',
+      'The employee synchronizes the MR head, target branch, reviews and conflicts. Care ends when the repository confirms that the MR was merged or closed. CI checks follow the job configuration frozen when this work started.',
+    ],
+    'classify-feedback': [
+      '归因评审意见',
+      'Classify review feedback',
+      '正在判断哪些评审意见需要修改代码、补充说明或人工决定，处理结果会保留在 MR 记录中。',
+      'Review feedback is being classified into code changes, explanations or human decisions. The handling results remain in the MR record.',
+    ],
+    'acknowledge-feedback': [
+      '确认收到评审意见',
+      'Acknowledge review feedback',
+      '正在确认收到新的评审意见，随后按意见内容修复或回复。',
+      'New review feedback is being acknowledged before the employee repairs or replies to it.',
+    ],
+    'repair-feedback': [
+      '修复评审问题',
+      'Repair review findings',
+      '正在按已批准的设计修复评审问题；发布前会重新验证修改后的候选。',
+      'Review findings are being repaired against the approved design. The changed candidate is verified again before publication.',
+    ],
+    'reply-feedback': [
+      '发布修复并回复评审',
+      'Publish repairs and reply to reviewers',
+      '正在将处理结果回复到原评审线程；需要改代码的修复会更新当前 MR。',
+      'Results are being posted to the original review threads. Repairs that require code changes update this MR.',
+    ],
     'collect-pipeline': [
       '收集当前提交的流水线结果',
       'Collect pipeline results for the current commit',
+      '正在通过已配置的连接收集流水线状态和检查记录；结果必须对应当前 MR 的源提交和目标分支。',
+      'The configured connection is collecting pipeline states and check records for the current MR head and target branch.',
     ],
-    'classify-pipeline': ['分析流水线失败原因', 'Classify pipeline failures'],
-    'repair-pipeline': ['修复流水线问题', 'Repair pipeline failures'],
-    'repair-conflict': ['处理合并冲突', 'Resolve merge conflicts'],
-    'publish-conflict': ['发布冲突修复', 'Publish conflict repairs'],
-    'prepare-approval': ['准备审批材料', 'Prepare approval material'],
-    'submit-approval': ['提交审批', 'Submit approval'],
-    'observe-approval': ['跟踪审批结果', 'Track approval results'],
-    'evaluate-ready': ['检查合并条件', 'Evaluate merge readiness'],
+    'classify-pipeline': [
+      '分析流水线失败原因',
+      'Classify pipeline failures',
+      '正在依据流水线检查和日志判断失败原因，再按岗位配置安排修复。',
+      'Pipeline checks and logs are being used to identify the cause of failure and select the repair configured for this job.',
+    ],
+    'repair-pipeline': [
+      '修复流水线问题',
+      'Repair pipeline failures',
+      '正在修复当前提交的流水线问题；修改后重新验证候选并等待新提交的检查结果。',
+      'Pipeline failures for the current commit are being repaired. The changed candidate is verified again and new checks must match the published commit.',
+    ],
+    'repair-conflict': [
+      '处理合并冲突',
+      'Resolve merge conflicts',
+      '正在将目标分支的变化合入当前工作分支并处理冲突；修复仍须符合已批准的设计。',
+      'Target branch changes are being merged into the working branch and conflicts resolved against the approved design.',
+    ],
+    'publish-conflict': [
+      '发布冲突修复',
+      'Publish conflict repairs',
+      '正在验证并发布冲突修复，随后重新同步 MR 的提交和合并状态。',
+      'The conflict repair is being verified and published before the MR commits and mergeability are synchronized again.',
+    ],
+    'prepare-approval': [
+      '准备审批材料',
+      'Prepare approval material',
+      '正在为当前 MR 提交准备审批材料，材料和后续决定会保留在审批记录中。',
+      'Approval material is being prepared for the current MR commit. The material and decision remain in the approval record.',
+    ],
+    'submit-approval': [
+      '提交审批',
+      'Submit approval',
+      '正在通过已配置的审批流程提交材料，随后跟踪该提交对应的审批决定。',
+      'Material is being submitted through the configured approval process. The decision is tracked for the corresponding commit.',
+    ],
+    'observe-approval': [
+      '跟踪审批结果',
+      'Track approval results',
+      '审批决定更新后继续处理当前 MR；旧提交的审批不会作为当前提交已批准的依据。',
+      'Work on this MR continues when the approval decision changes. Approval for an earlier commit does not approve the current commit.',
+    ],
+    'evaluate-ready': [
+      '检查合并条件',
+      'Evaluate merge readiness',
+      '正在核对当前 MR 的提交、检查、评审和审批记录；条件满足后等待仓库侧合入，数字人不会自动合并。',
+      'The current MR commits, checks, reviews and approvals are being checked. Once the prerequisites are met, the employee waits for the repository to merge the MR; it does not merge automatically.',
+    ],
   }
   const stage = progress.workItemRef && stages[progress.workItemRef]
-  if (stage)
-    return { tone: 'info' as const, title: stage[zh ? 0 : 1], body: progress.nextAction.body }
+  if (stage) return { tone: 'info' as const, title: stage[zh ? 0 : 1], body: stage[zh ? 2 : 3] }
   if (
     delivery.approvalHold ||
     (progress.care.approval?.current && progress.care.approval.value.status === 'pending')
@@ -207,8 +284,8 @@ export function graphDeliveryStatus(progress: GraphDeliveryProgress, zh: boolean
       tone: 'info' as const,
       title: zh ? '等待 MR 合入' : 'Awaiting MR merge',
       body: zh
-        ? '数字人继续跟踪 MR 的源提交、目标分支、CI 和评审；收到权威合入或关闭结果后才结束看护。'
-        : 'The employee keeps tracking the MR head, target branch, CI and reviews until an authoritative merge or close result ends care.',
+        ? '数字人继续跟踪 MR 的源提交、目标分支和评审，并按本工作的岗位配置跟踪 CI；收到仓库确认的合入或关闭结果后才结束看护。'
+        : 'The employee keeps tracking the MR head, target branch and reviews, with CI care as configured for this work. Care ends only when the repository confirms a merge or close.',
     }
   return progress.nextAction
 }

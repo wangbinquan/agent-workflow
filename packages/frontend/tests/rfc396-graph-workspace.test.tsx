@@ -695,6 +695,114 @@ test.each(['headSha', 'targetSha', 'mergeRequestRef'] as const)(
     const pipeline = screen.getByRole('region', { name: '流水线检查' })
     expect(within(pipeline).getByText('CI 流水线 · 尚未确认')).toBeTruthy()
     expect(within(pipeline).getByText(/旧版本记录，等待重新检查/)).toBeTruthy()
+    expect(within(pipeline).queryByText('CI 流水线 · 通过')).toBeNull()
+    fireEvent.click(screen.getByText('版本、检查、审批与评审记录'))
+    const record = screen.getByRole('region', { name: '流水线记录' })
+    expect(within(record).getByText('记录中的流水线状态 · 通过')).toBeTruthy()
+    expect(within(record).getByText('单元测试 · 通过（旧版本）')).toBeTruthy()
+  },
+)
+
+test.each(['missing', 'initial-pending'] as const)(
+  '%s pipeline evidence keeps the CI configuration entry and frozen-job explanation visible',
+  (kind) => {
+    const delivery = deliveryFixture()
+    const care = projectGraphDeliveryCare(
+      delivery,
+      kind === 'missing'
+        ? []
+        : [
+            {
+              typeId: 'development.pipeline',
+              state: {
+                status: 'pending',
+                mergeRequestRef: delivery.ref,
+                headSha: delivery.headSha,
+                targetSha: delivery.targetSha,
+                checks: [],
+              },
+              updatedAt: 1,
+            },
+          ],
+    )
+    render(<GraphDesignDelivery progress={{ ...deliveryProgress(delivery), care }} zh />)
+    const pipeline = screen.getByRole('region', { name: '流水线检查' })
+    expect(within(pipeline).getByText('CI 流水线 · 尚未确认')).toBeTruthy()
+    expect(within(pipeline).getByText('尚无可读取的流水线检查结果，不能判为通过。')).toBeTruthy()
+    expect(within(pipeline).getByText(/仅凭空记录无法判断是否配置或启动了 CI/)).toBeTruthy()
+    expect(within(pipeline).getByText(/已有工作保持启动时的配置/)).toBeTruthy()
+    const configure = within(pipeline).getByRole('link', { name: '配置 CI 看护岗位' })
+    expect(configure.getAttribute('href')).toBe(
+      '/digital-employees/graph-development%402?view=jobs&jobTemplateId=platform%3Agraph-development%3Ajob%3Amr-ci-v1&workItem=collect-pipeline',
+    )
+    expect(configure.closest('details')).toBeNull()
+    expect(within(pipeline).queryByText('CI 流水线 · 等待结果')).toBeNull()
+    expect((screen.getByTestId('graph-delivery-records') as HTMLDetailsElement).open).toBe(false)
+  },
+)
+
+test.each([
+  ['queued', '排队中'],
+  ['running', '执行中'],
+  ['passed', '通过'],
+  ['failed', '失败'],
+] as const)(
+  'a current %s check is visible as actual CI activity, with inspectable results',
+  (status, label) => {
+    const delivery = deliveryFixture()
+    const care = projectGraphDeliveryCare(delivery, [
+      {
+        typeId: 'development.pipeline',
+        state: {
+          status: status === 'passed' || status === 'failed' ? status : 'pending',
+          mergeRequestRef: delivery.ref,
+          headSha: delivery.headSha,
+          targetSha: delivery.targetSha,
+          checks: [{ checkRef: 'unit', name: '单元测试', status, summary: '精确提交的检查记录' }],
+        },
+        updatedAt: 1,
+      },
+    ])
+    render(<GraphDesignDelivery progress={{ ...deliveryProgress(delivery), care }} zh />)
+    const pipeline = screen.getByRole('region', { name: '流水线检查' })
+    expect(within(pipeline).getByText(`CI 流水线 · ${label}`)).toBeTruthy()
+    expect(within(pipeline).queryByRole('link', { name: '配置 CI 看护岗位' })).toBeNull()
+    fireEvent.click(screen.getByText('版本、检查、审批与评审记录'))
+    const record = screen.getByRole('region', { name: '流水线记录' })
+    expect(within(record).getByText(`单元测试 · ${label}`)).toBeTruthy()
+    expect(within(record).getByText('精确提交的检查记录')).toBeTruthy()
+  },
+)
+
+test.each([
+  ['canceled', '已取消'],
+  ['skipped', '已跳过'],
+] as const)(
+  'a %s check does not turn a pending pipeline into successful evidence',
+  (status, label) => {
+    const delivery = deliveryFixture()
+    const care = projectGraphDeliveryCare(delivery, [
+      {
+        typeId: 'development.pipeline',
+        state: {
+          status: 'pending',
+          mergeRequestRef: delivery.ref,
+          headSha: delivery.headSha,
+          targetSha: delivery.targetSha,
+          checks: [{ checkRef: 'unit', name: '单元测试', status }],
+        },
+        updatedAt: 1,
+      },
+    ])
+    render(<GraphDesignDelivery progress={{ ...deliveryProgress(delivery), care }} zh />)
+    const pipeline = screen.getByRole('region', { name: '流水线检查' })
+    expect(within(pipeline).getByText('CI 流水线 · 等待结果')).toBeTruthy()
+    expect(within(pipeline).queryByText('CI 流水线 · 通过')).toBeNull()
+    expect(within(pipeline).queryByText(/尚无可读取的流水线检查结果/)).toBeNull()
+    fireEvent.click(screen.getByText('版本、检查、审批与评审记录'))
+    expect(
+      within(screen.getByRole('region', { name: '流水线记录' })).getByText(`单元测试 · ${label}`),
+    ).toBeTruthy()
   },
 )
 
@@ -729,17 +837,123 @@ test('unknown context data does not become successful evidence, and approval/rev
   expect(care.reviews?.current).toBe(true)
 })
 
-test('MR care exposes exact branches, commits, feedback and a working MR link', () => {
-  render(<GraphDesignDelivery progress={deliveryProgress()} zh />)
+test('MR care keeps its summary compact and reveals exact versions, approvals and feedback on demand', () => {
+  const delivery = deliveryFixture()
+  const care = projectGraphDeliveryCare(delivery, [
+    {
+      typeId: 'development.approval',
+      state: {
+        status: 'approved',
+        mergeRequestRef: delivery.ref,
+        headSha: delivery.headSha,
+        deadlineAt: null,
+      },
+      updatedAt: 2,
+    },
+    {
+      typeId: 'development.review-resolution',
+      state: {
+        status: 'replied',
+        mergeRequestRef: delivery.ref,
+        sourceHeadSha: delivery.headSha,
+        publishedHeadSha: delivery.headSha,
+        threads: [{ threadRef: 'thread-1', disposition: 'addressed', replyBody: '已保留取消规则' }],
+      },
+      updatedAt: 3,
+    },
+  ])
+  render(<GraphDesignDelivery progress={{ ...deliveryProgress(delivery), care }} zh />)
   expect(screen.getByRole('link', { name: '打开 MR' }).getAttribute('href')).toBe(
     'https://example.test/repo/-/merge_requests/42',
   )
-  expect(screen.getByText('work/42 → main')).toBeTruthy()
-  expect(screen.getByText('a'.repeat(40))).toBeTruthy()
-  expect(screen.getByText('b'.repeat(40))).toBeTruthy()
-  expect(screen.getByText('未解决评审')).toBeTruthy()
-  expect(screen.getByText('2')).toBeTruthy()
+  expect(screen.getByText('work/42 → main').closest('details')).toBeNull()
+  const details = screen.getByTestId('graph-delivery-records') as HTMLDetailsElement
+  expect(details.open).toBe(false)
+  expect(screen.getByText(delivery.headSha).closest('details')).toBe(details)
+  expect(screen.getByText(delivery.targetSha!).closest('details')).toBe(details)
+  fireEvent.click(screen.getByText('版本、检查、审批与评审记录'))
+  expect(details.open).toBe(true)
+  expect(within(details).getByText(delivery.headSha)).toBeTruthy()
+  expect(within(details).getByText(delivery.targetSha!)).toBeTruthy()
+  expect(within(details).getByText('未解决评审')).toBeTruthy()
+  expect(within(details).getByText('2')).toBeTruthy()
+  expect(within(details).getByRole('region', { name: '审批进度' }).textContent).toContain('已批准')
+  expect(within(details).getByRole('region', { name: '评审反馈处理' }).textContent).toContain(
+    '已保留取消规则',
+  )
+  fireEvent.click(screen.getByText('版本、检查、审批与评审记录'))
+  expect(details.open).toBe(false)
 })
+
+test.each(['merged', 'closed', 'canceled'] as const)(
+  '%s delivery presents historical records without waiting for CI or merge',
+  (outcome) => {
+    const delivery = {
+      ...deliveryFixture(),
+      status: outcome === 'canceled' ? ('active' as const) : outcome,
+      readyToMerge: true,
+      approvalHold: true,
+      mergedCommitSha: outcome === 'merged' ? 'c'.repeat(40) : null,
+    }
+    const care = projectGraphDeliveryCare(delivery, [
+      {
+        typeId: 'development.pipeline',
+        state: {
+          status: 'pending',
+          mergeRequestRef: delivery.ref,
+          headSha: delivery.headSha,
+          targetSha: delivery.targetSha,
+          checks: [],
+        },
+        updatedAt: 1,
+      },
+    ])
+    render(
+      <GraphDesignDelivery
+        progress={{
+          ...deliveryProgress(delivery),
+          caseState: 'terminal',
+          terminalKind: outcome,
+          nextAction: {
+            tone: 'info',
+            title: '工作已结束',
+            body: '数字人已停止看护，历史仍可查阅。',
+          },
+          care,
+        }}
+        zh
+      />,
+    )
+    expect(screen.getByText('交付记录')).toBeTruthy()
+    expect(
+      screen.getByText(
+        outcome === 'merged'
+          ? 'MR 已合入'
+          : outcome === 'closed'
+            ? 'MR 已关闭，未合入'
+            : '工作已结束',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('CI 历史记录')).toBeTruthy()
+    expect(screen.queryByText('交付与持续看护')).toBeNull()
+    expect(screen.queryByText('CI 流水线 · 等待结果')).toBeNull()
+    expect(screen.queryByText('是，等待仓库侧合入')).toBeNull()
+    const details = screen.getByTestId('graph-delivery-records') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    fireEvent.click(screen.getByText('查看交付历史明细'))
+    expect(details.open).toBe(true)
+    expect(
+      within(details).getByText('以下是工作结束时保留的记录，不再等待流水线、评审或审批。'),
+    ).toBeTruthy()
+    expect(within(details).getByText('合并条件（记录值）')).toBeTruthy()
+    expect(within(details).getByText('已满足')).toBeTruthy()
+    expect(within(details).getByText('记录时存在审批暂停')).toBeTruthy()
+    expect(within(details).getByText(/^与本次交付版本一致/)).toBeTruthy()
+    expect(within(details).getByRole('link', { name: '为后续工作配置 CI 看护岗位' })).toBeTruthy()
+    if (delivery.mergedCommitSha)
+      expect(within(details).getByText(delivery.mergedCommitSha)).toBeTruthy()
+  },
+)
 
 test('an internal candidate is not MR completion and closed is distinct from merged', () => {
   const pending = graphDeliveryStatus(deliveryProgress(null), true)

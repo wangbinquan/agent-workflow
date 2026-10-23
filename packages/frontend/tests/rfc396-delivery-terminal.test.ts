@@ -59,6 +59,66 @@ test.each([true, false])(
   },
 )
 
+test.each([true, false])('MR preparation describes CI as configuration-dependent (zh=%s)', (zh) => {
+  const progress = { ...stopped(zh, null), caseState: 'active', terminalKind: null }
+  const status = graphDeliveryStatus(progress, zh)
+  expect(status.title).toBe(zh ? 'MR 尚未创建' : 'Merge request not yet created')
+  expect(status.body).toContain(zh ? 'CI 看护需要' : 'CI care requires')
+  expect(status.body).toContain(zh ? '启动时的岗位' : 'frozen when this work started')
+})
+
+test.each([true, false])(
+  'MR observation explains repository updates and external termination instead of internal event names (zh=%s)',
+  (zh) => {
+    const progress = {
+      ...stopped(zh, delivery()),
+      caseState: 'waiting',
+      terminalKind: null,
+      workItemRef: 'observe-mr',
+      nextAction: {
+        tone: 'info' as const,
+        title: 'waiting for event',
+        body: 'verification request, review request, implementation request',
+      },
+    }
+    const status = graphDeliveryStatus(progress, zh)
+    expect(status.body).toContain(
+      zh ? '源提交、目标分支、评审和冲突状态' : 'MR head, target branch, reviews and conflicts',
+    )
+    expect(status.body).toContain(
+      zh ? '仓库确认合入或关闭后结束看护' : 'repository confirms that the MR was merged or closed',
+    )
+    expect(status.body).toContain(
+      zh ? '启动时的岗位配置' : 'configuration frozen when this work started',
+    )
+    expect(status.body).not.toContain('verification request')
+    expect(status.body).not.toContain('implementation request')
+  },
+)
+
+test.each([true, false])(
+  'blocked and warning next actions remain authoritative over ordinary MR stage copy (zh=%s)',
+  (zh) => {
+    const nextAction = {
+      tone: 'warning' as const,
+      title: zh ? '需要重新审核设计' : 'Design review required',
+      body: zh ? '候选依据已变化，请重新审核。' : 'The candidate basis changed; review it again.',
+    }
+    for (const caseState of ['blocked', 'waiting']) {
+      for (const value of [null, delivery()]) {
+        const progress = {
+          ...stopped(zh, value),
+          caseState,
+          terminalKind: null,
+          workItemRef: 'observe-mr',
+          nextAction,
+        }
+        expect(graphDeliveryStatus(progress, zh)).toEqual(nextAction)
+      }
+    }
+  },
+)
+
 test.each([true, false])(
   'a stopped case with an open MR no longer claims running care or waiting for merge (zh=%s)',
   (zh) => {

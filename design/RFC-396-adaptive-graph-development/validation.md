@@ -1,5 +1,13 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 Windows 修复已通过，继续补界面验收
+
+`b0afe1b6411f8e3e2333f633871079dd21d636da` 的 [Windows E2E 3/4](https://github.com/wangbinquan/agent-workflow/actions/runs/39960727188/job/120439725490) 已成功，三个 graph@2 交付及合入/关闭旅程均首轮通过；不再用本地路径约束测试代替原生 Windows 结果。该 job 另有普通任务完成的 `1 flaky`，证据保留在 [CI 归因](./ci-audit-2026-10-23.md)，不冒充无重试全绿。
+
+本次准确 SHA 的 GitHub macOS artifact 还完成一次本地真实 daemon/浏览器验收：**3/0，160.2s，无跳过或重试**；截图含 MR 等待、合入和关闭。模型及 code host 仍为 fixture，且原创建/回答步骤通过 API，不能代替完整页面操作或企业连接验收。实际截图揭示空 CI 占位被画成等待、详情占满首屏的问题，已经完成修复与用例，并把预约场景的员工创建、任务受理和原始澄清补为页面操作。新 UI 候选集中前端回归 **60/0，3 files，3.81s**，相关源码/测试 ESLint 通过；实际页面旅程与修复后截图等待新候选运行，不回写旧结果。日志 `/tmp/rfc396-ui-care-central-tests.log`、`/tmp/rfc396-ui-care-lint.log`。
+
+Windows 修复提交的主 CI 已终态 **47 success / 2 failure**，剩余为 Static scans 与派生汇总；功能、构建与十个 E2E 分片均成功，不代表整条 CI 全绿。
+
 ## 2026-10-23 继续验收：旧发布阻塞已处理，Windows 交付修复中
 
 后继 `67ab6b9ae` 已处理误发布的任务启动合同，并保留本任务材料说明能力；其主 CI 类型、后端分片通过。先前“等待完整 II-a 迁移才能继续”的阻塞描述已不再适用于当前提交。目录视觉基线在 `94088b876` 的 exact-SHA 视觉 CI 已通过。
@@ -10,18 +18,18 @@
 
 本轮生产和用例已完成，已以 `ba7b8c6c4a03f0ab952dfd52fee291332dda74f5` 发布到 `origin/main`，集中验证正在收口，RFC 仍 In Progress。旧版内部交付证据在下方保留，不外推为新的 MR 能力通过。
 
-| 范围 | 本轮结果与证据界限 |
-| --- | --- |
-| PostgreSQL，全部 `rfc396-*.test.ts` | **156 pass / 0 fail，909 expect，24 files，168.47s**；真实专用 PostgreSQL，不是 SQLite 推断。日志 `/tmp/rfc396-mr-postgresql-central.log` |
-| SQLite，首轮 24 files | **147 pass / 8 fail，862 expect**；原失败如实保留。2 个 runtime 新断言形状、4 个局部 fixture 非法修改来源、1 个旧人工验收 fixture 不可读、1 个应用装配缺共享 MR 修复工具初始化 |
-| SQLite，失败范围复验 | runtime/jobs/intake **17/0**；local-planning/review-regressions **17/0**；verification **13/0**；HTTP/registration 通过。未重跑未变化的整个集合，不将重叠结果重复累计 |
-| 既有装配回归 | RFC-383 guard 分别追踪 graph@1 / graph@2，保留 former-wiring 对照；修后 **12/0，57 expect**。默认 MR 工具在 load 时先确保共享内置 agents，真实 HTTP 应用启动通过 |
-| 前端交互 | 终止态 **6/0**；人工验收候选/范围变化 **11/0**；工作区修后 **26/0**（含实现门发现的两条恢复旅程）；合计覆盖 **43 个独立用例**，三文件结果分别记录 |
-| 独立实现门 | **PASS**；两处 UI 旅程回归修复后定向复核通过，详见 [implementation-gate](./implementation-gate.md) |
-| 静态 | backend / frontend 初轮修后 `tsc --noEmit` 通过；backend 默认 Node 4 GiB heap OOM，8 GiB 完成。末次共享树前端检查又出现 3 处并发错误：非本任务 `shared/src/schemas/task.ts` 的 `taskExecutionKind` 新增 `digital-employee`，而 `TaskSubjectLink.tsx` / `tasks.new.tsx` 尚未覆盖。实际 diff 已核实，未代改或纳入提交；本任务新增测试的参数类型已修。任务路径 ESLint 通过，最终整仓结论以本次 exact-SHA CI 为准 |
-| MR E2E | 三个既有图旅程已适配 graph@2，保留主要图/审核/证据断言，并增加同 Case MR 创建、缺 CI 不误绿、外部 merged/closed 观测终结；模型与 code host 是受控 fixture。本次托管 CI 的浏览器任务已启动，尚无通过结论；数字员工启动模型的发布依赖缺口单列于下方 |
-| 真人浏览器 | 当前 CUA inventory 为 apps=[] / browsers=[]，创建 iab 返回 `Browser is not available: iab`；不宣称本轮真人界面验收通过 |
-| 发布与 hosted CI | `ba7b8c6c4a03f0ab952dfd52fee291332dda74f5` 已推送，推送后本地/远端差异 `0/0`，共享 index 为空；71 个准确路径包含本任务内并行 Codex 产出，其他在制内容保留未提交。[主 CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 与 [视觉回归 39914131342](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131342) 执行中；此前 `67795ed462` 的结果不能证明新代码 |
+| 范围                                | 本轮结果与证据界限                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL，全部 `rfc396-*.test.ts` | **156 pass / 0 fail，909 expect，24 files，168.47s**；真实专用 PostgreSQL，不是 SQLite 推断。日志 `/tmp/rfc396-mr-postgresql-central.log`                                                                                                                                                                                                                                                                     |
+| SQLite，首轮 24 files               | **147 pass / 8 fail，862 expect**；原失败如实保留。2 个 runtime 新断言形状、4 个局部 fixture 非法修改来源、1 个旧人工验收 fixture 不可读、1 个应用装配缺共享 MR 修复工具初始化                                                                                                                                                                                                                                |
+| SQLite，失败范围复验                | runtime/jobs/intake **17/0**；local-planning/review-regressions **17/0**；verification **13/0**；HTTP/registration 通过。未重跑未变化的整个集合，不将重叠结果重复累计                                                                                                                                                                                                                                         |
+| 既有装配回归                        | RFC-383 guard 分别追踪 graph@1 / graph@2，保留 former-wiring 对照；修后 **12/0，57 expect**。默认 MR 工具在 load 时先确保共享内置 agents，真实 HTTP 应用启动通过                                                                                                                                                                                                                                              |
+| 前端交互                            | 终止态 **6/0**；人工验收候选/范围变化 **11/0**；工作区修后 **26/0**（含实现门发现的两条恢复旅程）；合计覆盖 **43 个独立用例**，三文件结果分别记录                                                                                                                                                                                                                                                             |
+| 独立实现门                          | **PASS**；两处 UI 旅程回归修复后定向复核通过，详见 [implementation-gate](./implementation-gate.md)                                                                                                                                                                                                                                                                                                            |
+| 静态                                | backend / frontend 初轮修后 `tsc --noEmit` 通过；backend 默认 Node 4 GiB heap OOM，8 GiB 完成。末次共享树前端检查又出现 3 处并发错误：非本任务 `shared/src/schemas/task.ts` 的 `taskExecutionKind` 新增 `digital-employee`，而 `TaskSubjectLink.tsx` / `tasks.new.tsx` 尚未覆盖。实际 diff 已核实，未代改或纳入提交；本任务新增测试的参数类型已修。任务路径 ESLint 通过，最终整仓结论以本次 exact-SHA CI 为准 |
+| MR E2E                              | 三个既有图旅程已适配 graph@2，保留主要图/审核/证据断言，并增加同 Case MR 创建、缺 CI 不误绿、外部 merged/closed 观测终结；模型与 code host 是受控 fixture。本次托管 CI 的浏览器任务已启动，尚无通过结论；数字员工启动模型的发布依赖缺口单列于下方                                                                                                                                                             |
+| 真人浏览器                          | 当前 CUA inventory 为 apps=[] / browsers=[]，创建 iab 返回 `Browser is not available: iab`；不宣称本轮真人界面验收通过                                                                                                                                                                                                                                                                                        |
+| 发布与 hosted CI                    | `ba7b8c6c4a03f0ab952dfd52fee291332dda74f5` 已推送，推送后本地/远端差异 `0/0`，共享 index 为空；71 个准确路径包含本任务内并行 Codex 产出，其他在制内容保留未提交。[主 CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 与 [视觉回归 39914131342](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131342) 执行中；此前 `67795ed462` 的结果不能证明新代码 |
 
 新增实现与恢复边界见 [全面回顾](./review-and-mr-parity.md)，岗位与 CI 连接使用方式见 [usage](./usage.md)。本轮未修改旧托管实例或其镜像。
 
@@ -29,13 +37,13 @@
 
 `ba7b8c6c4a03` 的 [CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 已报告失败；本地共享树中的通过结果不能替代这个实际发布快照。独立功能复核只能说明其审阅的候选内容，不能据此认为发布依赖已完整。
 
-| 失败范围 | 已核实原因与处置 |
-| --- | --- |
+| 失败范围                                                                                                              | 已核实原因与处置                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 类型检查、backend 10/24 的 hostWorkflow 四项、backend 20/24 的真实数字员工执行四项，以及 backend 14/24 的人工审核 E2E | `digitalEmployeeExecution.ts` 整文件除本任务的材料说明前缀/env，还提交了 RFC-395 II-a 的 `TaskStartOptions`、新 `subject` 和移除旧宿主播种的改动；所依赖的共享 schema、启动 kernel、任务主体/创建、审核投影及测试仍只在本地在制。远端旧 kernel 仍读取 `input.subject.workflowId`，类型和实际启动均不成立。**这是本次发布选择的依赖闭包遗漏，不能仅称为外部旧测试问题。** 保留全部迁移产出，不还原新模型、不删旧断言，也不擅自扫入尚未完成集中验证的迁移文件。完整迁移闭包可提交之前，此项阻塞整仓通过 |
-| backend 15/24，OS 架构两项 | 新 MR 界面包含开发员工业务语义却位于通用数字员工组件目录；两个类型包组合层依赖未登记。修复将图功能归位至 development-automation feature，并精确补齐已审阅依赖，既有禁止规则保持不变 |
-| backend 6/24，测试跳过登记 | 新 MR bridge 测试因 POSIX shebang/chmod 夹具跳过 Windows；业务断言本身无需该限制。改为生产仓库脚本解析器定位脚本、显式 Bun 执行，保留全部 17 项用例和真实执行证据，不增加跳过豁免 |
-| backend 1/24，能力证据索引 | 两个 graph E2E 标题更新后索引仍是旧名称；只重接精确标题，保留原有覆盖断言 |
-| Static scans | 只读取状态元数据：该 job 失败。未读取该类 findings 或日志，未对此开展分析 |
+| backend 15/24，OS 架构两项                                                                                            | 新 MR 界面包含开发员工业务语义却位于通用数字员工组件目录；两个类型包组合层依赖未登记。修复将图功能归位至 development-automation feature，并精确补齐已审阅依赖，既有禁止规则保持不变                                                                                                                                                                                                                                                                                                                   |
+| backend 6/24，测试跳过登记                                                                                            | 新 MR bridge 测试因 POSIX shebang/chmod 夹具跳过 Windows；业务断言本身无需该限制。改为生产仓库脚本解析器定位脚本、显式 Bun 执行，保留全部 17 项用例和真实执行证据，不增加跳过豁免                                                                                                                                                                                                                                                                                                                     |
+| backend 1/24，能力证据索引                                                                                            | 两个 graph E2E 标题更新后索引仍是旧名称；只重接精确标题，保留原有覆盖断言                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Static scans                                                                                                          | 只读取状态元数据：该 job 失败。未读取该类 findings 或日志，未对此开展分析                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 依赖缺口的具体边界：`packages/shared/src/schemas/task.ts`、Task Execution 的 `taskRouteLaunchOperations.ts` / `taskSubject` / `taskCreation` / repository codecs、Collaboration 的 `review.ts` 与任务主体查询合同、`actionExecutionEnvironment.ts` 及对应历史回归。当前 `public/queries`、`services/task` 和新增测试 helper 又与迁移其他部分耦合，不能把这些路径当作已确认可独立发布的 allowlist。对应 II-a 计划要求整组集中验证后提交；本任务继续处理独立缺陷，未替代迁移责任范围。
 
@@ -44,7 +52,6 @@
 上述独立修复已以 `6423d9ef0cb86be3e8b6eadfed6adf3565bc8e16` 推送，推送后本地/远端差异 `0/0`、index 为空；[主 CI 39916451896](https://github.com/wangbinquan/agent-workflow/actions/runs/39916451896) 与 [视觉回归 39916451473](https://github.com/wangbinquan/agent-workflow/actions/runs/39916451473) 启动时分别记录，未宣称它们已通过。
 
 首个 MR 提交的 [视觉回归 39914131342](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131342) 终态为 **58 passed / 1 failed**，唯一失败是数字员工类型目录截图。按视觉回归 README 的 Option A 下载 artifact `12484069229`，逐张查看 expected / actual / diff 后确认：变化仅为图数字人卡片显示新的 MR 看护说明、工作项 `6 → 24`、生命周期区域 `1 → 2` 及对应文字排版；其他卡片与页面布局保持。当前快照与 artifact 中 expected 字节一致，已将逐张审阅后的实际截图原样复制到唯一对应的 Linux 基线，不提高阈值、不批量接受其他截图。新的 exact-SHA 视觉回归仍须给出零差异结论；这一目录截图也不替代完整 MR 运行验收。
-
 
 **2026-10-22 全面回顾后的当前裁决：需要修改后再验收。** 以下“功能验收完成”是前一轮范围的历史记录。本轮确认 R01～R10 功能/可用性缺口，以及 MR 提交和持续看护未接入；新增范围见 [review-and-mr-parity.md](./review-and-mr-parity.md)。原浏览器旅程含 API 建立工作和提交澄清，不能当成全程 UI 可用性证明。新的 MR 生命周期、修复和 UI 验收尚未完成。
 
@@ -143,7 +150,7 @@
 | PostgreSQL 默认 NULL 排序不同                                        | 权威人工输入查询使用既有 `descNullsLast` 合同                                                                                                   |
 | 新增五张内容表/迁移造成旧精确计数及最后一步切片过期                  | 明确 222 源表/216 active、261 迁移；逐一锁定五张图表；RFC-374 前缀定位 `0036_rfc374_node_run_seq`，继续证明真实历史升级                         |
 | 新类型、图弹窗和第二个验证命令消费者未登记                           | 两种类型各初始化一次；原重复装配负面对照仍各两次；登记七个实际 Dialog 实例与确切工厂转发点                                                      |
-| 22 个图 HTTP 路由未登记、两种错误缺少 HTTP 断言                      | 完整端点登记；真实应用中验证 404/422 错误码（422 断言纠正见下文）；MCP 逐叶登记当前 Case/UI 范围，未凭空声称新增外部模型工具                                          |
+| 22 个图 HTTP 路由未登记、两种错误缺少 HTTP 断言                      | 完整端点登记；真实应用中验证 404/422 错误码（422 断言纠正见下文）；MCP 逐叶登记当前 Case/UI 范围，未凭空声称新增外部模型工具                    |
 | 公开类型直接派生整套装配；领域文件包含跨域适配/资源模板              | 明确 SourceControl DTO/参与者；HTTP 挂载不进入公共 DTO；类型注册/codec/内置资源移入 application，HTTP 归 infrastructure，组合根只构造完整参与者 |
 | 能力台账、模式清单和 POSIX 夹具跳过项未同步                          | 配套既有机器清单，保留范围解释；不增加宽泛排除，不删除原用例                                                                                    |
 | Windows 真实启动报 `ENAMETOOLONG`                                    | 完整图模型/schema 通过既有 `seedFiles` 物化到 invocation 工作区；命令行仅含材料路径，不截断材料；夹具读取同一文件                               |
@@ -159,7 +166,6 @@
 
 大请求和实际运行时选择的独立回归已通过，见 `rfc396-design-assist-transport.test.ts`、`rfc396-assist-transport-test.txt`。本次后端确切修复路径 lint 通过；最终修复候选仍须消费新的 hosted exact-SHA CI。共享 schema 清单测试的并发导入与本 RFC 五表断言完整保留，生成的 schema 报告与最终复验待共享依赖形成可运行候选后完成；不临时撤走他人产物制造绿树。
 
-
 ## 第二轮发布与 schema 报告补齐
 
 修复提交 `b8d1f9fcc7f695655cb8112f2d4b103c5c5cdd6a` 已推送；推送后 `main == origin/main`、差异 `0/0`、共享 index 为空。此次仅提交明确的 64 个新旧路径名，未带入 RFC-395 的在制迁移。
@@ -172,7 +178,6 @@ HTTP 适配器迁到 `infrastructure/http` 后，错误码覆盖扫描现继续�
 
 共享 `tests/architecture/rfc349-schema-contract.test.ts` 同时包含本 RFC 的计数/五表断言与 RFC-395 的新 bootstrap 导入。完整保留这些改动；在其依赖仍未提交时，不单独发布这个共享文件制造缺依赖提交。canonical 报告和路由覆盖修复可独立发布；共享断言的发布及其 CI 仍需后续收齐。未重复运行全量本地 gate。
 
-
 ## Windows 旅程闭环与 HTTP 断言纠正
 
 schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb450882f9b` 推送；推送后 `main == origin/main`、差异 `0/0`、共享 index 为空。该提交的 [主 CI 39725816019](https://github.com/wangbinquan/agent-workflow/actions/runs/39725816019) 尚在执行。
@@ -184,13 +189,12 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 - [Windows shard 3/4，job 119653946843](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119653946843) 为 **138 passed**，明确包含预约 39.8s、通知 1.2m、已有模块 43.5s 三条完整 RFC-396 旅程。该结果验证了材料文件传递及 Pin 保存等待的实际 Windows 路径；仍是确定性 system mock，不能替代 AC17 的真实模型。
 - 主 CI 当时为 43 个 job 成功、2 个失败、3 个 Linux 浏览器分片排队；不是整体绿。失败逐项如下。
 
-| 失败 job | 已确认根因 | 处理 |
-| --- | --- | --- |
-| [119646933434，backend 12/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933434) | 217/211 的旧计数断言及旧 canonical 报告；1131 pass / 2 fail | 报告已由 `baf4ac293` 更新；计数/五表断言在共享文件中完成，仍依赖 RFC-395 未提交导入，保留全部共同产出 |
-| [119646933476，backend 16/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933476) | 本 RFC 新增 HTTP 断言误写 400；既有 `ValidationError` 一直定义为 422；1005 pass / 2 fail / 1 skip | 改正断言为 422，继续精确断言 `graph-request-invalid`；不改生产错误合同 |
+| 失败 job                                                                                                               | 已确认根因                                                                                        | 处理                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [119646933434，backend 12/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933434) | 217/211 的旧计数断言及旧 canonical 报告；1131 pass / 2 fail                                       | 报告已由 `baf4ac293` 更新；计数/五表断言在共享文件中完成，仍依赖 RFC-395 未提交导入，保留全部共同产出 |
+| [119646933476，backend 16/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164/job/119646933476) | 本 RFC 新增 HTTP 断言误写 400；既有 `ValidationError` 一直定义为 422；1005 pass / 2 fail / 1 skip | 改正断言为 422，继续精确断言 `graph-request-invalid`；不改生产错误合同                                |
 
 `baf4ac293` 的 [backend 16/24，job 119649325233](https://github.com/wangbinquan/agent-workflow/actions/runs/39725816019/job/119649325233) 是同一个尚未包含修复的 400/422 断言失败，未认领为其他原因。修复后的完整 HTTP 用例在本地 SQLite 与真实 PostgreSQL 同次复验 **2 pass / 0 fail，42 assertions**，日志 `rfc396-http-status-repair.txt`。复验包含读取、深链、原始证据导出、编辑、版本冲突、独立展示状态、历史版本与冻结依据导出，未缩成只检查状态码。后续 hosted exact-SHA 结果仍需收齐。
-
 
 ## 实现候选 CI 终态与剩余阻塞
 
@@ -209,7 +213,6 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 
 本次后续记录提交只更新 RFC 状态和证据，不改变 `fe835ab43` 的生产与测试候选。继续保持 **In Progress**；后继记录提交的 CI 与上述实现候选证据分别看待。
 
-
 ## 2026-10-22 真实调用揭示的结果收取修复
 
 通知案例的 designer 和澄清后的 output 都发布 `agent-result`；原宿主按原始输出行顺序取首个同名端口，错误地重复消费首稿，导致 Task 已 done 而 Case 卡在 running。修复复用已有 `projectExecutionOutcome`，按工作流 output 节点和最新 settled run 取结果，保留 inactive/skipped/缺失端口语义。另将设计导入的 `ValidationError` 归为 semantic 失败回执；真实存储错误仍传播，避免吞掉基础设施问题。冻结材料补充 decision 人工来源、决策表规则引用、预算单位和验收义务规则，不修改已发布内置资源版本，也不放宽领域校验。
@@ -220,17 +223,16 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 
 真实审核的 322 KB 提示触发 OpenCode 单参数限制。大提示改走已有 SpawnPlan stdin，完整材料不截断，小提示 argv 与直接 buildCommand 的有界校验保持原语义。真实子进程检验 CJK、多行、末尾哨兵，业务与系统装配均检验 stdin 和续跑 session 标识；对应两文件集中验证 **21 pass / 0 fail / 61 assertions**，目标 lint/格式通过。这是传输和装配范围的证据，不替代真实模型审核成功或全仓 CI。
 
-
 ## 2026-10-22 当前功能矩阵与剩余退出条件
 
-| 验收点 | 当前证据与结果 |
-| --- | --- |
+| 验收点           | 当前证据与结果                                                                                                                                                                                                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | AC01、08、13、18 | 注册、原生协作门、执行合同、版本兼容及恢复用例通过；生产源码 67795ed462 的 exact-SHA CI 49/49 success。托管实际原文批准、重复请求身份、续跑和终态完整记录。实际恢复含有限运维配置操作，不宣称默认自动恢复已覆盖全部租约故障。 |
-| AC02～07、12 | 领域、组合规划、过期读集、语义与布局分离、差异审阅、固定视图、原始人工来源测试和三条完整真实模型旅程通过；组合与有边界的固定对照见 adaptive-comparison.md。 |
-| AC09～11 | 三个真实模型候选及托管候选分别有实际代码/测试、独立 profile 回执、basis/tree/profile/environment 绑定与原始日志；托管 transient unknown 与最终 current 均保留，未执行或读取失败未冒充通过。 |
-| AC14 | SQLite/PostgreSQL 的实际回归、单机完整执行，以及托管 PostgreSQL/服务/任务传输/原生 review/profile/交付均有实际证据；本轮关闭，见 hosted-completion-evidence.json。 |
-| AC15 | 原三个确定性浏览器旅程覆盖桌面、320/390px、键盘和图/列表定位；托管实际页面完成原始证据读取。后者不替代此前窄屏和交互覆盖。 |
-| AC16 | 实际 Case 页面可找到交付 commit 与原始报告；任务工作区普通 API 可读取代码/测试/脚本，clamp.ts blob 与候选 trace 一致。已有配置发布/冲突/重放测试保留；本托管案例 publication=null，没有声称业务远端发布或部署。 |
-| AC17 | 三条实际 DeepSeek 完整旅程已交付，分别 24/0、44/0、13/0，原始失败及代理针对虚构案例作出的 provisional 判断保留。托管受控夹具不额外计入真实模型案例数量。 |
+| AC02～07、12     | 领域、组合规划、过期读集、语义与布局分离、差异审阅、固定视图、原始人工来源测试和三条完整真实模型旅程通过；组合与有边界的固定对照见 adaptive-comparison.md。                                                                   |
+| AC09～11         | 三个真实模型候选及托管候选分别有实际代码/测试、独立 profile 回执、basis/tree/profile/environment 绑定与原始日志；托管 transient unknown 与最终 current 均保留，未执行或读取失败未冒充通过。                                   |
+| AC14             | SQLite/PostgreSQL 的实际回归、单机完整执行，以及托管 PostgreSQL/服务/任务传输/原生 review/profile/交付均有实际证据；本轮关闭，见 hosted-completion-evidence.json。                                                            |
+| AC15             | 原三个确定性浏览器旅程覆盖桌面、320/390px、键盘和图/列表定位；托管实际页面完成原始证据读取。后者不替代此前窄屏和交互覆盖。                                                                                                    |
+| AC16             | 实际 Case 页面可找到交付 commit 与原始报告；任务工作区普通 API 可读取代码/测试/脚本，clamp.ts blob 与候选 trace 一致。已有配置发布/冲突/重放测试保留；本托管案例 publication=null，没有声称业务远端发布或部署。               |
+| AC17             | 三条实际 DeepSeek 完整旅程已交付，分别 24/0、44/0、13/0，原始失败及代理针对虚构案例作出的 provisional 判断保留。托管受控夹具不额外计入真实模型案例数量。                                                                      |
 
 当前剩余项是 T15/T16 的共享 main CI 与最终状态收尾。前继 42611df21 的 CI 39848361400 为 47 success / 2 failure，所有功能 job 成功，整体 required 失败；407fb491 的 CI 39858220290 于 22:02:18 UTC completed / failure，同为 47 success / 2 failure：静态检查 job 120101856514 与 CI required 120114469860，所有功能 job success；静态项仅读取状态元数据，未读取 findings 或日志。本次收尾提交仍须消费自身 exact-SHA CI。未因文档收尾重复本地全量门禁、重跑业务测试或改动其他会话代码。功能证据完整不代表共享 CI 总绿，因此此记录仍不将 RFC 标为 Done。
