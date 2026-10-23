@@ -29,7 +29,8 @@ describe('RFC-395 II-a A1 fixture read boundary', () => {
     expect(Object.keys(readers).sort()).toEqual(Object.keys(ledger.files).sort())
     for (const reason of Object.values(ledger.files))
       expect(ledger.reasonCategories).toHaveProperty(reason)
-  })
+    // 全量扫描 2000+ 个测试文件：CI 机器上 5–8 s，超过 bun 默认的 5 s 单测上限。
+  }, 60_000)
   test('negative controls include moved picks, filters, aliases, repositories and SQL', () => {
     const found = directFixtureReads(
       'negative.ts',

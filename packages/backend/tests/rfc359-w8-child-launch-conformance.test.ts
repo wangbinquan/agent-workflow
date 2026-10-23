@@ -501,7 +501,11 @@ function comparableRows(rows: readonly Record<string, unknown>[]): unknown[] {
     const comparable: Record<string, unknown> = {}
     for (const key of Object.keys(row).sort()) {
       if (VOLATILE_CHILD_COLUMNS.has(key)) continue
-      comparable[key] = row[key]
+      // RFC-395 II-a：任务行的目标模型投影内嵌逐仓 `repos`，同一批工作区格要一并摘掉。
+      comparable[key] =
+        key === 'repos' && Array.isArray(row[key])
+          ? comparableRows(row[key] as readonly Record<string, unknown>[])
+          : row[key]
     }
     return comparable
   })

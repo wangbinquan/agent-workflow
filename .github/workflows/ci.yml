@@ -50,6 +50,11 @@ jobs:
         run: bun run format:check
 
       - name: Lint
+        env:
+          # RFC-395 II-a grew the typed `lint:promises` program over
+          # packages/backend/src; run 40012778786 hit the default V8 heap and
+          # aborted with code 134. Same allowance as the Typecheck step below.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: bun run lint
 
       - name: Dependency rules (import seams + no-circular)

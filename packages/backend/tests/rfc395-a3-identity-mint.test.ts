@@ -9,7 +9,7 @@ import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infras
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { deriveNodeRunRole } from '@/modules/task-execution/domain/nodeRunRole'
 import { buildNodeRunMintRecord } from '@/modules/task-execution/application/buildNodeRunMintRecord'
-import { installAbortTrigger, dropAbortTrigger } from './helpers/faultTrigger'
+import { installAbortTrigger, dropAbortTrigger, abortMessages } from './helpers/faultTrigger'
 
 const roles: readonly Pick<NodeRunMintInput, 'nodeId' | 'cause' | 'role' | 'syntheticKind'>[] = [
   { nodeId: 'agent', cause: 'initial', role: 'node-attempt', syntheticKind: null },
@@ -245,8 +245,8 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
     }
     await installAbortTrigger(harness, trigger)
     try {
-      await expect(
-        mint.mint({
+      const error = await mint
+        .mint({
           taskId,
           nodeId: 'input',
           role: 'node-attempt',
@@ -254,8 +254,13 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
           cause: 'io-virtual',
           status: 'done',
           outputs: [{ portName: 'value', content: 'body' }],
-        }),
-      ).rejects.toThrow('output-abort')
+        })
+        .then(
+          () => undefined,
+          (cause: unknown) => cause,
+        )
+      // PostgreSQL 把触发器异常包成 `Failed query`，原文在 cause 上；两个引擎都须由这条触发器中止。
+      expect(abortMessages(error)).toContain('output-abort')
     } finally {
       await dropAbortTrigger(harness, trigger)
     }

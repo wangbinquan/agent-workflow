@@ -63,3 +63,17 @@ export async function dropAbortTrigger(
   await harness.executeFixtureDdl(`DROP TRIGGER IF EXISTS ${spec.name} ON ${spec.table}`)
   await harness.executeFixtureDdl(`DROP FUNCTION IF EXISTS ${spec.name}()`)
 }
+
+/**
+ * 触发器错误沿 `cause` 链的全部文案。PostgreSQL 驱动把触发器异常包成 `Failed query: …`，
+ * 原始文案挂在 `cause` 上；SQLite 直接抛原文。判据用它即可在两个引擎上锁住「是这条触发器中止的」。
+ */
+export function abortMessages(error: unknown): string {
+  const messages: string[] = []
+  let current: unknown = error
+  for (let depth = 0; current !== undefined && current !== null && depth < 8; depth++) {
+    messages.push(current instanceof Error ? current.message : String(current))
+    current = current instanceof Error ? current.cause : undefined
+  }
+  return messages.join('\n')
+}

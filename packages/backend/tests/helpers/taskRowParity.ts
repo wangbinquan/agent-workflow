@@ -40,6 +40,18 @@ export const VOLATILE_TASK_ROW_COLUMNS: readonly string[] = [
 ]
 
 /**
+ * RFC-395 II-a：`readTaskFixtures` 的目标模型投影带出逐仓 `repos`。每一仓里逐次必然不同的是同一批
+ * 工作区格（路径、分支、基线提交）外加本行的 taskId；其余逐仓字段照样整行比较。
+ */
+export const VOLATILE_TASK_REPO_COLUMNS: readonly string[] = [
+  'taskId',
+  'branch',
+  'repoPath',
+  'worktreePath',
+  'baseCommit',
+]
+
+/**
  * @param extraVolatile 各用例自己的那几格（例如按 lane 新建的 agent / workgroup id、
  *   定时行 id、带墙钟装饰的任务名）。
  */
@@ -49,9 +61,21 @@ export function comparableTaskRow(
 ): Record<string, unknown> {
   const denied = new Set([...VOLATILE_TASK_ROW_COLUMNS, ...extraVolatile])
   const comparable: Record<string, unknown> = {}
+  const repoDenied = new Set(VOLATILE_TASK_REPO_COLUMNS)
   for (const key of Object.keys(row).sort()) {
     if (denied.has(key)) continue
-    comparable[key] = row[key]
+    const value = row[key]
+    comparable[key] =
+      key === 'repos' && Array.isArray(value)
+        ? value.map((repo: Record<string, unknown>) =>
+            Object.fromEntries(
+              Object.keys(repo)
+                .sort()
+                .filter((field) => !repoDenied.has(field))
+                .map((field) => [field, repo[field]]),
+            ),
+          )
+        : value
   }
   return comparable
 }

@@ -111,11 +111,17 @@ async function restoreStrictClarifyTransition(): Promise<void> {
 async function restoreDecodeBeforeWorkflowDelete(): Promise<void> {
   const target = sourcePath('modules/resource-catalog/infrastructure/workflowRepository.ts')
   const original: typeof WorkflowRepository = await import(target)
+  // RFC-395 II-a（D1）：删除读取改为只看 catalog 工作流（排除旧库残留的宿主行），锚点随之更新；
+  // 变异本身不变——仍在同一事务里先解码再比版本。
   const current = `    async delete(authority, id, deletion) {
       const deletedVersion = await runResourceCatalogTransaction(input.db, async (transaction) => {
         const { workflows, resourceGrants } = tablesOf(transaction)
         const row = (
-          await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+          await transaction
+            .select()
+            .from(workflows)
+            .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+            .limit(1)
         )[0]
         if (row === undefined) throw notFound(id)`
   const versionCheck = 'if (row.version !== deletion.expectedVersion) throw staleRow(id, row)'

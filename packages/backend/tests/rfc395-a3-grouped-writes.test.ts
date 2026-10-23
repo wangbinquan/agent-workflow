@@ -20,7 +20,7 @@ import type {
   NodeRunLifecycleWrite,
 } from '@/modules/task-execution/application/ports/nodeRunWrites'
 import type { NodeRunStatus } from '@agent-workflow/shared'
-import { installAbortTrigger, dropAbortTrigger } from './helpers/faultTrigger'
+import { installAbortTrigger, dropAbortTrigger, abortMessages } from './helpers/faultTrigger'
 
 const runtimeParams = '{ "z":1, "__configDir" : {"mode":"x"} }'
 const inventory = '{"z": [], "a": [1,2]}'
@@ -383,16 +383,21 @@ describeEachProvider('RFC-395 II-a A3 grouped writes', (harness) => {
     }
     await installAbortTrigger(harness, trigger)
     try {
-      await expect(
-        s.nodes.patch({
+      const error = await s.nodes
+        .patch({
           nodeRunId: s.id,
           values: {
             config: { runtimeInventoryJson: inventory },
             runtime: { startupVerificationJson: startup },
             result: { portValidationFailuresJson: failures },
           },
-        }),
-      ).rejects.toThrow('followup-abort')
+        })
+        .then(
+          () => undefined,
+          (cause: unknown) => cause,
+        )
+      // PostgreSQL 把触发器异常包成 `Failed query`，原文在 cause 上；两个引擎都须由这条触发器中止。
+      expect(abortMessages(error)).toContain('followup-abort')
     } finally {
       await dropAbortTrigger(harness, trigger)
     }

@@ -53,3 +53,24 @@ test('the removed lifecycle cells are still checked for consistency', () => {
   // Everything else on the row stays on the equality surface.
   expect(comparableTaskRow({ ...running, mode: 'scratch' })).not.toEqual(comparableTaskRow(pending))
 })
+
+// RFC-395 II-a：目标模型投影内嵌的逐仓 `repos` 只摘逐次必然不同的工作区格，其余逐仓字段仍比较。
+test('nested repos drop only per-run workspace cells', () => {
+  const repo = { mountPath: '', readonly: false, repoIndex: 0, baseBranch: 'main' }
+  const laneA = {
+    ...pending,
+    repos: [
+      { ...repo, taskId: 'a', repoPath: '/a', worktreePath: '/a', baseCommit: '1', branch: 'x' },
+    ],
+  }
+  const laneB = {
+    ...pending,
+    repos: [
+      { ...repo, taskId: 'b', repoPath: '/b', worktreePath: '/b', baseCommit: '2', branch: 'y' },
+    ],
+  }
+  expect(comparableTaskRow(laneA)).toEqual(comparableTaskRow(laneB))
+  expect(
+    comparableTaskRow({ ...laneA, repos: [{ ...laneA.repos[0], readonly: true }] }),
+  ).not.toEqual(comparableTaskRow(laneB))
+})
