@@ -366,3 +366,37 @@ I-b 由 Codex 实施（S0～S5），本会话审核并补正，一次提交落�
 - **收口（`d41f068f1`，run 39843156514）**：49 个 job 中 47 个通过，两个 provider 的后端全部分片、真库 job（含 P0 变异取证）、
   e2e 全绿；唯一失败的依赖审计门仍是上面的外部公告。本地另在 PostgreSQL 上直接跑了 P0-2 / P0-5 / P0-6 三个变异：本机负载下脚本的
   PG 基线阶段会撞 5 秒默认超时，所以加 `--timeout 60000` 单独跑，结果与 SQLite 一致。
+
+### 6.10 阶段 II 实施分解（2026-10-22）
+
+用户 2026-10-22 选定阶段 II 拆两次交付，依据 §4「前置交付不激活新合同，最终激活交付包含全部实现和测试」：
+
+| 交付 | 内容 | 验证与提交 |
+| --- | --- | --- |
+| II-a 端口先行 | 在现有物理 schema 上，把业务改为经目标形状的端口读写；行为与 API 不变，不新增表、不改迁移、不激活新合同 | 全部开发与用例写完后集中验证一次，单独提交 |
+| II-b 一次切换 | 目标 contribution、各域适配器换到目标表、转换器、迁移回执与激活、兼容投影、删除清单 | T18 集中验证，一次激活交付 |
+
+理由：II-a 的重构错误由现有双 provider 测试在已知正确的旧 schema 上抓出；II-b 只剩存储切换、转换与激活，改动面与归因难度都小得多。
+II-a 写在现有 schema 上的读侧映射（主体判定、挂载与逐仓 checkpoint 解码、逐题答案分解、引用数组解析、选择 oracle）
+就是转换器所需的源读者规则，II-b 冻结后移入迁移模块；只有写侧适配器会在 II-b 被替换。
+
+II-a 的精确范围（每包一次 Codex 派发，同一工作树只并行文件不相交的包）：
+
+| 包 | 范围 | 留给 II-b |
+| --- | --- | --- |
+| A1 测试造数（T2b 测试侧） | 目标模型 fixture builder：spec 用公共 API 投影字段名；已删或派生的形状（`repoCount`、`worktreeDirName`、`seq: null`、单仓 / 多仓 checkpoint 双编码、`consumed_upstream_runs_json` 原文）不进 spec，改用目标形状输入（挂载列表、逐仓 checkpoint、消费边）。实现写现有 schema，seq 经生产分配器；被迁列的更新与读取也经 builder。幂等 AST codemod 改写全部测试直写；机器可读的列去向清单（tasks 70 列、node_runs 62 列等）及 builder 覆盖测试；守卫：fixture 模块之外不得直写被重塑表（只降棘轮，余量逐文件登记）；e2e 裸 SQL 收进单一夹具模块 | builder 实现切到目标表；迁移链测试归位到转换器 |
+| A2 Task 主体与工作区（T4、T5 端口） | 五类主体判定与 `definitionAnchorId`；`taskSubjectProjection`（评审不再 join `workflows`）；读时排版按定义来源判定；D1 宿主工作流退出 catalog：停止播种，对宿主行的 join 与存在性依赖全部改为常量与投影，旧库残留行由转换器删除；单一任务创建 participant，lineage 推导移入领域函数；主仓字段单一投影 `projectTaskRepositorySurface`；挂载列表 + 逐仓 checkpoint 端口 DTO，`repoCount === 1` 二分与 `worktreeDirName` 键收进适配器 codec；回滚计划与执行合一，删除 `gitStashSnapshot` 与 retry 模式（D3 中不依赖 schema 的部分） | 物理拆表；镜像列与 `repo_count` 删除 |
+| A3 NodeRun（T6 端口） | 按 §6.2 的固定顺序：`domain/runSelection` 领域模型、`application/ports/runSelection.ts`、包装现有 picker 的 oracle 适配器；77 处选择计算与 22 条 SQL 按 ii0-revision §3.3 的 G1～G12 迁到端口；NodeRun 身份快照 + 配置 / 运行态 / 结果 / checkpoint 视图，扁平 patch 与 extra 改为按目标表分组的类型化写入；铸行显式传 role，不变量改为「角色 + 容器」，存储仍按现 schema，由同一个领域函数推导；collaboration / memory / 工作组改经 task-execution public query 与 participant | 选择表实现与双实现对拍；oracle 移入迁移模块；seq / frame 启动回填删除 |
+| A4 澄清与内容（T7、T9 端口） | 逐题答案 / 草稿 / 归属领域模块与 map 投影，seal、编辑、follow-up 都走该模块；memory 改经 collaboration public query；`ContentRef` 判别联合与字节型技能端口，内容位置推断收敛到 ContentRef codec | 逐题表；去掉 Task 锁与整 map 读写；内容表与 bytes 列 |
+| A5 资源依赖（T8 端口） | agent 引用单一写者 participant、workflow 定义单一写者、共享依赖收集、单一依赖校验 | 关系表与依赖索引；去掉 JSON LIKE |
+| A6 AtomicApply（T10） | `platform/atomic-apply` 共用状态机；intent 与资源包 apply 改为场景适配器，两份收敛合一；旧制品形状只留在一个 legacy codec | legacy codec 移入迁移模块（D9） |
+| A7 跨域收口（T11） | 模块只访问本模块表，跨域读写改经 public query / participant，加守卫 | — |
+
+派发顺序：A1 与 A6 并行（A1 的 codemod 暂跳过 A6 触及的测试文件，II-a 收尾时全树重跑一次）→ A2 → A3 → A4 与 A5 并行 → A7 → 集中验证。
+
+II-b 的工作包：
+- B1：目标 contribution；冻结 epoch-1 合同与源表；合同历史机制；新 baseline；pointer v2；`migrationRole` 退役。
+- B2：各域适配器换到目标表；选择表实现与双实现对拍；builder 换到目标模型；删除清单其余项。
+- B3：转换器（T12）、迁移回执（T13）、切换与恢复（T14）、旧 epoch 备份恢复。
+- B4：兼容投影与 DTO 对拍（T15，夹具取自 II-a 提交）；守卫与账本（T16）；其余测试与操作手册（T17）。
+- 之后执行 T18。
