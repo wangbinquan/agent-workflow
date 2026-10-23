@@ -18,6 +18,8 @@
 
 ## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
+**2026-10-23 接续核对**：`67ab6b9ae` 已处理误发布的任务启动合同，保留图材料能力；旧 II-a 发布阻塞不再适用于当前 head。主 CI 类型/后端通过，完整 nightly 三个 graph@2 MR 旅程首轮通过，目录视觉 `39916883153@94088b876` success。当前仍有本任务的 Windows 交付缺陷：含冒号的 `mr-handoff` 记录 ID 被当成目录名；已改用稳定标识并补实际交接/重放回归，SQLite 18/0，待新 exact-SHA Windows CI。已检查全部定时 workflow，明确的 pre-RFC396 失败与归属未明超时分列，详见 [CI 归因](design/RFC-396-adaptive-graph-development/ci-audit-2026-10-23.md)。
+
 **2026-10-23 本轮 MR 补齐与发布缺口**：graph@2 共享原 MR 生命周期、同 Case 候选交接/修复/独立重验、完整 CI 岗位配置入口与界面复核修复已以 `ba7b8c6c4a03` 推送。共享候选取得真实 PostgreSQL 156/0、SQLite 修后相关回归、43 项独立前端交互及功能实现门证据；但 [CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 已报告失败。本次共享文件发布同时带入 RFC-395 II-a 的 Task 主体迁移片段，其启动/schema/审核依赖未发布，这是本次发布依赖核对遗漏，不能归为仅外部旧测试失败；完整迁移闭包发布前不宣称可验收。图业务 UI 归属、跨平台测试及 E2E 证据索引另在本任务内修复。CUA 无可用浏览器，真实企业连接和当前 MR 完整运行验收仍单列，未部署旧托管实例。详细归因见 [本轮验收](design/RFC-396-adaptive-graph-development/validation.md) 与 [完整问题账本](design/RFC-396-adaptive-graph-development/review-and-mr-parity.md)。
 
 **2026-10-22 回顾与范围补齐进行中**：用户要求全面复盘易用性/可读性/功能正确性，并明确新数字人必须继承原数字人的 MR 提交和监控能力，允许本任务内多个 agent 并行执行。已确认当前 graph@1 只到内部提交/可选分支推送；此前“只剩 CI 收尾”不再成立。R01～R10 与 graph@2 的 MR 创建更新、评审/CI/冲突修复、审批协同、外部合入/关闭和修复后图验证见 [补充合同](design/RFC-396-adaptive-graph-development/review-and-mr-parity.md)。完整开发与用例后集中验收；下文运行证据保留其历史范围。

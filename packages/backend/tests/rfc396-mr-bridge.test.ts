@@ -5,7 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
 import { stableIdentityComponent } from '@/util/gitRef'
 import { sha256Hex } from '@/util/hash'
@@ -57,7 +57,11 @@ function git(cwd: string, ...args: string[]) {
 describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
   async function fixture(
     unborn = false,
-    options: { manualAcceptance?: boolean; multipleProfileRevisions?: boolean } = {},
+    options: {
+      manualAcceptance?: boolean
+      multipleProfileRevisions?: boolean
+      enforcePortableCheckpointPaths?: boolean
+    } = {},
   ) {
     const root = mkdtempSync(join(tmpdir(), 'rfc396-mr-bridge-'))
     roots.push(root)
@@ -357,11 +361,21 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     const candidateRows = new Map<string, EmployeeChangeCandidateRecord>()
     let failCommitRegistration = false
     let restores = 0
+    const checkpointPaths: string[] = []
     const bridge = createGraphDeliveryBridge({
       appHome: root,
       factory: createFileAutomationWorkspaceEffectsFactory(),
       sourceControl: {
         ...sourceControl,
+        async checkpoint(input) {
+          if (
+            options.enforcePortableCheckpointPaths &&
+            /[<>:"\\|?*]/.test(basename(input.checkpointRoot))
+          )
+            throw new Error('invalid-windows-checkpoint-directory')
+          checkpointPaths.push(input.checkpointRoot)
+          return await sourceControl.checkpoint(input)
+        },
         async restore(input) {
           restores++
           return await sourceControl.restore(input)
@@ -446,6 +460,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       frozen,
       verified,
       committed,
+      checkpointPaths,
       review,
       implementation,
       profiles,
@@ -464,6 +479,29 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
   }
 
   const caseTest = test
+
+  caseTest(
+    'MR handoff preserves its business identity through a portable checkpoint and replay',
+    async () => {
+      const f = await fixture(false, { enforcePortableCheckpointPaths: true })
+      const result = await f.bridge.prepareHandoff(f.handoff)
+      expect(result.candidateState).toMatchObject({
+        commitSha: f.committed.commitSha,
+        treeOid: f.verified.candidateTreeOid,
+      })
+      expect(f.checkpointPaths).toHaveLength(1)
+      const record = (await f.store.records(f.work.designId)).find(
+        (row) => row.kind === 'mr-handoff',
+      )!
+      expect(record.id).toStartWith('mr-handoff:')
+      expect(record.status).toBe('completed')
+      const workspace = await f.bridge.continuationWorkspace(f.work.designId)
+      expect(workspace).not.toBeNull()
+      expect(readFileSync(join(workspace!.workspacePath, 'booking.js'), 'utf8')).toContain('预约')
+      expect(await f.bridge.prepareHandoff({ ...f.handoff, workspace: workspace! })).toEqual(result)
+      expect(f.checkpointPaths).toHaveLength(1)
+    },
+  )
 
   caseTest(
     'owner persistence resumes an interrupted handoff and keeps the published candidate after reconstruction',

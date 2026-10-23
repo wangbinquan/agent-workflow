@@ -371,13 +371,19 @@ async function journey(
   await page.getByRole('button', { name: 'Verify candidate again', exact: true }).click()
   await expect
     .poll(
-      async () =>
-        (await workspace()).executionLinks.some(
-          (link) => link.kind === 'delivery' && Boolean(link.commitSha),
-        ),
+      async () => {
+        const state = await workspace()
+        return {
+          delivered: state.executionLinks.some(
+            (link) => link.kind === 'delivery' && Boolean(link.commitSha),
+          ),
+          caseState: state.host.state,
+          workItem: state.host.workItemRef,
+        }
+      },
       { timeout: 90_000 },
     )
-    .toBe(true)
+    .toMatchObject({ delivered: true })
   // The internal candidate receipt is an MR handoff, not the end of this graph@2 Case.
   await expect
     .poll(

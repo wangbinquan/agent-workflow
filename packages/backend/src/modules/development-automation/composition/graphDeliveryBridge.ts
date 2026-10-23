@@ -206,7 +206,7 @@ export function createGraphDeliveryBridge(deps: {
           const checkpointRoot = deps.factory.resolve(
             caseRoot(work.caseId),
             'graph-handoff',
-            record.id,
+            stableIdentityComponent(record.id),
           )
           const checkpoint = await deps.sourceControl.checkpoint({
             workspacePath: workspace.workspacePath,
