@@ -19,10 +19,15 @@ export interface ZipFile {
 }
 
 /**
- * DOS 时间的固定值（1980-01-01 00:00:00，zip 纪元起点）。
+ * DOS 时间的固定值（本地时间 1980-01-01 00:00:00，zip 纪元起点）。
  * ⚠️ 不要改成当前时间——见文件头。
+ *
+ * 必须按**本地时间**构造：fflate 用本地时间的年月日时分秒写 DOS 字段。曾经的
+ * `Date.UTC(1980, 0, 1)` 在 UTC 以西的时区换算成 1979-12-31，fflate 直接抛
+ * 「date not in range 1980-2099」，每次导出都 500；在 UTC 以东则 DOS 时间随时区偏移，
+ * 同一份闭包在不同时区导出的字节不同。回归锁：`tests/zip-fixed-mtime-timezone.test.ts`。
  */
-const FIXED_MTIME = new Date(Date.UTC(1980, 0, 1))
+const FIXED_MTIME = new Date(1980, 0, 1)
 
 export function encodeZip(files: readonly ZipFile[]): Uint8Array {
   const tree: Record<string, Uint8Array> = {}

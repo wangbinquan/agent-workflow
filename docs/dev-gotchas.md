@@ -379,6 +379,13 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 
 - **给共享 harness 加东西，别让不需要它的用例陪着付钱**（同日，自伤后自修）。我给一张 8 类资源的 ACL 矩阵加了第五个用户，只有其中 1 类用得上，但它建在 `beforeEach` 里——`createUser` 会**故意慢速**哈希密码，于是另外 7 类 × 33 条用例全在为一条用例付这笔钱。高负载下随即出现一次与本改动无关的用例超时红。**没拿「重跑九次都绿」当通过依据**（含三次 `--isolate --randomize`）：能消掉的时序面就消掉。**定式**：往共享 fixture 里加**慢**操作（密码哈希、子进程、文件系统、网络桩）时按需构造，别无条件建。
 
+## `bun test` 固定按 UTC 运行：时区相关的缺陷单测复现不出来（2026-10-23 实撞）
+
+`bun test` 里 `new Date(1980, 0, 1).getTimezoneOffset()` 为 0（即使没有设置 `TZ`），而普通 `bun` 进程（daemon、e2e 二进制）按机器时区计算。`util/zip.ts` 曾把 zip mtime 钉成 `new Date(Date.UTC(1980, 0, 1))`，fflate 却按**本地时间**的年月日时分秒写 DOS 时间字段：在 UTC 以西的机器上它换算成 1979-12-31，fflate 抛 `date not in range 1980-2099`，所有资源包导出都返回 500；在 UTC 以东则 DOS 时间随时区偏移，导出字节因机器而异。CI 跑在 UTC、单测又固定 UTC，全绿了很久，直到在 UTC-7 的开发机上跑 e2e 才暴露。
+
+- 写「固定时间点」时先想清楚下游按本地还是 UTC 解释它。交给按本地字段编码的库（zip 的 DOS 时间等）用本地构造 `new Date(1980, 0, 1)`。
+- 时区相关的回归测试要在子进程里显式设 `TZ` 跑，进程内断言看不见：见 `packages/backend/tests/zip-fixed-mtime-timezone.test.ts`。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。
