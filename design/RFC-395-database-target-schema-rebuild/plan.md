@@ -454,3 +454,23 @@ II-b 的工作包：
 验证：本地集中验证（2026-10-23）。后端 SQLite 全量三轮：第一轮 4116 过 / 161 败，其中 405 个文件被 A7 引入的模块初始化环连带（collaboration 人工门文件反向 value-import task-execution 的 `public/participants`）；修环与 RFC-376 结构门后第二轮 105 个文件 181 败；三个 Codex 修复线程（守卫与源码锁 / 选择与旅程 / 持久化与一致性）修复后第三轮 5 个文件 6 败，均已修复并单独复验；`rfc220-oauth2-callback-route` 为负载下本地模拟授权服务器的抖动（单独 7/0，前两轮通过）。验证中发现并修复的生产回退：调度采纳 pending 重跑行时读取尚未实现的 slot 标签（澄清 / 评审 / 包装节点旅程不再重跑）、准备重试与 commit 中断恢复的 oracle 范围、任务空间目录多写根与祖先行（已恢复 HEAD 的「只写调用方给出的 nodePaths」）、AtomicApply 返回数组未冻结、评审徽标计数从 1 条 SQL 退化为 3 次查询、收件箱轮询带出整份冻结定义（RFC-311 L1-3）、保存期依赖校验的 `VALIDATE_CALL_POLICY` 调用点丢失。shared 2349/0、frontend 7327/0、system-mocks 102/0。e2e：A1 改动的 24 个 spec 本地冒烟 195 过 / 3 败，均与 II-a 无关——MEM-X8 在 `67ab6b9ae` 的 nightly 已失败；WG-06 是本机 UTC-7 时区下 `util/zip.ts` 固定 mtime 换算为 1979 年触发 `date not in range` 的既有缺陷（UTC 的 CI 不复现）；TASK-X2 是本机真实 runtime 带凭据，使变更叙述生成成功而非预期的失败。本地 PostgreSQL 因 Docker 虚拟机磁盘满中断（满之前约 1849 个 PG 用例无失败），以 CI 的 ubuntu PostgreSQL 分片为准。静态检查：三包 typecheck、eslint、prettier、depcheck、lint:promises 均通过；RFC-294 公共合同与 RFC-376 结构门的静态扫描无未登记项。
 
 CI：`106d06d84` 的 run 40012778786 暴露 5 类本次引入的问题（typed lint 堆上限、双引擎启动对等未摘逐仓易变格、PG 触发器错误包装、A1 全量扫描守卫超时、P0-6 变异锚点），由 `5b947545e` 修复；run 40017338430 第 2 次尝试 47 成功 / 2 失败，仅余 Static scans（依赖审计类，II-a 之前已红，按规则不分析）与派生汇总。第 1 次尝试中 Windows e2e 2/4 的 1 个失败与 ubuntu e2e 2/3 的取消，经本地用 II-a 二进制复跑（6–7 s 通过）与一次重跑归因为 runner 慢（daemon 就绪 90 s 超时）和作业准备耗时（约 11 分钟），不是本次改动。
+
+### 6.12 II-b 前置裁决（2026-10-23）
+
+II-a 交付后向用户提了三项待定事项，用户 2026-10-23 回复「按你推荐做，3 改」：
+
+1. **公共合同过渡债务**（§6.11「偏离与债务」第 1 条）：用户明确接受推荐方案。38 条过渡合同保留，后继仍是 RFC-294 S5/S6 在组合根绑定。§6.11 中「未收到反对，按推荐方案提交」的表述，以本条的明确接受为准。
+2. **II-b 动工前的两项裁决**。提问时只列出了问题，没有写出推荐内容，所以用户回复「按你推荐做」时没有看到下面的具体方案。以下是此后首次写出的推荐，作为 II-b 设计的默认前提，用户可以推翻：
+   - **39 处被重塑表记账访问的收口方式**：采用 RFC-294 的 consumer-owned required SPI（RFC-294 design §2、§3.1）。
+     - 模块间 31 处：消费方在自己的 `composition/required-ports.ts` 声明按用例拆分的端口；表 owner 在自己的 `application/adapters/` 实现；bootstrap 负责实例化和注入。这样不新增 offered 边，也不形成文件级值依赖环。3 处 `OFFERED_BUT_BLOCKED` 同样走这条路。
+     - 模块外 8 处：业务 SQL 移入 owner 模块，`platform` 只保留领域中性的端口，由 owner 实现、bootstrap 注入，不新增 platform → modules 边。其中 `db/query.ts` 的可见性联合查询按调用场景移入 owner，经端口保持单语句语义，与账本 `removeWhen` 一致。
+     - II-b design 须逐条列出新增的 required-SPI 实现边（RFC-294 §3.1 要求它们与 offered 边分开登记），经用户确认后才开始 B2。
+   - **聚合行重放判据**：II-b 保持今天的判据，即同时满足以下四条：
+     - 聚合行的铸行序晚于每个参与 shard 的可复用输入行；
+     - 聚合行状态为 done；
+     - 合并状态已落定或为 `conflict-human`；
+     - 非强制重跑，且未禁用复用。
+
+     判据位置：`packages/backend/src/modules/task-execution/infrastructure/runSelection/oracle/shards.ts:57-76`。`node_run_inputs` 照常记录聚合行实际消费的 shard 运行集合，但这个集合只记录，不参与判定。存量聚合行没有持久化的消费集合，转换器不为它们反推。如果改成「已消费集合 == 当前 shard 选择」，会带来用户可见的行为变化（反例见 §6.11「留给 II-b 的事项」第 2 条），因此另行立项。design §5.2 的相应表述以本条为准。
+
+3. **`util/zip.ts` 时区缺陷**：与 RFC-395 无关，已由 `7e48a0035` 单独修复。固定 mtime 改为按本地时间构造，并附五个时区的子进程回归测试；本机 e2e WG-06 已转为通过。§6.11 验证段对 WG-06 的归因不变。

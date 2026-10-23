@@ -15,6 +15,13 @@
 
 **CI**：`106d06d84` 的 run 40012778786 暴露 5 类本次引入的问题（typed lint 堆上限、双引擎启动对等未摘逐仓易变格、PG 触发器错误包装、A1 全量扫描守卫超时、P0-6 变异锚点），由 `5b947545e` 修复；run 40017338430 第 2 次尝试 47 成功 / 2 失败，仅余 Static scans（依赖审计类，II-a 之前已红，按规则不分析）与派生汇总。第 1 次尝试中 Windows e2e 2/4 的 1 个失败与 ubuntu e2e 2/3 的取消，经本地用 II-a 二进制复跑（6–7 s 通过）与一次重跑归因为 runner 慢（daemon 就绪 90 s 超时）和作业准备耗时（约 11 分钟），不是本次改动。
 
+**2026-10-23 补记**：用户回复「按你推荐做，3 改」，裁决记入 plan §6.12。
+- 38 条公共合同过渡债务：明确接受。
+- 39 处被重塑表记账访问：按 RFC-294 consumer-owned required SPI 收口，II-b design 逐条列出新增的实现边，经用户确认后再开始 B2。
+- 聚合行重放判据：II-b 保持今天的判据，消费集合只记录、不参与判定；改为集合判据另行立项。
+- 这两项的具体推荐在用户回复之后才首次写出，用户可以推翻。
+- 上文「未在本次修改」的 `util/zip.ts` 时区缺陷，已由 `7e48a0035` 单独修复（附五个时区的子进程回归测试）。
+
 ## 2026-10-22 RFC-395 In Progress：阶段 I-a、II-pre、I-b 完成，下一步 II-a
 
 **进行中 RFC**：[RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)（数据库阶段目标模型与一次迁移）。用户 2026-10-21 交本会话做任务分解并指挥 Codex 实施（按本会话惯例免设计门与实现门，可推翻）。**I-a 已完成**（各领域显式 schema contribution 等价重述今日 schema，零物理变更；交付记录见 RFC plan §6.7）：表声明改在各模块 `infrastructure/persistence/schema.ts`，用 `platform/persistence/schema/dsl.ts` 的简写 DSL；`bootstrap/persistenceSchema.ts` 唯一汇集；冻结对比（v2 合同、PostgreSQL plan、两套 drizzle 表、drizzle-kit 快照）全部相等，SQLite 与真实 PostgreSQL 的长期等价测试入库。**II-pre 已完成**（交付记录见 plan §6.8；提前到 I-b 之前的理由见 §6.7）：删除旧启动入口 `startTask` 族、`getTaskNodeRuns`、`systemWorkspaceGc` GC 库、intent `converge`、BundleApply 旧合同段，以及随之失去生产引用的 `services/users.ts` 与 `legacyUserService`；测试改走生产路径，RFC-199 的 11 个竞态回归全部改接生产启动与物化器清理。**I-b 已完成**（交付记录见 plan §6.9）：业务查询写在中立查询面 `PersistenceDb` / `PersistenceTx` 上，表从会话句柄取（`tablesOf(db)`），运行时是原生 bun-sqlite / bun-sql；sqlite-proxy、SQL 改写链与进程级表投影已删除；PostgreSQL 写闸只做语句分类，单行插入经 `insertOne` 保持一次往返。下一步 **II**，用户 2026-10-22 选定拆两次交付（plan §6.10）：**II-a 端口先行**——在现有 schema 上把业务改为经目标形状的端口读写，行为与 API 不变、不激活新合同，单独集中验证并提交（A1 测试造数 builder 与 codemod、A2 Task 主体与工作区、A3 NodeRun 选择端口与 oracle、A4 澄清与内容、A5 资源依赖、A6 AtomicApply、A7 跨域收口）；**II-b 一次切换**——目标 schema、转换器、迁移回执与激活，一次激活交付→ III（每个真实实例单独批准迁移）。已提交：任务分解 `ab4fee188`、用户决定 `02f0ff213`、阶段 I 技术方案 `865944979`、II-0 设计修订 `461e8bc6c`、I-a `4b91ada04`、II-pre `e2e8b925b`（前端用例改读修复 `7ee66e0cd`）、I-b `9e66d89df`（CI 补正 `c35067361`、`d41f068f1`，收口 CI 除外部依赖公告 dompurify GHSA-mrv2-3pqr-j5jr 外全绿）。

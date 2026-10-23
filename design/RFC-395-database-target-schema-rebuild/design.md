@@ -190,6 +190,8 @@ selected-run 变更由现有操作 owner 同事务提交。槽位种类为 `node
 
 > 2026-10-23（II-a 交付）：K1 / K3 / K6（稳定 role 与 canonical slot）推迟到 II-b，规则表见 plan §6.11；II-a 的 oracle 不推导标签，生产选择与 HEAD 相同。聚合行重放判据「记录的已消费 shard 集合 == 当前 shard 选择」与今天「聚合行比所有参与 shard 新」并非无条件等价（反例见 plan §6.11），II-b 物化前须由用户裁决。
 
+> 2026-10-23（用户裁决，见 plan §6.12）：II-b 保持今天的聚合行重放判据。`node_run_inputs` 中的消费集合只记录、不参与判定。上文「聚合可重放当且仅当其 `node_run_inputs` 记录的 shard 运行集合等于当前 shard 选中集合」改为另行立项的后续目标。
+
 ### 5.3 旧 `node_runs` 62 列去向
 
 | 目标 | 源字段 |
