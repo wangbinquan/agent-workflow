@@ -1,6 +1,8 @@
 // Model output and the code host are controlled fixtures. The daemon, Case, native
 // clarify/review, Git, MR publication and external-state observation use production paths.
 // Actual model-quality and hosted-provider acceptance are recorded separately in RFC-396.
+// UI acceptance guards the automatic MR source-branch summary and narrow-screen HTML
+// readability; document width alone misses content clipped by an internal scroll container.
 import { expect, test, type Page } from '@playwright/test'
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -160,7 +162,8 @@ async function createBookingCaseThroughUi(page: Page, scenario: string): Promise
   const employeeName = `Graph browser employee ${tag}`
   const dialog = page.getByRole('dialog', { name: 'Create digital employee', exact: true })
   await dialog.getByLabel('Employee name').fill(employeeName)
-  await dialog.getByRole('combobox', { name: 'Job template', exact: true }).click()
+  // Select initially names its placeholder; Field labels can also include required markers/hints.
+  await dialog.getByRole('combobox', { name: 'Job template' }).click()
   await page.getByRole('option', { name: defaultJob.name, exact: true }).click()
   await expect(dialog.getByTestId('employee-scope-picker')).toContainText(
     'Choose repository when starting a task',
@@ -183,8 +186,11 @@ async function createBookingCaseThroughUi(page: Page, scenario: string): Promise
   const card = page.locator('.employee-summary-card--employee').filter({ hasText: employeeName })
   await expect(card).toContainText(defaultJob.name)
   await card.getByRole('link', { name: 'Create task', exact: true }).click()
+  // The employee deeplink starts at Workspace; revisit Execution to verify its selection.
+  await page.getByTestId('stepper-step-mode').click()
   await expect(page.getByTestId('stepper-step-mode')).toHaveAttribute('aria-current', 'step')
-  await expect(page.getByRole('combobox', { name: 'Digital employee', exact: true })).toContainText(
+  const wizard = page.getByTestId('task-wizard')
+  await expect(wizard.getByRole('combobox', { name: 'Digital employee' })).toContainText(
     employeeName,
   )
   await page.getByTestId('stepper-next').click()
@@ -195,13 +201,20 @@ async function createBookingCaseThroughUi(page: Page, scenario: string): Promise
   await expect(page.getByTestId('stepper-step-content')).toHaveAttribute('aria-current', 'step')
   await page.getByTestId('wizard-task-name').fill(scenario)
   await page.getByRole('radio', { name: 'Write request', exact: true }).click()
-  await page.getByRole('textbox', { name: 'Request', exact: true }).fill(scenario)
+  await wizard.getByRole('textbox', { name: /^Request\b/ }).fill(scenario)
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-confirm')).toHaveAttribute('aria-current', 'step')
   await expect(page.getByTestId('employee-case-summary-employee')).toContainText(employeeName)
   await expect(page.getByTestId('employee-case-summary-space')).toContainText(projectPath)
   await expect(page.getByTestId('employee-case-summary-name')).toContainText(scenario)
   await expect(page.getByTestId('employee-case-summary-content')).toContainText(scenario)
+  const summary = wizard.getByTestId('wizard-summary')
+  await expect(
+    summary.locator('.wizard-summary__row').filter({ hasText: 'MR source branch' }),
+  ).toContainText(
+    'Leave empty for a platform-generated source branch. It must differ from the MR target branch. Verified changes enter MR delivery and care.',
+  )
+  await expect(summary).not.toContainText('Internal candidate only')
   await test.info().attach('graph-booking-create-task', {
     body: await page.getByTestId('task-wizard').screenshot(),
     contentType: 'image/png',
@@ -302,6 +315,75 @@ async function answerOriginalQuestionsThroughUi(
     directive: 'stop',
     answers: [{ ...answer, confirmedBasis: clarifyAnswerBasis(question, answer) }],
   })
+}
+
+async function expectGraphHtmlFitsViewport(page: Page, width: number) {
+  const workspace = page.getByTestId('graph-design-workspace')
+  await expect(
+    workspace.getByRole('button', { name: 'Compare options', exact: true }),
+  ).toBeVisible()
+  await expect(
+    workspace.getByText('Elements and relations (select multiple for a path)', { exact: true }),
+  ).toBeVisible()
+  const layout = await workspace
+    .locator(
+      'button, a[href], input, textarea, summary, p, .graph-design__actions > span, .notice-banner, .notice-banner__body',
+    )
+    .evaluateAll((elements) => {
+      const visible = elements.filter((element): element is HTMLElement => {
+        if (!(element instanceof HTMLElement) || element.closest('svg')) return false
+        const style = getComputedStyle(element)
+        if (style.visibility === 'hidden' || style.display === 'none') return false
+        const rect = element.getBoundingClientRect()
+        if (rect.width === 0 || rect.height === 0) return false
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          if (
+            parent instanceof HTMLDetailsElement &&
+            !parent.open &&
+            !parent.querySelector(':scope > summary')?.contains(element)
+          )
+            return false
+        }
+        return true
+      })
+      const overflow = visible.flatMap((element) => {
+        let left = 0
+        let right = window.innerWidth
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          if (!['auto', 'scroll', 'hidden', 'clip'].includes(getComputedStyle(parent).overflowX))
+            continue
+          const clip = parent.getBoundingClientRect()
+          left = Math.max(left, clip.left)
+          right = Math.min(right, clip.right)
+        }
+        // Text ranges also catch clipped nowrap content inside an otherwise fitting box.
+        // SVG renderings intentionally scroll horizontally and are excluded above.
+        const text = document.createRange()
+        text.selectNodeContents(element)
+        const rects = [element.getBoundingClientRect(), ...text.getClientRects()]
+        const clipped = rects.some(
+          (rect) => rect.width > 0 && (rect.left < left - 1 || rect.right > right + 1),
+        )
+        return clipped
+          ? [
+              {
+                tag: element.tagName,
+                text: element.textContent?.trim().slice(0, 120),
+                left: Math.min(...rects.map((rect) => rect.left)),
+                right: Math.max(...rects.map((rect) => rect.right)),
+                visibleLeft: left,
+                visibleRight: right,
+              },
+            ]
+          : []
+      })
+      return { checked: visible.length, overflow }
+    })
+  expect(layout.checked).toBeGreaterThan(0)
+  expect(
+    layout.overflow,
+    `${width}px graph actions, notices and semantic summary must fit`,
+  ).toEqual([])
 }
 
 async function journey(
@@ -476,6 +558,7 @@ async function journey(
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true)
+    await expectGraphHtmlFitsViewport(page, width)
     if (booking) {
       await page.getByRole('region', { name: 'flow', exact: true }).scrollIntoViewIfNeeded()
       await test.info().attach(`graph-booking-${width}px`, {

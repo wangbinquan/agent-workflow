@@ -18,6 +18,8 @@
 
 ## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
+**2026-10-23 页面验收后继**：`fb99b3a0d` 的主 CI `39965841593` 终态44成功/5失败，三个平台 E2E 都是本会话新增预约用例的控件名称定位错误；另两项为 Static scans 与派生汇总。纠正定位和深链步骤假设后，相同 GitHub artifact 的完整预约 UI 旅程1/0、39.1s，原失败保留。截图又确认新任务摘要错误显示“仅交付内部候选”、320px 内部文本裁切；当前已完成合同说明复用、网格宽度修复、实际 HTML/文本范围断言，并补空闲 MR 等待文案（相关回归22/0）。这些新生产修改仍须后继 artifact 与 CI 接受，旧成功不代签。WebKit 定时 CI 已终态6成功/2失败，均为有实施前证据的 MEM-X8；详见 [归因](design/RFC-396-adaptive-graph-development/ci-audit-2026-10-23.md) 与 [验证](design/RFC-396-adaptive-graph-development/validation.md)。
+
 **2026-10-23 接续核对**：`67ab6b9ae` 已处理误发布的任务启动合同，保留图材料能力；旧 II-a 发布阻塞不再适用于当前 head。`b0afe1b64` 已修本任务 Windows checkpoint 目录中的冒号，原生 Windows 三个 graph@2 MR 旅程均首轮通过；主 CI `39960727188` 终态 **47 success / 2 failure**，只余 Static scans 与派生汇总，未称整条全绿。该准确 SHA 的 GitHub macOS artifact 本地三旅程 3/0，实际截图发现的空 CI 占位/详情挤占首屏已修，并补预约从创建员工到原始澄清的页面操作；新前端集中回归60/0，修复后页面接受待新候选。已检查全部定时 workflow，明确的 pre-RFC396 失败、缓存/扫描成本和归属未明超时分列，详见 [CI 归因](design/RFC-396-adaptive-graph-development/ci-audit-2026-10-23.md)。
 
 **2026-10-23 本轮 MR 补齐与发布缺口**：graph@2 共享原 MR 生命周期、同 Case 候选交接/修复/独立重验、完整 CI 岗位配置入口与界面复核修复已以 `ba7b8c6c4a03` 推送。共享候选取得真实 PostgreSQL 156/0、SQLite 修后相关回归、43 项独立前端交互及功能实现门证据；但 [CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 已报告失败。本次共享文件发布同时带入 RFC-395 II-a 的 Task 主体迁移片段，其启动/schema/审核依赖未发布，这是本次发布依赖核对遗漏，不能归为仅外部旧测试失败；完整迁移闭包发布前不宣称可验收。图业务 UI 归属、跨平台测试及 E2E 证据索引另在本任务内修复。CUA 无可用浏览器，真实企业连接和当前 MR 完整运行验收仍单列，未部署旧托管实例。详细归因见 [本轮验收](design/RFC-396-adaptive-graph-development/validation.md) 与 [完整问题账本](design/RFC-396-adaptive-graph-development/review-and-mr-parity.md)。

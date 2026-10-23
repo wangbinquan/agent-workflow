@@ -1,5 +1,19 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 页面操作补齐的实际执行与修正
+
+`fb99b3a0dfffd749b681cc12f867c5085c4eb878` 发布了空 CI/明细/终态呈现修复及预约页面操作用例。该 SHA 的 GitHub macOS artifact 本地结果 **2 pass / 1 fail**：通知和已有模块的 MR 观察与终态成功，预约停在新增的岗位下拉框精确名称定位。三个平台 hosted E2E 确认同一失败，属于本会话用例。主 CI `39965841593` 终态 **44 success / 5 failure**，其他失败为 Static scans 与派生汇总。修正后限定复验又发现预选员工的任务深链会自动前进，已改为实际点击可见步骤。原失败日志 `/tmp/rfc396-fb99-ui-journeys.log` 与 `/tmp/rfc396-fb99-booking-repair.log` 保留。
+
+纠正后的完整预约页面旅程使用该 SHA 的 GitHub macOS artifact **12506702914**，结果 **1 passed / 0 failed / 0 skipped / 0 flaky，39.1s**。实际通过页面创建员工/任务、查看并回答原始问题、保留 provisional 和未填写的负责人/日期、确认设计、实现、独立验证和人工验收，并读取 MR、打开 CI 岗位草稿入口、消费外部合入。模型/代码托管仍是 fixture；图示 fixture 不证明模型质量。日志与 JSON 为 `/tmp/rfc396-fb99-booking-final-unsandboxed.{log,json}`，八张原始 PNG 位于 `/tmp/rfc396-fb99-booking-final-unsandboxed-attachments/`；根已读取创建摘要、原始问题、确认和320px截图。此前一次受限沙箱中的 Chromium 启动失败 `MachPortRendezvousServer ... Permission denied (1100)` 单列保存，不记作产品失败。
+
+截图已验证空 CI 提示、配置入口、收起明细和终态历史，但同时发现以下遗漏，已完成生产修改与直接回归用例：
+
+- MR 空闲等待仍显示内部事件名：使用同一 MR 观察文案，保留停止/阻塞/审批/可合入优先级；终态与等待回归 **22/0**，相关 lint 通过。
+- 新 MR 岗位确认页误称“仅交付内部候选”：通用确认组件直接使用现有岗位合同必填的本地化 description，兼容旧内部候选与新自动 MR 分支语义；E2E 断言准确说明且不出现旧文案。
+- 320px 的内部网格裁切：限定图工作区网格 minmax/min-width 与控件换行，保留 SVG 滚动和缩放；390/320px 回归读取实际 HTML/文本 Range 与横向裁切祖先可见边界，不能只看 document 总宽度。
+
+本段新的生产修复及增强用例须消费后继 artifact 和 exact-SHA CI；上面的39.1s结果不代签。未变化组件的原60项结果复用，未启动重复全量门禁。
+
 ## 2026-10-23 Windows 修复已通过，继续补界面验收
 
 `b0afe1b6411f8e3e2333f633871079dd21d636da` 的 [Windows E2E 3/4](https://github.com/wangbinquan/agent-workflow/actions/runs/39960727188/job/120439725490) 已成功，三个 graph@2 交付及合入/关闭旅程均首轮通过；不再用本地路径约束测试代替原生 Windows 结果。该 job 另有普通任务完成的 `1 flaky`，证据保留在 [CI 归因](./ci-audit-2026-10-23.md)，不冒充无重试全绿。

@@ -46,6 +46,20 @@ function stopped(zh: boolean, value: GraphMergeRequestDelivery | null): GraphDel
   }
 }
 
+function waitingForMr(zh: boolean): GraphDeliveryProgress {
+  return {
+    ...stopped(zh, { ...delivery(), readyToMerge: false }),
+    caseState: 'waiting',
+    terminalKind: null,
+    workItemRef: null,
+    nextAction: {
+      tone: 'info',
+      title: zh ? '等待关注对象变化' : 'Wait for a watched change',
+      body: 'verification request, review request, clarification request, implementation request',
+    },
+  }
+}
+
 test.each([true, false])(
   'a terminal case without an MR never promises future publication (zh=%s)',
   (zh) => {
@@ -97,6 +111,89 @@ test.each([true, false])(
 )
 
 test.each([true, false])(
+  'an idle MR without a work item uses the MR observation explanation (zh=%s)',
+  (zh) => {
+    const progress = waitingForMr(zh)
+    const status = graphDeliveryStatus(progress, zh)
+    expect(status).toEqual(graphDeliveryStatus({ ...progress, workItemRef: 'observe-mr' }, zh))
+    expect(status.title).toBe(zh ? '同步 MR 最新状态' : 'Synchronize the latest MR state')
+    expect(status.body).toContain(
+      zh ? '源提交、目标分支、评审和冲突状态' : 'MR head, target branch, reviews and conflicts',
+    )
+    expect(status.body).toContain(
+      zh ? '仓库确认合入或关闭后结束看护' : 'repository confirms that the MR was merged or closed',
+    )
+    expect(status.body).not.toMatch(
+      /verification request|review request|clarification request|implementation request/,
+    )
+  },
+)
+
+test.each([true, false])(
+  'approval holds and current pending decisions precede idle MR observation and readiness (zh=%s)',
+  (zh) => {
+    for (const approvalHold of [true, false]) {
+      const progress = waitingForMr(zh)
+      progress.delivery = { ...delivery(), approvalHold }
+      if (!approvalHold)
+        progress.care.approval = {
+          current: true,
+          updatedAt: 1,
+          value: {
+            status: 'pending',
+            mergeRequestRef: 'repo!42',
+            headSha: 'a'.repeat(40),
+            deadlineAt: null,
+          },
+        }
+      expect(graphDeliveryStatus(progress, zh).title).toBe(
+        zh ? '等待审批结果' : 'Awaiting approval',
+      )
+    }
+  },
+)
+
+test.each([true, false])(
+  'a ready MR without a work item keeps the specific merge-waiting status (zh=%s)',
+  (zh) => {
+    const progress = { ...waitingForMr(zh), delivery: delivery() }
+    const status = graphDeliveryStatus(progress, zh)
+    expect(status.title).toBe(zh ? '等待 MR 合入' : 'Awaiting MR merge')
+    expect(status.body).toContain(
+      zh ? '收到仓库确认的合入或关闭结果后才结束看护' : 'repository confirms a merge or close',
+    )
+  },
+)
+
+test.each([true, false])(
+  'idle MR observation preserves explicit graph work and cases that are not waiting (zh=%s)',
+  (zh) => {
+    const progress = waitingForMr(zh)
+    for (const workItemRef of ['design-and-clarify', 'review-design', 'verify-change'])
+      expect(graphDeliveryStatus({ ...progress, workItemRef }, zh)).toEqual(progress.nextAction)
+    expect(graphDeliveryStatus({ ...progress, caseState: 'active' }, zh)).toEqual(
+      progress.nextAction,
+    )
+  },
+)
+
+test.each([true, false])(
+  'blocked and warning idle MR states retain their specific next action (zh=%s)',
+  (zh) => {
+    const progress = waitingForMr(zh)
+    const nextAction = {
+      tone: 'warning' as const,
+      title: zh ? '需要重新审核设计' : 'Design review required',
+      body: zh ? '候选依据已变化，请重新审核。' : 'The candidate basis changed; review it again.',
+    }
+    expect(graphDeliveryStatus({ ...progress, nextAction }, zh)).toEqual(nextAction)
+    expect(graphDeliveryStatus({ ...progress, caseState: 'blocked' }, zh)).toEqual(
+      progress.nextAction,
+    )
+  },
+)
+
+test.each([true, false])(
   'blocked and warning next actions remain authoritative over ordinary MR stage copy (zh=%s)',
   (zh) => {
     const nextAction = {
@@ -122,7 +219,7 @@ test.each([true, false])(
 test.each([true, false])(
   'a stopped case with an open MR no longer claims running care or waiting for merge (zh=%s)',
   (zh) => {
-    for (const workItemRef of ['collect-pipeline', 'observe-approval', 'wait-merge']) {
+    for (const workItemRef of ['collect-pipeline', 'observe-approval', 'wait-merge', null]) {
       const progress = { ...stopped(zh, delivery()), workItemRef }
       const status = graphDeliveryStatus(progress, zh)
       expect(status.title).toBe(zh ? '工作已结束' : 'Work finished')

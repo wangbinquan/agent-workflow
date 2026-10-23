@@ -180,13 +180,14 @@ export function graphDeliveryStatus(progress: GraphDeliveryProgress, zh: boolean
         ? '设计批准、实现与独立验证通过后，数字人会发布工作分支并创建 MR，继续处理评审和合并冲突。CI 看护需要本工作启动时的岗位已配置企业流水线连接。'
         : 'After design approval, implementation and independent verification, the employee publishes the working branch, creates an MR, and handles reviews and merge conflicts. CI care requires a pipeline connection in the job configuration frozen when this work started.',
     }
+  const observation: [string, string, string, string] = [
+    '同步 MR 最新状态',
+    'Synchronize the latest MR state',
+    '数字人会同步 MR 的源提交、目标分支、评审和冲突状态；仓库确认合入或关闭后结束看护。CI 检查按本工作启动时的岗位配置执行。',
+    'The employee synchronizes the MR head, target branch, reviews and conflicts. Care ends when the repository confirms that the MR was merged or closed. CI checks follow the job configuration frozen when this work started.',
+  ]
   const stages: Record<string, [string, string, string, string]> = {
-    'observe-mr': [
-      '同步 MR 最新状态',
-      'Synchronize the latest MR state',
-      '数字人会同步 MR 的源提交、目标分支、评审和冲突状态；仓库确认合入或关闭后结束看护。CI 检查按本工作启动时的岗位配置执行。',
-      'The employee synchronizes the MR head, target branch, reviews and conflicts. Care ends when the repository confirms that the MR was merged or closed. CI checks follow the job configuration frozen when this work started.',
-    ],
+    'observe-mr': observation,
     'classify-feedback': [
       '归因评审意见',
       'Classify review feedback',
@@ -286,6 +287,16 @@ export function graphDeliveryStatus(progress: GraphDeliveryProgress, zh: boolean
       body: zh
         ? '数字人继续跟踪 MR 的源提交、目标分支和评审，并按本工作的岗位配置跟踪 CI；收到仓库确认的合入或关闭结果后才结束看护。'
         : 'The employee keeps tracking the MR head, target branch and reviews, with CI care as configured for this work. Care ends only when the repository confirms a merge or close.',
+    }
+  if (
+    delivery.status === 'active' &&
+    progress.caseState === 'waiting' &&
+    progress.workItemRef === null
+  )
+    return {
+      tone: 'info' as const,
+      title: observation[zh ? 0 : 1],
+      body: observation[zh ? 2 : 3],
     }
   return progress.nextAction
 }

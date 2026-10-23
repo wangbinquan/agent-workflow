@@ -1,16 +1,42 @@
 .graph-design {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Keep intrinsic diagram and control widths inside their own grid areas. */
+.graph-design > *,
+.graph-design__columns > *,
+.graph-design__stack > *,
+.graph-design__list > * {
+  min-width: 0;
+}
+.graph-design .card__title-row,
+.graph-design .card__title-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.graph-design .card__title-row > *,
+.graph-design .card__title-actions > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.graph-design .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .graph-design__columns {
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) minmax(0, 3fr);
   gap: 1rem;
   align-items: start;
+  min-width: 0;
 }
 .graph-design__stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   min-width: 0;
 }
@@ -19,6 +45,11 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+  min-width: 0;
+}
+.graph-design__actions > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .graph-design__diagram {
   overflow: auto;
@@ -37,7 +68,9 @@
 }
 .graph-design__list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;

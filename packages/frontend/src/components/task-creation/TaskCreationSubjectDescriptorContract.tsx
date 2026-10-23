@@ -1042,7 +1042,7 @@ export function TaskCreationSubjectDescriptorContract(
                   <dt>{localized(publicationBranchOption.label, language)}</dt>
                   <dd>
                     {publicationBranch.trim() ||
-                      (zh ? '仅交付内部候选' : 'Internal candidate only')}
+                      localized(publicationBranchOption.description, language)}
                     {summaryEdit(1)}
                   </dd>
                 </div>
